@@ -1,0 +1,119 @@
+/* =================================================================
+   恵友会 — Slide Design System (for html-to-pptx)
+   Canvas: 1280 x 720 px  →  10in x 5.625in (16:9)
+   px→pt factor = 0.5625  (eg 64px ≈ 36pt, 40px ≈ 22.5pt)
+
+   デザインの芯 (html-to-pptx の挙動に最適化):
+   - 太字で階層を作る。font-weight >=600 → PPT で bold 出力される。
+     タイトル/見出し/KPI/キーワード=700、本文=500。"全部太字"にはしない(強弱が消える)。
+   - 色は2色＋中立： 緑(primary=主役) ＋ 朱(accent=差し色/注意喚起) ＋ 黒・グレー(ink)。
+     背景は白で統一。差し色は1スライドに1箇所が目安。
+   - 文字を小さくしない。可読本文は18px以上、16px未満の本文を作らない
+     (フッター・ページ番号等のクロームのみ14px可)。
+   - 背景はソリッド色のみ取得される。グラデーションは使わない(フラット)。
+   - 中央寄せは1行に限定(複数行中央寄せは保持されない)。本文は左寄せ。
+   ================================================================= */
+
+:root{
+  /* 中立：黒・グレー・白（背景は白で統一、階層はグレーで作る） */
+  --paper:#FFFFFF; --paper-deep:#F5F7F2; --surface-soft:#F8FAF6;
+  --ink-1:#1A2118; --ink-2:#3A4438; --ink-3:#5F6A5C; --ink-4:#8A9485;
+  --border-1:#D6DDD0; --border-soft:#E8ECE3;
+  /* 色① プライマリ＝緑（主役・CTA・正常・グラフ）。brand はロゴ実色（白抜き面の地）。 */
+  --brand:#65C201;
+  --primary:#7DBE2A; --primary-deep:#65A018; --primary-soft:#BFDF8A;
+  --primary-tint:#ECF6DA; --primary-ink:#3F6510;
+  /* 色② 差し色＝朱（アテンション／注意喚起。1スライドに1箇所が目安）。
+     -accent=塗り/バー・大きい文字、-ink=白地の小さめ強調テキスト(AA確保)、-tint=淡い地。 */
+  --accent:#D97049; --accent-ink:#B4502A; --accent-tint:#FBE6DA;
+}
+
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:"Noto Sans JP",sans-serif;-webkit-font-smoothing:antialiased;}
+
+/* ---- slide canvas ---- */
+.h-ppt-page{
+  width:1280px;height:720px;position:relative;overflow:hidden;
+  background:var(--paper);color:var(--ink-1);
+  font-family:"Noto Sans JP",sans-serif;
+}
+.pad{padding:72px 90px;}           /* 標準セーフマージン */
+.num{font-family:"Inter",sans-serif;font-feature-settings:"tnum" 1;}
+
+/* ---- type ---- (太字で階層を作る。見出し/KPI=700、本文=500。文字は小さくしない) ---- */
+.eyebrow{font-size:16px;font-weight:700;letter-spacing:3px;color:var(--primary-deep);}
+.eyebrow-light{font-size:16px;font-weight:700;letter-spacing:3px;color:var(--primary-soft);}
+.kicker{font-size:18px;font-weight:500;color:var(--ink-3);}
+
+.t-hero{font-size:62px;font-weight:700;line-height:1.28;color:var(--ink-1);letter-spacing:1px;}
+.t-title{font-size:42px;font-weight:700;line-height:1.32;color:var(--ink-1);letter-spacing:0.5px;}
+.t-section{font-size:54px;font-weight:700;line-height:1.3;color:#FFFFFF;letter-spacing:1px;}
+.t-card{font-size:27px;font-weight:700;line-height:1.4;color:var(--ink-1);}
+.t-card-sm{font-size:22px;font-weight:700;line-height:1.45;color:var(--ink-1);}
+
+.lead{font-size:22px;font-weight:500;line-height:1.7;color:var(--ink-2);}
+.body{font-size:20px;font-weight:500;line-height:1.75;color:var(--ink-2);}
+.body-sm{font-size:18px;font-weight:500;line-height:1.7;color:var(--ink-3);}
+.meta{font-size:16px;font-weight:500;line-height:1.6;color:var(--ink-3);letter-spacing:0.5px;}
+.caption{font-size:15px;font-weight:500;color:var(--ink-4);letter-spacing:0.5px;}
+/* 強調：太字＝.strong（濃インク）／差し色の最重要1点＝.strong-accent（朱・AA） */
+.strong{font-weight:700;color:var(--ink-1);}
+.strong-accent{font-weight:700;color:var(--accent-ink);}
+.ink3{color:var(--ink-3);} .green{color:var(--primary-deep);} .accent{color:var(--accent-ink);} .white{color:#fff;}
+
+/* big numbers (KPI/巨大連番は 700) */
+.kpi{font-size:92px;font-weight:700;line-height:1;color:var(--ink-1);letter-spacing:-1px;}
+.kpi-green{font-size:92px;font-weight:700;line-height:1;color:var(--primary-deep);letter-spacing:-1px;}
+.kpi-accent{font-size:92px;font-weight:700;line-height:1;color:var(--accent-ink);letter-spacing:-1px;}
+.kpi-unit{font-size:26px;font-weight:500;color:var(--ink-3);}
+.bignum{font-size:150px;font-weight:700;line-height:0.9;color:var(--primary-soft);letter-spacing:-2px;}
+
+/* ---- structure marks (no decorative icons) ---- */
+.bar{width:34px;height:5px;border-radius:9999px;background:var(--primary);}
+.bar-tall{width:5px;height:46px;border-radius:9999px;background:var(--primary);}
+.bar-accent{width:34px;height:5px;border-radius:9999px;background:var(--accent);}        /* 差し色バー */
+.dot{width:11px;height:11px;border-radius:9999px;background:var(--primary);flex:none;}
+.dot-accent{width:11px;height:11px;border-radius:9999px;background:var(--accent);flex:none;} /* 差し色ドット */
+.rule{height:2px;background:var(--border-1);width:100%;}
+.rule-soft{height:2px;background:var(--border-soft);width:100%;}
+.idx{font-family:"Inter",sans-serif;font-size:30px;font-weight:700;color:var(--primary);line-height:1;}
+
+/* ---- cards (flat, white, thin border) ---- */
+.card{background:#FFFFFF;border:1px solid var(--border-1);border-radius:16px;}
+.card-soft{background:var(--surface-soft);border:1px solid var(--border-soft);border-radius:16px;}
+.card-tint{background:var(--primary-tint);border:1px solid var(--primary-soft);border-radius:16px;}
+
+/* ---- pills / badges ---- */
+.pill{display:inline-flex;align-items:center;border-radius:9999px;}
+.btn-primary{background:var(--primary);color:#fff;border-radius:9999px;font-size:18px;font-weight:700;}
+.tag{background:var(--primary-tint);color:var(--primary-ink);border-radius:9999px;font-size:16px;font-weight:700;}
+.tag-accent{background:var(--accent-tint);color:var(--accent-ink);border-radius:9999px;font-size:16px;font-weight:700;} /* 差し色タグ：注意/最重要 */
+
+/* ---- header / footer for content slides ---- */
+.foot{position:absolute;left:90px;right:90px;bottom:34px;display:flex;align-items:center;justify-content:space-between;}
+.foot-logo{display:flex;align-items:center;gap:12px;}
+.logo-mark{width:26px;height:26px;}
+.foot-name{font-size:16px;font-weight:700;color:var(--ink-2);letter-spacing:0.5px;}
+.foot-sub{font-size:14px;font-weight:500;color:var(--ink-4);}
+.pageno{font-family:"Inter",sans-serif;font-size:14px;font-weight:500;color:var(--ink-4);letter-spacing:1px;}
+
+/* brand (logo green) slides — 中扉・結びの色面。深緑は廃止しロゴ緑に統一 */
+.page-brand{background:var(--brand);color:#fff;}
+.page-tint{background:var(--paper-deep);}
+
+/* ---- 図解 (diagram) ----
+   html-to-pptx は getBoundingClientRect で位置を取得するため position:absolute が使える。
+   コネクタは縦・横の直線(bar)のみ。斜め線は不可。方向を示すときは矢印グリフ「→」を text として置く。 */
+.dgm{position:relative;margin:0 auto;}
+.dgm-box{position:absolute;background:#fff;border:1px solid var(--border-1);border-radius:14px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+.dgm-box .t{font-size:19px;font-weight:700;color:var(--ink-1);line-height:1.35;}
+.dgm-box .s{font-size:14px;font-weight:500;color:var(--ink-3);margin-top:5px;letter-spacing:.5px;}
+.dgm-soft{background:var(--surface-soft);border-color:var(--border-soft);}
+.dgm-hub{position:absolute;background:var(--brand);border-radius:18px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}
+.dgm-hub .t{font-size:25px;font-weight:700;color:#fff;line-height:1.3;}
+.dgm-hub .s{font-size:15px;font-weight:500;color:rgba(255,255,255,.88);margin-top:7px;letter-spacing:.5px;}
+.dgm-line-v{position:absolute;width:4px;background:var(--primary-soft);border-radius:2px;}
+.dgm-line-h{position:absolute;height:4px;background:var(--primary-soft);border-radius:2px;}
+.arrow{font-family:"Inter",sans-serif;font-weight:700;color:var(--primary);}  /* → 連結用 */
