@@ -45,12 +45,13 @@ jobs:
       - name: Test
         run: npm run test -- --run
 
-      # worker-configuration.d.tsのドリフト、Next.js/OpenNextの本番ビルド失敗をPRで止める。
-      - name: Verify Cloudflare types
-        run: npm run cf-typegen -- --check
-
       - name: Build for Cloudflare
         run: npm run cf:build
+
+      # OpenNextのworker定義を生成してから型定義を検証する。
+      # build前は .open-next/worker が無く、ローカルとCIで型定義のハッシュが変わるため。
+      - name: Verify Cloudflare types
+        run: npm run cf-typegen -- --check
 
       # 本番依存だけを対象に、High/Criticalの既知脆弱性をリリースゲートにする。
       - name: Audit production dependencies
