@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { parsePayrollCsv } from "../../src/server/parsers/payrollParser";
+import { parsePayrollCsv } from "../../src/infrastructure/parsers/payrollParser";
 
 const fixture = readFileSync(resolve(__dirname, "../fixtures/payroll_sample.csv"));
 

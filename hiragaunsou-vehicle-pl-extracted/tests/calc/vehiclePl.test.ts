@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  calculateVehiclePl,
-  isCharteredVehicle,
-  type VehiclePlInput,
-} from "../../src/server/calc/vehiclePl";
+import { calculateVehiclePl, type VehiclePlInput } from "../../src/domain/rules/vehiclePlCalculation";
+import { isCharteredVehicle } from "../../src/domain/rules/charteredVehicle";
 
 function baseInput(overrides: Partial<VehiclePlInput> = {}): VehiclePlInput {
   return {

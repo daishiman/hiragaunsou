@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildTodoResponse,
   type ReviewFlagRecord,
-} from "../../src/server/routes/todoService";
+} from "../../src/usecase/steps/getTodoBoard";
 
 function flag(overrides: Partial<ReviewFlagRecord>): ReviewFlagRecord {
   return {

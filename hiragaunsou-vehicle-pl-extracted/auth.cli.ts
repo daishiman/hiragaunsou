@@ -1,6 +1,6 @@
 /**
  * Better Auth CLI 専用設定 (`npx @better-auth/cli generate` 用)。
- * ランタイム(src/server/auth.ts)とは分離し、副作用なしでスキーマ生成のみ行う。
+ * ランタイム(src/infrastructure/auth/auth.ts)とは分離し、副作用なしでスキーマ生成のみ行う。
  * D1へは接続しない(in-memory sqlite で schema shape のみ与える)。
  */
 import { betterAuth } from "better-auth/minimal";
@@ -25,7 +25,7 @@ export const auth = betterAuth({
       hd: "example.co.jp",
     },
   },
-  // ランタイム(src/server/auth.ts)と同じ rateLimit.storage="database" を CLI 設定にも
+  // ランタイム(src/infrastructure/auth/auth.ts)と同じ rateLimit.storage="database" を CLI 設定にも
   // 反映し、rate_limit テーブルを schema生成の対象に含める。
   rateLimit: {
     enabled: true,

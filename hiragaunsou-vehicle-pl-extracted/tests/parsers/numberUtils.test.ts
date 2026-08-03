@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseJapaneseAmount, normalizeKey } from "../../src/server/parsers/numberUtils";
+import { parseJapaneseAmount, normalizeKey } from "../../src/infrastructure/parsers/numberUtils";
 
 describe("parseJapaneseAmount", () => {
   it("カンマ区切りの金額文字列を数値へ変換する", () => {

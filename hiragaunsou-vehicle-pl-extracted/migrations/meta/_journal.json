@@ -15,6 +15,13 @@
       "when": 1785747839640,
       "tag": "0001_far_barracuda",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785750970123,
+      "tag": "0002_parallel_sally_floyd",
+      "breakpoints": true
     }
   ]
 }

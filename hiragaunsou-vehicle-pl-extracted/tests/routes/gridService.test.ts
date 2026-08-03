@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildGridResponse } from "../../src/server/routes/gridService";
-import type { AnomalyFlag } from "../../src/server/calc/anomaly";
+import { buildGridResponse } from "../../src/usecase/steps/getMonthlyGrid";
+import type { AnomalyFlag } from "../../src/domain/rules/anomalyDetection";
 
 describe("buildGridResponse", () => {
   it("51列すべてをfieldsとして返す", () => {

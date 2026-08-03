@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseDurationToHours } from "../../src/server/parsers/timeUtils";
+import { parseDurationToHours } from "../../src/infrastructure/parsers/timeUtils";
 
 describe("parseDurationToHours", () => {
   it("H:MM 形式 (稼動時間) を10進時間へ変換する", () => {

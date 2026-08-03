@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectFileType } from "../../src/server/parsers/detectFileType";
+import { detectFileType } from "../../src/infrastructure/parsers/detectFileType";
 
 describe("detectFileType", () => {
   it("ファイル名のキーワードで判定する(営業所名部分が変わっても検出できる)", () => {

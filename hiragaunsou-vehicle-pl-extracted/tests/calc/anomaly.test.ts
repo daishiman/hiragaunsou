@@ -3,7 +3,7 @@ import {
   detectMissingInput,
   detectRangeDeviation,
   detectYoyDeviation,
-} from "../../src/server/calc/anomaly";
+} from "../../src/domain/rules/anomalyDetection";
 
 describe("detectMissingInput", () => {
   it("必須項目が0/nullの車両を未入力として検知する", () => {

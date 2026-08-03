@@ -8,7 +8,11 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "json-summary"],
-      include: ["src/server/parsers/**", "src/server/calc/**", "src/server/routes/**"],
+      include: [
+        "src/infrastructure/parsers/**",
+        "src/domain/rules/**",
+        "src/usecase/steps/**",
+      ],
     },
   },
 });

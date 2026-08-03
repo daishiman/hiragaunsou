@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import {
   parseSalesMonitorCsv,
   aggregateSalesByVehicle,
-} from "../../src/server/parsers/salesMonitorParser";
+} from "../../src/infrastructure/parsers/salesMonitorParser";
 
 const fixture = readFileSync(resolve(__dirname, "../fixtures/sales_monitor_sample.csv"));
 

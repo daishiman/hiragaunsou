@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { decodeCp932 } from "../../src/server/parsers/encoding";
+import { decodeCp932 } from "../../src/infrastructure/parsers/encoding";
 
 describe("decodeCp932", () => {
   it("cp932でエンコードされた実データCSVを正しくUTF-8文字列へデコードする", () => {
