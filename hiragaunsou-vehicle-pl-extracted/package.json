@@ -12,6 +12,8 @@
     "coverage": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "cf-typegen": "wrangler types",
+    "cf:build": "opennextjs-cloudflare build",
+    "cf:dry-run": "opennextjs-cloudflare build && wrangler deploy --dry-run",
     "db:migrate:local": "wrangler d1 migrations apply hiragaunsou_vehicle_pl --local",
     "db:migrate:remote": "wrangler d1 migrations apply hiragaunsou_vehicle_pl --remote",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy"
@@ -21,27 +23,33 @@
     "better-auth": "^1.2.7",
     "drizzle-orm": "^0.45.2",
     "encoding-japanese": "^2.2.0",
+    "fflate": "^0.8.3",
     "hono": "^4.6.14",
+    "jose": "^6.1.3",
     "next": "^16.2.12"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.8.9",
+    "@cloudflare/vitest-pool-workers": "^0.20.1",
     "@cloudflare/workers-types": "^5.20260730.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22.10.2",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "@vitejs/plugin-react": "^4.3.4",
-    "@vitest/coverage-v8": "^2.1.9",
+    "@vitejs/plugin-react": "^5.1.2",
+    "@vitest/coverage-v8": "^4.1.10",
     "better-sqlite3": "^12.11.1",
     "drizzle-kit": "^0.31.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.7.2",
-    "vite": "^5.4.11",
-    "vitest": "^2.1.8",
+    "vite": "^7.3.6",
+    "vitest": "^4.1.10",
     "wrangler": "^4.0.0"
+  },
+  "overrides": {
+    "postcss": "8.5.25",
+    "sharp": "0.35.2"
   }
 }
