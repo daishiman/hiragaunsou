@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ja" data-mode="pop">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>物件提案デスク Pop — モードB モデルケース</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+/* ============================================================
+   モードB「Pop・親しみ」 — jp-web-design §15(Nani実測ディテール反映版)
+   ============================================================ */
+:root[data-mode="pop"] {
+  --pop-primary: #43a4f5;        /* ブライト: CTA・トグルON・強調 */
+  --pop-primary-pastel: #8ecdf8; /* パステル: マスコット・面 */
+  --pop-primary-soft: #d9edfe;   /* 選択状態・チップ・CTAリング */
+  --pop-primary-deep: #2273b8;   /* 文字・リンク・アイコン */
+  --pop-bg: #eaf5fe;
+  --pop-card-radius: 24px;
+  --pop-control-radius: 12px;
+}
+
+html[data-mode="pop"] body {
+  background: var(--pop-bg);
+  font-size: 16px;
+}
+
+/* ヘッダー */
+.pop-header {
+  max-width: 720px;
+  margin: 16px auto 0;
+  background: #fff;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  gap: 12px;
+}
+.pop-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
+.pop-logo .name { font-weight: 700; font-size: 16px; }
+
+/* マスコット: assets/pop-mascot-editable.svg の再着色版
+   縁あり=ヒーロー用 / 縁なし=ヘッダー・フッター用(jp-web-design §15-4) */
+.mascot-img { display: block; flex: none; }
+
+.pill-ghost {
+  border: none;
+  background: var(--subtle);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 8px 16px;
+  border-radius: var(--pop-control-radius);
+  cursor: pointer;
+}
+.pill-ghost:hover { background: #e9edf2; }
+
+main.pop { max-width: 720px; margin: 0 auto; padding: 36px 20px 0; }
+
+/* ヒーロー: 黒太字+わずかな傾き */
+.pop-hero { text-align: center; margin-bottom: 8px; display: grid; justify-items: center; gap: 12px; }
+.pop-hero h1 {
+  font-size: 30px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: 0.01em;
+  text-wrap: balance;
+  transform: rotate(-1.2deg);
+}
+.pop-hero p { margin: 0; color: var(--ink-muted); font-size: 15px; }
+@media (prefers-reduced-motion: reduce) { .pop-hero h1 { transform: none; } }
+
+/* 手書き風注釈: くるっとループ矢印+全体を少し傾ける */
+.hand-note {
+  color: var(--pop-primary-deep);
+  font-weight: 700;
+  font-size: 14px;
+  margin: 18px 0 2px;
+  text-align: center;
+  transform: rotate(-1.5deg);
+  display: grid;
+  justify-items: center;
+  gap: 0;
+}
+
+/* カード */
+.pop-card {
+  background: #fff;
+  border-radius: var(--pop-card-radius);
+  padding: 24px;
+  border: none;
+}
+.pop-card + .pop-card { margin-top: 16px; }
+
+/* セクション見出し: 波線の下線 */
+.section-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 14px;
+}
+.section-label .squiggle {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: var(--pop-primary-pastel);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 7px;
+}
+.section-label .count { font-weight: 700; color: var(--ink-muted); font-size: 13px; margin-left: 8px; }
+
+/* 行 */
+.pop-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--subtle);
+}
+.pop-row:last-of-type { border-bottom: none; }
+
+/* カスタムチェックボックス: プライマリ地には白グリフ
+   (ネイティブaccent-colorは明るい色だと黒チェックを描くため自前描画) */
+.pop-row input[type="checkbox"] {
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  border: 2px solid #c9dff5;
+  background: #fff;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex: none;
+  transition: background 120ms, border-color 120ms;
+}
+.pop-row input[type="checkbox"]:checked {
+  background: var(--pop-primary);
+  border-color: var(--pop-primary);
+}
+.pop-row input[type="checkbox"]:checked::after {
+  content: "";
+  width: 11px;
+  height: 6px;
+  border-left: 3px solid #fff;
+  border-bottom: 3px solid #fff;
+  border-radius: 1px;
+  transform: rotate(-45deg) translate(0, -2px);
+}
+@media (prefers-reduced-motion: reduce) { .pop-row input[type="checkbox"] { transition: none; } }
+.pop-row .pr-main { flex: 1; min-width: 0; }
+.pop-row .pr-title { font-weight: 700; font-size: 15px; }
+.pop-row .pr-sub { font-size: 13px; color: var(--ink-muted); }
+.pop-row .pr-price {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.015em;
+  font-weight: 700;
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+/* 主要CTA: ブライト+白太字+淡色リング(Nani踏襲) */
+.pop-cta {
+  border: none;
+  background: var(--pop-primary);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  font-size: 16px;
+  padding: 14px 28px;
+  border-radius: 999px;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 18px;
+  box-shadow: 0 0 0 5px var(--pop-primary-soft);
+  transition: transform 100ms, background 100ms;
+}
+.pop-cta:hover { background: #2f96ec; transform: scale(1.02); }
+.pop-cta:active { transform: scale(0.98); }
+@media (prefers-reduced-motion: reduce) { .pop-cta, .pop-cta:hover, .pop-cta:active { transform: none; transition: none; } }
+
+.cta-row { display: flex; align-items: center; gap: 14px; margin-top: 6px; }
+.cta-row .pop-cta { margin-top: 12px; }
+
+/* 調整ボタン: プライマリの枠線で際立たせる(どこで調整できるか迷わせない) */
+.tune-btn {
+  border: 2px solid var(--pop-primary);
+  background: #fff;
+  color: var(--pop-primary-deep);
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  margin-top: 12px;
+}
+.tune-btn:hover { background: var(--pop-primary-soft); }
+.tune-btn[aria-expanded="true"] { background: var(--pop-primary-soft); }
+
+.pop-cta-note { display: flex; justify-content: center; margin-top: 12px; }
+
+/* 設定パネル: セグメント切替+トグルスイッチ */
+.settings-panel { margin-top: 16px; border-top: 1px solid var(--subtle); padding-top: 16px; display: grid; gap: 18px; }
+.setting-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.setting-item .s-label { font-weight: 700; font-size: 15px; }
+.setting-item .s-sub { font-size: 13px; color: var(--ink-muted); font-weight: 400; }
+
+.segmented {
+  display: inline-flex;
+  background: var(--subtle);
+  border-radius: 999px;
+  padding: 4px;
+  gap: 2px;
+}
+.segmented button {
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink-muted);
+  padding: 8px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.segmented button[aria-pressed="true"] {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(22, 25, 29, .08);
+}
+
+.switch {
+  width: 48px;
+  height: 28px;
+  border-radius: 999px;
+  border: none;
+  background: #d6dde4;
+  position: relative;
+  cursor: pointer;
+  flex: none;
+  transition: background 150ms;
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  top: 3px;
+  left: 3px;
+  transition: left 150ms;
+  box-shadow: 0 1px 3px rgba(22, 25, 29, .2);
+}
+.switch[aria-checked="true"] { background: var(--pop-primary); }
+.switch[aria-checked="true"]::after { left: 23px; }
+@media (prefers-reduced-motion: reduce) { .switch, .switch::after { transition: none; } }
+
+/* チップ */
+.pop-chips { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+@media (min-width: 640px) { .pop-chips { grid-template-columns: repeat(4, 1fr); } }
+.pop-chip {
+  border: none;
+  background: var(--subtle);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 12px 8px;
+  border-radius: var(--pop-control-radius);
+  cursor: pointer;
+  text-align: center;
+}
+.pop-chip:hover { background: #e9edf2; }
+.pop-chip[aria-pressed="true"] { background: var(--pop-primary-soft); color: var(--pop-primary-deep); }
+
+/* 機能カード: 破線ボーダー+太字タイトル(アイコンなし) */
+.pop-features { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 16px; }
+@media (min-width: 640px) { .pop-features { grid-template-columns: 1fr 1fr; } }
+.pop-feature {
+  background: transparent;
+  border: 2px dashed #c3ddf5;
+  border-radius: 18px;
+  padding: 16px 18px;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: transform 100ms, background 100ms;
+}
+.pop-feature:hover { background: #fff; transform: translateY(-2px); }
+@media (prefers-reduced-motion: reduce) { .pop-feature:hover { transform: none; } }
+.pop-feature .f-title { font-weight: 700; font-size: 15px; }
+.pop-feature .f-sub { font-size: 13px; color: var(--ink-muted); margin-top: 2px; }
+
+/* KPI */
+.pop-kpis { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 24px; }
+.pop-kpi { text-align: center; padding: 8px; }
+.pop-kpi .k-label { font-size: 13px; color: var(--ink-muted); font-weight: 700; }
+.pop-kpi .k-value {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.015em;
+  font-weight: 700;
+  font-size: 26px;
+}
+
+/* フッター: 波と白面を密着させる(隙間の線を出さない) */
+.pop-bottom { margin-top: 40px; font-size: 0; }
+.pop-bottom .wave { display: block; width: 100%; height: 40px; margin: 0 0 -1px; }
+.pop-bottom .foot { background: #fff; padding: 14px 20px 48px; }
+.pop-footer { text-align: center; font-size: 13px; color: var(--ink-muted); margin: 0; }
+.pop-footer a { color: var(--pop-primary-deep); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<header class="pop-header">
+  <a class="pop-logo" href="pop.html" aria-label="ホームに戻る">
+    <img class="mascot-img" src="mascot-borderless.svg" alt="" width="36" height="37">
+    <span class="name">物件提案デスク</span>
+  </a>
+  <button type="button" class="pill-ghost pressable">ログイン</button>
+</header>
+
+<main class="pop">
+  <div class="pop-hero rise-in">
+    <img class="mascot-img" src="mascot-bordered.svg" alt="" width="88" height="91">
+    <h1>提案メールを、ぽんと送る。</h1>
+    <p>優先物件は選択済み。確認して送るだけ。</p>
+  </div>
+
+  <div class="hand-note rise-in" style="--stagger: 60ms">
+    ログインなしで試せます
+    <svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true">
+      <path d="M16 4.2 a4.2 4.2 0 1 0 -1.5 8.1 C 13.2 15.6 14.6 19.2 18.4 21.6"
+            stroke="var(--pop-primary-deep)" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+      <path d="M14.4 21.4 L 18.9 22 L 18.1 17.7"
+            stroke="var(--pop-primary-deep)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </svg>
+  </div>
+
+  <!-- 視覚的主役: 今日の提案 -->
+  <section class="pop-card rise-in" style="--stagger: 120ms">
+    <p class="section-label"><span class="squiggle">今日の提案</span><span class="count" id="deal-count">3件が選択済み</span></p>
+    <div class="pop-row">
+      <input type="checkbox" checked aria-label="練馬区 一棟マンションを選択">
+      <div class="pr-main">
+        <div class="pr-title">練馬区 一棟マンション</div>
+        <div class="pr-sub">田中様</div>
+      </div>
+      <div class="pr-price">23<span class="num-sep">,</span>048<span class="unit">万円</span></div>
+    </div>
+    <div class="pop-row">
+      <input type="checkbox" checked aria-label="川口市 一棟アパートを選択">
+      <div class="pr-main">
+        <div class="pr-title">川口市 一棟アパート</div>
+        <div class="pr-sub">佐藤様</div>
+      </div>
+      <div class="pr-price">9<span class="num-sep">,</span>800<span class="unit">万円</span></div>
+    </div>
+    <div class="pop-row">
+      <input type="checkbox" checked aria-label="横浜市 区分レジ2戸を選択">
+      <div class="pr-main">
+        <div class="pr-title">横浜市 区分レジ2戸</div>
+        <div class="pr-sub">鈴木様</div>
+      </div>
+      <div class="pr-price">6<span class="num-sep">,</span>480<span class="unit">万円</span></div>
+    </div>
+
+    <div class="cta-row">
+      <button type="button" class="tune-btn" id="tune-btn" aria-expanded="false" aria-controls="settings-panel">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+          <path d="M4 7h9"/><circle cx="17" cy="7" r="2.6"/>
+          <path d="M20 15h-9"/><circle cx="7" cy="15" r="2.6"/>
+        </svg>
+        調整
+      </button>
+      <button type="button" class="pop-cta" id="pop-send">3件を確認して送る</button>
+    </div>
+    <div class="pop-cta-note">
+      <span class="kbd-hint"><span class="kbd">⌘</span><span class="kbd">Enter</span>でも送れます</span>
+    </div>
+
+    <!-- 調整パネル: セグメント+トグル(Enter送信はオプトイン) -->
+    <div class="settings-panel" id="settings-panel" hidden>
+      <div class="setting-item">
+        <span class="s-label">メールの文体</span>
+        <div class="segmented" role="group" aria-label="メールの文体">
+          <button type="button" aria-pressed="true">丁寧</button>
+          <button type="button" aria-pressed="false">フランク</button>
+        </div>
+      </div>
+      <div class="setting-item">
+        <span class="s-label">Enterキーで送信<br><span class="s-sub">Shift+Enterで改行</span></span>
+        <button type="button" class="switch" role="switch" aria-checked="false" aria-label="Enterキーで送信"></button>
+      </div>
+    </div>
+  </section>
+
+  <section class="pop-card rise-in" style="--stagger: 180ms">
+    <p class="section-label"><span class="squiggle">次の提案エリア</span></p>
+    <div class="pop-chips" id="pop-chips">
+      <button type="button" class="pop-chip pressable" aria-pressed="true">東京23区</button>
+      <button type="button" class="pop-chip pressable" aria-pressed="false">首都圏</button>
+      <button type="button" class="pop-chip pressable" aria-pressed="false">関西圏</button>
+      <button type="button" class="pop-chip pressable" aria-pressed="false">地元(和歌山県)</button>
+    </div>
+  </section>
+
+  <!-- 機能カード: 破線+太字(アイコンなし) -->
+  <div class="pop-features rise-in" style="--stagger: 240ms">
+    <button type="button" class="pop-feature">
+      <div class="f-title">概要書から登録</div>
+      <div class="f-sub">貼り付けやドラッグ&ドロップでも</div>
+    </button>
+    <button type="button" class="pop-feature">
+      <div class="f-title">送信レポート</div>
+      <div class="f-sub">反響率と次にやることだけ</div>
+    </button>
+  </div>
+
+  <div class="pop-kpis rise-in" style="--stagger: 300ms">
+    <div class="pop-kpi"><div class="k-label">進行中</div><div class="k-value">12<span class="unit">件</span></div></div>
+    <div class="pop-kpi"><div class="k-label">今月の成約</div><div class="k-value">3<span class="unit">件</span></div></div>
+    <div class="pop-kpi"><div class="k-label">反響率</div><div class="k-value">18.6<span class="unit">%</span></div></div>
+  </div>
+</main>
+
+<div class="pop-bottom">
+  <svg class="wave" viewBox="0 0 1440 40" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M0,20 C240,40 480,0 720,20 C960,40 1200,0 1440,20 L1440,40 L0,40 Z" fill="#fff"/>
+  </svg>
+  <div class="foot">
+    <img class="mascot-img" src="mascot-borderless.svg" alt="" width="30" height="31" style="margin: 0 auto 10px">
+    <p class="pop-footer">
+      モードB「Pop・親しみ」の見本 — <a href="index.html">モードA(ミニマル・信頼)</a> / <a href="catalog.html">部品カタログ</a>
+    </p>
+  </div>
+</div>
+
+<script>
+'use strict'
+document.querySelectorAll('#pop-chips .pop-chip').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('#pop-chips .pop-chip').forEach((c) => c.setAttribute('aria-pressed', 'false'))
+    chip.setAttribute('aria-pressed', 'true')
+  })
+})
+
+/* 選択数とCTAラベルを連動(濃く太い数字=変わる値) */
+function syncDealCount() {
+  const n = document.querySelectorAll('.pop-row input[type="checkbox"]:checked').length
+  document.getElementById('deal-count').textContent = `${n}件が選択済み`
+  const cta = document.getElementById('pop-send')
+  cta.textContent = `${n}件を確認して送る`
+  cta.disabled = n === 0
+}
+document.querySelectorAll('.pop-row input[type="checkbox"]').forEach((cb) => {
+  cb.addEventListener('change', syncDealCount)
+})
+syncDealCount()
+
+const tuneBtn = document.getElementById('tune-btn')
+tuneBtn.addEventListener('click', () => {
+  const panel = document.getElementById('settings-panel')
+  const open = panel.hidden
+  panel.hidden = !open
+  tuneBtn.setAttribute('aria-expanded', String(open))
+})
+
+document.querySelectorAll('.segmented button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    btn.parentElement.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', 'false'))
+    btn.setAttribute('aria-pressed', 'true')
+  })
+})
+
+document.querySelectorAll('.switch').forEach((sw) => {
+  sw.addEventListener('click', () => {
+    sw.setAttribute('aria-checked', String(sw.getAttribute('aria-checked') !== 'true'))
+  })
+})
+</script>
+</body>
+</html>
