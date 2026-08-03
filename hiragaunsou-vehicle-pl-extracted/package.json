@@ -36,7 +36,7 @@
     "@types/node": "^22.10.2",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "@vitejs/plugin-react": "^5.1.2",
+    "@vitejs/plugin-react": "^5.2.0",
     "@vitest/coverage-v8": "^4.1.10",
     "better-sqlite3": "^12.11.1",
     "drizzle-kit": "^0.31.4",
@@ -44,7 +44,7 @@
     "react-dom": "^19.2.8",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.7.2",
-    "vite": "^7.3.6",
+    "vite": "^8.2.0",
     "vitest": "^4.1.10",
     "wrangler": "^4.0.0"
   },
