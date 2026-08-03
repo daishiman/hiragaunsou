@@ -1,0 +1,41 @@
+name: hiragaunsou-vehicle-pl CI
+
+# PR作成・更新時に typecheck / test を自動実行する。
+# このリポジトリは複数プロジェクトのモノレポのため、対象パスに変更があるときだけ走らせる。
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "hiragaunsou-vehicle-pl-extracted/**"
+      - ".github/workflows/hiragaunsou-vehicle-pl-ci.yml"
+
+# GITHUB_TOKENの権限は最小(読み取りのみ)。デプロイ等の書き込みはCDワークフロー側でのみ許可する。
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: hiragaunsou-vehicle-pl-extracted
+
+jobs:
+  ci:
+    name: typecheck + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: hiragaunsou-vehicle-pl-extracted/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # lintスクリプトは現時点でpackage.jsonに未定義のため未実行(導入時にここへ追加する)
+      - name: Test
+        run: npm run test -- --run
