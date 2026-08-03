@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>車両収支管理システム — モック(平賀運送)</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <p class="app-name">車両収支管理システム</p>
+    <p class="app-sub">平賀運送 — 提案モック v0.2</p>
+
+    <div class="nav-group-label">日々の業務</div>
+    <button class="nav-item" data-view="home">ホーム</button>
+    <button class="nav-item" data-view="import">データ登録 <span class="nav-count nav-count-reg" id="nav-reg-count"></span></button>
+    <button class="nav-item" data-view="anomaly">異常値チェック <span class="nav-count" id="nav-anomaly-count"></span></button>
+
+    <div class="nav-group-label">現状データ(閲覧)</div>
+    <button class="nav-item" data-view="grid">月次収支表</button>
+    <button class="nav-item" data-view="annual">年間集計・対前年</button>
+
+    <div class="nav-group-label">分析</div>
+    <button class="nav-item" data-view="dashboard">経営ダッシュボード</button>
+    <button class="nav-item" data-view="deficit">赤字の理由(3分類)</button>
+
+    <div class="nav-group-label">仕様の合意</div>
+    <button class="nav-item" data-view="logic">データ設計(入力と自動化)</button>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <span class="mock-badge">モック — 2025年6月〜2026年5月の実データを表示(保存は動作しません)</span>
+    </header>
+    <main class="content" id="content"></main>
+  </div>
+</div>
+
+<div id="modal-root"></div>
+
+<script src="data.js"></script>
+<script src="js/core.js"></script>
+<script src="js/view-home.js"></script>
+<script src="js/view-import.js"></script>
+<script src="js/view-anomaly.js"></script>
+<script src="js/view-grid.js"></script>
+<script src="js/view-deficit.js"></script>
+<script src="js/view-dashboard.js"></script>
+<script src="js/view-annual.js"></script>
+<script src="js/view-logic.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
