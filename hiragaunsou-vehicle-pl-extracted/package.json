@@ -1,0 +1,43 @@
+{
+  "name": "hiragaunsou-vehicle-pl",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "dev:client": "vite build --watch",
+    "build": "vite build && tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "cf-typegen": "wrangler types",
+    "db:migrate:local": "wrangler d1 migrations apply hiragaunsou_vehicle_pl --local",
+    "db:migrate:remote": "wrangler d1 migrations apply hiragaunsou_vehicle_pl --remote",
+    "deploy": "vite build && wrangler deploy"
+  },
+  "dependencies": {
+    "better-auth": "^1.2.7",
+    "drizzle-orm": "^0.45.2",
+    "encoding-japanese": "^2.2.0",
+    "hono": "^4.6.14"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.9",
+    "@cloudflare/workers-types": "^5.20260730.1",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/coverage-v8": "^2.1.9",
+    "better-sqlite3": "^12.11.1",
+    "drizzle-kit": "^0.31.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8",
+    "wrangler": "^4.0.0"
+  }
+}

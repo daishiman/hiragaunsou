@@ -11,6 +11,8 @@ venv/
 .env
 .env.*
 !.env.example
+.dev.vars
+.dev.vars.*
 
 # JavaScript
 node_modules/
