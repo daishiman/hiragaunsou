@@ -1,0 +1,29 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+
+# JavaScript
+node_modules/
+dist/
+build/
+coverage/
+
+# Editor and temporary files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+~$*
+*.tmp
+*.log
