@@ -31,5 +31,30 @@
   },
   "enableAllProjectMcpServers": true,
   "cleanupPeriodDays": 14,
-  "includeCoAuthoredBy": true
+  "includeCoAuthoredBy": true,
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // .tool_response.filePath // empty' | { read -r f; case \"$f\" in *hiragaunsou-vehicle-pl-extracted*.ts|*hiragaunsou-vehicle-pl-extracted*.tsx) (cd hiragaunsou-vehicle-pl-extracted && npm run typecheck) ;; esac; }",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"hiragaunsou-vehicle-pl-extracted\" 2>/dev/null || exit 0; if ! git diff --quiet -- . 2>/dev/null || ! git diff --cached --quiet -- . 2>/dev/null; then if ! npm run test -- --run >/tmp/hiragaunsou-test-stop.log 2>&1; then echo \"{\\\"systemMessage\\\": \\\"hiragaunsou-vehicle-pl: npm run test が失敗しています(詳細: /tmp/hiragaunsou-test-stop.log)。修正してください。\\\"}\"; fi; fi",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
 }
