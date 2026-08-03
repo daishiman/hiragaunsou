@@ -2,12 +2,17 @@ import { betterAuth } from "better-auth/minimal";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { drizzle } from "drizzle-orm/d1";
 import { APIError } from "better-auth/api";
+import { verifyGoogleIdToken, type GoogleProfile } from "better-auth/social-providers";
+import { decodeJwt } from "jose";
 import * as authSchema from "../db/auth-schema";
 
 /**
  * 認証: Google Workspace 限定ログイン (Better Auth) — Next.js + OpenNext for Cloudflare 版。
- * - Google Workspace 限定は `socialProviders.google.hd` (Google署名済みIDトークンのhd claim) で検証する。
- *   メールドメイン文字列比較は使わない (better-auth-google-gate スキルの不変条件)。
+ * - 許可ドメインは複数指定可能(カンマ区切りの WORKSPACE_DOMAINS)。将来的に協力会社等のドメインを
+ *   追加できるよう、単一文字列(better-authのsocialProviders.google.hdは単一ドメイン比較のみ対応)
+ *   ではなく、Setによる許可リスト判定を getUserInfo/verifyIdToken のオーバーライドで行う。
+ * - 検証は常に Google 署名済みIDトークンの hd claim に対して行う。メールドメインの文字列比較は使わない
+ *   (better-auth-google-gate スキルの不変条件)。
  * - D1バインディングはリクエスト単位で OpenNext の getCloudflareContext() から取得し、
  *   都度 createAuth(env) を呼ぶ(モジュールスコープにDB接続やAuthインスタンスを固定しない)。
  */
@@ -15,12 +20,37 @@ export type AuthEnv = {
   DB: D1Database;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
-  WORKSPACE_DOMAIN: string;
+  WORKSPACE_DOMAINS: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
 };
 
+/** カンマ区切りの許可ドメイン一覧を正規化してSetにする(空要素は除外、大文字小文字を無視)。 */
+export function parseAllowedWorkspaceDomains(raw: string): Set<string> {
+  return new Set(
+    raw
+      .split(",")
+      .map((domain) => domain.trim().toLowerCase())
+      .filter((domain) => domain.length > 0),
+  );
+}
+
+/**
+ * Google署名済みIDトークンの hd claim が許可ドメインSetに含まれるかを判定する。
+ * 許可リストが空の場合は fail-closed(誰も通さない)。
+ */
+export function isWorkspaceHostedDomainAllowed(
+  allowedDomains: Set<string>,
+  hostedDomain: unknown,
+): boolean {
+  if (allowedDomains.size === 0) return false;
+  if (typeof hostedDomain !== "string" || hostedDomain.length === 0) return false;
+  return allowedDomains.has(hostedDomain.toLowerCase());
+}
+
 export function createAuth(env: AuthEnv) {
+  const allowedDomains = parseAllowedWorkspaceDomains(env.WORKSPACE_DOMAINS);
+
   return betterAuth({
     baseURL: env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
@@ -35,9 +65,40 @@ export function createAuth(env: AuthEnv) {
       google: {
         clientId: env.GOOGLE_CLIENT_ID,
         clientSecret: env.GOOGLE_CLIENT_SECRET,
-        // Google Workspace 限定。個人Gmail・別ドメイン・グループアドレスは hd 不一致で拒否される。
-        hd: env.WORKSPACE_DOMAIN,
         prompt: "select_account",
+        // better-authの`hd`オプションは単一ドメイン比較のみ対応のため使わず、
+        // getUserInfo/verifyIdTokenをオーバーライドして許可ドメインSetで検証する。
+        // どちらもGoogleから直接得た(TLS経由・未改ざん)IDトークンのhd claimを見る。
+        // 個人Gmail・許可外ドメイン・グループアドレスはhd不一致で拒否される。
+        async getUserInfo(token) {
+          if (!token.idToken) return null;
+          const profile = decodeJwt(token.idToken) as GoogleProfile;
+          if (!isWorkspaceHostedDomainAllowed(allowedDomains, profile.hd)) {
+            console.error(
+              `Google sign-in rejected: hosted domain "${profile.hd ?? "<missing>"}" is not in WORKSPACE_DOMAINS.`,
+            );
+            return null;
+          }
+          return {
+            user: {
+              id: profile.sub,
+              name: profile.name,
+              email: profile.email,
+              image: profile.picture,
+              emailVerified: profile.email_verified,
+            },
+            data: profile,
+          };
+        },
+        async verifyIdToken(idToken, nonce) {
+          const jwtClaims = await verifyGoogleIdToken({
+            token: idToken,
+            audience: env.GOOGLE_CLIENT_ID,
+            nonce,
+          });
+          if (!jwtClaims) return false;
+          return isWorkspaceHostedDomainAllowed(allowedDomains, jwtClaims.hd);
+        },
       },
     },
     rateLimit: {

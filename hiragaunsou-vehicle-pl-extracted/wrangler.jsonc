@@ -38,8 +38,8 @@
     "binding": "IMAGES"
   },
   "vars": {
-    // Google Workspace限定ログインのドメイン。後続でユーザーが確定させるプレースホルダー
-    "WORKSPACE_DOMAIN": "example.co.jp",
+    // Google Workspace限定ログインの許可ドメイン（カンマ区切り）。本番では実ドメインへ置換する。
+    "WORKSPACE_DOMAINS": "example.co.jp",
     "BETTER_AUTH_URL": "https://hiragaunsou-vehicle-pl.daishimanju.workers.dev"
   },
   "observability": {
