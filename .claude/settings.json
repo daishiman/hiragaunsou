@@ -1,6 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
+    "defaultMode": "bypassPermissions",
     "allow": [
       "Read",
       "Glob",
@@ -28,6 +29,7 @@
       "Bash(rm -rf ~*)"
     ]
   },
+  "enableAllProjectMcpServers": true,
   "cleanupPeriodDays": 14,
   "includeCoAuthoredBy": true
 }
