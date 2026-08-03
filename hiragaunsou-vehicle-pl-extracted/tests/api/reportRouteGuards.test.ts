@@ -22,12 +22,16 @@ vi.mock("@opennextjs/cloudflare", () => ({
   })),
 }));
 
-const findSinceMock = vi.fn();
+const { findSinceMock, D1UsageLogRepositoryMock } = vi.hoisted(() => {
+  const findSinceMock = vi.fn();
+  class D1UsageLogRepositoryMock {
+    findSince = findSinceMock;
+    record = vi.fn();
+  }
+  return { findSinceMock, D1UsageLogRepositoryMock };
+});
 vi.mock("../../src/infrastructure/db/D1UsageLogRepository", () => ({
-  D1UsageLogRepository: vi.fn().mockImplementation(() => ({
-    findSince: findSinceMock,
-    record: vi.fn(),
-  })),
+  D1UsageLogRepository: D1UsageLogRepositoryMock,
 }));
 
 vi.mock("../../src/infrastructure/db/client", () => ({

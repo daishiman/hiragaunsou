@@ -13,6 +13,11 @@ on:
 permissions:
   contents: read
 
+# 同じPRへの連続pushで古い検証を走らせ続けない。main以外は新しいrunを優先する。
+concurrency:
+  group: hiragaunsou-vehicle-pl-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 defaults:
   run:
     working-directory: hiragaunsou-vehicle-pl-extracted
@@ -21,6 +26,7 @@ jobs:
   ci:
     name: typecheck + test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -36,6 +42,18 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      # lintスクリプトは現時点でpackage.jsonに未定義のため未実行(導入時にここへ追加する)
       - name: Test
         run: npm run test -- --run
+
+      - name: Build for Cloudflare
+        run: npm run cf:build
+
+      # OpenNext生成物を含むworker型を生成できることを検証する。
+      # `--check` はRunnerごとのOpenNext出力差でハッシュが非決定的になるため使わず、
+      # 型安全性は上記のTypecheckとCloudflare本番ビルドで担保する。
+      - name: Generate Cloudflare types
+        run: npm run cf-typegen
+
+      # 本番依存だけを対象に、High/Criticalの既知脆弱性をリリースゲートにする。
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high

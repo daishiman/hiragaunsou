@@ -39,5 +39,14 @@ export function buildImportFileKey(
   timestamp: number,
   originalFileName: string,
 ): string {
-  return `imports/${yearMonth}/${fileType}/${timestamp}_${originalFileName}`;
+  const safeYearMonth = /^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonth) ? yearMonth : "unknown-month";
+  const safeFileType = fileType.replace(/[^a-z0-9_-]/gi, "_").slice(0, 80) || "unknown";
+  // R2ではキーに/が使えるため、元ファイル名をそのまま連結すると意図しない階層を作れる。
+  // 監査で読める範囲の日本語は残し、制御文字・パス文字だけを除去する。
+  const safeFileName = originalFileName
+    .normalize("NFKC")
+    .replace(/[\\/\u0000-\u001F\u007F]/g, "_")
+    .replace(/[^\p{L}\p{N}._()（）\- ]/gu, "_")
+    .slice(0, 180) || "upload";
+  return `imports/${safeYearMonth}/${safeFileType}/${timestamp}_${safeFileName}`;
 }

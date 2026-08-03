@@ -15,6 +15,7 @@ export const SOURCE_TYPES = [
   "vehicle_operation", // 車両別運行実績表 (ITP-WEBServiceV3, デジタコ)
   "sales_monitor", // 売上モニタリスト (車楽クラウド)
   "payroll", // 給与集計表(日給者) (ACELINK NX-CE)
+  "monthly_pl_workbook", // 既存の完成済み「○月収支表」Excel（移行期間の正本取込）
 ] as const;
 
 export const csvImportBatch = sqliteTable("csv_import_batch", {

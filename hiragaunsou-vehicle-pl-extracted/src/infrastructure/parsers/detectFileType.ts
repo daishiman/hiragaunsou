@@ -16,14 +16,15 @@ export function detectFileType(
 }
 
 function detectByFileName(fileName: string): SourceType | "unknown" {
-  if (fileName.includes("運行実績表")) return "vehicle_operation";
-  if (fileName.includes("売上モニタリスト")) return "sales_monitor";
-  if (fileName.includes("給与集計表")) return "payroll";
+  const normalized = fileName.normalize("NFKC");
+  if (normalized.includes("運行実績表")) return "vehicle_operation";
+  if (normalized.includes("売上モニタリスト")) return "sales_monitor";
+  if (normalized.includes("給与集計表")) return "payroll";
   return "unknown";
 }
 
 function detectByHeader(header: string[]): SourceType | "unknown" {
-  const set = new Set(header.map((h) => h.trim()));
+  const set = new Set(header.map((h) => h.replace(/^\uFEFF/, "").normalize("NFKC").trim()));
   const hasAll = (cols: string[]) => cols.every((c) => set.has(c));
 
   if (hasAll(["車両番号", "稼動時間", "総距離"])) return "vehicle_operation";
