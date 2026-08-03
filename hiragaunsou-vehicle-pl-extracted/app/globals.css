@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+:root {
+  --brand: #1d63be;
+  --brand-deep: #15498f;
+  --brand-soft: #e3edfa;
+  --brand-mist: #eef3fa;
+
+  --accent: #e8590c;
+  --accent-deep: #c74e0b;
+
+  --ink: #16191d;
+  --ink-muted: #545e6b;
+  --line: #e3e6ea;
+  --subtle: #f5f6f8;
+
+  --danger: #d93025;
+  --caution-soft: #fdf6e3;
+  --caution-border: #e6c96a;
+
+  --font-num: "Helvetica Neue", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-deep: var(--brand-deep);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-mist: var(--brand-mist);
+  --color-accent: var(--accent);
+  --color-accent-deep: var(--accent-deep);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-line: var(--line);
+  --color-subtle: var(--subtle);
+  --color-danger: var(--danger);
+  --color-caution-soft: var(--caution-soft);
+  --color-caution-border: var(--caution-border);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+body {
+  background: var(--brand-mist);
+  color: var(--ink);
+  font-family:
+    "Helvetica Neue",
+    Arial,
+    "Hiragino Kaku Gothic ProN",
+    "Hiragino Sans",
+    "Noto Sans JP",
+    Meiryo,
+    sans-serif;
+  font-feature-settings: "palt";
+}
+
+.num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.pressable {
+  transition: transform 100ms;
+}
+.pressable:active {
+  transform: scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pressable,
+  .pressable:active {
+    transition: none;
+    transform: none;
+  }
+}
