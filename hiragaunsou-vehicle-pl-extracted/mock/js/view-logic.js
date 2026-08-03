@@ -16,10 +16,10 @@
     { item: '車両リース・割賦', layer: 2, src: '車両マスタ(毎月支払額)', how: '契約時登録 → 毎月自動計上', status: 'fixed' },
     { item: '一般管理費', layer: 2, src: '売上 × 16.9%(3期平均)', how: '率マスタから自動(当面現行踏襲)', status: 'agree' },
     { item: '固定費・変動費・経費計・損益・利益率', layer: 2, src: '上記すべて', how: '現行Excelの定義式をそのまま実装。手入力は構造的に不可', status: 'fixed' },
-    { item: '軽油代(インタンク/外部)・給油量', layer: 3, src: '燃料集計Excel(別担当作成)', how: '第1段: ファイルD&D自動パース / 第2段: 1次ソース直結', status: 'hypo' },
-    { item: 'インタンク単価(円/ℓ)', layer: 3, src: '月次の仕入単価', how: '月1回入力 → 全車へ一括反映', status: 'fixed' },
-    { item: '給与', layer: 3, src: '給与計算ソフト(製品名 要確認)', how: '総支給額のみCSV取込(取れなければ一括貼付UI)', status: 'hypo' },
-    { item: '修理費(実費)', layer: 3, src: '修理伝票・請求書', how: '毎月入力(将来: 請求書OCR)。標準原価とは別フィールドで保持', status: 'agree' },
+    { item: '軽油代(インタンク/外部)・給油量', layer: 3, src: '給油レシート・外部請求書', how: 'CSV/Excelは自動取込、PDFはOCRで車番・金額を抽出', status: 'hypo' },
+    { item: 'インタンク単価(円/ℓ)', layer: 3, src: '月次の仕入単価', how: '請求書/仕入データから取得し、全車へ自動反映', status: 'hypo' },
+    { item: '給与', layer: 3, src: 'ACELINK NX-CE CSV', how: '給与集計表（日給者）をファイル取込', status: 'fixed' },
+    { item: '修理費(実費)', layer: 3, src: '修理伝票・請求書', how: '車番・金額をOCR/CSV取込。標準原価とは別フィールドで保持', status: 'agree' },
   ]
 
   const STATUS = {
@@ -31,7 +31,7 @@
   const LAYER_HEAD = {
     1: '層① 自動流入 — 1次ソースから自動で入る(人間は触らない)',
     2: '層② 連鎖確定 — 入力とマスタから自動計算で決まる',
-    3: '層③ 人間入力 — 毎月人間が入れる(5項目以内が目標)',
+    3: '層③ 原票読取 — CSV/Excel/PDFから取得し、例外だけ確認する',
   }
 
   const QUESTIONS = [
@@ -81,9 +81,9 @@
             <p>車番・運転者・稼働Kmが決まると、マスタから自動計算。</p>
           </div>
           <div class="sf">
-            <div class="sf-num">03 — 人が入れるのは5つだけ</div>
+            <div class="sf-num">03 — 原票を自動で読む</div>
             <div class="sf-title">燃料・給与・修理費・単価・例外</div>
-            <p>毎月合計30分以内が目標。</p>
+            <p>入力ではなく、ファイル取込と要確認の判断だけにする。</p>
           </div>
         </div>
       </div>
