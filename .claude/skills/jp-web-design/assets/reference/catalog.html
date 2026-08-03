@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>デザインカタログ — jp-web-design モデルケース</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="app-name">デザインカタログ<span class="app-name-sub">jp-web-design の部品と状態の一覧</span></div>
+  <nav class="app-nav" aria-label="主要ナビゲーション">
+    <a href="index.html" style="font-size:13px; color:var(--brand-deep); text-decoration:none; padding:6px 12px">モードA(ミニマル)</a>
+    <a href="pop.html" style="font-size:13px; color:var(--brand-deep); text-decoration:none; padding:6px 12px">モードB(Pop)</a>
+  </nav>
+</header>
+
+<main>
+  <h1 class="page-title">部品カタログ</h1>
+  <p class="page-lede">Skill jp-web-design の各セクションを、そのまま実装した見本です。色は「意味」にしか使いません。</p>
+
+  <!-- §1-2 カラートークン -->
+  <section class="catalog-section">
+    <h2 class="section-heading">カラートークン — プライマリ + 差し色1色 + グレースケール</h2>
+    <p class="spec-note">60% = 白・極薄グレーの地 / 30% = 文字・罫線 / 10% = 操作(brand)と結果(accent)。差し色は1色まで・1画面の色相は3つまで。企業カラー指定時は brand にプライマリ、accent に補色系1色(緑系プライマリ→オレンジ等)を割り当て、残りはグレースケールのまま。黒背景は絶対に作らない。</p>
+    <div class="swatch-row">
+      <div class="swatch"><div class="sw-color" style="background:var(--brand)"></div><div class="sw-meta"><strong>brand</strong><br><code>#1d63be</code> 操作・選択・リンク・進捗のみ</div></div>
+      <div class="swatch"><div class="sw-color" style="background:var(--accent)"></div><div class="sw-meta"><strong>accent</strong><br><code>#e8590c</code> 主要CTA+キー数字の2箇所だけ</div></div>
+      <div class="swatch"><div class="sw-color" style="background:var(--ink)"></div><div class="sw-meta"><strong>ink</strong><br><code>#16191d</code> 本文</div></div>
+      <div class="swatch"><div class="sw-color" style="background:var(--ink-muted)"></div><div class="sw-meta"><strong>ink-muted</strong><br><code>#545e6b</code> 補足(これより薄くしない)</div></div>
+      <div class="swatch"><div class="sw-color" style="background:var(--line)"></div><div class="sw-meta"><strong>line</strong><br><code>#e3e6ea</code> 罫線・境界</div></div>
+      <div class="swatch"><div class="sw-color" style="background:var(--danger)"></div><div class="sw-meta"><strong>danger</strong><br><code>#d93025</code> エラー・破壊的操作のみ</div></div>
+      <div class="swatch"><div class="sw-color" style="background:var(--brand-soft)"></div><div class="sw-meta"><strong>brand-soft</strong><br><code>#e3edfa</code> 選択・チップ・主役面</div></div>
+      <div class="swatch"><div class="sw-color" style="background:var(--brand-mist)"></div><div class="sw-meta"><strong>brand-mist</strong><br><code>#eef3fa</code> ページ地(白の単調を回避)</div></div>
+    </div>
+    <p class="spec-note" style="margin-top:16px">ブランド適用サンプル(頻出パターン)。原色・蛍光は使わず、差し色は淡め・柔らかめに倒す(青×オレンジのみ実績上そのまま)。</p>
+    <div class="swatch-row">
+      <div class="swatch"><div class="sw-color" style="background:#0e7490"></div><div class="sw-meta"><strong>深めの水色(brand例)</strong><br><code>#0e7490</code> 「真っ青」よりこちらが多い</div></div>
+      <div class="swatch"><div class="sw-color" style="background:#e57a9e"></div><div class="sw-meta"><strong>淡めのローズ(差し色例)</strong><br><code>#e57a9e</code> 鮮ピンクはきつい。柔らかく</div></div>
+      <div class="swatch"><div class="sw-color" style="background:#e0973f"></div><div class="sw-meta"><strong>ソフトアンバー(差し色例)</strong><br><code>#e0973f</code> 緑・紫系のプライマリに</div></div>
+    </div>
+  </section>
+
+  <!-- §5 ボタン -->
+  <section class="catalog-section">
+    <h2 class="section-heading">ボタン(3階層+破壊的)</h2>
+    <p class="spec-note">ラベルは動詞で終える。主要CTAは1画面に基本1つ。実行中は幅を変えずに「送信中…」へ。</p>
+    <div class="card card-pad">
+      <div class="demo-row">
+        <button type="button" class="btn btn-primary pressable">送信する</button>
+        <button type="button" class="btn btn-secondary pressable">編集する</button>
+        <button type="button" class="btn btn-tertiary pressable">キャンセル</button>
+        <button type="button" class="btn btn-danger-outline pressable">削除する</button>
+        <button type="button" class="btn btn-primary" disabled>送信する</button>
+        <button type="button" class="btn btn-primary" style="min-width:112px"><span class="spinner" aria-hidden="true"></span>送信中…</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- §5 バッジ -->
+  <section class="catalog-section">
+    <h2 class="section-heading">ステータスバッジ</h2>
+    <p class="spec-note">色相を増やさず「塗り・罫線・打消し・破線」の違いで状態を区別する。文字ラベルを必ず持つ。</p>
+    <div class="card card-pad">
+      <div class="demo-row">
+        <span class="badge badge-active">進行中</span>
+        <span class="badge badge-done">成約</span>
+        <span class="badge badge-closed">売却済</span>
+        <span class="badge badge-dropped">取下げ</span>
+        <span class="badge badge-alert">要確認</span>
+        <span class="badge badge-required">必須</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- §5 フォーム -->
+  <section class="catalog-section">
+    <h2 class="section-heading">フォーム</h2>
+    <p class="spec-note">ラベル上置き・placeholderをラベル代わりにしない・エラーは項目直下に「現象+直し方」。</p>
+    <div class="card card-pad">
+      <div class="grid-2">
+        <div class="field">
+          <label for="cat-email">メールアドレス <span class="badge badge-required">必須</span></label>
+          <input id="cat-email" type="email" inputmode="email" placeholder="taro@example.com">
+          <p class="hint">提案メールの送信先になります。</p>
+        </div>
+        <div class="field has-error">
+          <label for="cat-email-err">メールアドレス <span class="badge badge-required">必須</span></label>
+          <input id="cat-email-err" type="email" inputmode="email" value="sato@example">
+          <p class="error-msg">メールアドレスの形式が正しくありません。「@」以降にドメインを入れてください。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- §2 プリセット2層(ux-design §2) -->
+  <section class="catalog-section">
+    <h2 class="section-heading">選択チップ(等幅グリッド・孤児折返し禁止)</h2>
+    <p class="spec-note">4個 = grid-cols-2 → sm:4。flex-wrapの成り行きに任せず「1個だけ折返し」を防ぐ。よくある選択肢を上段に。</p>
+    <div class="card card-pad">
+      <div class="chip-grid">
+        <button type="button" class="chip pressable" aria-pressed="true">東京23区</button>
+        <button type="button" class="chip pressable" aria-pressed="false">首都圏</button>
+        <button type="button" class="chip pressable" aria-pressed="false">関西圏</button>
+        <button type="button" class="chip pressable" aria-pressed="false">地元(和歌山県)</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- §5 テーブル -->
+  <section class="catalog-section">
+    <h2 class="section-heading">テーブル — 数値はExcel基準</h2>
+    <p class="spec-note">セルは「生数値+3桁カンマ」のみ。単位は列ヘッダーへ(1列1単位)。右揃え+等幅数字+欧文フォント。桁の圧縮はヘッダーの単位変更(円→万円→百万円)で行い、セル側で概数に丸めない。SPでは主要3項目のカードに組み替える。</p>
+    <div class="card">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>物件</th><th class="col-num">価格(万円)</th><th class="col-num">利回り(%)</th><th>状態</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>練馬区 一棟マンション</td><td class="col-num num">23,048</td><td class="col-num num">7.2</td><td><span class="badge badge-active">進行中</span></td></tr>
+            <tr><td>川口市 一棟アパート</td><td class="col-num num">9,800</td><td class="col-num num">8.1</td><td><span class="badge badge-active">進行中</span></td></tr>
+            <tr><td>船橋市 一棟アパート</td><td class="col-num num">7,350</td><td class="col-num num">8.4</td><td><span class="badge badge-closed">売却済</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- §5 空状態 / スケルトン / 注意の面 -->
+  <section class="catalog-section">
+    <h2 class="section-heading">空状態 / スケルトン / 注意の面</h2>
+    <p class="spec-note">空状態は「状態の説明+次の1歩」をセットで。読み込みはスピナーよりスケルトン。</p>
+    <div class="grid-2">
+      <div class="empty-state">
+        <p class="es-title">まだ物件の登録がありません</p>
+        <p class="es-body">最初の1件を登録すると、ここに提案リストが表示されます。</p>
+        <button type="button" class="btn btn-primary pressable">概要書から登録する</button>
+      </div>
+      <div style="display:grid; gap:12px">
+        <div class="card card-pad" aria-hidden="true" style="display:grid; gap:10px">
+          <div class="skeleton" style="height:16px; width:60%"></div>
+          <div class="skeleton" style="height:16px; width:85%"></div>
+          <div class="skeleton" style="height:16px; width:45%"></div>
+        </div>
+        <div class="caution-panel">この操作は取り消せません。内容をご確認ください。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- §9 データ表現 -->
+  <section class="catalog-section">
+    <h2 class="section-heading">データ表現 — バーは「100%が定義できる」ときだけ</h2>
+    <p class="spec-note">2〜3値の比較はバーより「数字+差分」。バーを使うのは進捗(分母が明示できる)・構成比・0起点の実数比較のみ。比率同士を恣意的な幅で描かない。裸の棒禁止(ラベル+数値必須)。</p>
+    <div class="grid-2">
+      <div class="card card-pad">
+        <p class="spec-note" style="margin-top:0">正: 少数比較は数字+差分</p>
+        <div class="delta-compare">
+          <div class="dc-item">
+            <div class="dc-label">先月</div>
+            <div class="dc-value" style="color:var(--ink-muted)">11.2<span class="unit">%</span></div>
+          </div>
+          <span class="dc-arrow" aria-hidden="true">→</span>
+          <div class="dc-item">
+            <div class="dc-label">今月</div>
+            <div class="dc-value">18.6<span class="unit">%</span></div>
+          </div>
+          <span class="delta-chip">+7.4pt</span>
+        </div>
+      </div>
+      <div class="card card-pad">
+        <p class="spec-note" style="margin-top:0">正: 分母が明示できる進捗バー</p>
+        <div class="compare-item">
+          <div class="ci-head"><span class="ci-label">目標120通に対する実績</span><span class="ci-value">86<span class="unit">/120通</span></span></div>
+          <div class="bar-track"><div class="bar-fill is-brand" style="width:71.7%"></div></div>
+          <p class="footnote" style="margin:6px 0 0">達成率 71.7%(100% = 月間目標120通)</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- §3 タイポグラフィ・メリハリ -->
+  <section class="catalog-section">
+    <h2 class="section-heading">タイポグラフィ — メリハリと数字のシャープさ</h2>
+    <p class="spec-note">1画面に視覚的主役を1つ。主役と本文のサイズ比は2.5倍以上。数字は欧文フォント+等幅数字。カンマは0.8emに縮小、通貨記号は単位扱い(62%+間隔)で「数字=変数」と見分ける。</p>
+    <div class="card card-pad">
+      <div class="hero-number" style="padding:8px 0 16px">
+        <div class="hn-label">ページ主数字 = 視覚的主役(唯一のaccent・カンマ縮小・¥は単位扱い)</div>
+        <div class="hn-value"><span class="currency">¥</span>372<span class="num-sep">,</span>160<span class="num-sep">,</span>000</div>
+      </div>
+      <dl class="def-list" style="border-top:1px solid var(--line); padding-top:14px">
+        <dt>ページタイトル</dt><dd style="font-weight:700; font-size:18px">18〜20px・太字</dd>
+        <dt>セクション見出し</dt><dd style="font-weight:700; font-size:13px">13px・太字・静かに</dd>
+        <dt>本文</dt><dd>14px・normal・行間1.7</dd>
+        <dt>補足・ラベル</dt><dd style="font-size:12px; color:var(--ink-muted)">12px・ink-muted(これより薄くしない)</dd>
+        <dt>数字(和文フォント)</dt><dd style="font-family:'Hiragino Kaku Gothic ProN','Hiragino Sans',Meiryo,sans-serif; font-weight:700">123,456,789 — ボサッと見える(禁止)</dd>
+        <dt>数字(欧文フォント)</dt><dd class="num" style="font-weight:700">123,456,789 — シャープ(.num を必ず当てる)</dd>
+      </dl>
+    </div>
+  </section>
+</main>
+
+</body>
+</html>
