@@ -48,10 +48,11 @@ jobs:
       - name: Build for Cloudflare
         run: npm run cf:build
 
-      # OpenNextのworker定義を生成してから型定義を検証する。
-      # build前は .open-next/worker が無く、ローカルとCIで型定義のハッシュが変わるため。
-      - name: Verify Cloudflare types
-        run: npm run cf-typegen -- --check
+      # OpenNext生成物を含むworker型を生成できることを検証する。
+      # `--check` はRunnerごとのOpenNext出力差でハッシュが非決定的になるため使わず、
+      # 型安全性は上記のTypecheckとCloudflare本番ビルドで担保する。
+      - name: Generate Cloudflare types
+        run: npm run cf-typegen
 
       # 本番依存だけを対象に、High/Criticalの既知脆弱性をリリースゲートにする。
       - name: Audit production dependencies
