@@ -3,12 +3,10 @@
 import { createAuthClient } from "better-auth/client";
 
 /**
- * Better Auth クライアント(Next.js版)。baseURLは同一オリジンの /api/auth。
- * src/client/src/authClient.ts (旧Vite版) と同じ設計を踏襲する。
+ * Better Auth クライアント(Next.js版)。同一オリジンの既定 `/api/auth` を使う。
+ * 相対URLをbaseURLとして渡すと、Better Auth 1.6系では無効になる。
  */
-export const authClient = createAuthClient({
-  baseURL: "/api/auth",
-});
+export const authClient = createAuthClient();
 
 export function signInWithGoogle() {
   return authClient.signIn.social({
