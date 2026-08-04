@@ -16,7 +16,7 @@
 4. GitHub Secretsの登録(CI/CDが動くようにする)
 5. 本番URLへのスモークテスト(実際に開いて動作確認)
 6. web-perf(表示速度)の計測
-7. (任意・低優先度)未使用パッケージ`hono`の削除
+7. (完了)未使用パッケージ`hono`の削除
 
 ---
 
@@ -251,35 +251,12 @@ GitHub Actionsで「PRを出すと自動でテストが走る」「mainにマー
 
 ---
 
-## タスク7(任意・低優先度): 未使用パッケージ`hono`の削除
+## タスク7(完了): 未使用パッケージ`hono`の削除
 
 ### 何をするか
-以前の実装(Cloudflare Workers単体構成)で使っていた`hono`というパッケージが、Next.js構成への移行後も`package.json`に残ったままになっています。実害はありませんが、次回の軽微な整理のタイミングで削除して問題ありません。
+以前のCloudflare Workers単体構成で使われていた`hono`は削除済みです。このアプリはNext.js App Router + OpenNext構成であり、APIは`app/api/`のRoute Handlerで実装します。Honoを再導入しないでください。
 
-### 手順
-1. ターミナルでプロジェクトフォルダへ移動します。
-   ```bash
-   cd "/Users/dm/dev/dev/TireMind/平賀運送/hiragaunsou-vehicle-pl-extracted"
-   ```
-2. 次のコマンドで、コード中に`hono`が使われていないことを再確認します(何も表示されなければ未使用です)。
-   ```bash
-   grep -rl "from \"hono\"\|from 'hono'" app src 2>/dev/null
-   ```
-3. 何も表示されなければ、アンインストールします。
-   ```bash
-   npm uninstall hono
-   ```
-4. 型検査とテストが通ることを確認します。
-   ```bash
-   npm run typecheck
-   npm run test -- --run
-   ```
-5. 問題なければコミットします。
-   ```bash
-   git add package.json package-lock.json
-   git commit -m "未使用のhono依存を削除"
-   git push
-   ```
+確認済み: `app/`、`src/`、`tests/`、`scripts/`にHonoのimportはなく、`package.json`にも依存はありません。
 
 ---
 
@@ -291,4 +268,4 @@ GitHub Actionsで「PRを出すと自動でテストが走る」「mainにマー
 - [ ] タスク4: GitHub Secrets(`CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID`)登録 + `production` Environment作成
 - [ ] タスク5: 本番URLでのログイン・CSVインポートの動作確認
 - [ ] タスク6: PageSpeed Insightsでの表示速度計測
-- [ ] タスク7(任意): `hono`パッケージ削除
+- [x] タスク7: `hono`パッケージ削除
