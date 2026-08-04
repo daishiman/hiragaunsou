@@ -57,6 +57,19 @@ describe("aggregateSalesByVehicle", () => {
     expect(target!.toll).toBeGreaterThanOrEqual(miscRow!.toll);
   });
 
+  // 収支表 L列「高速他料金」= 通行料 + その他(燃料サーチャージ+待機時間料+付帯料金)。
+  // 現行Excelの「車両別売上」シートがこの2つを足して収支表へ転記している。
+  it("附帯料金に顧客請求分の通行料を含める(収支表の高速他料金と同じ定義)", () => {
+    const csv = [
+      "車両コード,運転者名,受取運賃,通行料,燃料サーチャージ,待機時間料,付帯料金",
+      "22,濱田,\"1,552,000\",\"250,000\",\"8,000\",\"4,110\",0",
+    ].join("\r\n");
+
+    const rows = parseSalesMonitorCsv(csv);
+    expect(rows[0].toll).toBe(250000);
+    expect(rows[0].ancillaryFee).toBe(262110);
+  });
+
   it("同一車両の複数伝票を合算しslipCountをカウントする", () => {
     const rows = parseSalesMonitorCsv(new Uint8Array(fixture));
     const agg = aggregateSalesByVehicle(rows);

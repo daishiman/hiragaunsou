@@ -48,8 +48,9 @@ export interface FinalizeMonthlyPlInput {
   yearMonth: string;
   manualInputs: ManualVehicleInput[];
   /**
-   * STEP2: キリンの輸送協力金・経営支援金の配賦結果 (車番 → その他欄への加算額)。
-   * 手入力の miscOther に加算する (置き換えない)。
+   * STEP2: キリンの輸送協力金・経営支援金の配賦結果 (車番 → 加算額)。
+   * 現行Excelは配賦額を収支表 L列「高速他料金」(=売上側) に載せているため、
+   * 附帯料金に加算する (置き換えない)。費用側の諸経費ではない。
    */
   kirinAllocations?: readonly { vehicleNo: string; amount: number }[];
   /**
@@ -115,15 +116,21 @@ export class FinalizeMonthlyPlUseCase {
       if (r.naturalKey) payrollByEmployee.set(r.naturalKey, r.raw as PayrollRecord);
     }
 
-    const driversByVehicle = new Map<string, { name: string; salary: number; welfare: number }>();
+    const driversByVehicle = new Map<
+      string,
+      { name: string; salary: number; welfare: number; count: number }
+    >();
     for (const driver of drivers) {
       if (!driver.vehicleNo) continue;
       const payroll = payrollByEmployee.get(driver.employeeCode);
-      const existing = driversByVehicle.get(driver.vehicleNo) ?? { name: "", salary: 0, welfare: 0 };
+      const existing =
+        driversByVehicle.get(driver.vehicleNo) ?? { name: "", salary: 0, welfare: 0, count: 0 };
       driversByVehicle.set(driver.vehicleNo, {
         name: existing.name ? `${existing.name}/${driver.driverName}` : driver.driverName,
         salary: existing.salary + (payroll?.totalPay ?? 0),
         welfare: existing.welfare + (payroll?.socialInsuranceTotal ?? 0),
+        // 賞与は運転者1人あたりの支給額なので、2人乗務の車両は2人分になる
+        count: existing.count + 1,
       });
     }
 
@@ -132,7 +139,7 @@ export class FinalizeMonthlyPlUseCase {
       manualByVehicle.set(m.vehicleNo, m);
     }
 
-    // STEP2: キリン配賦は「その他」欄への加算。手入力済みの値を消さずに足す。
+    // STEP2: キリン配賦は売上(高速他料金)への加算。集計済みの値を消さずに足す。
     const kirinByVehicle = new Map<string, number>();
     for (const a of input.kirinAllocations ?? []) {
       kirinByVehicle.set(a.vehicleNo, (kirinByVehicle.get(a.vehicleNo) ?? 0) + a.amount);
@@ -161,7 +168,7 @@ export class FinalizeMonthlyPlUseCase {
         hours: op?.operatingHours ?? 0,
         km: op?.totalDistanceKm ?? 0,
         fare: sales?.fare ?? 0,
-        fee: sales?.ancillaryFee ?? 0,
+        fee: (sales?.ancillaryFee ?? 0) + (kirinByVehicle.get(vehicle.vehicleNo) ?? 0),
         toll: sales?.toll ?? 0,
         fuelInQty: manual.fuelInQty,
         fuelOutQty: manual.fuelOutQty,
@@ -179,7 +186,8 @@ export class FinalizeMonthlyPlUseCase {
         insVoluntary: vehicle.insVoluntary,
         taxAuto: vehicle.taxAuto,
         taxWeight: vehicle.taxWeight,
-        miscOther: manual.miscOther + (kirinByVehicle.get(vehicle.vehicleNo) ?? 0),
+        miscOther: manual.miscOther,
+        driverCount: driver?.count ?? 0,
         lease: vehicle.lease,
         installment: vehicle.installment,
         standardCostRate,

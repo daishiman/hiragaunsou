@@ -80,6 +80,12 @@ export interface VehiclePlInput {
    * null/undefined のときだけ toll × tollDiscountRate で近似する。
    */
   tollDiscountActual?: number | null;
+  /**
+   * その車両に紐づく運転者の人数。賞与は運転者1人あたりの月額なので、
+   * 2人乗務の車両は2人分になる (現行Excelも2人乗務車は月5万円で計上している)。
+   * 省略時は1人として扱う (運転者マスタ未整備の車両で賞与が消えないようにする)。
+   */
+  driverCount?: number | null;
 }
 
 export interface VehiclePlCalculated {
@@ -172,7 +178,7 @@ export function calculateVehiclePl(
     input.repairActual + tire + input.equip + input.mainte,
   );
 
-  const bonus = round2(rates.bonusAnnual / 12);
+  const bonus = round2((rates.bonusAnnual / 12) * (input.driverCount ?? 1));
   const laborTotal = round2(input.salary + bonus + input.welfare);
 
   const insTotal = round2(input.insCompulsory + input.insVoluntary);

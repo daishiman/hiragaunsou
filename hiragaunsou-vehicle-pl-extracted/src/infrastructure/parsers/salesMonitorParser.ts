@@ -16,7 +16,13 @@ export interface SalesMonitorRow {
   driverName: string;
   fare: number; // 受取運賃
   toll: number; // 通行料 (道路使用料)
-  ancillaryFee: number; // 附帯料金 = 燃料サーチャージ + 待機時間料 + 付帯料金
+  /**
+   * 収支表 L列「高速他料金」= 通行料 + その他(燃料サーチャージ + 待機時間料 + 付帯料金)。
+   * 現行Excelの「車両別売上」シートが 受取運賃 / 通行料 / その他 のピボットを作り、
+   * 「他 = 通行料 + その他」を収支表へ転記しているのに合わせる。
+   * 顧客への請求分であり、費用側の道路使用料(高速協の請求実費)とは別物なので二重計上ではない。
+   */
+  ancillaryFee: number;
   isChartered: boolean;
   needsReview: boolean;
   reviewReason: string | null;
@@ -52,6 +58,7 @@ export function parseSalesMonitorCsv(
         fare: parseJapaneseAmount(r["受取運賃"]),
         toll: parseJapaneseAmount(r["通行料"]),
         ancillaryFee:
+          parseJapaneseAmount(r["通行料"]) +
           parseJapaneseAmount(r["燃料サーチャージ"]) +
           parseJapaneseAmount(r["待機時間料"]) +
           parseJapaneseAmount(r["付帯料金"]),
