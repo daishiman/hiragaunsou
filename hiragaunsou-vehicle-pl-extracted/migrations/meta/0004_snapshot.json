@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "73b28ba3-02e7-4911-b89d-ec21ee00fbeb",
-  "prevId": "e045d744-04d3-4094-af52-fbe46a7477f3",
+  "id": "e045d744-04d3-4094-af52-fbe46a7477f3",
+  "prevId": "c9a53348-2df4-4829-98fd-1c93e38b05da",
   "tables": {
     "account": {
       "name": "account",
@@ -941,6 +941,13 @@
           "columns": [
             "year_month",
             "source_type"
+          ],
+          "isUnique": false
+        },
+        "raw_ingestion_batch_idx": {
+          "name": "raw_ingestion_batch_idx",
+          "columns": [
+            "batch_id"
           ],
           "isUnique": false
         }
