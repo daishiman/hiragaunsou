@@ -74,6 +74,11 @@ export function createAuth(env: AuthEnv) {
           if (!token.idToken) return null;
           const profile = decodeJwt(token.idToken) as GoogleProfile;
           if (!isWorkspaceHostedDomainAllowed(allowedDomains, profile.hd)) {
+            // 拒否理由をログに残す。hd は組織ドメイン名でありメールアドレス等の個人情報は含めない。
+            // これが無いと callback は unable_to_get_user_info としか言わず、原因究明が不可能になる。
+            console.warn(
+              `Google sign-in rejected: hosted domain "${profile.hd ?? "<none>"}" is not in WORKSPACE_DOMAINS.`,
+            );
             return null;
           }
           return {
@@ -98,6 +103,12 @@ export function createAuth(env: AuthEnv) {
         },
       },
     },
+    // OAuthコールバックが失敗したときの遷移先。
+    // 既定のままだと Better Auth は /api/auth/error に飛ばし、そこは本番(NODE_ENV=production)で
+    // 問答無用に `/?error=...` へ302する。`/` は未ログインなので /sign-in へリダイレクトされ、
+    // 利用者から見ると「認証したのにサインイン画面に戻る」だけで理由が一切表示されない。
+    // 明示的に /sign-in を指定し、error クエリを添えて理由を画面に出せるようにする。
+    onAPIError: { errorURL: "/sign-in" },
     rateLimit: {
       enabled: true,
       storage: "database",
