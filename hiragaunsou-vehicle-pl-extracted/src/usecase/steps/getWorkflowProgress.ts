@@ -98,7 +98,7 @@ export class GetWorkflowProgressUseCase {
       this.vehiclePlRepo.getConfirmation(yearMonth),
     ]);
 
-    // STEP1は「取込」だけでなく「傭車・2重計上・諸口の整理」まで終えて完了。
+    // STEP2は「取込」だけでなく「傭車・2重計上・諸口の整理」「キリン配賦」まで終えて完了。
     // 判断が残っているうちは done にしない (整理前の数字で締めさせないため)。
     const cleansingPending = Math.max(0, cleansingFlagged - cleansingDecided);
 
@@ -112,27 +112,21 @@ export class GetWorkflowProgressUseCase {
 
     const statusById: Record<WorkflowStepId, { status: WorkflowStepStatus; detail: string }> = {
       1: opBatch
-        ? cleansingPending > 0
+        ? { status: "done", detail: `${opBatch.fileName} を取込済み (${opBatch.rowCount}行)` }
+        : { status: "todo", detail: "車両別運行実績表のCSVがまだ取り込まれていません" },
+      2: !salesBatch
+        ? { status: "todo", detail: "売上モニタリストのCSVがまだ取り込まれていません" }
+        : cleansingPending > 0
           ? {
               status: "partial",
-              detail: `${opBatch.fileName} を取込済み。傭車・2重計上・諸口の確認が ${cleansingPending}件 残っています`,
+              detail: `${salesBatch.fileName} を取込済み。傭車・2重計上・諸口の確認が ${cleansingPending}件 残っています`,
             }
           : {
-              status: "done",
-              detail:
-                cleansingFlagged > 0
-                  ? `${opBatch.fileName} を取込済み・要確認 ${cleansingFlagged}件 も判断済み`
-                  : `${opBatch.fileName} を取込済み (${opBatch.rowCount}行)`,
-            }
-        : { status: "todo", detail: "車両別運行実績表のCSVがまだ取り込まれていません" },
-      2: salesBatch
-        ? {
-            status: kirinEntered ? "done" : "partial",
-            detail: kirinEntered
-              ? `${salesBatch.fileName} を取込済み・キリン配賦も入力済み`
-              : `${salesBatch.fileName} を取込済み。キリンの協力金の配賦がまだです`,
-          }
-        : { status: "todo", detail: "売上モニタリストのCSVがまだ取り込まれていません" },
+              status: kirinEntered ? "done" : "partial",
+              detail: kirinEntered
+                ? `${salesBatch.fileName} を取込済み・要確認 ${cleansingFlagged}件 も判断済み・キリン配賦も入力済み`
+                : `${salesBatch.fileName} を取込済み。キリンの協力金の配賦がまだです`,
+            },
       3: {
         status: entryStatus(fuelEntered, total),
         detail:
@@ -175,7 +169,7 @@ export class GetWorkflowProgressUseCase {
     };
 
     // 取込(STEP1・2)が済むまで手入力系(STEP3・5・6)とチェック(7・8)は着手できない
-    const importsDone = statusById[1].status === "done" && salesBatch !== null;
+    const importsDone = opBatch !== null && salesBatch !== null;
 
     const steps: WorkflowStepProgress[] = WORKFLOW_STEPS.map((step) => {
       const s = statusById[step.id];

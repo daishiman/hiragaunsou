@@ -29,6 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <AppShell
       userName={session.name}
       userRole={session.role}
+      role={session.role}
       yearMonth={yearMonth}
       badges={{
         registration,

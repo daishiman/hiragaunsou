@@ -174,7 +174,7 @@ export async function POST(request: Request) {
     );
 
     // 保存済みの全車両分を渡す(今回の画面で触っていない車両の入力を消さないため)
-    // STEP1で下したデータ整形の判断も併せて渡し、除外・車番付け替えを反映した状態で確定する。
+    // STEP2で下したデータ整形の判断も併せて渡し、除外・車番付け替えを反映した状態で確定する。
     const [saved, cleansingDecisions] = await Promise.all([
       manualInputRepo.findByYearMonth(body.yearMonth),
       new D1CleansingDecisionRepository(db).findByYearMonth(body.yearMonth, CLEANSING_SOURCE_TYPE),

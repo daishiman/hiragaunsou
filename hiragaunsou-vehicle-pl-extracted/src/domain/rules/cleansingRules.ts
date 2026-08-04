@@ -1,5 +1,7 @@
 /**
- * 業務フロー STEP1「データ整形(傭車・2重計上・諸口の処理)」の判定ルール。
+ * 業務フロー STEP2「データ整形(傭車・2重計上・諸口の処理)」の判定ルール。
+ * (docxの見出し上はSTEP1配下だが、判定に使う運転者名等は売上モニタリスト(STEP2)にしか無いため、
+ *  データとしてはSTEP2に属する。詳細はworkflowSteps.tsのSTEP2定義を参照)
  *
  * 業務フロー docx より:
  *   ・傭車の判定: 車番が「88888」になっているものが傭車 → 機械的に除外してよい
@@ -134,6 +136,47 @@ export const DECISION_LABELS: Record<CleansingDecisionType, string> = {
   correct: "修正して残す",
   keep: "そのまま残す",
 };
+
+export interface ClusterableRow {
+  vehicleNo: string;
+  driverName: string;
+  customerName: string;
+  loadDate: string;
+  amount: number;
+  flags: readonly CleansingFlag[];
+}
+
+/**
+ * 荷主名の表記ゆれ(全角/半角の(株)、空白の有無など)を吸収して比較できるようにする。
+ * 会社名の実体が同じかどうかまでは判定しない。あくまで束ねる/束ねないの誤差を減らすための正規化。
+ */
+function normalizeCustomerName(name: string): string {
+  return name
+    .trim()
+    .replace(/[（(]株[）)]|㈱|株式会社/g, "")
+    .replace(/[（(]有[）)]|㈲|有限会社/g, "")
+    .replace(/\s+/g, "");
+}
+
+/**
+ * 「同じ内容の伝票」とみなす基準。
+ *
+ * 車番・荷主・金額・立っているフラグの種類が一致する行を同じグループとして束ねる。
+ * 積荷日はあえて基準から外している: 車番4242・東洋インキ㈱・700円が日付違いで何件も並ぶような
+ * ケース(同一取引が伝票行として分割計上されているとみられるもの)を一括で捌けるようにするため。
+ * 一方で金額まで一致させることで、たまたま同じ車番×荷主というだけの別内容の伝票を
+ * 誤って一緒くたにしないようにしている。
+ *
+ * 空文字列を返すと束ねない(driverName が「諸口」等でなければ、そもそも要判断リストに乗らない)。
+ */
+export function cleansingClusterKey(row: ClusterableRow): string {
+  if (!row.vehicleNo || !row.customerName) return "";
+  const flagKey = [...row.flags]
+    .map((f) => f.type)
+    .sort()
+    .join("+");
+  return [row.vehicleNo, normalizeCustomerName(row.customerName), row.amount, flagKey].join("|");
+}
 
 export const FLAG_LABELS: Record<CleansingFlagType, string> = {
   chartered: "傭車",

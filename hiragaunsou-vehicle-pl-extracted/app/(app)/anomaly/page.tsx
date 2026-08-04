@@ -44,8 +44,9 @@ export default async function AnomalyPage({
     <>
       <PageHead
         kind="ops"
-        title="収支表のチェック"
+        title="収支表のチェック(業務フロー STEP7)"
         lead="いつもと違う値を1件ずつ「入力ミス」か「実績」か判定します"
+        showHomeLink
         action={
           <YearMonthSelect basePath="/anomaly" value={yearMonth} options={selectableYearMonths(13)} />
         }

@@ -1,5 +1,6 @@
 import { slipKey, type SalesMonitorRow } from "../../infrastructure/parsers/salesMonitorParser";
 import {
+  cleansingClusterKey,
   detectCleansingFlags,
   needsHumanDecision,
   suggestDecision,
@@ -13,7 +14,7 @@ import type {
 } from "../../domain/repositories/CleansingDecisionRepository";
 
 /**
- * 業務フロー STEP1「データ整形(傭車・2重計上・諸口の処理)」の要判断リストを組み立てるユースケース。
+ * 業務フロー STEP2「データ整形(傭車・2重計上・諸口の処理)」の要判断リストを組み立てるユースケース。
  *
  * 全伝票を人に見せると数千行になり判断できない。フラグが立った行だけを、
  * 判断に必要な情報(荷主・積荷日・運賃・立ったフラグの理由・前月の判断)とともに出す。
@@ -38,6 +39,11 @@ export interface CleansingQueueItem {
   note: string | null;
   /** 前月以前の同じ伝票への判断からの提案 (自動適用はしない) */
   suggestion: { decision: CleansingDecisionType; reason: string } | null;
+  /**
+   * 「同じ内容の伝票」を束ねるキー (cleansingClusterKey)。空文字列は束ねない(単独扱い)。
+   * 画面側はこのキーが一致する行をグループ表示し、1回の判断をまとめて適用できるようにする。
+   */
+  clusterKey: string;
 }
 
 export interface CleansingQueueResult {
@@ -49,14 +55,14 @@ export interface CleansingQueueResult {
   charteredExcluded: number;
   /** 取り込んだ伝票の総数 */
   totalRows: number;
-  /** まだ判断が下されていない件数。0 になったら STEP1 完了 */
+  /** まだ判断が下されていない件数。0 になったら STEP2 完了 */
   pendingCount: number;
   /** 人が「除外する」と判断した件数 */
   excludedCount: number;
 }
 
 /**
- * STEP1で下した判断を売上伝票に反映する (収支確定の直前に適用する)。
+ * STEP2で下した判断を売上伝票に反映する (収支確定の直前に適用する)。
  *
  * - delete: その伝票を集計から落とす
  * - correct: 正しい車番へ付け替えて残す (付け替え先の指定が無ければ何もしない)
@@ -143,13 +149,18 @@ export class GetCleansingQueueUseCase {
     const items: CleansingQueueItem[] = candidates.map(({ row, rowKey, flags }) => {
       const decided = decisionByRowKey.get(rowKey);
       const prev = previousByRowKey.get(rowKey);
+      const vehicleNo = row.vehicleCode ?? "";
+      const driverName = row.driverName ?? "";
+      const customerName = row.customerName ?? "";
+      const loadDate = row.loadDate ?? "";
+      const amount = (row.fare ?? 0) + (row.ancillaryFee ?? 0);
       return {
         rowKey,
-        vehicleNo: row.vehicleCode ?? "",
-        driverName: row.driverName ?? "",
-        customerName: row.customerName ?? "",
-        loadDate: row.loadDate ?? "",
-        amount: (row.fare ?? 0) + (row.ancillaryFee ?? 0),
+        vehicleNo,
+        driverName,
+        customerName,
+        loadDate,
+        amount,
         flags,
         decision: decided?.decision ?? null,
         correctedVehicleNo: decided?.correctedVehicleNo ?? null,
@@ -157,6 +168,7 @@ export class GetCleansingQueueUseCase {
         suggestion: suggestDecision(
           prev ? { decision: prev.decision, yearMonth: prev.yearMonth, note: prev.note } : undefined,
         ),
+        clusterKey: cleansingClusterKey({ vehicleNo, driverName, customerName, loadDate, amount, flags }),
       };
     });
 

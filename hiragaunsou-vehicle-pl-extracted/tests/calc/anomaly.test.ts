@@ -70,6 +70,19 @@ describe("detectRangeDeviation", () => {
     ];
     expect(detectRangeDeviation(values, 3)).toHaveLength(0);
   });
+
+  it("0や負の値の車両は中央値の計算対象にも桁ミス判定の対象にもしない(未入力と桁ミスを混同しない)", () => {
+    const values = [
+      { vehicleNo: "1", field: "km", value: 5000 },
+      { vehicleNo: "2", field: "km", value: 5200 },
+      { vehicleNo: "3", field: "km", value: 4800 },
+      { vehicleNo: "4", field: "km", value: 0 }, // 未入力(別ロジックのdetectMissingInputで拾う)
+      { vehicleNo: "5", field: "km", value: -100 }, // データ不整合
+    ];
+    const flags = detectRangeDeviation(values, 3);
+    // 母数(正の値3件)による中央値は5000、0/負の値はここでは一切フラグを立てない
+    expect(flags).toHaveLength(0);
+  });
 });
 
 describe("detectYoyDeviation", () => {

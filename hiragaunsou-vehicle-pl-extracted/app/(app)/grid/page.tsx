@@ -47,6 +47,7 @@ export default async function GridPage({
         kind="data"
         title="月次収支表(業務フロー STEP8)"
         lead="車両別の収支。転記は不要で、CSVで書き出せます"
+        showHomeLink
         action={<YearMonthSelect basePath="/grid" value={yearMonth} options={selectableYearMonths(13)} />}
       />
 

@@ -1,6 +1,9 @@
-import { parseCsv, toRecords } from "./csvUtils";
+import { assertRequiredHeaders, parseCsv, toRecords } from "./csvUtils";
 import { decodeCp932 } from "./encoding";
 import { parseJapaneseAmount, normalizeKey } from "./numberUtils";
+
+/** 列順が変わっても取り込めるよう、名前で検証する必須列。 */
+const REQUIRED_HEADERS = ["社員No", ["氏　名", "氏名"], "総支給額", "社保合計"] as const;
 
 /**
  * 給与集計表(日給者) (ACELINK NX-CE出力, cp932/shift_jis, 59列) パーサ。
@@ -32,6 +35,7 @@ function isSubtotalRow(employeeName: string): boolean {
 export function parsePayrollCsv(input: string | ArrayBuffer | Uint8Array): PayrollRecord[] {
   const text = typeof input === "string" ? input : decodeCp932(input);
   const rows = parseCsv(text);
+  assertRequiredHeaders(rows, REQUIRED_HEADERS, "給与集計表");
   const records = toRecords(rows);
 
   return records

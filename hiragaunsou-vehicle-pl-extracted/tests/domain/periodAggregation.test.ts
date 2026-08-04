@@ -5,6 +5,7 @@ import {
   costBreakdown,
   deficitRanking,
   diffRatio,
+  monthBefore,
   periodYearMonths,
   periodLabel,
 } from "../../src/domain/rules/periodAggregation";
@@ -217,6 +218,16 @@ describe("aggregateByDepot", () => {
     );
 
     expect(aggregateByDepot(vehicles)[0]?.depot).toBe("未設定");
+  });
+});
+
+describe("monthBefore", () => {
+  it("同一年内では月を1つ戻す", () => {
+    expect(monthBefore("2026-05")).toBe("2026-04");
+  });
+
+  it("1月の1ヶ月前は前年12月になる (年またぎ)", () => {
+    expect(monthBefore("2026-01")).toBe("2025-12");
   });
 });
 

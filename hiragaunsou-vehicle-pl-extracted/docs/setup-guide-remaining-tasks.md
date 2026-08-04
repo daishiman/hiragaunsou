@@ -13,6 +13,7 @@
 1. Google Workspaceドメインの確定
 2. Google OAuthクライアントの発行 + ログイン用シークレット登録
 3. AI要因分析レポート用の`ANTHROPIC_API_KEY`登録
+3.5. AI設定画面(複数プロバイダAPIキー管理)用の暗号鍵登録
 4. GitHub Secretsの登録(CI/CDが動くようにする)
 5. 本番URLへのスモークテスト(実際に開いて動作確認)
 6. web-perf(表示速度)の計測
@@ -166,6 +167,35 @@
 
 ---
 
+## タスク3.5: AI設定画面(複数プロバイダAPIキー管理)用の暗号鍵登録
+
+### 何をするか
+管理者(admin)向けの`/ai-settings`画面から、Claude/ChatGPT/Gemini/Grokの各APIキーをアプリのデータベース(D1)に登録・削除できます。この画面に入力したAPIキーは平文のままでは保存されず、暗号化してからD1に保存する仕組みです。その暗号化・復号に使う鍵(誰にも推測されない32byteのランダム値)を1つ発行し、Cloudflareの本番環境に登録します。
+
+この鍵を登録し忘れると、`/ai-settings`画面でAPIキーを保存しようとした際にエラーになります(逆に言うと、`/ai-settings`画面を使わない場合はこのタスクは後回しにしても他の機能に影響しません)。
+
+### 手順
+
+1. ターミナルで以下のコマンドを実行し、ランダムな鍵を生成します。
+   ```bash
+   openssl rand -base64 32
+   ```
+2. 表示された文字列(`=`で終わる44文字程度の文字列)をコピーします。**この文字列はパスワードと同じ扱いです。AI・チャット・メール・スクリーンショットへ貼り付けないでください。**
+3. プロジェクトフォルダで以下のコマンドを実行します。
+   ```bash
+   cd "/Users/dm/dev/dev/TireMind/平賀運送/hiragaunsou-vehicle-pl-extracted"
+   npx wrangler secret put API_KEY_ENCRYPTION_SECRET
+   ```
+4. `Enter a secret value:` と表示されるので、手順2でコピーした文字列を貼り付けてEnterキーを押します。
+5. `Success! Uploaded secret API_KEY_ENCRYPTION_SECRET` のようなメッセージが出れば完了です。
+
+これで本番環境の`/ai-settings`画面からAPIキーを登録・削除できるようになります。
+
+> [!NOTE]
+> ローカル開発環境(`.dev.vars`)には、実装時点で開発用の暗号鍵をすでに設定済みです。本番環境とは別の値なので、そのままで問題ありません。
+
+---
+
 ## タスク4: GitHub Secretsの登録(CI/CDが動くようにする)
 
 ### 何をするか
@@ -265,6 +295,7 @@ GitHub Actionsで「PRを出すと自動でテストが走る」「mainにマー
 - [ ] タスク1: `WORKSPACE_DOMAINS`を実際のドメインに変更してpush(複数ドメインはカンマ区切りで追記可)
 - [ ] タスク2: Google OAuthクライアント発行 → `setup-secrets.mjs`実行 → ログイン確認
 - [ ] タスク3: `ANTHROPIC_API_KEY`を`wrangler secret put`で登録
+- [ ] タスク3.5: `API_KEY_ENCRYPTION_SECRET`を`wrangler secret put`で登録(`/ai-settings`画面を使う場合のみ必須)
 - [ ] タスク4: GitHub Secrets(`CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID`)登録 + `production` Environment作成
 - [ ] タスク5: 本番URLでのログイン・CSVインポートの動作確認
 - [ ] タスク6: PageSpeed Insightsでの表示速度計測

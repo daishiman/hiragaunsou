@@ -5,12 +5,27 @@ import { getServerSession } from "../../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../../src/infrastructure/auth/accessControl";
 import { createDb } from "../../../../src/infrastructure/db/client";
 import { D1VehiclePlRepository } from "../../../../src/infrastructure/db/D1VehiclePlRepository";
+import { D1DeficitFactorAnalysisRepository } from "../../../../src/infrastructure/db/D1DeficitFactorAnalysisRepository";
+import type { DeficitFactorCategory } from "../../../../src/domain/repositories/DeficitFactorAnalysisRepository";
 import { GetVehicleHistoryUseCase } from "../../../../src/usecase/steps/getVehicleHistory";
 import { currentYearMonth } from "../../../_lib/yearMonth";
 import { kmPriceLabel, num, yen, yearMonthLabel } from "../../../_lib/format";
 import { PageHead } from "../../../_components/PageHead";
 import { EmptyState } from "../../../_components/EmptyState";
 import { BarRow } from "../../../_components/BarRow";
+
+/** COST_BREAKDOWN_FIELDS(getVehicleHistory.ts)と対応する日本語ラベル + 売上分 */
+const FACTOR_CATEGORY_LABELS: Record<DeficitFactorCategory, string> = {
+  sales: "売上",
+  tollNet: "運行費",
+  fuelTotal: "燃料費",
+  repairTotal: "修繕費",
+  laborTotal: "人件費",
+  insTotal: "保険料",
+  taxTotal: "賦課税",
+  transportTotal: "運送費",
+  adminTotal: "一般管理費",
+};
 
 /**
  * 車両ドリルダウン (モック view-grid.js の車両モーダルに対応)。
@@ -43,6 +58,10 @@ export default async function VehicleDetailPage({
   const current = data.current;
   const expenseMax = Math.max(...data.costBreakdown.map((c) => c.value), 1);
   const profitMax = Math.max(...data.history.map((h) => Math.abs(h.profit)), 1);
+  const isDeficit = (current?.profit ?? 0) < 0;
+  const analysis = isDeficit
+    ? await new D1DeficitFactorAnalysisRepository(db).findOne(vehicleNo, yearMonth)
+    : null;
 
   return (
     <>
@@ -137,6 +156,44 @@ export default async function VehicleDetailPage({
               </div>
             </section>
           </div>
+
+          {isDeficit && (
+            <section className="mt-5 rounded-xl border border-line bg-white p-5">
+              <h2 className="text-sm font-bold text-ink">AI要因分析({yearMonthLabel(yearMonth)})</h2>
+              {analysis ? (
+                <>
+                  <p className="mt-2 text-sm text-ink">{analysis.summary}</p>
+                  <ul className="mt-3 space-y-2">
+                    {analysis.factors.map((f, i) => (
+                      <li
+                        key={`${f.category}-${i}`}
+                        className="rounded-md border border-line bg-subtle px-3 py-2 text-xs leading-relaxed"
+                      >
+                        <span className="font-semibold text-ink">
+                          {FACTOR_CATEGORY_LABELS[f.category] ?? f.category}が
+                          {f.direction === "high" ? "高い" : "低い"}
+                        </span>
+                        <span className="num ml-2 text-ink-muted">目安 {yen(f.amountYen)}円</span>
+                        <p className="mt-1 text-ink-muted">{f.explanation}</p>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-3 text-[11px] text-ink-muted">
+                    {new Date(analysis.updatedAt).toLocaleString("ja-JP")} 時点のAI分析結果(
+                    {analysis.model})
+                  </p>
+                </>
+              ) : (
+                <p className="mt-2 text-xs text-ink-muted">
+                  この月・車両はまだAI分析されていません。
+                  <Link href={`/deficit?ym=${yearMonth}`} className="ml-1 text-brand-deep hover:underline">
+                    赤字の理由(3分類)画面
+                  </Link>
+                  の「AI分析する」ボタンから実行できます。
+                </p>
+              )}
+            </section>
+          )}
 
           <section className="mt-5 overflow-x-auto rounded-xl border border-line bg-white">
             <table className="w-full min-w-max border-collapse text-xs">

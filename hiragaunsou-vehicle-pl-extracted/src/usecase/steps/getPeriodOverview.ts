@@ -17,6 +17,7 @@ import {
   costBreakdown,
   deficitRanking,
   diffRatio,
+  monthBefore,
   periodLabel,
   periodYearMonths,
   previousYearOf,
@@ -83,6 +84,9 @@ export interface PeriodOverviewResponse {
   prev: PeriodPrevTotals | null;
   salesDiffRatio: number | null;
   profitDiffRatio: number | null;
+  /** 期間内の最新月を、その1ヶ月前と比べた増減率 (急な悪化に前年比より早く気づくため) */
+  salesMomDiffRatio: number | null;
+  profitMomDiffRatio: number | null;
   isEmpty: boolean;
 }
 
@@ -140,6 +144,18 @@ export class GetPeriodOverviewUseCase {
 
     const vehicles = aggregateByVehicle(byMonth);
 
+    // 前月比: 期間全体ではなく「最新月」だけを1ヶ月前と比べる。期間が3ヶ月・12ヶ月でも
+    // 直近の勢いに一番早く気づけるのはこの単月同士の比較のため。
+    const lastMonth = months[months.length - 1];
+    let momTotals: MonthTotals | null = null;
+    if (lastMonth !== undefined) {
+      const momYm = monthBefore(lastMonth.yearMonth);
+      const momRows = byMonth.has(momYm)
+        ? (byMonth.get(momYm) ?? [])
+        : [...((await this.vehiclePlRepo.findByYearMonths([momYm])).get(momYm) ?? [])];
+      if (momRows.length > 0) momTotals = monthTotals(momRows);
+    }
+
     return {
       from,
       to,
@@ -160,6 +176,14 @@ export class GetPeriodOverviewUseCase {
       prev,
       salesDiffRatio: prev === null ? null : diffRatio(totals.sales, prev.sales),
       profitDiffRatio: prev === null ? null : diffRatio(totals.profit, prev.profit),
+      salesMomDiffRatio:
+        lastMonth === undefined || momTotals === null
+          ? null
+          : diffRatio(lastMonth.totals.sales, momTotals.sales),
+      profitMomDiffRatio:
+        lastMonth === undefined || momTotals === null
+          ? null
+          : diffRatio(lastMonth.totals.profit, momTotals.profit),
       isEmpty: rows.length === 0,
     };
   }
@@ -207,6 +231,8 @@ export class GetPeriodOverviewUseCase {
       prev: null,
       salesDiffRatio: null,
       profitDiffRatio: null,
+      salesMomDiffRatio: null,
+      profitMomDiffRatio: null,
       isEmpty: true,
     };
   }

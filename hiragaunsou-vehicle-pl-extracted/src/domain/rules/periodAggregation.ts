@@ -64,6 +64,12 @@ export function previousYearOf(yearMonths: readonly string[]): string[] {
   });
 }
 
+/** 指定月の1ヶ月前 (対前月比較の相手) */
+export function monthBefore(yearMonth: string): string {
+  const { year, month } = parse(yearMonth);
+  return format(year, month - 2);
+}
+
 /* ------------------------------------------------------------------ *
  * 経費の構成比
  * ------------------------------------------------------------------ */

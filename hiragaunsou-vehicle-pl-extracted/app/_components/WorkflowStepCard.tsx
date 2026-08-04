@@ -23,10 +23,10 @@ const STATUS_MARK: Record<string, string> = {
 /**
  * 業務フロー1ステップの行。
  *
- * このカードはホームに8枚並ぶ。1枚あたり4行 (説明・数値・出典・注記) 書くと
- * 画面が読み物になって「どこまで終わったか」が読み取れなくなるため、
- * 既定で見せるのは「番号・見出し・状態・数値」の4点だけにする。
- * 手順の説明・出典・判断ポイントは折りたたみへ逃がす。
+ * 段階的開示(プログレッシブディスクロージャー): 「今やるべきこと」以外を最初から
+ * 大きく見せると認知負荷が上がるため、いま取り組むステップ(isNext)だけを大きく・
+ * 目立つ色で表示し、完了済み・まだ先のステップは小さく静かなコンパクト行にする。
+ * 情報を消すわけではなく、詳細は <details> でいつでも参照できる状態を保つ。
  */
 export function WorkflowStepCard({
   progress,
@@ -37,52 +37,43 @@ export function WorkflowStepCard({
 }) {
   const { step, status, detail, blocked } = progress;
 
-  const statusClass =
-    status === "done"
-      ? "bg-subtle text-ink-muted border-line"
-      : status === "partial"
-        ? "bg-caution-soft text-ink border-caution-border"
-        : "bg-white text-ink-muted border-line border-dashed";
-
-  const containerClass = [
-    "rounded-xl border bg-white p-4",
-    isNext ? "border-brand ring-1 ring-brand-soft" : "border-line",
-    blocked ? "opacity-60" : "",
-  ].join(" ");
+  if (!isNext) {
+    return <CompactRow progress={progress} />;
+  }
 
   return (
-    <div className={containerClass}>
+    <div className="rounded-xl border border-brand bg-white p-4 ring-1 ring-brand-soft">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="num shrink-0 rounded-md bg-brand-soft px-2 py-0.5 text-xs font-bold text-brand-deep">
+        <span className="num shrink-0 rounded-md bg-brand px-2.5 py-1 text-sm font-bold text-white">
           STEP {step.id}
         </span>
-        <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{step.title}</span>
+        <span className="min-w-0 flex-1 truncate text-base font-bold text-ink">{step.title}</span>
         <span className="shrink-0 rounded-full border border-line bg-subtle px-2 py-0.5 text-[11px] text-ink-muted">
           {MODE_LABEL[step.mode]}
         </span>
-        <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${statusClass}`}>
+        <span className="shrink-0 rounded-full border border-caution-border bg-caution-soft px-2.5 py-0.5 text-[11px] font-semibold text-ink">
           <span aria-hidden>{STATUS_MARK[status]}</span> {STATUS_LABEL[status]}
         </span>
       </div>
 
-      <p className="num mt-1.5 text-xs text-ink">{detail}</p>
+      <p className="num mt-2 text-sm text-ink">{detail}</p>
 
-      <details className="mt-2">
-        <summary className="cursor-pointer text-[11px] font-semibold text-brand-deep">
+      <details className="mt-3">
+        <summary className="cursor-pointer text-xs font-semibold text-brand-deep">
           この手順について
           {step.notes.length > 0 ? `(判断ポイント ${step.notes.length}件)` : ""}
         </summary>
-        <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">{step.summary}</p>
-        <p className="mt-1 text-[11px] text-ink-muted">出典: {step.source}</p>
+        <p className="mt-1.5 text-xs leading-relaxed text-ink-muted">{step.summary}</p>
+        <p className="mt-1 text-xs text-ink-muted">出典: {step.source}</p>
         {step.notes.length > 0 && (
-          <ul className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-ink-muted">
+          <ul className="mt-1.5 space-y-1 text-xs leading-relaxed text-ink-muted">
             {step.notes.map((n) => (
               <li key={n}>・{n}</li>
             ))}
           </ul>
         )}
         {step.isJudgementHeavy && (
-          <p className="mt-2 rounded-md border border-caution-border bg-caution-soft px-3 py-2 text-[11px] leading-relaxed">
+          <p className="mt-2 rounded-md border border-caution-border bg-caution-soft px-3 py-2 text-xs leading-relaxed">
             経験に頼っている判断が残っています。迷ったら請求書発行担当に確認してください。
           </p>
         )}
@@ -90,18 +81,74 @@ export function WorkflowStepCard({
 
       <div className="mt-3">
         {blocked ? (
-          <p className="text-[11px] text-ink-muted">
-            STEP 1・2 の取込が終わると着手できます
-          </p>
+          <p className="text-xs text-ink-muted">STEP 1・2 の取込が終わると着手できます</p>
         ) : (
           <Link
             href={step.href}
-            className="pressable inline-block rounded-md border border-line px-3 py-1.5 text-xs font-semibold text-ink hover:bg-subtle"
+            className="pressable inline-block rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-deep"
           >
-            {status === "done" ? "内容を見直す" : "この手順を開く"}
+            この手順を開く
           </Link>
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * 完了済み・まだ先のステップの表示。
+ * 1行に畳んで小さく・控えめに置き、クリックすれば詳細(判断ポイント・出典・リンク)を開ける。
+ */
+function CompactRow({ progress }: { progress: WorkflowStepProgress }) {
+  const { step, status, detail, blocked } = progress;
+
+  const rowClass = [
+    "group rounded-lg border bg-white px-3 py-2",
+    status === "done" ? "border-line" : "border-line border-dashed",
+    blocked ? "opacity-60" : "",
+  ].join(" ");
+
+  return (
+    <details className={rowClass}>
+      <summary className="flex cursor-pointer list-none items-center gap-2 text-xs">
+        <span className="num shrink-0 rounded bg-subtle px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted">
+          STEP {step.id}
+        </span>
+        <span
+          className={`min-w-0 flex-1 truncate ${
+            status === "done" ? "text-ink-muted line-through decoration-1" : "text-ink-muted"
+          }`}
+        >
+          {step.title}
+        </span>
+        <span className="shrink-0 text-[10px] font-medium text-ink-muted">
+          <span aria-hidden>{STATUS_MARK[status]}</span> {STATUS_LABEL[status]}
+        </span>
+      </summary>
+
+      <div className="mt-2 border-t border-line pt-2">
+        <p className="num text-[11px] text-ink-muted">{detail}</p>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">{step.summary}</p>
+        {step.notes.length > 0 && (
+          <ul className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-ink-muted">
+            {step.notes.map((n) => (
+              <li key={n}>・{n}</li>
+            ))}
+          </ul>
+        )}
+        <div className="mt-2">
+          {blocked ? (
+            <p className="text-[11px] text-ink-muted">STEP 1・2 の取込が終わると着手できます</p>
+          ) : (
+            <Link
+              href={step.href}
+              className="pressable inline-block rounded-md border border-line px-2.5 py-1 text-[11px] font-semibold text-ink hover:bg-subtle"
+            >
+              {status === "done" ? "内容を見直す" : "この手順を開く"}
+            </Link>
+          )}
+        </div>
+      </div>
+    </details>
   );
 }

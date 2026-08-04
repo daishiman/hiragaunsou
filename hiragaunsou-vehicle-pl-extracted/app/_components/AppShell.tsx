@@ -1,14 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { NAV_GROUPS, findNavItem, type NavBadge } from "../_lib/navigation";
+import { visibleNavGroups, findNavItem, type NavBadge } from "../_lib/navigation";
 import { yearMonthLabel } from "../_lib/format";
+import { isYearMonth } from "../_lib/yearMonth";
 
 export interface AppShellProps {
   userName: string;
   userRole: string;
+  /** 権限マトリクスの参照キー。サイドバーで開けない画面を除くのに使う */
+  role: string;
+  /** サイドバーのバッジ件数などが基準にする「実際の今月」。ヘッダー表示には使わない */
   yearMonth: string;
   /** ナビのバッジ件数 (0以下は非表示) */
   badges: Record<NavBadge, number>;
@@ -20,10 +24,17 @@ export interface AppShellProps {
  * モック mock/index.html の .layout / .sidebar / .topbar 構成を Next.js に移植したもの。
  * SPではサイドバーをオフキャンバス化し、トップバーのボタンで開閉する。
  */
-export function AppShell({ userName, userRole, yearMonth, badges, children }: AppShellProps) {
+export function AppShell({ userName, userRole, role, yearMonth, badges, children }: AppShellProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [navOpen, setNavOpen] = useState(false);
   const current = findNavItem(pathname);
+  const navGroups = visibleNavGroups(role);
+
+  // ページ側で ?ym= を選んでいれば、ヘッダーの表示もそれに合わせる。
+  // 無指定のページ(ホーム等)では yearMonth (サーバーの実際の今月) をそのまま出す。
+  const ym = searchParams.get("ym");
+  const displayYearMonth = ym && isYearMonth(ym) ? ym : yearMonth;
 
   // SPのサイドバーはリンクを押した時点で閉じる。
   // pathname を見る useEffect で閉じると「描画後に state を書き換える」ことになり、
@@ -58,14 +69,42 @@ export function AppShell({ userName, userRole, yearMonth, badges, children }: Ap
           </Link>
         </div>
 
+        {/*
+          ホームは「最初に見るべき場所」として、他のメニュー項目と同じ並びに埋もれさせない。
+          常時 brand-soft の面を敷いて視覚的に切り離し、迷ったらまずここ、を伝える。
+        */}
+        <div className="border-b border-line px-2 pb-3 pt-3">
+          <Link
+            href="/"
+            onClick={closeNav}
+            aria-current={pathname === "/" ? "page" : undefined}
+            className={[
+              "flex items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm font-bold transition-colors",
+              pathname === "/"
+                ? "bg-brand text-white"
+                : "bg-brand-soft text-brand-deep hover:bg-brand-soft/70",
+            ].join(" ")}
+          >
+            <span>ホーム</span>
+            <span
+              className={[
+                "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                pathname === "/" ? "bg-white/20 text-white" : "bg-white text-brand-deep",
+              ].join(" ")}
+            >
+              まずはここ
+            </span>
+          </Link>
+        </div>
+
         <nav className="flex-1 px-2 py-3" aria-label="メインメニュー">
-          {NAV_GROUPS.map((group) => (
+          {navGroups.map((group) => (
             <div key={group.label} className="mb-4">
               <p className="px-2 pb-1.5 text-[11px] font-semibold tracking-wide text-ink-muted">
                 {group.label}
               </p>
               <ul>
-                {group.items.map((item) => {
+                {group.items.filter((item) => item.href !== "/").map((item) => {
                   const active = current?.href === item.href;
                   const count = item.badge ? badges[item.badge] : 0;
                   return (
@@ -129,7 +168,7 @@ export function AppShell({ userName, userRole, yearMonth, badges, children }: Ap
           <p className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
             {current?.label ?? "車両収支管理システム"}
           </p>
-          <p className="num shrink-0 text-xs text-ink-muted">{yearMonthLabel(yearMonth)}度</p>
+          <p className="num shrink-0 text-xs text-ink-muted">{yearMonthLabel(displayYearMonth)}度</p>
         </header>
 
         <main className="min-w-0 flex-1 px-4 py-6 lg:px-8 lg:py-8">{children}</main>

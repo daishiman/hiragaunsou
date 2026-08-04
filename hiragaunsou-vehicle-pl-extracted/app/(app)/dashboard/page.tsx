@@ -7,13 +7,15 @@ import { createDb } from "../../../src/infrastructure/db/client";
 import { D1VehiclePlRepository } from "../../../src/infrastructure/db/D1VehiclePlRepository";
 import { D1RateMasterRepository } from "../../../src/infrastructure/db/D1MasterRepository";
 import { D1AnnualReferenceRepository } from "../../../src/infrastructure/db/D1AnnualReferenceRepository";
+import { D1ReviewFlagRepository } from "../../../src/infrastructure/db/D1ReviewFlagRepository";
 import { GetPeriodOverviewUseCase } from "../../../src/usecase/steps/getPeriodOverview";
 import {
+  currentYearMonth,
   isYearMonth,
   periodPresets,
   selectableYearMonths,
 } from "../../_lib/yearMonth";
-import { kmPriceLabel, man, num, pct, yen } from "../../_lib/format";
+import { chartMonthLabel, kmPriceLabel, man, num, pct, yen } from "../../_lib/format";
 import { PageHead } from "../../_components/PageHead";
 import { EmptyState } from "../../_components/EmptyState";
 import { PeriodSelect } from "../../_components/PeriodSelect";
@@ -45,11 +47,15 @@ export default async function DashboardPage({
 
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);
-  const data = await new GetPeriodOverviewUseCase(
-    new D1VehiclePlRepository(db),
-    new D1RateMasterRepository(db),
-    new D1AnnualReferenceRepository(db),
-  ).execute(from, to);
+  const [data, openAnomalyFlags] = await Promise.all([
+    new GetPeriodOverviewUseCase(
+      new D1VehiclePlRepository(db),
+      new D1RateMasterRepository(db),
+      new D1AnnualReferenceRepository(db),
+    ).execute(from, to),
+    new D1ReviewFlagRepository(db).findOpenByYearMonth(currentYearMonth()),
+  ]);
+  const anomalyCount = openAnomalyFlags.filter((f) => f.status === "open").length;
 
   const t = data.totals;
 
@@ -71,6 +77,22 @@ export default async function DashboardPage({
 
       <p className="-mt-3 mb-4 text-xs font-semibold text-ink-muted">{data.label}</p>
 
+      {/*
+        異常の早期発見: 分析画面から作業画面(チェック)へ気づいた瞬間に橋渡しする。
+        0件のときは静かに消え、認知負荷を増やさない。
+      */}
+      {anomalyCount > 0 && (
+        <Link
+          href="/anomaly"
+          className="pressable mb-4 flex items-center justify-between gap-2 rounded-lg border border-danger/30 bg-danger/5 px-4 py-2.5 text-sm hover:bg-danger/10"
+        >
+          <span className="font-semibold text-danger">
+            未処理の異常が <span className="num">{anomalyCount}</span> 件あります
+          </span>
+          <span className="text-xs font-semibold text-danger">チェックへ →</span>
+        </Link>
+      )}
+
       {data.isEmpty ? (
         <EmptyState
           title="この期間のデータはまだありません"
@@ -86,9 +108,15 @@ export default async function DashboardPage({
               value={man(t.profit)}
               negative={t.profit < 0}
               diff={data.salesDiffRatio === null ? null : data.profitDiffRatio}
+              diff2={data.profitMomDiffRatio}
               sub={`利益率 ${pct(data.margin)}`}
             />
-            <StatTile label="売上" value={man(t.sales)} diff={data.salesDiffRatio} />
+            <StatTile
+              label="売上"
+              value={man(t.sales)}
+              diff={data.salesDiffRatio}
+              diff2={data.salesMomDiffRatio}
+            />
             <StatTile
               label="赤字車両"
               value={num(data.deficitCount)}
@@ -111,8 +139,8 @@ export default async function DashboardPage({
             <div className="mt-3">
               <TrendBars
                 title="損益"
-                points={data.months.map((m) => ({
-                  label: m.label,
+                points={data.months.map((m, i) => ({
+                  label: chartMonthLabel(m.yearMonth, i),
                   value: m.totals.profit,
                   reference: m.prevProfit,
                   isEmpty: m.isEmpty,
@@ -128,8 +156,8 @@ export default async function DashboardPage({
             <div className="mt-3">
               <TrendBars
                 title="売上"
-                points={data.months.map((m) => ({
-                  label: m.label,
+                points={data.months.map((m, i) => ({
+                  label: chartMonthLabel(m.yearMonth, i),
                   value: m.totals.sales,
                   reference: m.prevSales,
                   isEmpty: m.isEmpty,

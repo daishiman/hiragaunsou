@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ListToolbar } from "../../_components/ListToolbar";
 
 export interface VehicleRow {
   vehicleNo: string;
@@ -153,7 +154,18 @@ export function ManualEntryStepper({
   const [submitState, setSubmitState] = useState<"idle" | "pending" | "done" | "error">("idle");
   const [saveState, setSaveState] = useState<"idle" | "pending" | "done" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const [vehicleSearch, setVehicleSearch] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
+
+  // 車両テーブルは何十行にもなるので、車番・運転者名で絞り込めるようにする。
+  // どのステップのどの表にも同じ検索語を使い回す(表ごとに検索欄を出すと逆に分かりにくいため)。
+  const filteredVehicles = useMemo(() => {
+    const query = vehicleSearch.trim();
+    if (!query) return vehicles;
+    return vehicles.filter(
+      (v) => v.vehicleNo.includes(query) || (v.driver ?? "").includes(query),
+    );
+  }, [vehicles, vehicleSearch]);
 
   // 保存済みの入力を読み戻す。請求書が届くたびに開き直して続きから入力できるようにするため。
   useEffect(() => {
@@ -311,7 +323,7 @@ export function ManualEntryStepper({
             </tr>
           </thead>
           <tbody>
-            {vehicles.map((v) => (
+            {filteredVehicles.map((v) => (
               <tr key={v.vehicleNo} className="border-t border-line">
                 <td className="px-3 py-2 num">{v.vehicleNo}</td>
                 <td className="px-3 py-2">{v.driver ?? "—"}</td>
@@ -358,7 +370,7 @@ export function ManualEntryStepper({
               </tr>
             </thead>
             <tbody>
-              {vehicles.map((v) => (
+              {filteredVehicles.map((v) => (
                 <tr key={v.vehicleNo} className="border-t border-line align-top">
                   <td className="px-3 py-2 num">{v.vehicleNo}</td>
                   {fields.map((f) => {
@@ -548,6 +560,11 @@ export function ManualEntryStepper({
               />
               <span className="text-[11px] text-ink-muted">全車の軽油代を自動計算</span>
             </label>
+            <ListToolbar
+              searchValue={vehicleSearch}
+              onSearchChange={setVehicleSearch}
+              searchPlaceholder="車番・運転者で検索"
+            />
             {renderVehicleTable("fuelInQty", "インタンク給油量", "ℓ")}
             {renderVehicleTable("fuelOut", "外部給油代", "円")}
             {renderVehicleTable("fuelOutQty", "外部給油量", "ℓ")}
@@ -583,7 +600,7 @@ export function ManualEntryStepper({
                   <span aria-hidden>!</span>未取込
                 </span>
                 <Link
-                  href="/import"
+                  href="/import?step=4"
                   className="pressable rounded-md border border-brand px-3 py-1.5 text-xs font-semibold text-brand-deep hover:bg-brand-soft"
                 >
                   データ取込へ
@@ -604,6 +621,11 @@ export function ManualEntryStepper({
         {step === 3 ? (
           <div className="flex flex-col gap-4">
             <h2 className="text-sm font-bold text-ink">修繕費・タイヤ</h2>
+            <ListToolbar
+              searchValue={vehicleSearch}
+              onSearchChange={setVehicleSearch}
+              searchPlaceholder="車番・運転者で検索"
+            />
             {renderOptionalTable(
               [{ field: "tireActual", label: "タイヤ代(実費)" }],
               "空欄 = 走行距離 × タイヤ単価で自動計算 / 0 = 今月はタイヤ代なしとして確定",
@@ -617,6 +639,11 @@ export function ManualEntryStepper({
         {step === 4 ? (
           <div className="flex flex-col gap-4">
             <h2 className="text-sm font-bold text-ink">高速料金</h2>
+            <ListToolbar
+              searchValue={vehicleSearch}
+              onSearchChange={setVehicleSearch}
+              searchPlaceholder="車番で検索"
+            />
             {renderOptionalTable(
               [
                 { field: "tollActual", label: "通行料金(実費)" },
@@ -655,8 +682,17 @@ export function ManualEntryStepper({
               </dd>
             </dl>
             {submitState === "done" ? (
-              <div className="mt-3 rounded-md border border-line bg-subtle px-4 py-3 text-sm text-ink">
-                収支表を作り直しました。月次収支表に反映されています。
+              <div className="mt-3 rounded-md border border-brand bg-brand-soft px-4 py-3">
+                <p className="text-sm font-semibold text-ink">
+                  収支表を作り直しました。月次収支表に反映されています。
+                </p>
+                <p className="mt-1 text-xs text-ink-muted">続けて、収支表のチェック(STEP7)で異常値を確認してください</p>
+                <Link
+                  href={`/anomaly?ym=${yearMonth}`}
+                  className="pressable mt-3 inline-block rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-deep"
+                >
+                  次へ: 収支表のチェックに進む
+                </Link>
               </div>
             ) : null}
           </div>

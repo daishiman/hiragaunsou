@@ -297,7 +297,7 @@ export const manualVehicleInput = sqliteTable(
 );
 
 /**
- * 業務フロー STEP1「データ整形(傭車・2重計上・諸口の処理)」で人が下した判断の履歴。
+ * 業務フロー STEP2「データ整形(傭車・2重計上・諸口の処理)」で人が下した判断の履歴。
  *
  * 判定ルール(車番88888=傭車 / 888・10・5000番=2重計上疑い / 運転者「諸口」)はシステムが持ち、
  * 最終判断は人が1クリックで下す。その判断をここに残すことで
@@ -349,3 +349,57 @@ export const appSetting = sqliteTable("app_setting", {
     .notNull(),
   updatedBy: text("updated_by").references(() => user.id),
 });
+
+/** AI分析(要因分析レポート等)に使うプロバイダ種別 */
+export const AI_PROVIDERS = ["anthropic", "openai", "google", "xai"] as const;
+
+/**
+ * AI分析用の外部APIキー (管理者専用画面から登録)。
+ *
+ * apiKeyCipher / apiKeyIv は AES-GCM で暗号化した値のみを保持し、平文のAPIキーは
+ * 一切保存しない。復号鍵は D1 ではなく Cloudflare Workers Secrets
+ * (env.API_KEY_ENCRYPTION_SECRET) から取得するため、この D1 データベースの内容だけを
+ * 見ても平文キーは復元できない。復号は src/infrastructure/security の暗号化ユーティリティ
+ * 経由でサーバー側 (admin権限チェック済みのRoute Handler) からのみ行う想定であり、
+ * 画面・APIレスポンスの双方で平文キーやその一部を返してはならない (登録済みかどうかの
+ * 真偽値と末尾4桁のマスク表示のみ許可)。
+ *
+ * 編集は常に上書き保存のみ (既存レコードの部分更新はしない)。provider ごとに1件だけ持つ。
+ */
+export const aiProviderCredential = sqliteTable("ai_provider_credential", {
+  provider: text("provider").primaryKey(), // anthropic / openai / google / xai
+  apiKeyCipher: text("api_key_cipher").notNull(),
+  apiKeyIv: text("api_key_iv").notNull(),
+  /** 表示用: キー末尾4文字のみ (一覧でどのキーか見分けるため。復元には使えない) */
+  apiKeyLast4: text("api_key_last4").notNull(),
+  /** 選択中のモデルID (プロバイダのモデルカタログのいずれか) */
+  model: text("model").notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+    .notNull(),
+  updatedBy: text("updated_by").references(() => user.id),
+});
+
+/**
+ * 赤字車両(車番×年月)のAI要因分析結果。/deficit の「AI分析する」ボタンから
+ * 月単位でバッチ生成し、ここに永続化して同月の再訪時はAIを再呼び出ししない(キャッシュ)。
+ * factorsJson は DeficitFactorItem[] (科目名・向き・金額・説明) をJSON文字列で保持する。
+ */
+export const deficitFactorAnalysis = sqliteTable(
+  "deficit_factor_analysis",
+  {
+    id: text("id").primaryKey(),
+    yearMonth: text("year_month").notNull(),
+    vehicleNo: text("vehicle_no").notNull(),
+    summary: text("summary").notNull(),
+    factorsJson: text("factors_json").notNull(),
+    model: text("model").notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedBy: text("updated_by").references(() => user.id),
+  },
+  (table) => [
+    uniqueIndex("deficit_factor_analysis_ym_no_idx").on(table.yearMonth, table.vehicleNo),
+  ],
+);

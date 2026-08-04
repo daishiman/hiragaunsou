@@ -6,8 +6,9 @@ import { createDb } from "../../../src/infrastructure/db/client";
 import { D1VehicleMasterRepository, D1RateMasterRepository } from "../../../src/infrastructure/db/D1MasterRepository";
 import { D1VehiclePlRepository } from "../../../src/infrastructure/db/D1VehiclePlRepository";
 import { D1ImportBatchRepository } from "../../../src/infrastructure/db/D1ImportBatchRepository";
-import { currentYearMonth } from "../../_lib/yearMonth";
+import { currentYearMonth, selectableYearMonths } from "../../_lib/yearMonth";
 import { PageHead } from "../../_components/PageHead";
+import { YearMonthSelect } from "../../_components/YearMonthSelect";
 import { ManualEntryStepper, type PrefillValues } from "./ManualEntryStepper";
 
 /** 手入力フォーム(Google-Forms風ステップ)。層③(修理費実費/インタンク単価/外部給油明細/給与確認/例外上書き)を入力する。 */
@@ -61,11 +62,20 @@ export default async function ManualEntryPage({
   return (
     <div className="max-w-2xl">
       <PageHead
-        kind="tool"
+        kind="ops"
         title="手入力(業務フロー STEP2・3・5・6)"
         lead="請求書から入力する項目だけをステップ順に。Enterで次の欄へ"
+        showHomeLink
+        action={
+          <YearMonthSelect
+            basePath="/manual-entry"
+            value={yearMonth}
+            options={selectableYearMonths(13)}
+          />
+        }
       />
       <ManualEntryStepper
+        key={yearMonth}
         yearMonth={yearMonth}
         vehicles={vehicles.map((v) => ({ vehicleNo: v.vehicleNo, driver: null }))}
         prefill={prefill}

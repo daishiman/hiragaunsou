@@ -39,7 +39,7 @@
   },
   "vars": {
     // Google Workspace限定ログインの許可ドメイン（カンマ区切り）。
-    "WORKSPACE_DOMAINS": "senpai-lab.com",
+    "WORKSPACE_DOMAINS": "senpai-lab.com,tiermind.co.jp",
     "BETTER_AUTH_URL": "https://hiragaunsou-vehicle-pl.daishimanju.workers.dev"
   },
   // 未設定のままデプロイして「本番だけ500」になるのを防ぐ(設定漏れならデプロイ自体が失敗する)。

@@ -96,7 +96,7 @@ export interface ImportBatchRepository {
   } | null>;
 
   /**
-   * STEP1「データ整形」の要確認件数を数える (ホームの進捗判定用)。
+   * STEP2「データ整形」の要確認件数を数える (ホームの進捗判定用)。
    * 生データを全部読むとホームの表示が重くなるため、件数だけをSQLで取る。
    */
   countRawRowsWithFlags(yearMonth: string, sourceType: string): Promise<number>;
