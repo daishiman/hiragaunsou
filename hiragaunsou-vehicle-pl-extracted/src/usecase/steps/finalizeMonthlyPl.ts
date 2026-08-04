@@ -9,6 +9,8 @@ import type {
   DriverMasterRepository,
   RateMasterRepository,
 } from "../../domain/repositories/MasterRepository";
+import type { CleansingDecisionRecord } from "../../domain/repositories/CleansingDecisionRepository";
+import { applyCleansingDecisions } from "./getCleansingQueue";
 
 /**
  * STEP7: 収支確定(締め)ユースケース。
@@ -25,19 +27,36 @@ import type {
  */
 export interface ManualVehicleInput {
   vehicleNo: string;
+  /** STEP3 燃料費 */
   fuelInQty: number;
   fuelOut: number;
   fuelOutQty: number;
   adblue: number;
+  /** STEP5 経費(修繕費・タイヤ) */
   repairActual: number;
+  /** タイヤ実費。未入力(null)なら km×単価の標準原価にフォールバックする */
+  tireActual?: number | null;
   equip: number;
   mainte: number;
+  /** STEP6 高速料金。未入力(null)なら売上モニタリスト由来の通行料/組合割引率で近似する */
+  tollActual?: number | null;
+  tollDiscountActual?: number | null;
   miscOther: number;
 }
 
 export interface FinalizeMonthlyPlInput {
   yearMonth: string;
   manualInputs: ManualVehicleInput[];
+  /**
+   * STEP2: キリンの輸送協力金・経営支援金の配賦結果 (車番 → その他欄への加算額)。
+   * 手入力の miscOther に加算する (置き換えない)。
+   */
+  kirinAllocations?: readonly { vehicleNo: string; amount: number }[];
+  /**
+   * STEP1: データ整形で人が下した判断 (除外する/車番を修正して残す)。
+   * 元データは書き換えず、集計の直前にここで重ねる。
+   */
+  cleansingDecisions?: readonly CleansingDecisionRecord[];
 }
 
 export interface FinalizeMonthlyPlResult {
@@ -52,8 +71,11 @@ const ZERO_MANUAL_INPUT: Omit<ManualVehicleInput, "vehicleNo"> = {
   fuelOutQty: 0,
   adblue: 0,
   repairActual: 0,
+  tireActual: null,
   equip: 0,
   mainte: 0,
+  tollActual: null,
+  tollDiscountActual: null,
   miscOther: 0,
 };
 
@@ -81,7 +103,12 @@ export class FinalizeMonthlyPlUseCase {
       if (r.naturalKey) opByVehicle.set(r.naturalKey, r.raw as VehicleOperationRecord);
     }
 
-    const salesAgg = aggregateSalesByVehicle(salesRawRows.map((r) => r.raw as SalesMonitorRow));
+    // STEP1のデータ整形の判断を先に重ねてから集計する
+    const salesRows = applyCleansingDecisions(
+      salesRawRows.map((r) => r.raw as SalesMonitorRow),
+      input.cleansingDecisions ?? [],
+    );
+    const salesAgg = aggregateSalesByVehicle(salesRows);
 
     const payrollByEmployee = new Map<string, PayrollRecord>();
     for (const r of payrollRawRows) {
@@ -103,6 +130,12 @@ export class FinalizeMonthlyPlUseCase {
     const manualByVehicle = new Map<string, ManualVehicleInput>();
     for (const m of input.manualInputs) {
       manualByVehicle.set(m.vehicleNo, m);
+    }
+
+    // STEP2: キリン配賦は「その他」欄への加算。手入力済みの値を消さずに足す。
+    const kirinByVehicle = new Map<string, number>();
+    for (const a of input.kirinAllocations ?? []) {
+      kirinByVehicle.set(a.vehicleNo, (kirinByVehicle.get(a.vehicleNo) ?? 0) + a.amount);
     }
 
     const rows: VehiclePlCalculated[] = vehicles.map((vehicle) => {
@@ -135,6 +168,9 @@ export class FinalizeMonthlyPlUseCase {
         fuelOut: manual.fuelOut,
         adblue: manual.adblue,
         repairActual: manual.repairActual,
+        tireActual: manual.tireActual ?? null,
+        tollActual: manual.tollActual ?? null,
+        tollDiscountActual: manual.tollDiscountActual ?? null,
         equip: manual.equip,
         mainte: manual.mainte,
         salary: driver?.salary ?? 0,
@@ -143,7 +179,7 @@ export class FinalizeMonthlyPlUseCase {
         insVoluntary: vehicle.insVoluntary,
         taxAuto: vehicle.taxAuto,
         taxWeight: vehicle.taxWeight,
-        miscOther: manual.miscOther,
+        miscOther: manual.miscOther + (kirinByVehicle.get(vehicle.vehicleNo) ?? 0),
         lease: vehicle.lease,
         installment: vehicle.installment,
         standardCostRate,

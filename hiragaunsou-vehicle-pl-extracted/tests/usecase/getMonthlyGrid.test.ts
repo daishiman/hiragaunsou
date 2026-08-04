@@ -11,6 +11,8 @@ function stubVehiclePlRepo(rows: VehiclePlCalculated[]): VehiclePlRepository {
     upsertMany: async () => {},
     findByYearMonth: async () => rows,
     findByVehicleNo: async () => rows,
+    findByYearMonths: async () => new Map(),
+    countByYearMonth: async () => rows.length,
   };
 }
 
@@ -21,6 +23,7 @@ function stubReviewFlagRepo(
     createFlags: async () => {},
     findOpenByYearMonth: async () => flags,
     resolve: async () => {},
+    reopen: async () => {},
   };
 }
 

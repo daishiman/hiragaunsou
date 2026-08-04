@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { count, eq, inArray, sum } from "drizzle-orm";
 import type { Db } from "./client";
 import { vehiclePl } from "./schema";
 import type { VehiclePlRepository } from "../../domain/repositories/VehiclePlRepository";
@@ -125,6 +125,8 @@ export class D1VehiclePlRepository implements VehiclePlRepository {
             expense: row.expense,
             profit: row.profit,
             margin: row.margin,
+            // 作り直したら確定は外す (確定済みの表と中身がずれたまま残さない)
+            confirmed: false,
             updatedAt: now,
           },
         }),
@@ -141,6 +143,50 @@ export class D1VehiclePlRepository implements VehiclePlRepository {
   async findByVehicleNo(vehicleNo: string): Promise<VehiclePlCalculated[]> {
     const rows = await this.db.select().from(vehiclePl).where(eq(vehiclePl.vehicleNo, vehicleNo));
     return rows.map(mapRow);
+  }
+
+  async findByYearMonths(
+    yearMonths: readonly string[],
+  ): Promise<Map<string, VehiclePlCalculated[]>> {
+    const result = new Map<string, VehiclePlCalculated[]>();
+    for (const ym of yearMonths) result.set(ym, []);
+    if (yearMonths.length === 0) return result;
+
+    const rows = await this.db
+      .select()
+      .from(vehiclePl)
+      .where(inArray(vehiclePl.yearMonth, [...yearMonths]));
+    for (const row of rows) {
+      // 要求外の月がヒットすることはないが、Map初期化済みキーにのみ積む
+      result.get(row.yearMonth)?.push(mapRow(row));
+    }
+    return result;
+  }
+
+  async countByYearMonth(yearMonth: string): Promise<number> {
+    const rows = await this.db
+      .select({ value: count() })
+      .from(vehiclePl)
+      .where(eq(vehiclePl.yearMonth, yearMonth));
+    return rows[0]?.value ?? 0;
+  }
+
+  async getConfirmation(yearMonth: string): Promise<{ total: number; confirmed: number }> {
+    const rows = await this.db
+      .select({ total: count(), confirmed: sum(vehiclePl.confirmed) })
+      .from(vehiclePl)
+      .where(eq(vehiclePl.yearMonth, yearMonth));
+    return {
+      total: rows[0]?.total ?? 0,
+      confirmed: Number(rows[0]?.confirmed ?? 0),
+    };
+  }
+
+  async setConfirmed(yearMonth: string, confirmed: boolean): Promise<void> {
+    await this.db
+      .update(vehiclePl)
+      .set({ confirmed })
+      .where(eq(vehiclePl.yearMonth, yearMonth));
   }
 }
 

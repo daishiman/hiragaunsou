@@ -65,6 +65,21 @@ export interface VehiclePlInput {
   installment: number;
   /** 標準原価単価 (repairStandard/tireStandard を km 連動で計算するため) */
   standardCostRate: StandardCostRate;
+  /**
+   * タイヤ費 実費 (業務フローSTEP5: 各社請求書から車番・金額を入力)。
+   * null/undefined のときだけ km×単価の標準原価にフォールバックする。
+   */
+  tireActual?: number | null;
+  /**
+   * 高速通行料 実費 (業務フローSTEP6: 高速協の請求書から入力)。
+   * null/undefined のときだけ売上モニタリスト由来の toll を使う。
+   */
+  tollActual?: number | null;
+  /**
+   * 高速割引額 実費 (業務フローSTEP6: 請求書に合計が無いため個別割引額を合算した値)。
+   * null/undefined のときだけ toll × tollDiscountRate で近似する。
+   */
+  tollDiscountActual?: number | null;
 }
 
 export interface VehiclePlCalculated {
@@ -139,8 +154,11 @@ export function calculateVehiclePl(
 ): VehiclePlCalculated {
   const sales = input.fare + input.fee;
 
-  const tollDisc = round2(input.toll * rates.tollDiscountRate);
-  const tollNet = round2(input.toll - tollDisc);
+  // STEP6: 高速協の請求書から入力された実費があればそれを正とする。
+  // 無いときだけ売上モニタリスト由来の通行料と組合割引率で近似する。
+  const toll = input.tollActual ?? input.toll;
+  const tollDisc = round2(input.tollDiscountActual ?? toll * rates.tollDiscountRate);
+  const tollNet = round2(toll - tollDisc);
 
   const fuelIn = round2(input.fuelInQty * rates.tankPricePerLiter);
   const fuelQty = round2(input.fuelInQty + input.fuelOutQty);
@@ -148,7 +166,8 @@ export function calculateVehiclePl(
   const fuelTotal = round2(fuelIn + input.fuelOut + input.adblue);
 
   const repairStandard = round2(input.km * input.standardCostRate.repairPerKm);
-  const tire = round2(input.km * input.standardCostRate.tirePerKm);
+  // STEP5: タイヤ請求書からの実費があればそれを正とし、無ければ km×単価の標準原価を使う。
+  const tire = round2(input.tireActual ?? input.km * input.standardCostRate.tirePerKm);
   const repairTotal = round2(
     input.repairActual + tire + input.equip + input.mainte,
   );
@@ -186,7 +205,7 @@ export function calculateVehiclePl(
     fare: input.fare,
     fee: input.fee,
     sales: round2(sales),
-    toll: input.toll,
+    toll,
     tollDisc,
     tollNet,
     fuelIn,

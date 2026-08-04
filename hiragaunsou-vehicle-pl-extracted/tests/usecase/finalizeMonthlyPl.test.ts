@@ -9,6 +9,7 @@ import type {
   RateMasterRepository,
 } from "../../src/domain/repositories/MasterRepository";
 import { DEFAULT_RATE_SETTINGS } from "../../src/domain/rules/vehiclePlCalculation";
+import { DEFAULT_DEFICIT_THRESHOLDS } from "../../src/domain/rules/deficitClassification";
 import type { VehicleOperationRecord } from "../../src/infrastructure/parsers/vehicleOperationParser";
 import type { SalesMonitorRow } from "../../src/infrastructure/parsers/salesMonitorParser";
 import type { PayrollRecord } from "../../src/infrastructure/parsers/payrollParser";
@@ -37,7 +38,11 @@ function stubDriverMasterRepo(drivers: DriverMasterRecord[]): DriverMasterReposi
 }
 
 function stubRateMasterRepo(): RateMasterRepository {
-  return { getRates: async () => DEFAULT_RATE_SETTINGS };
+  return {
+    getRates: async () => DEFAULT_RATE_SETTINGS,
+    getDeficitThresholds: async () => DEFAULT_DEFICIT_THRESHOLDS,
+    setRate: async () => {},
+  };
 }
 
 function stubVehiclePlRepo() {
@@ -48,6 +53,8 @@ function stubVehiclePlRepo() {
     },
     findByYearMonth: async () => [],
     findByVehicleNo: async () => [],
+    findByYearMonths: async () => new Map(),
+    countByYearMonth: async () => 0,
   };
   return { repo, calls };
 }

@@ -61,4 +61,11 @@ export class D1ReviewFlagRepository implements ReviewFlagRepository {
       .set({ status, resolvedBy, resolvedAt: new Date(), resolutionNote: note })
       .where(eq(reviewFlag.id, id));
   }
+
+  async reopen(id: string): Promise<void> {
+    await this.db
+      .update(reviewFlag)
+      .set({ status: "open", resolvedBy: null, resolvedAt: null, resolutionNote: null })
+      .where(eq(reviewFlag.id, id));
+  }
 }

@@ -49,6 +49,8 @@ function stubVehiclePlRepo(dataByYearMonth: Record<string, ReturnType<typeof cal
     upsertMany: async () => {},
     findByYearMonth: async (yearMonth) => dataByYearMonth[yearMonth] ?? [],
     findByVehicleNo: async () => [],
+    findByYearMonths: async () => new Map(),
+    countByYearMonth: async () => 0,
   };
 }
 

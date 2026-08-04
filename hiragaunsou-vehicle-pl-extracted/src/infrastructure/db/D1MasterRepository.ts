@@ -9,6 +9,10 @@ import type {
   RateMasterRepository,
 } from "../../domain/repositories/MasterRepository";
 import { DEFAULT_RATE_SETTINGS, type RateSettings } from "../../domain/rules/vehiclePlCalculation";
+import {
+  DEFAULT_DEFICIT_THRESHOLDS,
+  type DeficitThresholds,
+} from "../../domain/rules/deficitClassification";
 
 /** D1(Drizzle)によるVehicleMasterRepositoryの実装(Infrastructure層アダプタ)。 */
 export class D1VehicleMasterRepository implements VehicleMasterRepository {
@@ -29,6 +33,17 @@ export class D1VehicleMasterRepository implements VehicleMasterRepository {
       lease: r.lease,
       installment: r.installment,
     }));
+  }
+
+  async updateLeaseInstallment(
+    vehicleNo: string,
+    lease: number,
+    installment: number,
+  ): Promise<void> {
+    await this.db
+      .update(vehicleMaster)
+      .set({ lease, installment, updatedAt: new Date() })
+      .where(eq(vehicleMaster.vehicleNo, vehicleNo));
   }
 }
 
@@ -51,28 +66,50 @@ export const RATE_KEYS = {
   adminFeeRate: "admin_fee_rate",
   bonusAnnual: "bonus_annual",
   tankPricePerLiter: "tank_price",
+  /** 赤字3分類: 売上がこれ未満なら遊休・低稼働型 */
+  idleSales: "deficit_idle_sales",
+  /** 赤字3分類: 修理費実費がこれ以上なら突発修繕型 */
+  repairSpike: "deficit_repair_spike",
+  /** 損益分岐目安のkm単価 (ダッシュボードのkm単価分布の閾線) */
+  breakEvenKmPrice: "break_even_km_price",
 } as const;
 
 /** D1(Drizzle)によるRateMasterRepositoryの実装。yearMonth指定値→全期間共通値→デフォルトの順でフォールバックする。 */
 export class D1RateMasterRepository implements RateMasterRepository {
   constructor(private readonly db: Db) {}
 
-  async getRates(yearMonth: string): Promise<RateSettings> {
+  /** 月指定値→全期間共通値→既定値 の順で解決する関数を作る (1クエリで全キーを賄う) */
+  private async resolver(yearMonth: string): Promise<(key: string, fallback: number) => number> {
     const rows = await this.db.select().from(rateMaster);
-
-    const resolve = (key: string, fallback: number): number => {
+    return (key: string, fallback: number): number => {
       const monthly = rows.find((r) => r.key === key && r.yearMonth === yearMonth);
       if (monthly) return monthly.value;
       const common = rows.find((r) => r.key === key && r.yearMonth === null);
       if (common) return common.value;
       return fallback;
     };
+  }
+
+  async getRates(yearMonth: string): Promise<RateSettings> {
+    const resolve = await this.resolver(yearMonth);
 
     return {
       tollDiscountRate: resolve(RATE_KEYS.tollDiscountRate, DEFAULT_RATE_SETTINGS.tollDiscountRate),
       adminFeeRate: resolve(RATE_KEYS.adminFeeRate, DEFAULT_RATE_SETTINGS.adminFeeRate),
       bonusAnnual: resolve(RATE_KEYS.bonusAnnual, DEFAULT_RATE_SETTINGS.bonusAnnual),
       tankPricePerLiter: resolve(RATE_KEYS.tankPricePerLiter, DEFAULT_RATE_SETTINGS.tankPricePerLiter),
+    };
+  }
+
+  async getDeficitThresholds(yearMonth: string): Promise<DeficitThresholds> {
+    const resolve = await this.resolver(yearMonth);
+    return {
+      idleSales: resolve(RATE_KEYS.idleSales, DEFAULT_DEFICIT_THRESHOLDS.idleSales),
+      repairSpike: resolve(RATE_KEYS.repairSpike, DEFAULT_DEFICIT_THRESHOLDS.repairSpike),
+      breakEvenKmPrice: resolve(
+        RATE_KEYS.breakEvenKmPrice,
+        DEFAULT_DEFICIT_THRESHOLDS.breakEvenKmPrice,
+      ),
     };
   }
 

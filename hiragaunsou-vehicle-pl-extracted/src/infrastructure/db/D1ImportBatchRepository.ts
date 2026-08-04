@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull } from "drizzle-orm";
 import type { Db } from "./client";
 import { csvImportBatch, rawIngestion } from "./schema";
 import type { ImportBatchRepository } from "../../domain/repositories/VehiclePlRepository";
@@ -14,6 +14,7 @@ export class D1ImportBatchRepository implements ImportBatchRepository {
     fileName: string;
     importedBy: string | null;
     rowCount: number;
+    excludedRowCount?: number;
   }): Promise<void> {
     await this.db.insert(csvImportBatch).values({
       id: input.id,
@@ -22,6 +23,7 @@ export class D1ImportBatchRepository implements ImportBatchRepository {
       fileName: input.fileName,
       importedBy: input.importedBy,
       rowCount: input.rowCount,
+      excludedRowCount: input.excludedRowCount ?? 0,
       status: "completed",
     });
   }
@@ -70,6 +72,7 @@ export class D1ImportBatchRepository implements ImportBatchRepository {
     id: string;
     fileName: string;
     rowCount: number;
+    excludedRowCount: number;
     importedAt: number;
     status: string;
   } | null> {
@@ -86,8 +89,23 @@ export class D1ImportBatchRepository implements ImportBatchRepository {
       id: row.id,
       fileName: row.fileName,
       rowCount: row.rowCount,
+      excludedRowCount: row.excludedRowCount,
       importedAt: row.importedAt.getTime(),
       status: row.status,
     };
+  }
+
+  async countRawRowsWithFlags(yearMonth: string, sourceType: string): Promise<number> {
+    const rows = await this.db
+      .select({ count: count() })
+      .from(rawIngestion)
+      .where(
+        and(
+          eq(rawIngestion.yearMonth, yearMonth),
+          eq(rawIngestion.sourceType, sourceType),
+          isNotNull(rawIngestion.flags),
+        ),
+      );
+    return rows[0]?.count ?? 0;
   }
 }

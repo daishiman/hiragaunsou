@@ -9,6 +9,7 @@ function stubReviewFlagRepo(
     createFlags: async () => {},
     findOpenByYearMonth: async () => flags,
     resolve: async () => {},
+    reopen: async () => {},
   };
 }
 
