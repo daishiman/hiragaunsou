@@ -24,6 +24,7 @@ export default defineConfig({
         "app/_components/**/*.tsx",
         "app/_lib/**",
         "app/(app)/**/*.tsx",
+        "middleware.ts",
       ],
       exclude: [
         "src/infrastructure/db/schema.ts",
