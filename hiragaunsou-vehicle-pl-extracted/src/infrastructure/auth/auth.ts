@@ -74,9 +74,6 @@ export function createAuth(env: AuthEnv) {
           if (!token.idToken) return null;
           const profile = decodeJwt(token.idToken) as GoogleProfile;
           if (!isWorkspaceHostedDomainAllowed(allowedDomains, profile.hd)) {
-            console.error(
-              `Google sign-in rejected: hosted domain "${profile.hd ?? "<missing>"}" is not in WORKSPACE_DOMAINS.`,
-            );
             return null;
           }
           return {
