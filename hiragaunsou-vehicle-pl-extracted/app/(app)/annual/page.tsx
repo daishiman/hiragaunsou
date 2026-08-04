@@ -143,6 +143,13 @@ export default async function AnnualPage({
             ) : (
               <span className="font-bold">全月一致</span>
             )}
+            {/* 月合計の差の内訳は車番別でしか読めない。同じ月の月次収支表へ渡す。 */}
+            <Link
+              href={`/grid?ym=${encodeURIComponent(yearMonth)}`}
+              className="ml-auto text-xs font-semibold text-brand-deep hover:underline"
+            >
+              車番別の食い違いを見る →
+            </Link>
           </div>
 
           <section className="mt-4 rounded-xl border border-line bg-white p-5">
@@ -403,7 +410,14 @@ export default async function AnnualPage({
                         key={r.yearMonth}
                         className={`border-b border-line last:border-b-0 ${r.hasGap ? "bg-caution-soft" : ""}`}
                       >
-                        <td className="px-3 py-2 font-medium">{r.label}</td>
+                        <td className="px-3 py-2 font-medium">
+                          <Link
+                            href={`/grid?ym=${encodeURIComponent(r.yearMonth)}`}
+                            className="text-brand-deep hover:underline"
+                          >
+                            {r.label}
+                          </Link>
+                        </td>
                         <td className="num px-3 py-2 text-right">{yen(r.systemSales)}</td>
                         <td className="num px-3 py-2 text-right">{yen(r.sheetSales)}</td>
                         <td className="num px-3 py-2 text-right font-bold">{yen(r.salesGap)}</td>

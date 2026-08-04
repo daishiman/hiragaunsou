@@ -5,7 +5,9 @@ import { checkAccess } from "../../../src/infrastructure/auth/accessControl";
 import { createDb } from "../../../src/infrastructure/db/client";
 import { D1VehiclePlRepository } from "../../../src/infrastructure/db/D1VehiclePlRepository";
 import { D1ReviewFlagRepository } from "../../../src/infrastructure/db/D1ReviewFlagRepository";
+import { D1ImportBatchRepository } from "../../../src/infrastructure/db/D1ImportBatchRepository";
 import { GetMonthlyGridUseCase } from "../../../src/usecase/steps/getMonthlyGrid";
+import { GetExcelReconciliationUseCase } from "../../../src/usecase/steps/getExcelReconciliation";
 import { currentYearMonth, selectableYearMonths } from "../../_lib/yearMonth";
 import { yearMonthLabel } from "../../_lib/format";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
@@ -13,6 +15,7 @@ import { PageHead } from "../../_components/PageHead";
 import { EmptyState } from "../../_components/EmptyState";
 import { ConfirmMonthlyPlUseCase } from "../../../src/usecase/steps/confirmMonthlyPl";
 import { GridTable } from "./GridTable";
+import { ExcelReconcileList } from "./ExcelReconcileList";
 import { ConfirmBar } from "./ConfirmBar";
 
 /** F1 月次収支表 (S2画面)。Presentation層はUseCase呼び出しのみ。 */
@@ -32,9 +35,10 @@ export default async function GridPage({
   const db = createDb(env.DB);
   const plRepo = new D1VehiclePlRepository(db);
   const flagRepo = new D1ReviewFlagRepository(db);
-  const [grid, confirmation] = await Promise.all([
+  const [grid, confirmation, reconciliation] = await Promise.all([
     new GetMonthlyGridUseCase(plRepo, flagRepo).execute(yearMonth),
     new ConfirmMonthlyPlUseCase(plRepo, flagRepo).status(yearMonth),
+    new GetExcelReconciliationUseCase(plRepo, new D1ImportBatchRepository(db)).execute(yearMonth),
   ]);
 
   return (
@@ -76,7 +80,10 @@ export default async function GridPage({
           actionHref="/import"
         />
       ) : (
-        <GridTable rows={grid.rows} yearMonth={yearMonth} />
+        <>
+          <GridTable rows={grid.rows} yearMonth={yearMonth} />
+          <ExcelReconcileList result={reconciliation} />
+        </>
       )}
     </>
   );
