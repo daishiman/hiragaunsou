@@ -28,8 +28,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { href: "/", label: "ホーム", desc: "今月の締めを業務フローの順に進める" },
       {
         href: "/import",
-        label: "データ取込(STEP1・2・4)",
-        desc: "運行実績・売上モニタリスト・給与集計表を取込む",
+        label: "データ取込(STEP1・2・4・7)",
+        desc: "運行実績・売上モニタリスト・給与集計表・完成済み収支表を取込む",
         badge: "registration",
       },
       {

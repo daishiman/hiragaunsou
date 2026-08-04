@@ -50,10 +50,12 @@ export const rawIngestion = sqliteTable(
     /** 傭車(88888)・諸口・2重計上疑いなどのフラグ (JSON配列文字列) */
     flags: text("flags"),
   },
-  (table) => [
-    index("raw_ingestion_batch_idx").on(table.batchId),
-    index("raw_ingestion_ym_source_idx").on(table.yearMonth, table.sourceType),
-  ],
+  // D1は「書き込み行数」を索引更新も含めて数えるため、索引を1本持つだけで
+  // 取込1行あたりの消費が増える。raw_ingestion は毎月数千行入る最大の書き込み源であり、
+  // 無料枠(10万行/日)に最も近づくテーブルなので、索引は実際に引かれるものだけに絞る。
+  // batch_id 単独の索引は削除(0003)。取込済みバッチの削除は year_month + source_type で
+  // 絞り込んでから batch_id で判定するため、下の複合索引で足りる。
+  (table) => [index("raw_ingestion_ym_source_idx").on(table.yearMonth, table.sourceType)],
 );
 
 /** 車両マスタ (保険・税・リース・配賦単価等、連鎖確定の土台) */

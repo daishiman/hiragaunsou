@@ -39,3 +39,6 @@ next-env.d.ts
 *.tmp
 *.log
 .dev.vars*
+
+# 共有元データ(実績CSV/Excel)。受入テスト用にここへ置くがGit管理しない。
+/data/
