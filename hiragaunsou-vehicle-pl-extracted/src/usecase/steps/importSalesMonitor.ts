@@ -1,5 +1,6 @@
 import { parseSalesMonitorCsv } from "../../infrastructure/parsers/salesMonitorParser";
 import { isCharteredVehicle } from "../../domain/rules/charteredVehicle";
+import { detectCleansingFlags, needsHumanDecision } from "../../domain/rules/cleansingRules";
 import type { FileStorageRepository } from "../../domain/repositories/FileStorageRepository";
 import type { ImportBatchRepository } from "../../domain/repositories/VehiclePlRepository";
 
@@ -44,6 +45,13 @@ export class ImportSalesMonitorUseCase {
     const charteredExcluded = records.filter((r) => isCharteredVehicle(r.vehicleCode)).length;
     const kept = records.filter((r) => !isCharteredVehicle(r.vehicleCode));
 
+    // STEP1のデータ整形フラグ(2重計上の疑い・諸口)は取込時に確定させ、raw_ingestion に貼っておく。
+    // こうしておくと「要確認が何件あるか」を生データを読み直さずに数えられる(ホームの進捗表示が軽くなる)。
+    const flagsPerRow = kept.map((r) =>
+      detectCleansingFlags({ vehicleNo: r.vehicleCode, driverName: r.driverName }),
+    );
+    const needsReviewCount = flagsPerRow.filter(needsHumanDecision).length;
+
     const batchId = crypto.randomUUID();
     await this.importBatchRepo.createBatch({
       id: batchId,
@@ -52,6 +60,7 @@ export class ImportSalesMonitorUseCase {
       fileName: input.fileName,
       importedBy: input.importedBy,
       rowCount: kept.length,
+      excludedRowCount: charteredExcluded,
     });
 
     await this.importBatchRepo.saveRawIngestion(
@@ -62,7 +71,7 @@ export class ImportSalesMonitorUseCase {
         rowIndex: i,
         naturalKey: r.vehicleCode,
         raw: r,
-        flags: r.needsReview ? ["misc_driver_name"] : [],
+        flags: (flagsPerRow[i] ?? []).map((f) => f.type),
       })),
     );
 
@@ -71,7 +80,7 @@ export class ImportSalesMonitorUseCase {
       storedFileKey: stored.key,
       totalRows: records.length,
       charteredExcluded,
-      needsReviewCount: kept.filter((r) => r.needsReview).length,
+      needsReviewCount,
     };
   }
 }

@@ -55,6 +55,7 @@ export class ImportVehicleOperationUseCase {
       fileName: input.fileName,
       importedBy: input.importedBy,
       rowCount: kept.length,
+      excludedRowCount: charteredExcluded,
     });
 
     await this.importBatchRepo.saveRawIngestion(

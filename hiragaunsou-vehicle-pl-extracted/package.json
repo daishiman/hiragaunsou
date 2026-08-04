@@ -16,7 +16,9 @@
     "cf:dry-run": "opennextjs-cloudflare build && wrangler deploy --dry-run",
     "db:migrate:local": "wrangler d1 migrations apply hiragaunsou_vehicle_pl --local",
     "db:migrate:remote": "wrangler d1 migrations apply hiragaunsou_vehicle_pl --remote",
-    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy"
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.20.2",
@@ -30,6 +32,7 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.20.1",
     "@cloudflare/workers-types": "^5.20260730.1",
+    "@eslint/js": "^9.39.5",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22.10.2",
@@ -39,10 +42,14 @@
     "@vitest/coverage-v8": "^4.1.10",
     "better-sqlite3": "^12.11.1",
     "drizzle-kit": "^0.31.4",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.7.2",
+    "typescript-eslint": "^8.66.0",
     "vite": "^7.3.6",
     "vitest": "^4.1.10",
     "wrangler": "^4.0.0"

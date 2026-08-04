@@ -28,6 +28,8 @@ export const csvImportBatch = sqliteTable("csv_import_batch", {
     .notNull(),
   importedBy: text("imported_by").references(() => user.id),
   rowCount: integer("row_count").notNull().default(0),
+  /** 取込時に機械的に除外した行数 (傭車=車番88888)。「何件を自動で処理したか」を人に示すために持つ */
+  excludedRowCount: integer("excluded_row_count").notNull().default(0),
   status: text("status").notNull().default("completed"), // completed / failed / partial
 });
 
@@ -48,10 +50,12 @@ export const rawIngestion = sqliteTable(
     /** 傭車(88888)・諸口・2重計上疑いなどのフラグ (JSON配列文字列) */
     flags: text("flags"),
   },
-  (table) => [
-    index("raw_ingestion_batch_idx").on(table.batchId),
-    index("raw_ingestion_ym_source_idx").on(table.yearMonth, table.sourceType),
-  ],
+  // D1は「書き込み行数」を索引更新も含めて数えるため、索引を1本持つだけで
+  // 取込1行あたりの消費が増える。raw_ingestion は毎月数千行入る最大の書き込み源であり、
+  // 無料枠(10万行/日)に最も近づくテーブルなので、索引は実際に引かれるものだけに絞る。
+  // batch_id 単独の索引は削除(0003)。取込済みバッチの削除は year_month + source_type で
+  // 絞り込んでから batch_id で判定するため、下の複合索引で足りる。
+  (table) => [index("raw_ingestion_ym_source_idx").on(table.yearMonth, table.sourceType)],
 );
 
 /** 車両マスタ (保険・税・リース・配賦単価等、連鎖確定の土台) */
@@ -202,6 +206,34 @@ export const reviewFlag = sqliteTable(
 );
 
 /**
+ * 年間集計の参照値 (S8 年間集計・対前年画面)。
+ *
+ * 月次データ(vehicle_pl)から自動集計できない外部の数字だけを持つ:
+ *  - prev_year_actual : 前年度実績 (対前年比較の相手方。月次データが無い期間の実績)
+ *  - excel_annual_sheet: 現行Excelの年間集計シートの転記値 (自動突合してズレを可視化するための比較元)
+ *
+ * 集計・損益などの下流の値は手入力できない構造にする方針のため、このテーブルは
+ * 「月次から計算できない外部由来の値」だけを保持し、当年度の集計値は保存しない。
+ */
+export const annualReference = sqliteTable(
+  "annual_reference",
+  {
+    id: text("id").primaryKey(),
+    /** prev_year_actual / excel_annual_sheet */
+    kind: text("kind").notNull(),
+    yearMonth: text("year_month").notNull(), // YYYY-MM
+    sales: real("sales").notNull().default(0),
+    expense: real("expense").notNull().default(0),
+    note: text("note"),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedBy: text("updated_by").references(() => user.id),
+  },
+  (table) => [uniqueIndex("annual_reference_kind_ym_idx").on(table.kind, table.yearMonth)],
+);
+
+/**
  * AI(Claude API等)呼び出しの利用量ログ。/usage 画面で概算費用・利用者別内訳を出すための唯一の記録先。
  * kind: factor_analysis_report(要因分析レポート) / pdf_ocr_extract(PDF OCR抽出) 等、呼び出し用途を識別する。
  */
@@ -224,3 +256,96 @@ export const usageLog = sqliteTable(
     index("usage_log_recorded_by_idx").on(table.recordedBy),
   ],
 );
+
+/**
+ * 業務フロー STEP3(燃料費) / STEP5(修繕費・タイヤ) / STEP6(高速料金) の人手入力値。
+ *
+ * これらは月内の別々のタイミングで請求書が届くため、1回で入力し切れない。
+ * 入力を保存して再開・その場修正できるようにするため、確定(vehicle_pl)とは別に保持する。
+ * vehicle_pl は常にこの値から再計算されるので、こちらが人手入力の唯一の正本になる。
+ */
+export const manualVehicleInput = sqliteTable(
+  "manual_vehicle_input",
+  {
+    id: text("id").primaryKey(),
+    yearMonth: text("year_month").notNull(),
+    vehicleNo: text("vehicle_no").notNull(),
+    /** STEP3 燃料費 */
+    fuelInQty: real("fuel_in_qty").notNull().default(0),
+    fuelOut: real("fuel_out").notNull().default(0),
+    fuelOutQty: real("fuel_out_qty").notNull().default(0),
+    adblue: real("adblue").notNull().default(0),
+    /** STEP5 経費(修繕費・タイヤ)。tire_actual は null のとき km×単価の標準原価にフォールバックする */
+    repairActual: real("repair_actual").notNull().default(0),
+    tireActual: real("tire_actual"),
+    equip: real("equip").notNull().default(0),
+    mainte: real("mainte").notNull().default(0),
+    /** STEP6 高速料金。null のとき売上モニタリスト由来の通行料と組合割引率で近似する */
+    tollActual: real("toll_actual"),
+    tollDiscountActual: real("toll_discount_actual"),
+    /** STEP2 キリン配賦を含む「その他」諸経費 */
+    miscOther: real("misc_other").notNull().default(0),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedBy: text("updated_by").references(() => user.id),
+  },
+  (table) => [
+    uniqueIndex("manual_vehicle_input_ym_no_idx").on(table.yearMonth, table.vehicleNo),
+    index("manual_vehicle_input_ym_idx").on(table.yearMonth),
+  ],
+);
+
+/**
+ * 業務フロー STEP1「データ整形(傭車・2重計上・諸口の処理)」で人が下した判断の履歴。
+ *
+ * 判定ルール(車番88888=傭車 / 888・10・5000番=2重計上疑い / 運転者「諸口」)はシステムが持ち、
+ * 最終判断は人が1クリックで下す。その判断をここに残すことで
+ *  - なぜその伝票が収支表に入っていない(入っている)かを後から説明できる
+ *  - 翌月に同じ伝票が上がってきたとき「前月はこう判断した」と提案できる
+ * ようにする。row_key は伝票の自然キー(管理№-行№)。
+ */
+export const cleansingDecision = sqliteTable(
+  "cleansing_decision",
+  {
+    id: text("id").primaryKey(),
+    yearMonth: text("year_month").notNull(),
+    sourceType: text("source_type").notNull(),
+    rowKey: text("row_key").notNull(),
+    vehicleNo: text("vehicle_no"),
+    driverName: text("driver_name"),
+    /** 立っていたフラグ種別 (JSON配列文字列: chartered/duplicate_suspect/misc_entry) */
+    flagTypes: text("flag_types").notNull(),
+    /** delete(除外する) / correct(修正して残す) / keep(そのまま残す) */
+    decision: text("decision").notNull(),
+    /** correct のとき、正しい車番へ付け替える */
+    correctedVehicleNo: text("corrected_vehicle_no"),
+    note: text("note"),
+    decidedBy: text("decided_by").references(() => user.id),
+    decidedAt: integer("decided_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("cleansing_decision_ym_src_row_idx").on(
+      table.yearMonth,
+      table.sourceType,
+      table.rowKey,
+    ),
+    index("cleansing_decision_ym_idx").on(table.yearMonth),
+    index("cleansing_decision_row_idx").on(table.sourceType, table.rowKey),
+  ],
+);
+
+/**
+ * 業務ルールのうち、コードに埋めたくない設定値。
+ * 例: キリンの輸送協力金・経営支援金の配賦先車番 (現状24番・300番だが、専属車両が変われば変わる)。
+ */
+export const appSetting = sqliteTable("app_setting", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+    .notNull(),
+  updatedBy: text("updated_by").references(() => user.id),
+});

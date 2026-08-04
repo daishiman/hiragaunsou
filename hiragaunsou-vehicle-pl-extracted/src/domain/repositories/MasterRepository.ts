@@ -1,4 +1,5 @@
 import type { RateSettings } from "../rules/vehiclePlCalculation";
+import type { DeficitThresholds } from "../rules/deficitClassification";
 
 /**
  * 車両マスタ (保険・税・リース・配賦単価等、連鎖確定の土台)。
@@ -21,6 +22,16 @@ export interface VehicleMasterRecord {
 
 export interface VehicleMasterRepository {
   findAllActive(): Promise<VehicleMasterRecord[]>;
+
+  /**
+   * リース料・割賦支払額を更新する (業務フロー STEP7「変更があれば都度修正する」)。
+   * 収支表の値を直接いじらせず、必ず土台の車両マスタを直して再計算させるための入口。
+   */
+  updateLeaseInstallment(
+    vehicleNo: string,
+    lease: number,
+    installment: number,
+  ): Promise<void>;
 }
 
 /** 運転者マスタ (社員コードで車番と紐づく。1:1ではない) */
@@ -41,6 +52,12 @@ export interface DriverMasterRepository {
 export interface RateMasterRepository {
   /** yearMonth 指定のtank_price等を優先し、無ければ全期間共通値・デフォルト値の順でフォールバックする */
   getRates(yearMonth: string): Promise<RateSettings>;
+
+  /**
+   * 赤字3分類・損益分岐km単価の閾値を取得する (S9 赤字の理由 / S7 ダッシュボード)。
+   * getRates と同じフォールバック順 (月指定→全期間共通→既定値)。
+   */
+  getDeficitThresholds(yearMonth: string): Promise<DeficitThresholds>;
 
   /**
    * レート単価を1件 upsert する (手入力画面「インタンク単価」用, §2.2)。

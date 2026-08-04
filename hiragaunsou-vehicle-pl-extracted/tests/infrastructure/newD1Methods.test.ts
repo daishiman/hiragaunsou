@@ -30,6 +30,7 @@ function createTestDb() {
       file_name TEXT NOT NULL,
       imported_at INTEGER NOT NULL,
       imported_by TEXT,
+      excluded_row_count INTEGER NOT NULL DEFAULT 0,
       row_count INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'completed'
     );

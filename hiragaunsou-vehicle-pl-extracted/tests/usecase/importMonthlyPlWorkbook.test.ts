@@ -26,6 +26,8 @@ describe("ImportMonthlyPlWorkbookUseCase", () => {
       upsertMany: async (_yearMonth, rows) => { upsertCalls.push(rows); },
       findByYearMonth: async () => [],
       findByVehicleNo: async () => [],
+      findByYearMonths: async () => new Map(),
+      countByYearMonth: async () => 0,
     };
 
     const result = await new ImportMonthlyPlWorkbookUseCase(fileStorage, batchRepo, vehiclePlRepo).execute({

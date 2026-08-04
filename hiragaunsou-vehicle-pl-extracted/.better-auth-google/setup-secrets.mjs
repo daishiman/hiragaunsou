@@ -34,7 +34,8 @@ async function readHidden(label) {
       process.stdin.setRawMode(wasRaw);
       process.stdin.pause();
       process.stdout.write("\n");
-      error ? reject(error) : resolve(value);
+      if (error) reject(error);
+      else resolve(value);
     };
     const onData = (chunk) => {
       for (const character of chunk) {

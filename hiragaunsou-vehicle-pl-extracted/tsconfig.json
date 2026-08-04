@@ -31,6 +31,8 @@
   },
   "include": [
     "src",
+    "app",
+    "next-env.d.ts",
     "worker-configuration.d.ts",
     "vitest.config.ts",
     ".next/types/**/*.ts",

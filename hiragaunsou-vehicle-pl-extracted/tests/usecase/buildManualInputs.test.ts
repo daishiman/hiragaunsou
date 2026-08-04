@@ -7,7 +7,7 @@ describe("buildManualInputs", () => {
     expect(res[0]!.repairActual).toBe(12000);
   });
 
-  it("未入力フィールドは0にする", () => {
+  it("未入力フィールドは0にする(実費項目だけは推計へ戻せるようnullのまま)", () => {
     const res = buildManualInputs([{ vehicleNo: "1" }]);
     expect(res[0]).toEqual({
       vehicleNo: "1",
@@ -19,6 +19,9 @@ describe("buildManualInputs", () => {
       equip: 0,
       mainte: 0,
       miscOther: 0,
+      tireActual: null,
+      tollActual: null,
+      tollDiscountActual: null,
     });
   });
 

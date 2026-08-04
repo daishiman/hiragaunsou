@@ -77,7 +77,7 @@ describe("ImportSalesMonitorUseCase", () => {
     // 傭車(88888)は保存対象から除外されている
     expect(ingestion.rows.every((r) => r.naturalKey !== "88888")).toBe(true);
     // 諸口行はflagsに要確認マークが付いたまま残る(自動削除しない)
-    const misc = ingestion.rows.find((r) => r.flags.includes("misc_driver_name"));
+    const misc = ingestion.rows.find((r) => r.flags.includes("misc_entry"));
     expect(misc).toBeDefined();
   });
 });

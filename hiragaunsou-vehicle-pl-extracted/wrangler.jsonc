@@ -42,6 +42,12 @@
     "WORKSPACE_DOMAINS": "senpai-lab.com",
     "BETTER_AUTH_URL": "https://hiragaunsou-vehicle-pl.daishimanju.workers.dev"
   },
+  // 未設定のままデプロイして「本番だけ500」になるのを防ぐ(設定漏れならデプロイ自体が失敗する)。
+  "secrets": {
+    "required": ["BETTER_AUTH_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]
+  },
+  // limits.cpu_ms(課金の安全弁)は有料プラン専用のため設定していない。
+  // 無料プランでは 1リクエストあたり CPU 10ms / D1クエリ50本 が既定の上限として効く。
   "observability": {
     "enabled": true
   },

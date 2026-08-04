@@ -20,12 +20,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { id } = await params;
   const body = (await request.json()) as {
-    action: "corrected" | "approved" | "dismissed";
+    action: "corrected" | "approved" | "dismissed" | "reopen";
     note?: string;
   };
 
   const repo = new D1ReviewFlagRepository(createDb(env.DB));
-  await repo.resolve(id, session.id, body.action, body.note ?? null);
+  // reopen は判定の取り消し(Undo)。押し間違いを戻せるようにするための経路。
+  if (body.action === "reopen") {
+    await repo.reopen(id);
+  } else {
+    await repo.resolve(id, session.id, body.action, body.note ?? null);
+  }
 
   return NextResponse.json({ ok: true });
 }

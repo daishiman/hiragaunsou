@@ -9,6 +9,7 @@ import type {
   RateMasterRepository,
 } from "../../src/domain/repositories/MasterRepository";
 import { DEFAULT_RATE_SETTINGS } from "../../src/domain/rules/vehiclePlCalculation";
+import { DEFAULT_DEFICIT_THRESHOLDS } from "../../src/domain/rules/deficitClassification";
 import type { VehicleOperationRecord } from "../../src/infrastructure/parsers/vehicleOperationParser";
 import type { SalesMonitorRow } from "../../src/infrastructure/parsers/salesMonitorParser";
 import type { PayrollRecord } from "../../src/infrastructure/parsers/payrollParser";
@@ -37,7 +38,11 @@ function stubDriverMasterRepo(drivers: DriverMasterRecord[]): DriverMasterReposi
 }
 
 function stubRateMasterRepo(): RateMasterRepository {
-  return { getRates: async () => DEFAULT_RATE_SETTINGS };
+  return {
+    getRates: async () => DEFAULT_RATE_SETTINGS,
+    getDeficitThresholds: async () => DEFAULT_DEFICIT_THRESHOLDS,
+    setRate: async () => {},
+  };
 }
 
 function stubVehiclePlRepo() {
@@ -48,6 +53,8 @@ function stubVehiclePlRepo() {
     },
     findByYearMonth: async () => [],
     findByVehicleNo: async () => [],
+    findByYearMonths: async () => new Map(),
+    countByYearMonth: async () => 0,
   };
   return { repo, calls };
 }
@@ -185,5 +192,67 @@ describe("FinalizeMonthlyPlUseCase", () => {
     expect(result.rows[0]?.sales).toBe(0);
     // 固定費(保険・税)はマスタから即時セットされるため、売上0でも損益は赤字になる(仕様通り)
     expect(result.rows[0]?.profit).toBeLessThan(0);
+  });
+
+  // 実データ突合 (2026-05) で判明した業務ルール。現行Excelの「車両別売上」シートは
+  // キリンの輸送協力金・経営支援金を収支表 L列「高速他料金」= 売上側に載せている。
+  it("キリン配賦は費用の諸経費ではなく売上(附帯料金)に加算する", async () => {
+    const importBatchRepo = stubImportBatchRepo({ vehicle_operation: [], sales_monitor: [], payroll: [] });
+    const useCase = new FinalizeMonthlyPlUseCase(
+      importBatchRepo,
+      stubVehicleMasterRepo([baseVehicle({ vehicleNo: "24" })]),
+      stubDriverMasterRepo([]),
+      stubRateMasterRepo(),
+      stubVehiclePlRepo().repo,
+    );
+
+    const result = await useCase.execute({
+      yearMonth: "2026-05",
+      manualInputs: [],
+      kirinAllocations: [{ vehicleNo: "24", amount: 152_127 }],
+    });
+
+    const row = result.rows[0];
+    expect(row?.fee).toBe(152_127);
+    expect(row?.sales).toBe(152_127);
+    expect(row?.miscOther).toBe(0);
+  });
+
+  // 賞与は運転者1人あたりの月額。2人乗務の車両は2人分になる (現行Excelも月5万円で計上)。
+  it("賞与は車両に紐づく運転者の人数分を計上する", async () => {
+    const importBatchRepo = stubImportBatchRepo({ vehicle_operation: [], sales_monitor: [], payroll: [] });
+    const useCase = new FinalizeMonthlyPlUseCase(
+      importBatchRepo,
+      stubVehicleMasterRepo([baseVehicle({ vehicleNo: "22" }), baseVehicle({ vehicleNo: "23" })]),
+      stubDriverMasterRepo([
+        { employeeCode: "658", driverName: "濱田", vehicleNo: "22" },
+        { employeeCode: "720", driverName: "豊田", vehicleNo: "22" },
+        { employeeCode: "611", driverName: "須江", vehicleNo: "23" },
+      ]),
+      stubRateMasterRepo(),
+      stubVehiclePlRepo().repo,
+    );
+
+    const result = await useCase.execute({ yearMonth: "2026-05", manualInputs: [] });
+    const monthly = DEFAULT_RATE_SETTINGS.bonusAnnual / 12;
+
+    expect(result.rows.find((r) => r.no === "22")?.bonus).toBeCloseTo(monthly * 2);
+    expect(result.rows.find((r) => r.no === "23")?.bonus).toBeCloseTo(monthly);
+  });
+
+  // 運転者マスタに紐づく運転者が居ない車両は賞与も発生しない
+  it("運転者が紐づいていない車両の賞与は0にする", async () => {
+    const importBatchRepo = stubImportBatchRepo({ vehicle_operation: [], sales_monitor: [], payroll: [] });
+    const useCase = new FinalizeMonthlyPlUseCase(
+      importBatchRepo,
+      stubVehicleMasterRepo([baseVehicle({ vehicleNo: "205" })]),
+      stubDriverMasterRepo([]),
+      stubRateMasterRepo(),
+      stubVehiclePlRepo().repo,
+    );
+
+    const result = await useCase.execute({ yearMonth: "2026-05", manualInputs: [] });
+    expect(result.rows[0]?.bonus).toBe(0);
+    expect(result.rows[0]?.laborTotal).toBe(0);
   });
 });

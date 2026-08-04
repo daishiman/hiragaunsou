@@ -26,4 +26,21 @@ describe("parsePayrollCsv", () => {
     const records = parsePayrollCsv(new Uint8Array(fixture));
     expect(records.every((r) => r.employeeCode !== "")).toBe(true);
   });
+
+  // 実データ(2026-05)では車種別・営業所別の小計行と総合計行が混ざっており、
+  // これを1名分として取り込むと社員コードがたまたま一致した車両に数千万円の給与が乗る。
+  it("車種別・営業所別の小計行と総合計行を除外する", () => {
+    const header = "社員No,氏　名,総支給額,社保合計";
+    const csv = [
+      header,
+      "0093,浅沼　秀敏,\"663,820\",\"90,000\"",
+      "1,[１１ｔ]35名,\"10,571,754\",\"1,746,104\"",
+      "013,[津山（月給）]9名,\"2,675,750\",\"400,000\"",
+      "999,[総合計]98名,\"28,042,584\",\"4,524,163\"",
+    ].join("\r\n");
+
+    const records = parsePayrollCsv(csv);
+    expect(records.map((r) => r.employeeCode)).toEqual(["93"]);
+    expect(records[0].totalPay).toBe(663820);
+  });
 });

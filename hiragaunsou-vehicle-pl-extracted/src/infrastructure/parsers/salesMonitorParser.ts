@@ -16,10 +16,25 @@ export interface SalesMonitorRow {
   driverName: string;
   fare: number; // 受取運賃
   toll: number; // 通行料 (道路使用料)
-  ancillaryFee: number; // 附帯料金 = 燃料サーチャージ + 待機時間料 + 付帯料金
+  /**
+   * 収支表 L列「高速他料金」= 通行料 + その他(燃料サーチャージ + 待機時間料 + 付帯料金)。
+   * 現行Excelの「車両別売上」シートが 受取運賃 / 通行料 / その他 のピボットを作り、
+   * 「他 = 通行料 + その他」を収支表へ転記しているのに合わせる。
+   * 顧客への請求分であり、費用側の道路使用料(高速協の請求実費)とは別物なので二重計上ではない。
+   */
+  ancillaryFee: number;
   isChartered: boolean;
   needsReview: boolean;
   reviewReason: string | null;
+  /**
+   * STEP1「データ整形」で人が伝票を特定するための識別情報。
+   * 管理№+行№は伝票の自然キーなので、再取込しても同じ行を指せる
+   * (= 前月と同じ判断を引き継げる)。
+   */
+  slipNo: string;
+  lineNo: string;
+  customerName: string;
+  loadDate: string;
 }
 
 export function parseSalesMonitorCsv(
@@ -43,6 +58,7 @@ export function parseSalesMonitorCsv(
         fare: parseJapaneseAmount(r["受取運賃"]),
         toll: parseJapaneseAmount(r["通行料"]),
         ancillaryFee:
+          parseJapaneseAmount(r["通行料"]) +
           parseJapaneseAmount(r["燃料サーチャージ"]) +
           parseJapaneseAmount(r["待機時間料"]) +
           parseJapaneseAmount(r["付帯料金"]),
@@ -51,8 +67,28 @@ export function parseSalesMonitorCsv(
         reviewReason: isMisc
           ? "運転者名が「諸口」のため2重計上・按分計上の疑いあり(自動削除せず要確認)"
           : null,
+        slipNo: (r["管理№"] ?? "").trim(),
+        lineNo: (r["行№"] ?? "").trim(),
+        customerName: (r["荷主先略称"] ?? "").trim(),
+        loadDate: (r["積荷日"] ?? "").trim(),
       };
     });
+}
+
+/**
+ * 伝票1行を一意に指すキー。STEP1のデータ整形で下した判断を、この行に貼り付けて保存する。
+ *
+ * 管理№+行№が伝票の自然キーなので、翌月に同じ伝票が上がってきても・当月に再取込しても
+ * 同じキーになり、下した判断を引き継げる。
+ * 管理№が取れない古い取込データは、行の並び順(index)へフォールバックする。
+ */
+export function slipKey(
+  row: { slipNo?: string; lineNo?: string; vehicleCode: string },
+  index: number,
+): string {
+  const slipNo = (row.slipNo ?? "").trim();
+  if (slipNo !== "") return `${slipNo}-${(row.lineNo ?? "").trim()}`;
+  return `${row.vehicleCode}#${index}`;
 }
 
 export interface VehicleSalesAggregate {
