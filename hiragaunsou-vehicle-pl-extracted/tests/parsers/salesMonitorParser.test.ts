@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import {
   parseSalesMonitorCsv,
   aggregateSalesByVehicle,
+  slipKey,
 } from "../../src/infrastructure/parsers/salesMonitorParser";
 
 const fixture = readFileSync(resolve(__dirname, "../fixtures/sales_monitor_sample.csv"));
@@ -37,6 +38,35 @@ describe("parseSalesMonitorCsv", () => {
     expect(normal.length).toBeGreaterThan(0);
     expect(normal.every((r) => !r.needsReview)).toBe(true);
   });
+
+  it("車両コードが空の行は取込対象から除外する(集計を持たない伝票を混ぜない)", () => {
+    const csv = [
+      "車両コード,運転者名,受取運賃,通行料,燃料サーチャージ,待機時間料,付帯料金,管理№,行№,荷主先略称,積荷日",
+      ',濱田,"1,552,000","250,000","8,000","4,110",0,S001,1,テスト荷主,2026-05-01',
+      '22,山田,"800,000","100,000",0,0,0,S002,1,テスト荷主2,2026-05-02',
+    ].join("\r\n");
+
+    const rows = parseSalesMonitorCsv(csv);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ vehicleCode: "22" });
+  });
+});
+
+describe("slipKey (伝票1行を一意に指すキー)", () => {
+  it("管理№があれば管理№+行№を自然キーにする(再取込・翌月引き継ぎで一致させるため)", () => {
+    const key = slipKey({ slipNo: "S001", lineNo: "1", vehicleCode: "22" }, 5);
+    expect(key).toBe("S001-1");
+  });
+
+  it("管理№が無い古い取込データは、行の並び順(index)にフォールバックする", () => {
+    const key = slipKey({ slipNo: "", lineNo: "1", vehicleCode: "22" }, 5);
+    expect(key).toBe("22#5");
+  });
+
+  it("slipNo自体が無い(undefined)場合もindexへフォールバックする", () => {
+    const key = slipKey({ vehicleCode: "22" }, 0);
+    expect(key).toBe("22#0");
+  });
 });
 
 describe("aggregateSalesByVehicle", () => {
@@ -61,8 +91,8 @@ describe("aggregateSalesByVehicle", () => {
   // 現行Excelの「車両別売上」シートがこの2つを足して収支表へ転記している。
   it("附帯料金に顧客請求分の通行料を含める(収支表の高速他料金と同じ定義)", () => {
     const csv = [
-      "車両コード,運転者名,受取運賃,通行料,燃料サーチャージ,待機時間料,付帯料金",
-      "22,濱田,\"1,552,000\",\"250,000\",\"8,000\",\"4,110\",0",
+      "車両コード,運転者名,受取運賃,通行料,燃料サーチャージ,待機時間料,付帯料金,管理№,行№,荷主先略称,積荷日",
+      "22,濱田,\"1,552,000\",\"250,000\",\"8,000\",\"4,110\",0,S001,1,テスト荷主,2026-05-01",
     ].join("\r\n");
 
     const rows = parseSalesMonitorCsv(csv);
@@ -76,5 +106,25 @@ describe("aggregateSalesByVehicle", () => {
     for (const v of agg.values()) {
       expect(v.slipCount).toBeGreaterThan(0);
     }
+  });
+
+  it("列の順番が変わっても列名で解決して取り込める", () => {
+    const csv = [
+      "積荷日,荷主先略称,行№,管理№,付帯料金,待機時間料,燃料サーチャージ,通行料,受取運賃,運転者名,車両コード",
+      "2026-05-01,テスト荷主,1,S001,0,\"4,110\",\"8,000\",\"250,000\",\"1,552,000\",濱田,22",
+    ].join("\r\n");
+
+    const rows = parseSalesMonitorCsv(csv);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ vehicleCode: "22", driverName: "濱田", fare: 1552000, toll: 250000 });
+  });
+
+  it("必須列が1つ欠けていると、欠けている列名を含む例外になる", () => {
+    const csv = [
+      "車両コード,運転者名,受取運賃,通行料,燃料サーチャージ,待機時間料,管理№,行№,荷主先略称,積荷日",
+      "22,濱田,\"1,552,000\",\"250,000\",\"8,000\",\"4,110\",S001,1,テスト荷主,2026-05-01",
+    ].join("\r\n");
+
+    expect(() => parseSalesMonitorCsv(csv)).toThrow(/付帯料金/);
   });
 });

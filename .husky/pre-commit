@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+# コミット前は高速なチェックのみ: ステージ済みファイルへのlint(自動修正込み)。
+# フルテストはpre-pushで行う(コミット単位では途中経過のコードを許容し、共有前にまとめて検証する方針)。
+set -e
+
+PROJECT_DIR="hiragaunsou-vehicle-pl-extracted"
+
+if git diff --cached --name-only | grep -q "^${PROJECT_DIR}/"; then
+  cd "$PROJECT_DIR"
+  npx lint-staged
+fi

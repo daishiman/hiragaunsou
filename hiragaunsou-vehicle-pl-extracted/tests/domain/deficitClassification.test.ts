@@ -69,6 +69,14 @@ describe("kmPriceBuckets", () => {
     expect(buckets.reduce((sum, b) => sum + b.count, 0)).toBe(0);
   });
 
+  it("km単価が負(売上マイナス等のデータ不整合)の車両はどの区分にも属さないため除外する", () => {
+    const buckets = kmPriceBuckets(
+      [plRow({ no: "1", km: 10_000, sales: -100_000, profit: -100_000 })],
+      170,
+    );
+    expect(buckets.reduce((sum, b) => sum + b.count, 0)).toBe(0);
+  });
+
   it("区分ごとの赤字台数を数える", () => {
     const buckets = kmPriceBuckets(
       [

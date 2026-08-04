@@ -1,7 +1,22 @@
-import { parseCsv, toRecords } from "./csvUtils";
+import { assertRequiredHeaders, parseCsv, toRecords } from "./csvUtils";
 import { decodeCp932 } from "./encoding";
 import { parseJapaneseAmount, normalizeKey } from "./numberUtils";
 import { CHARTERED_VEHICLE_NO } from "../../domain/entities/VehiclePl";
+
+/** 列順が変わっても取り込めるよう、名前で検証する必須列。 */
+const REQUIRED_HEADERS = [
+  "車両コード",
+  "運転者名",
+  "受取運賃",
+  "通行料",
+  "燃料サーチャージ",
+  "待機時間料",
+  "付帯料金",
+  "管理№",
+  "行№",
+  "荷主先略称",
+  "積荷日",
+] as const;
 
 /**
  * 売上モニタリスト (車楽クラウド出力, cp932, 90列) パーサ。
@@ -27,7 +42,7 @@ export interface SalesMonitorRow {
   needsReview: boolean;
   reviewReason: string | null;
   /**
-   * STEP1「データ整形」で人が伝票を特定するための識別情報。
+   * STEP2「データ整形」で人が伝票を特定するための識別情報。
    * 管理№+行№は伝票の自然キーなので、再取込しても同じ行を指せる
    * (= 前月と同じ判断を引き継げる)。
    */
@@ -42,6 +57,7 @@ export function parseSalesMonitorCsv(
 ): SalesMonitorRow[] {
   const text = typeof input === "string" ? input : decodeCp932(input);
   const rows = parseCsv(text);
+  assertRequiredHeaders(rows, REQUIRED_HEADERS, "売上モニタリスト");
   const records = toRecords(rows);
 
   return records
@@ -76,7 +92,7 @@ export function parseSalesMonitorCsv(
 }
 
 /**
- * 伝票1行を一意に指すキー。STEP1のデータ整形で下した判断を、この行に貼り付けて保存する。
+ * 伝票1行を一意に指すキー。STEP2のデータ整形で下した判断を、この行に貼り付けて保存する。
  *
  * 管理№+行№が伝票の自然キーなので、翌月に同じ伝票が上がってきても・当月に再取込しても
  * 同じキーになり、下した判断を引き継げる。

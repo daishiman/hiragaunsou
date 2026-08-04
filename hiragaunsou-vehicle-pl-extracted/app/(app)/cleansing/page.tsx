@@ -12,8 +12,10 @@ import { PageHead } from "../../_components/PageHead";
 import { CleansingQueue } from "./CleansingQueue";
 
 /**
- * 業務フロー STEP1「データ整形(傭車・2重計上・諸口の処理)」。
+ * 業務フロー STEP2「データ整形(傭車・2重計上・諸口の処理)」。
  *
+ * 判定に使う運転者名・荷主名などは売上モニタリスト(STEP2)にしか無いため、
+ * STEP1(車両別運行実績表の取り込み)ではなくSTEP2の一部として位置づける。
  * docx で唯一「属人化工程」と名指しされている手順。判定ルール(88888=傭車 /
  * 888・10・5000番=2重計上の実績あり / 運転者「諸口」)はシステムが持ち、
  * 最終判断だけを人が1クリックで下す形にする。
@@ -41,8 +43,9 @@ export default async function CleansingPage({
     <>
       <PageHead
         kind="ops"
-        title="データ整形(業務フロー STEP1)"
+        title="データ整形(業務フロー STEP2)"
         lead="傭車・2重計上の疑い・諸口の伝票を1件ずつ判断します"
+        showHomeLink
         action={
           <YearMonthSelect basePath="/cleansing" value={yearMonth} options={selectableYearMonths(13)} />
         }

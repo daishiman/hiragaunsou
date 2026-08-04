@@ -38,10 +38,20 @@ vi.mock("../../src/infrastructure/db/client", () => ({
   createDb: vi.fn(() => ({})),
 }));
 
+const { findSecretMock } = vi.hoisted(() => ({ findSecretMock: vi.fn(async () => null) }));
+class D1AiProviderCredentialRepositoryMock {
+  findSecret = findSecretMock;
+}
+vi.mock("../../src/infrastructure/db/D1AiProviderCredentialRepository", () => ({
+  D1AiProviderCredentialRepository: D1AiProviderCredentialRepositoryMock,
+}));
+
 describe("POST /api/report のガード", () => {
   beforeEach(() => {
     findSinceMock.mockReset();
     findSinceMock.mockResolvedValue([]);
+    findSecretMock.mockReset();
+    findSecretMock.mockResolvedValue(null);
   });
 
   it("Originが一致しなければ403(CSRF対策)", async () => {

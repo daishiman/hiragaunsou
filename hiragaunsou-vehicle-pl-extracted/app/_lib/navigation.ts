@@ -1,7 +1,10 @@
+import { hasPermission, type Permission } from "../../src/domain/rules/permissions";
+
 /**
- * サイドバーのナビゲーション定義 (モック mock/index.html のグループ構成を正とする)。
- * グループ名・並び順・バッジの有無までモックに合わせる。
- * 「補助ツール」だけはモックに無い実装済み画面 (手入力・AI要因分析・利用状況) の受け皿。
+ * サイドバーのナビゲーション定義。
+ * グループ名・並び順・バッジの有無を実際の利用実態に合わせて調整している。
+ * ユーザーの主目的は分析(儲かっているか)であり、入力作業(毎月の締め)はそのための手段でしかない
+ * ため、「分析」グループは「現状データ」より前に置く。
  */
 export type NavBadge = "registration" | "anomaly";
 
@@ -19,6 +22,14 @@ export interface NavItem {
   /** ヘッダーの現在地表示に使う短い説明 */
   desc: string;
   badge?: NavBadge;
+  /**
+   * この画面を開くのに要る権限。省略時はログインのみで開ける(ホーム・仕様の合意等)。
+   * ページ側の checkAccess と同じ基準をここでも持ち、権限が無いユーザーにはサイドバーへ
+   * そもそも出さない(要件定義4章「ロール外への画面露出は不可」)。
+   * これが無いと、権限の無いページへのリンクを押しても理由の説明なくホームへ戻され、
+   * リンクが壊れているように見えてしまう。
+   */
+  permission?: Permission;
 }
 
 export interface NavGroup {
@@ -30,28 +41,55 @@ export interface NavGroup {
 
 export const NAV_GROUPS: readonly NavGroup[] = [
   {
+    label: "分析",
+    kind: "analysis",
+    items: [
+      {
+        href: "/dashboard",
+        label: "ダッシュボード",
+        desc: "期間の損益・推移・赤字車両・営業所別",
+        permission: "view",
+      },
+      {
+        href: "/deficit",
+        label: "赤字の理由",
+        desc: "赤字を原因別に分けて打ち手に繋げる",
+        permission: "view",
+      },
+      {
+        href: "/report",
+        label: "AI要因分析",
+        desc: "損益変動の要因をAIが要約する",
+        permission: "report_settings",
+      },
+    ],
+  },
+  {
     label: "毎月の締め(業務フロー順)",
     kind: "ops",
     items: [
-      { href: "/", label: "ホーム", desc: "今月の締めを業務フローの順に進める" },
+      { href: "/", label: "ホーム", desc: "今やることを1つだけ案内します。まずはここから" },
       {
         href: "/import",
         label: "データ取込",
         step: "1・2・4・7",
         desc: "運行実績・売上モニタリスト・給与集計表・完成済み収支表を取込む",
         badge: "registration",
+        permission: "input",
       },
       {
         href: "/cleansing",
         label: "データ整形",
-        step: "1",
+        step: "2",
         desc: "傭車・2重計上の疑い・諸口の伝票を1件ずつ判断する",
+        permission: "view",
       },
       {
         href: "/manual-entry",
         label: "手入力",
-        step: "3・5・6",
-        desc: "燃料費・修繕費・タイヤ・高速料金を請求書から入力する",
+        step: "2・3・5・6",
+        desc: "キリン配分・燃料費・修繕費・タイヤ・高速料金を請求書から入力する",
+        permission: "input",
       },
       {
         href: "/anomaly",
@@ -59,6 +97,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         step: "7",
         desc: "いつもと違う値を1件ずつ判定する",
         badge: "anomaly",
+        permission: "view",
       },
     ],
   },
@@ -66,16 +105,19 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     label: "現状データ(閲覧)",
     kind: "data",
     items: [
-      { href: "/grid", label: "月次収支表", step: "8", desc: "車両×科目の収支をExcel互換で見る" },
-      { href: "/annual", label: "年間集計・対前年", desc: "12ヶ月推移と前年比較・Excel突合" },
-    ],
-  },
-  {
-    label: "分析",
-    kind: "analysis",
-    items: [
-      { href: "/dashboard", label: "ダッシュボード", desc: "期間の損益・推移・赤字車両・営業所別" },
-      { href: "/deficit", label: "赤字の理由", desc: "赤字を原因別に分けて打ち手に繋げる" },
+      {
+        href: "/grid",
+        label: "月次収支表",
+        step: "8",
+        desc: "車両×科目の収支をExcel互換で見る",
+        permission: "view",
+      },
+      {
+        href: "/annual",
+        label: "年間集計・対前年",
+        desc: "12ヶ月推移と前年比較・Excel突合",
+        permission: "view",
+      },
     ],
   },
   {
@@ -89,13 +131,31 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     label: "補助ツール",
     kind: "tool",
     items: [
-      { href: "/report", label: "AI要因分析", desc: "損益変動の要因をAIが要約する" },
-      { href: "/usage", label: "利用状況", desc: "AI利用の概算費用を確認する" },
+      { href: "/usage", label: "利用状況", desc: "AI利用の概算費用を確認する", permission: "view" },
+      {
+        href: "/ai-settings",
+        label: "AI設定",
+        desc: "AI分析に使うAPIキーを管理する",
+        permission: "manage_api_keys",
+      },
     ],
   },
 ] as const;
 
 export const NAV_ITEMS: readonly NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
+
+/**
+ * ロールで開けない画面をサイドバーから除く。
+ * 権限が無い画面をリンクとして見せてしまうと、押した瞬間に理由も分からずホームへ
+ * 戻される(壊れたリンクに見える)ため、そもそも一覧に出さない。
+ * 結果として空になったグループも表示しない。
+ */
+export function visibleNavGroups(role: string): NavGroup[] {
+  return NAV_GROUPS.map((g) => ({
+    ...g,
+    items: g.items.filter((i) => !i.permission || hasPermission(role, i.permission)),
+  })).filter((g) => g.items.length > 0);
+}
 
 /** パスに対応するナビ項目 (最長一致)。該当なしは null。 */
 export function findNavItem(pathname: string): NavItem | null {

@@ -47,12 +47,21 @@ function describeResult(data: Record<string, unknown>): string {
  * 種別を利用者に選ばせるのではなく「どのSTEPの帳票か」を投入口で固定し、
  * サーバー側の自動判定は取り違え検知に使う。送信は1件ずつ直列に行う。
  */
+/** ?step=1 のような業務フロー番号を、その帳票のsourceTypeへ読み替える */
+function sourceTypeFromWorkflowStep(step: string | null): ImportSourceType | null {
+  if (!step) return null;
+  const stepLabel = `STEP${step}`;
+  return IMPORT_SOURCES.find((s) => s.step === stepLabel)?.sourceType ?? null;
+}
+
 export function ImportForm({
   yearMonth,
   imported,
+  initialWorkflowStep = null,
 }: {
   yearMonth: string;
   imported: Record<string, Batch[]>;
+  initialWorkflowStep?: string | null;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState<ImportSourceType | null>(null);
@@ -60,6 +69,18 @@ export function ImportForm({
   const [conflict, setConflict] = useState<Conflict | null>(null);
 
   const doneCount = IMPORT_SOURCES.filter((source) => (imported[source.sourceType] ?? []).length > 0).length;
+
+  // ホームの各STEPカード「この手順を開く」から来たときは、その帳票を主役にする。
+  // サイドバー「データ取込」から来たとき(指定なし)は、まだ取り込んでいない最初の帳票を
+  // 自動で主役にする。取り込むたびに imported が更新され、次の帳票へ自動で主役が移る
+  // ("STEP1が終わったらSTEP2が出てくる"という進行を、押し進めるボタンなしで実現する)。
+  const explicitFocusSourceType = sourceTypeFromWorkflowStep(initialWorkflowStep);
+  const nextIncompleteSource = IMPORT_SOURCES.find(
+    (source) => (imported[source.sourceType] ?? []).length === 0,
+  );
+  const lastSource = IMPORT_SOURCES[IMPORT_SOURCES.length - 1]!;
+  const focusSourceType =
+    explicitFocusSourceType ?? nextIncompleteSource?.sourceType ?? lastSource.sourceType;
 
   async function upload(sourceType: ImportSourceType, file: File, replace: boolean) {
     setPending(sourceType);
@@ -70,8 +91,39 @@ export function ImportForm({
     if (replace) form.append("replace", "true");
 
     try {
-      const res = await fetch(`/api/import/${sourceType}`, { method: "POST", body: form });
-      const data = (await res.json()) as Record<string, unknown>;
+      // サーバーに全く到達できなかった場合(オフライン・DNS失敗等)と、サーバーが
+      // 応答した場合とで、利用者に伝えるべき対処が違うため区別する。
+      let res: Response;
+      try {
+        res = await fetch(`/api/import/${sourceType}`, { method: "POST", body: form });
+      } catch {
+        setResults((prev) => ({
+          ...prev,
+          [sourceType]: {
+            ok: false,
+            fileName: file.name,
+            message: "サーバーに接続できませんでした(通信エラー)。ネットワーク環境を確認し、再度お試しください。",
+          },
+        }));
+        return;
+      }
+
+      // サーバーには到達したが、想定外の異常(未処理例外でJSONを返せなかった等)でレスポンス本文が
+      // JSONとして読めない場合。「通信エラー」と混同すると調査対象を誤るため、別文言にする。
+      let data: Record<string, unknown>;
+      try {
+        data = (await res.json()) as Record<string, unknown>;
+      } catch {
+        setResults((prev) => ({
+          ...prev,
+          [sourceType]: {
+            ok: false,
+            fileName: file.name,
+            message: `サーバー側で問題が発生し、結果を読み取れませんでした(HTTP ${res.status})。時間をおいて再度お試しいただくか、解決しない場合は管理者にご連絡ください。`,
+          },
+        }));
+        return;
+      }
 
       if (res.status === 409) {
         const c = data.conflict as { sameFileName: boolean; superseded: Batch[] };
@@ -81,7 +133,11 @@ export function ImportForm({
       if (!res.ok) {
         setResults((prev) => ({
           ...prev,
-          [sourceType]: { ok: false, fileName: file.name, message: String(data.error ?? "取込に失敗しました") },
+          [sourceType]: {
+            ok: false,
+            fileName: file.name,
+            message: String(data.error ?? `取込に失敗しました(HTTP ${res.status})`),
+          },
         }));
         return;
       }
@@ -90,11 +146,6 @@ export function ImportForm({
         [sourceType]: { ok: true, fileName: file.name, message: describeResult(data) },
       }));
       router.refresh();
-    } catch {
-      setResults((prev) => ({
-        ...prev,
-        [sourceType]: { ok: false, fileName: file.name, message: "通信エラーが発生しました" },
-      }));
     } finally {
       setPending(null);
     }
@@ -125,14 +176,28 @@ export function ImportForm({
         </p>
       </section>
 
-      {IMPORT_SOURCES.map((source) => {
+      <p className="text-xs font-semibold text-ink-muted">
+        {nextIncompleteSource
+          ? "取り込み終えた帳票と、まだの帳票は畳んでいます。他の帳票が必要なときはタップして開けます。"
+          : "すべて取込済みです。内容を直したいときはタップして開けます。"}
+      </p>
+
+      {[...IMPORT_SOURCES].sort((a, b) => {
+        if (!focusSourceType) return 0;
+        if (a.sourceType === focusSourceType) return -1;
+        if (b.sourceType === focusSourceType) return 1;
+        return 0;
+      }).map((source) => {
         const batches = imported[source.sourceType] ?? [];
         const result = results[source.sourceType];
         const isPending = pending === source.sourceType;
         const isConflicting = conflict?.sourceType === source.sourceType;
+        // ホームの特定STEPカードから来たときは、その帳票だけを主役にして他を畳む。
+        // フォーカス無し(サイドバー「データ取込」から直接来た)ときは全部を並列に見せる。
+        const isFocused = !focusSourceType || source.sourceType === focusSourceType;
 
-        return (
-          <section key={source.sourceType} className="rounded-xl border border-line bg-white p-5">
+        const body = (
+          <>
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <p className="text-xs font-semibold text-brand-deep">{source.step}</p>
@@ -162,6 +227,16 @@ export function ImportForm({
               </ul>
             ) : null}
 
+            {/* STEP2(売上モニタリスト)が取り込めたら、次にやること(データ整形)へ誘導する */}
+            {source.sourceType === "sales_monitor" && batches.length > 0 && !isConflicting ? (
+              <Link
+                href={`/cleansing?ym=${yearMonth}`}
+                className="pressable mt-3 inline-flex items-center gap-1 rounded-md bg-brand-soft px-3 py-1.5 text-xs font-semibold text-brand-deep hover:bg-brand-soft/70"
+              >
+                次へ: データ整形(STEP2)に進む →
+              </Link>
+            ) : null}
+
             {isConflicting ? (
               // border-warning / bg-amber-50 は本プロジェクトのトークンに存在せず
               // 枠線が消えていた。注意の面は caution トークンで描く。
@@ -185,7 +260,7 @@ export function ImportForm({
                   // 整形判断は伝票の自然キー(管理№-行№)に紐づくため、取込をやり直しても残る。
                   // 「全部やり直しになる」と誤解して入れ直しを避けるのを防ぐ。
                   <p className="mt-2 text-xs leading-5 text-ink-muted">
-                    データ整形(STEP1)で下した判断は伝票ごとに保存されているため、入れ直しても引き継がれます。
+                    データ整形(STEP2)で下した判断は伝票ごとに保存されているため、入れ直しても引き継がれます。
                   </p>
                 ) : null}
                 <div className="mt-3 flex gap-2">
@@ -225,7 +300,33 @@ export function ImportForm({
                 {result.fileName}: {result.message}
               </p>
             ) : null}
-          </section>
+          </>
+        );
+
+        if (isFocused) {
+          return (
+            <section key={source.sourceType} className="rounded-xl border border-line bg-white p-5">
+              {body}
+            </section>
+          );
+        }
+
+        return (
+          <details
+            key={source.sourceType}
+            className="group rounded-lg border border-line border-dashed bg-white px-4 py-2"
+          >
+            <summary className="flex cursor-pointer list-none items-center gap-2 text-xs">
+              <span className="shrink-0 rounded bg-subtle px-1.5 py-0.5 font-semibold text-ink-muted">
+                {source.step}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-ink-muted">{source.label}</span>
+              <span className="shrink-0 font-medium text-ink-muted">
+                {batches.length > 0 ? `✓ 取込済み ${batches.length}件` : "未取込"}
+              </span>
+            </summary>
+            <div className="mt-3 border-t border-line pt-3">{body}</div>
+          </details>
         );
       })}
 

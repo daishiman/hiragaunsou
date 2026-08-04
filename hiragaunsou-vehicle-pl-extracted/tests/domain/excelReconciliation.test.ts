@@ -61,6 +61,19 @@ describe("reconcileWithExcel", () => {
     expect(reconcileWithExcel(excel, system).vehicles).toEqual([]);
   });
 
+  it("システム側の値がNaN等の非数値なら0として扱い、突合を壊さない", () => {
+    const result = reconcileWithExcel(
+      [row("1", { sales: 100 })],
+      [row("1", { sales: Number.NaN })],
+    );
+    expect(result.vehicles[0]?.items[0]).toMatchObject({
+      label: "運送収入",
+      excel: 100,
+      system: 0,
+      diff: -100,
+    });
+  });
+
   it("片側にしか無い車両は件数だけ数える", () => {
     const result = reconcileWithExcel([row("1"), row("9")], [row("1")]);
     expect(result.comparedCount).toBe(1);

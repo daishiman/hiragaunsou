@@ -21,6 +21,11 @@ build/
 coverage/
 *.tsbuildinfo
 
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+
 # Next.js / OpenNext for Cloudflare build output
 .next/
 .open-next/

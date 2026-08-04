@@ -51,6 +51,16 @@ export function TrendBars({ points, title, referenceLabel, signed = false }: Tre
   const yOf = (v: number) => PAD_TOP + ((maxV - v) / span) * plotH;
   const zeroY = yOf(0);
 
+  // ラベルは詰めすぎると年月の文字が隣同士でぶつかるため、点数が多いときは間引く
+  // (最大10本分の幅を確保)。末尾は「直近がいつか」を示すため優先して出すが、
+  // 直前の間引きラベルと近すぎる (半間隔未満) ときは重なるので諦める。
+  const labelStep = Math.max(1, Math.ceil(points.length / 10));
+  const lastIndex = points.length - 1;
+  const lastNaturalStep = Math.floor(lastIndex / labelStep) * labelStep;
+  const showLastLabel = lastIndex - lastNaturalStep >= Math.ceil(labelStep / 2);
+  const showLabel = (i: number) =>
+    i % labelStep === 0 || (i === lastIndex && showLastLabel);
+
   const hasReference = referenceLabel !== undefined && points.some((p) => p.reference != null);
   const refPoints = points
     .map((p, i) => (p.reference == null ? null : `${PAD_X + slot * i + slot / 2},${yOf(p.reference)}`))
@@ -73,7 +83,8 @@ export function TrendBars({ points, title, referenceLabel, signed = false }: Tre
           const h = Math.max(Math.abs(yOf(p.value) - zeroY), p.isEmpty ? 0 : 1.5);
           const negative = signed && p.value < 0;
           return (
-            <g key={p.label}>
+            // label は "9月" のように年をまたいで重複しうるため、位置で key を振る
+            <g key={i}>
               {p.isEmpty ? (
                 // 未取込の月は「0円の実績」と紛らわしいので、点線の枠だけを置く
                 <rect
@@ -103,15 +114,17 @@ export function TrendBars({ points, title, referenceLabel, signed = false }: Tre
                       p.reference == null ? "" : ` / 前年 ${yen(p.reference)}円`
                     }`}
               </title>
-              <text
-                x={x + barW / 2}
-                y={H - 9}
-                textAnchor="middle"
-                fontSize={11}
-                fill="var(--ink-muted)"
-              >
-                {p.label}
-              </text>
+              {showLabel(i) && (
+                <text
+                  x={x + barW / 2}
+                  y={H - 9}
+                  textAnchor="middle"
+                  fontSize={11}
+                  fill="var(--ink-muted)"
+                >
+                  {p.label}
+                </text>
+              )}
             </g>
           );
         })}

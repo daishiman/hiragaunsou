@@ -18,7 +18,7 @@ import { isSameOriginRequest } from "../../_lib/assertSameOrigin";
 
 const VALID_DECISIONS: readonly CleansingDecisionType[] = ["delete", "correct", "keep"];
 
-/** STEP1 データ整形の要判断リストを返す */
+/** STEP2 データ整形の要判断リストを返す */
 export async function GET(request: Request) {
   const session = await getServerSession();
   if (!checkAccess(session, "view")) {
@@ -40,7 +40,7 @@ export async function GET(request: Request) {
 }
 
 /**
- * STEP1 データ整形の判断を保存する。
+ * STEP2 データ整形の判断を保存する。
  *
  * 元データ(raw_ingestion)は書き換えず判断だけを別テーブルへ残す。
  * これにより判断のやり直しに再取込が不要になり、

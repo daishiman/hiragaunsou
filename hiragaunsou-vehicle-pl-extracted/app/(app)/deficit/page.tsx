@@ -6,6 +6,8 @@ import { checkAccess } from "../../../src/infrastructure/auth/accessControl";
 import { createDb } from "../../../src/infrastructure/db/client";
 import { D1VehiclePlRepository } from "../../../src/infrastructure/db/D1VehiclePlRepository";
 import { D1RateMasterRepository } from "../../../src/infrastructure/db/D1MasterRepository";
+import { D1DeficitFactorAnalysisRepository } from "../../../src/infrastructure/db/D1DeficitFactorAnalysisRepository";
+import type { DeficitFactorAnalysisRecord } from "../../../src/domain/repositories/DeficitFactorAnalysisRepository";
 import {
   GetDeficitAnalysisUseCase,
   type DeficitGroupResult,
@@ -16,6 +18,7 @@ import { kmPriceLabel, man, num, yen, yearMonthLabel } from "../../_lib/format";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
 import { PageHead } from "../../_components/PageHead";
 import { EmptyState } from "../../_components/EmptyState";
+import { DeficitAnalysisButton } from "./DeficitAnalysisButton";
 
 /** 各分類で最初から見せる件数。残りは折りたたみ(段階的開示)。 */
 const TOP_N = 5;
@@ -26,14 +29,28 @@ function extraValue(group: DeficitGroupResult, v: DeficitVehicle): string {
   return `${yen(v.fixed)}円`;
 }
 
+function AnalysisBadge({ record }: { record: DeficitFactorAnalysisRecord | undefined }) {
+  if (!record) {
+    return <span className="text-ink-muted">未分析</span>;
+  }
+  const top = record.factors[0];
+  return (
+    <span className="inline-flex max-w-[16rem] items-center gap-1 truncate rounded-full bg-brand-soft px-2 py-0.5 text-[11px] text-brand-deep">
+      {top ? `${top.category}が${top.direction === "high" ? "高い" : "低い"}` : record.summary}
+    </span>
+  );
+}
+
 function VehicleRows({
   group,
   vehicles,
   yearMonth,
+  analysisByVehicle,
 }: {
   group: DeficitGroupResult;
   vehicles: DeficitVehicle[];
   yearMonth: string;
+  analysisByVehicle: Record<string, DeficitFactorAnalysisRecord>;
 }) {
   return (
     <>
@@ -53,6 +70,9 @@ function VehicleRows({
           <td className="num px-3 py-2 text-right">{yen(v.sales)}</td>
           <td className="num px-3 py-2 text-right font-bold text-danger">{yen(v.profit)}</td>
           <td className="num px-3 py-2 text-right">{extraValue(group, v)}</td>
+          <td className="px-3 py-2">
+            <AnalysisBadge record={analysisByVehicle[v.vehicleNo]} />
+          </td>
         </tr>
       ))}
     </>
@@ -63,10 +83,12 @@ function GroupTable({
   group,
   vehicles,
   yearMonth,
+  analysisByVehicle,
 }: {
   group: DeficitGroupResult;
   vehicles: DeficitVehicle[];
   yearMonth: string;
+  analysisByVehicle: Record<string, DeficitFactorAnalysisRecord>;
 }) {
   return (
     <div className="overflow-x-auto">
@@ -80,10 +102,16 @@ function GroupTable({
             <th className="px-3 py-2 text-right font-medium">売上(円)</th>
             <th className="px-3 py-2 text-right font-medium">損益(円)</th>
             <th className="px-3 py-2 text-right font-medium">{group.extraColumnLabel}</th>
+            <th className="px-3 py-2 text-left font-medium">AI要因分析</th>
           </tr>
         </thead>
         <tbody>
-          <VehicleRows group={group} vehicles={vehicles} yearMonth={yearMonth} />
+          <VehicleRows
+            group={group}
+            vehicles={vehicles}
+            yearMonth={yearMonth}
+            analysisByVehicle={analysisByVehicle}
+          />
         </tbody>
       </table>
     </div>
@@ -114,6 +142,10 @@ export default async function DeficitPage({
   );
   const data = await useCase.execute(yearMonth);
 
+  const canAnalyze = checkAccess(session, "report_settings");
+  const analysisResults = await new D1DeficitFactorAnalysisRepository(db).findByYearMonth(yearMonth);
+  const analysisByVehicle = Object.fromEntries(analysisResults.map((r) => [r.vehicleNo, r]));
+
   return (
     <>
       <PageHead
@@ -121,7 +153,10 @@ export default async function DeficitPage({
         title="赤字の理由(3分類)"
         lead={`赤字 ${data.deficitCount}台を原因の違いで3つに分けています`}
         action={
-          <YearMonthSelect basePath="/deficit" value={yearMonth} options={selectableYearMonths(13)} />
+          <div className="flex flex-wrap items-center gap-3">
+            <YearMonthSelect basePath="/deficit" value={yearMonth} options={selectableYearMonths(13)} />
+            {canAnalyze && data.deficitCount > 0 && <DeficitAnalysisButton yearMonth={yearMonth} />}
+          </div>
         }
       />
 
@@ -175,13 +210,23 @@ export default async function DeficitPage({
                     <p className="px-5 py-6 text-xs text-ink-muted">この分類に該当する車両はありません。</p>
                   ) : (
                     <>
-                      <GroupTable group={group} vehicles={top} yearMonth={yearMonth} />
+                      <GroupTable
+                        group={group}
+                        vehicles={top}
+                        yearMonth={yearMonth}
+                        analysisByVehicle={analysisByVehicle}
+                      />
                       {rest.length > 0 && (
                         <details className="border-t border-line">
                           <summary className="cursor-pointer px-5 py-3 text-xs font-semibold text-brand-deep">
                             残り{rest.length}台を表示
                           </summary>
-                          <GroupTable group={group} vehicles={rest} yearMonth={yearMonth} />
+                          <GroupTable
+                            group={group}
+                            vehicles={rest}
+                            yearMonth={yearMonth}
+                            analysisByVehicle={analysisByVehicle}
+                          />
                         </details>
                       )}
                     </>

@@ -5,6 +5,7 @@ import { checkAccess } from "../../../src/infrastructure/auth/accessControl";
 import { createDb } from "../../../src/infrastructure/db/client";
 import { D1VehiclePlRepository } from "../../../src/infrastructure/db/D1VehiclePlRepository";
 import { D1UsageLogRepository } from "../../../src/infrastructure/db/D1UsageLogRepository";
+import { resolveAnthropicCredential } from "../../../src/infrastructure/ai/resolveAnthropicCredential";
 import { ClaudeFactorAnalysisClient } from "../../../src/infrastructure/ai/ClaudeFactorAnalysisClient";
 import { GenerateFactorAnalysisReportUseCase } from "../../../src/usecase/steps/generateFactorAnalysisReport";
 import { recentYearMonths } from "../../_lib/yearMonth";
@@ -51,9 +52,17 @@ export async function POST(request: Request) {
     );
   }
 
+  const credential = await resolveAnthropicCredential(db, env);
+  if (!credential) {
+    return NextResponse.json(
+      { error: "AnthropicのAPIキーが未設定です。/ai-settings から登録してください" },
+      { status: 500 },
+    );
+  }
+
   const useCase = new GenerateFactorAnalysisReportUseCase(
     new D1VehiclePlRepository(db),
-    new ClaudeFactorAnalysisClient({ apiKey: env.ANTHROPIC_API_KEY }),
+    new ClaudeFactorAnalysisClient({ apiKey: credential.apiKey, model: credential.model }),
     usageLogRepo,
   );
 

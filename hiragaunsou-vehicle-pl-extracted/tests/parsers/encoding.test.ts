@@ -18,4 +18,11 @@ describe("decodeCp932", () => {
     const text = decodeCp932(new Uint8Array(buf));
     expect(text).toContain("社員No");
   });
+
+  it("Uint8Arrayでなく素のArrayBufferを渡してもデコードできる", () => {
+    const buf = readFileSync(resolve(__dirname, "../fixtures/vehicle_operation_sample.csv"));
+    const arrayBuffer = new Uint8Array(buf).buffer;
+    const text = decodeCp932(arrayBuffer);
+    expect(text).toContain("車両番号");
+  });
 });

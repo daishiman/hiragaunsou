@@ -8,8 +8,14 @@ declare global {
     BETTER_AUTH_SECRET: string;
     GOOGLE_CLIENT_ID: string;
     GOOGLE_CLIENT_SECRET: string;
-    /** F12 AI要因分析レポート (ClaudeFactorAnalysisClient) 用のシークレット */
+    /** F12 AI要因分析レポート (ClaudeFactorAnalysisClient) 用のシークレット。/ai-settings でD1にキーを登録した場合はそちらが優先され、これは未登録時のフォールバックとしてのみ使われる (app/api/report/route.ts の resolveAnthropicCredential 参照)。 */
     ANTHROPIC_API_KEY: string;
+    /**
+     * AI連携APIキー(D1の ai_provider_credential テーブル)の暗号化/復号鍵。
+     * `openssl rand -base64 32` で生成した32byteの値を `wrangler secret put` で登録する。
+     * この鍵を知っている人間だけがAPIキーを復号できるため、絶対に漏らさないこと。
+     */
+    API_KEY_ENCRYPTION_SECRET: string;
     /** /usage 概算費用計算用。未設定時はDEFAULT_USAGE_PRICING(Haiku 4.5相当)にフォールバックする */
     ANTHROPIC_PRICE_IN_USD_PER_M?: string;
     ANTHROPIC_PRICE_OUT_USD_PER_M?: string;

@@ -7,8 +7,21 @@ import {
   DECISION_LABELS,
   FLAG_LABELS,
   type CleansingDecisionType,
+  type CleansingFlagType,
 } from "../../../src/domain/rules/cleansingRules";
 import { yen } from "../../_lib/format";
+import { ListToolbar, type SortOption } from "../../_components/ListToolbar";
+
+type SortKey = "default" | "loadDateDesc" | "vehicleNoAsc";
+
+const SORT_OPTIONS: SortOption[] = [
+  { value: "default", label: "未判断・金額が大きい順(既定)" },
+  { value: "loadDateDesc", label: "積荷日が新しい順" },
+  { value: "vehicleNoAsc", label: "車番順" },
+];
+
+/** 絞り込みチップに出す対象 (傭車は自動除外済みで一覧に出ないため対象外) */
+const FILTERABLE_FLAG_TYPES: readonly CleansingFlagType[] = ["duplicate_suspect", "misc_entry"];
 
 const DECISION_ORDER: readonly CleansingDecisionType[] = ["delete", "correct", "keep"];
 
@@ -31,7 +44,7 @@ interface LocalState {
 }
 
 /**
- * 業務フロー STEP1「データ整形」の判断キュー。
+ * 業務フロー STEP2「データ整形」の判断キュー。
  *
  * 属人的な判断そのものは無くせないので、人の負荷を「判断」だけに絞る:
  *   - 何千行の売上明細ではなく、フラグが立った行だけを出す
@@ -68,7 +81,19 @@ export function CleansingQueue({
   );
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [showDecided, setShowDecided] = useState(false);
+  const [showDecided, setShowDecided] = useState(true);
+  const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("default");
+  const [activeFlagFilters, setActiveFlagFilters] = useState<Set<CleansingFlagType>>(new Set());
+
+  function toggleFlagFilter(key: string) {
+    setActiveFlagFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(key as CleansingFlagType)) next.delete(key as CleansingFlagType);
+      else next.add(key as CleansingFlagType);
+      return next;
+    });
+  }
 
   const pendingCount = useMemo(
     () => initialItems.filter((i) => state[i.rowKey]?.decision == null).length,
@@ -156,6 +181,58 @@ export function CleansingQueue({
     }
   }
 
+  /** 「同じ内容の伝票」グループに対して、1回の判断をまとめて適用する */
+  async function decideGroup(items: CleansingQueueItem[], decision: CleansingDecisionType) {
+    const groupKey = items.map((i) => i.rowKey).join(",");
+    const updates = items.map((item) => {
+      const prev = state[item.rowKey] ?? { decision: null, correctedVehicleNo: "", note: "" };
+      return { item, next: { ...prev, decision } };
+    });
+    setState((s) => {
+      const copy = { ...s };
+      for (const u of updates) copy[u.item.rowKey] = u.next;
+      return copy;
+    });
+    setPending(groupKey);
+    setError(null);
+    try {
+      await save(updates);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "まとめて保存できませんでした");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  /** グループ内共通の「正しい車番」「メモ」を全行へ反映してから保存する */
+  function updateGroupField(items: CleansingQueueItem[], field: "correctedVehicleNo" | "note", value: string) {
+    setState((s) => {
+      const copy = { ...s };
+      for (const item of items) {
+        const prev = copy[item.rowKey] ?? { decision: null, correctedVehicleNo: "", note: "" };
+        copy[item.rowKey] = { ...prev, [field]: value };
+      }
+      return copy;
+    });
+  }
+
+  async function saveGroupDetail(items: CleansingQueueItem[]) {
+    const updates = items
+      .filter((item) => state[item.rowKey]?.decision)
+      .map((item) => ({ item, next: state[item.rowKey]! }));
+    if (updates.length === 0) return;
+    const groupKey = items.map((i) => i.rowKey).join(",");
+    setPending(groupKey);
+    setError(null);
+    try {
+      await save(updates);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "保存できませんでした");
+    } finally {
+      setPending(null);
+    }
+  }
+
   if (notImported) {
     return (
       <div className="rounded-lg border border-line bg-white p-6">
@@ -171,9 +248,250 @@ export function CleansingQueue({
     );
   }
 
-  const visible = showDecided
+  const searchQuery = search.trim();
+  let visible = showDecided
     ? initialItems
     : initialItems.filter((i) => state[i.rowKey]?.decision == null);
+  if (searchQuery) {
+    visible = visible.filter(
+      (i) =>
+        i.vehicleNo.includes(searchQuery) ||
+        i.driverName.includes(searchQuery) ||
+        i.customerName.includes(searchQuery),
+    );
+  }
+  if (activeFlagFilters.size > 0) {
+    visible = visible.filter((i) => i.flags.some((f) => activeFlagFilters.has(f.type)));
+  }
+  if (sortKey === "loadDateDesc") {
+    visible = [...visible].sort((a, b) => b.loadDate.localeCompare(a.loadDate));
+  } else if (sortKey === "vehicleNoAsc") {
+    visible = [...visible].sort((a, b) => a.vehicleNo.localeCompare(b.vehicleNo, "ja", { numeric: true }));
+  }
+  // sortKey === "default" のときは initialItems の並び(未判断優先・金額降順)をそのまま使う
+
+  // clusterKey が同じ(=同じ内容とみなせる)行は2件以上まとまったときだけグループ化する。
+  // 1件しかない clusterKey や空文字列("束ねない"の意味)は、今まで通り単独カードで出す。
+  const clusters = new Map<string, CleansingQueueItem[]>();
+  for (const item of visible) {
+    if (!item.clusterKey) continue;
+    const members = clusters.get(item.clusterKey) ?? [];
+    members.push(item);
+    clusters.set(item.clusterKey, members);
+  }
+  const renderedRowKeys = new Set<string>();
+  const groups: ({ kind: "single"; item: CleansingQueueItem } | { kind: "cluster"; items: CleansingQueueItem[] })[] =
+    [];
+  for (const item of visible) {
+    if (renderedRowKeys.has(item.rowKey)) continue;
+    const members = item.clusterKey ? clusters.get(item.clusterKey) : undefined;
+    if (members && members.length >= 2) {
+      for (const m of members) renderedRowKeys.add(m.rowKey);
+      groups.push({ kind: "cluster", items: members });
+    } else {
+      renderedRowKeys.add(item.rowKey);
+      groups.push({ kind: "single", item });
+    }
+  }
+
+  function renderItemCard(item: CleansingQueueItem, compact: boolean) {
+    const local = state[item.rowKey] ?? { decision: null, correctedVehicleNo: "", note: "" };
+    return (
+      <div
+        key={item.rowKey}
+        className={`rounded-lg border bg-white p-4 ${compact ? "" : local.decision ? "border-line opacity-80" : "border-accent/40"}`}
+      >
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <span className="text-base font-bold text-ink">車番 {item.vehicleNo || "—"}</span>
+          <span className="text-sm text-ink-muted">運転者 {item.driverName || "—"}</span>
+          <span className="text-sm text-ink-muted">荷主 {item.customerName || "—"}</span>
+          <span className="text-sm text-ink-muted">積荷日 {item.loadDate || "—"}</span>
+          <span className="num ml-auto text-sm font-semibold text-ink">{yen(item.amount)} 円</span>
+        </div>
+
+        <ul className="mt-3 flex flex-col gap-1">
+          {item.flags.map((flag) => (
+            <li key={flag.type} className="text-sm text-ink">
+              <span className="mr-2 inline-block rounded bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent-deep">
+                {FLAG_LABELS[flag.type]}
+              </span>
+              {flag.reason}
+            </li>
+          ))}
+        </ul>
+
+        {item.suggestion && (
+          <p className="mt-2 text-sm text-brand-deep">前月の判断: {item.suggestion.reason}</p>
+        )}
+
+        {canDecide ? (
+          <>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {DECISION_ORDER.map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => decide(item, d)}
+                  disabled={pending !== null}
+                  aria-pressed={local.decision === d}
+                  title={DECISION_HINT[d]}
+                  className={`pressable rounded border px-3 py-1.5 text-sm font-semibold disabled:opacity-50 ${
+                    local.decision === d ? `${DECISION_STYLE[d]} bg-subtle` : "border-line text-ink-muted"
+                  }`}
+                >
+                  {DECISION_LABELS[d]}
+                </button>
+              ))}
+              {local.decision && (
+                <span className="self-center text-sm text-ink-muted">{DECISION_HINT[local.decision]}</span>
+              )}
+            </div>
+
+            {local.decision === "correct" && (
+              <div className="mt-3 flex flex-wrap items-end gap-3">
+                <label className="flex flex-col text-sm text-ink-muted">
+                  正しい車番
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={local.correctedVehicleNo}
+                    onChange={(e) =>
+                      setState((s) => ({
+                        ...s,
+                        [item.rowKey]: { ...local, correctedVehicleNo: e.target.value },
+                      }))
+                    }
+                    onBlur={() => saveDetail(item)}
+                    placeholder="例: 24"
+                    className="num mt-1 w-32 rounded border border-line px-2 py-1 text-right text-ink"
+                  />
+                </label>
+                <label className="flex min-w-60 flex-1 flex-col text-sm text-ink-muted">
+                  メモ(任意)
+                  <input
+                    type="text"
+                    value={local.note}
+                    onChange={(e) =>
+                      setState((s) => ({ ...s, [item.rowKey]: { ...local, note: e.target.value } }))
+                    }
+                    onBlur={() => saveDetail(item)}
+                    placeholder="請求書発行担当に確認済み など"
+                    className="mt-1 rounded border border-line px-2 py-1 text-ink"
+                  />
+                </label>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="mt-3 text-sm text-ink-muted">
+            判断の権限がありません。
+            {local.decision ? `現在の判断: ${DECISION_LABELS[local.decision]}` : "未判断です。"}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  function renderClusterCard(items: CleansingQueueItem[]) {
+    const groupKey = items.map((i) => i.rowKey).join(",");
+    const first = items[0]!;
+    const decisions = items.map((i) => state[i.rowKey]?.decision ?? null);
+    const groupDecision = decisions.every((d) => d === decisions[0]) ? decisions[0] : null;
+    const groupLocal = state[first.rowKey] ?? { decision: null, correctedVehicleNo: "", note: "" };
+    const isGroupPending = pending === groupKey;
+
+    return (
+      <div
+        key={groupKey}
+        className={`rounded-lg border bg-white p-4 ${groupDecision ? "border-line opacity-80" : "border-accent/40"}`}
+      >
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <span className="text-base font-bold text-ink">車番 {first.vehicleNo || "—"}</span>
+          <span className="text-sm text-ink-muted">運転者 {first.driverName || "—"}</span>
+          <span className="text-sm text-ink-muted">荷主 {first.customerName || "—"}</span>
+          <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent-deep">
+            同じ内容の伝票が{items.length}件
+          </span>
+          <span className="num ml-auto text-sm font-semibold text-ink">
+            {yen(items.reduce((sum, i) => sum + i.amount, 0))} 円(合計)
+          </span>
+        </div>
+
+        <ul className="mt-3 flex flex-col gap-1">
+          {first.flags.map((flag) => (
+            <li key={flag.type} className="text-sm text-ink">
+              <span className="mr-2 inline-block rounded bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent-deep">
+                {FLAG_LABELS[flag.type]}
+              </span>
+              {flag.reason}
+            </li>
+          ))}
+        </ul>
+
+        {canDecide ? (
+          <>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {DECISION_ORDER.map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => decideGroup(items, d)}
+                  disabled={pending !== null}
+                  aria-pressed={groupDecision === d}
+                  title={`${items.length}件すべてに適用: ${DECISION_HINT[d]}`}
+                  className={`pressable rounded border px-3 py-1.5 text-sm font-semibold disabled:opacity-50 ${
+                    groupDecision === d ? `${DECISION_STYLE[d]} bg-subtle` : "border-line text-ink-muted"
+                  }`}
+                >
+                  {DECISION_LABELS[d]}({items.length}件)
+                </button>
+              ))}
+              {isGroupPending && <span className="self-center text-sm text-ink-muted">保存しています…</span>}
+            </div>
+
+            {groupDecision === "correct" && (
+              <div className="mt-3 flex flex-wrap items-end gap-3">
+                <label className="flex flex-col text-sm text-ink-muted">
+                  正しい車番(全{items.length}件に反映)
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={groupLocal.correctedVehicleNo}
+                    onChange={(e) => updateGroupField(items, "correctedVehicleNo", e.target.value)}
+                    onBlur={() => saveGroupDetail(items)}
+                    placeholder="例: 24"
+                    className="num mt-1 w-32 rounded border border-line px-2 py-1 text-right text-ink"
+                  />
+                </label>
+                <label className="flex min-w-60 flex-1 flex-col text-sm text-ink-muted">
+                  メモ(任意)
+                  <input
+                    type="text"
+                    value={groupLocal.note}
+                    onChange={(e) => updateGroupField(items, "note", e.target.value)}
+                    onBlur={() => saveGroupDetail(items)}
+                    placeholder="請求書発行担当に確認済み など"
+                    className="mt-1 rounded border border-line px-2 py-1 text-ink"
+                  />
+                </label>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="mt-3 text-sm text-ink-muted">判断の権限がありません。</p>
+        )}
+
+        <details className="mt-3">
+          <summary className="cursor-pointer text-xs font-semibold text-ink-muted">
+            1件ずつ確認する(まとめた判断と違う対応が必要な伝票があれば、ここで個別に変更できます)
+          </summary>
+          <div className="mt-3 flex flex-col gap-3 border-t border-line pt-3">
+            {items.map((item) => renderItemCard(item, true))}
+          </div>
+        </details>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -230,6 +548,21 @@ export function CleansingQueue({
         </div>
       </div>
 
+      <ListToolbar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="車番・運転者・荷主で検索"
+        sortOptions={SORT_OPTIONS}
+        sortValue={sortKey}
+        onSortChange={(v) => setSortKey(v as SortKey)}
+        filterChips={FILTERABLE_FLAG_TYPES.map((type) => ({
+          key: type,
+          label: FLAG_LABELS[type],
+          active: activeFlagFilters.has(type),
+        }))}
+        onToggleFilter={toggleFlagFilter}
+      />
+
       {error && (
         <p role="alert" className="rounded border border-danger bg-danger/5 px-3 py-2 text-sm text-danger">
           {error}
@@ -242,111 +575,7 @@ export function CleansingQueue({
         </p>
       )}
 
-      {visible.map((item) => {
-        const local = state[item.rowKey] ?? { decision: null, correctedVehicleNo: "", note: "" };
-        return (
-          <div
-            key={item.rowKey}
-            className={`rounded-lg border bg-white p-4 ${
-              local.decision ? "border-line opacity-80" : "border-accent/40"
-            }`}
-          >
-            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-              <span className="text-base font-bold text-ink">車番 {item.vehicleNo || "—"}</span>
-              <span className="text-sm text-ink-muted">運転者 {item.driverName || "—"}</span>
-              <span className="text-sm text-ink-muted">荷主 {item.customerName || "—"}</span>
-              <span className="text-sm text-ink-muted">積荷日 {item.loadDate || "—"}</span>
-              <span className="num ml-auto text-sm font-semibold text-ink">
-                {yen(item.amount)} 円
-              </span>
-            </div>
-
-            <ul className="mt-3 flex flex-col gap-1">
-              {item.flags.map((flag) => (
-                <li key={flag.type} className="text-sm text-ink">
-                  <span className="mr-2 inline-block rounded bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent-deep">
-                    {FLAG_LABELS[flag.type]}
-                  </span>
-                  {flag.reason}
-                </li>
-              ))}
-            </ul>
-
-            {item.suggestion && (
-              <p className="mt-2 text-sm text-brand-deep">前月の判断: {item.suggestion.reason}</p>
-            )}
-
-            {canDecide ? (
-              <>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {DECISION_ORDER.map((d) => (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => decide(item, d)}
-                      disabled={pending !== null}
-                      aria-pressed={local.decision === d}
-                      title={DECISION_HINT[d]}
-                      className={`pressable rounded border px-3 py-1.5 text-sm font-semibold disabled:opacity-50 ${
-                        local.decision === d
-                          ? `${DECISION_STYLE[d]} bg-subtle`
-                          : "border-line text-ink-muted"
-                      }`}
-                    >
-                      {DECISION_LABELS[d]}
-                    </button>
-                  ))}
-                  {local.decision && (
-                    <span className="self-center text-sm text-ink-muted">
-                      {DECISION_HINT[local.decision]}
-                    </span>
-                  )}
-                </div>
-
-                {local.decision === "correct" && (
-                  <div className="mt-3 flex flex-wrap items-end gap-3">
-                    <label className="flex flex-col text-sm text-ink-muted">
-                      正しい車番
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        value={local.correctedVehicleNo}
-                        onChange={(e) =>
-                          setState((s) => ({
-                            ...s,
-                            [item.rowKey]: { ...local, correctedVehicleNo: e.target.value },
-                          }))
-                        }
-                        onBlur={() => saveDetail(item)}
-                        placeholder="例: 24"
-                        className="num mt-1 w-32 rounded border border-line px-2 py-1 text-right text-ink"
-                      />
-                    </label>
-                    <label className="flex min-w-60 flex-1 flex-col text-sm text-ink-muted">
-                      メモ(任意)
-                      <input
-                        type="text"
-                        value={local.note}
-                        onChange={(e) =>
-                          setState((s) => ({ ...s, [item.rowKey]: { ...local, note: e.target.value } }))
-                        }
-                        onBlur={() => saveDetail(item)}
-                        placeholder="請求書発行担当に確認済み など"
-                        className="mt-1 rounded border border-line px-2 py-1 text-ink"
-                      />
-                    </label>
-                  </div>
-                )}
-              </>
-            ) : (
-              <p className="mt-3 text-sm text-ink-muted">
-                判断の権限がありません。
-                {local.decision ? `現在の判断: ${DECISION_LABELS[local.decision]}` : "未判断です。"}
-              </p>
-            )}
-          </div>
-        );
-      })}
+      {groups.map((g) => (g.kind === "cluster" ? renderClusterCard(g.items) : renderItemCard(g.item, false)))}
     </div>
   );
 }

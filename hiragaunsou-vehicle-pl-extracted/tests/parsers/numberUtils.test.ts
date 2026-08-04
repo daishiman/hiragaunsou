@@ -22,6 +22,15 @@ describe("parseJapaneseAmount", () => {
   it("円記号混在も許容する", () => {
     expect(parseJapaneseAmount("¥1,000")).toBe(1000);
   });
+
+  it("ハイフン1文字は未入力扱いで0を返す", () => {
+    expect(parseJapaneseAmount("-")).toBe(0);
+  });
+
+  it("数値に変換できない文字列は例外を投げず0を返す(取込を止めない)", () => {
+    expect(parseJapaneseAmount("該当なし")).toBe(0);
+    expect(parseJapaneseAmount("N/A")).toBe(0);
+  });
 });
 
 describe("normalizeKey", () => {
@@ -36,5 +45,10 @@ describe("normalizeKey", () => {
 
   it("0そのものは0のまま", () => {
     expect(normalizeKey("0")).toBe("0");
+  });
+
+  it("nullとundefinedは空文字を返す", () => {
+    expect(normalizeKey(null)).toBe("");
+    expect(normalizeKey(undefined)).toBe("");
   });
 });

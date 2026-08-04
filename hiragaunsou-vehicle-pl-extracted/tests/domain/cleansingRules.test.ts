@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  cleansingClusterKey,
   detectCleansingFlags,
   needsHumanDecision,
   suggestDecision,
@@ -76,5 +77,57 @@ describe("suggestDecision (前月の判断を提案する)", () => {
       note: "請求書発行担当に確認済み",
     });
     expect(s?.reason).toContain("請求書発行担当に確認済み");
+  });
+});
+
+describe("cleansingClusterKey (同じ内容の伝票を束ねる基準)", () => {
+  it("車番が空なら束ねない(空文字キーを返す)", () => {
+    const key = cleansingClusterKey({
+      vehicleNo: "",
+      driverName: "山田",
+      customerName: "東洋インキ",
+      loadDate: "2026-05-01",
+      amount: 700,
+      flags: [],
+    });
+    expect(key).toBe("");
+  });
+
+  it("荷主名が空なら束ねない(空文字キーを返す)", () => {
+    const key = cleansingClusterKey({
+      vehicleNo: "4242",
+      driverName: "山田",
+      customerName: "",
+      loadDate: "2026-05-01",
+      amount: 700,
+      flags: [],
+    });
+    expect(key).toBe("");
+  });
+
+  it("車番・荷主・金額・フラグ種類が一致すれば同じキーになる(積荷日は基準に含めない)", () => {
+    const base = {
+      vehicleNo: "4242",
+      driverName: "諸口",
+      customerName: "東洋インキ㈱",
+      amount: 700,
+      flags: [{ type: "misc_entry" as const, severity: "review" as const, reason: "x" }],
+    };
+    const key1 = cleansingClusterKey({ ...base, loadDate: "2026-05-01" });
+    const key2 = cleansingClusterKey({ ...base, loadDate: "2026-05-15" });
+    expect(key1).toBe(key2);
+  });
+
+  it("金額が異なれば別キーになる(たまたま同じ車番×荷主というだけの別内容を混ぜない)", () => {
+    const base = {
+      vehicleNo: "4242",
+      driverName: "諸口",
+      customerName: "東洋インキ",
+      loadDate: "2026-05-01",
+      flags: [],
+    };
+    const key1 = cleansingClusterKey({ ...base, amount: 700 });
+    const key2 = cleansingClusterKey({ ...base, amount: 800 });
+    expect(key1).not.toBe(key2);
   });
 });

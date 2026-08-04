@@ -43,4 +43,40 @@ describe("parsePayrollCsv", () => {
     expect(records.map((r) => r.employeeCode)).toEqual(["93"]);
     expect(records[0].totalPay).toBe(663820);
   });
+
+  it("列の順番が変わっても列名で解決して取り込める", () => {
+    const csv = [
+      "総支給額,社保合計,氏　名,社員No",
+      "\"663,820\",\"90,000\",浅沼　秀敏,0093",
+    ].join("\r\n");
+
+    const records = parsePayrollCsv(csv);
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({ employeeCode: "93", totalPay: 663820, socialInsuranceTotal: 90000 });
+  });
+
+  it("氏名列の表記が「氏　名」でなく「氏名」(空白なし)でも取り込める", () => {
+    const csv = ["社員No,氏名,総支給額,社保合計", '0093,浅沼　秀敏,"663,820","90,000"'].join("\r\n");
+
+    const records = parsePayrollCsv(csv);
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({ employeeCode: "93", employeeName: "浅沼　秀敏" });
+  });
+
+  it("氏名列が「氏名」表記でも、小計行(角括弧+○名)の除外は変わらず効く", () => {
+    const csv = [
+      "社員No,氏名,総支給額,社保合計",
+      '0093,浅沼　秀敏,"663,820","90,000"',
+      '999,[総合計]98名,"28,042,584","4,524,163"',
+    ].join("\r\n");
+
+    const records = parsePayrollCsv(csv);
+    expect(records.map((r) => r.employeeCode)).toEqual(["93"]);
+  });
+
+  it("必須列が1つ欠けていると、欠けている列名を含む例外になる", () => {
+    const csv = ["社員No,氏　名,社保合計", "0093,浅沼　秀敏,\"90,000\""].join("\r\n");
+
+    expect(() => parsePayrollCsv(csv)).toThrow(/総支給額/);
+  });
 });

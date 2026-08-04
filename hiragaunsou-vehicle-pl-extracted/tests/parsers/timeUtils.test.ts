@@ -30,4 +30,10 @@ describe("parseDurationToHours", () => {
   it("不正な文字列は0を返す(例外を投げない)", () => {
     expect(parseDurationToHours("abc:def")).toBe(0);
   });
+
+  it("コロンが3つ以上(H:MM:SSより多い区切り)の想定外形式は0を返す", () => {
+    // 各要素は数値として妥当でも、コロン区切りが4要素になる時間表記は想定していない。
+    // 「コロンなし」フォールバックにも一致しない(文字列全体としては数値化できない)ため0で安全側に倒す。
+    expect(parseDurationToHours("1:02:03:04")).toBe(0);
+  });
 });

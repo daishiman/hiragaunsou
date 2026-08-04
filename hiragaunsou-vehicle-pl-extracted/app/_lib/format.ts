@@ -46,3 +46,14 @@ export function yearMonthLabel(yearMonth: string): string {
   const [y, m] = yearMonth.split("-");
   return `${y}年${Number(m)}月`;
 }
+
+/**
+ * 推移グラフの目盛りラベル。「8月」だけだと複数年にまたがる期間で年が分からなくなるため、
+ * 先頭の点と年が変わる1月だけ年を添える (毎回付けると目盛りが読みにくくなる)。
+ */
+export function chartMonthLabel(yearMonth: string, index: number): string {
+  const [y, m] = yearMonth.split("-");
+  const month = Number(m);
+  if (index === 0 || month === 1) return `${y}/${month}月`;
+  return `${month}月`;
+}

@@ -13,7 +13,7 @@ export default async function ReportPage() {
   return (
     <div className="max-w-3xl">
       <PageHead
-        kind="tool"
+        kind="analysis"
         title="AI要因分析レポート"
         lead="損益変動の要因をAIが要約します(生成ごとに費用が発生)"
       />

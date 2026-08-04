@@ -51,11 +51,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Lint
+        run: npm run lint
+
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Test
-        run: npm run test -- --run
+      - name: Test with coverage gate
+        run: npm run coverage
 
       - name: Build (OpenNext for Cloudflare)
         run: npm run cf:build

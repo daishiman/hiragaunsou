@@ -118,6 +118,43 @@ describe("GetPeriodOverviewUseCase", () => {
     expect(res.depots).toEqual([]);
   });
 
+  it("前月比: 期間内の最新月をその1ヶ月前と比べる (期間が複数月でも単月同士の比較)", async () => {
+    const res = await useCase({
+      "2026-04": [plRow({ no: "1", sales: 1_000_000, profit: 100_000 })],
+      "2026-05": [plRow({ no: "1", sales: 1_200_000, profit: 150_000 })],
+      "2026-06": [plRow({ no: "1", sales: 1_500_000, profit: 300_000 })],
+    }).execute("2026-04", "2026-06");
+
+    expect(res.salesMomDiffRatio).toBeCloseTo(0.25, 10);
+    expect(res.profitMomDiffRatio).toBeCloseTo(1, 10);
+  });
+
+  it("前月比: 期間の先頭より前の月まで遡って比較相手を取得する", async () => {
+    const res = await useCase({
+      "2026-03": [plRow({ no: "1", sales: 1_000_000, profit: 100_000 })],
+      "2026-04": [plRow({ no: "1", sales: 1_100_000, profit: 110_000 })],
+    }).execute("2026-04", "2026-04");
+
+    expect(res.salesMomDiffRatio).toBeCloseTo(0.1, 10);
+    expect(res.profitMomDiffRatio).toBeCloseTo(0.1, 10);
+  });
+
+  it("前月比: 1ヶ月前のデータが無ければnullにする (0扱いで伸び率を捏造しない)", async () => {
+    const res = await useCase({
+      "2026-05": [plRow({ no: "1", sales: 1_200_000, profit: 100_000 })],
+    }).execute("2026-05", "2026-05");
+
+    expect(res.salesMomDiffRatio).toBeNull();
+    expect(res.profitMomDiffRatio).toBeNull();
+  });
+
+  it("前月比: データが1件も無い期間ではnullにする", async () => {
+    const res = await useCase({}).execute("2026-04", "2026-06");
+
+    expect(res.salesMomDiffRatio).toBeNull();
+    expect(res.profitMomDiffRatio).toBeNull();
+  });
+
   it("開始が終了より後でも例外にせず空状態にする", async () => {
     const res = await useCase({ "2026-05": [plRow({ no: "1", sales: 1 })] }).execute("2026-06", "2026-04");
 

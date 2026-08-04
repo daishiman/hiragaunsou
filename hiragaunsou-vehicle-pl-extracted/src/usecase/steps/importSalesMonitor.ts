@@ -45,7 +45,7 @@ export class ImportSalesMonitorUseCase {
     const charteredExcluded = records.filter((r) => isCharteredVehicle(r.vehicleCode)).length;
     const kept = records.filter((r) => !isCharteredVehicle(r.vehicleCode));
 
-    // STEP1のデータ整形フラグ(2重計上の疑い・諸口)は取込時に確定させ、raw_ingestion に貼っておく。
+    // STEP2のデータ整形フラグ(2重計上の疑い・諸口)は取込時に確定させ、raw_ingestion に貼っておく。
     // こうしておくと「要確認が何件あるか」を生データを読み直さずに数えられる(ホームの進捗表示が軽くなる)。
     const flagsPerRow = kept.map((r) =>
       detectCleansingFlags({ vehicleNo: r.vehicleCode, driverName: r.driverName }),

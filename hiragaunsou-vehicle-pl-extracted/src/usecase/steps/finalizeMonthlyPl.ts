@@ -54,7 +54,7 @@ export interface FinalizeMonthlyPlInput {
    */
   kirinAllocations?: readonly { vehicleNo: string; amount: number }[];
   /**
-   * STEP1: データ整形で人が下した判断 (除外する/車番を修正して残す)。
+   * STEP2: データ整形で人が下した判断 (除外する/車番を修正して残す)。
    * 元データは書き換えず、集計の直前にここで重ねる。
    */
   cleansingDecisions?: readonly CleansingDecisionRecord[];
@@ -104,7 +104,7 @@ export class FinalizeMonthlyPlUseCase {
       if (r.naturalKey) opByVehicle.set(r.naturalKey, r.raw as VehicleOperationRecord);
     }
 
-    // STEP1のデータ整形の判断を先に重ねてから集計する
+    // STEP2のデータ整形の判断を先に重ねてから集計する
     const salesRows = applyCleansingDecisions(
       salesRawRows.map((r) => r.raw as SalesMonitorRow),
       input.cleansingDecisions ?? [],

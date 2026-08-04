@@ -54,6 +54,30 @@ describe("Route Handlerの認証ガード(未ログイン→401)", () => {
     expect(res.status).toBe(401);
   });
 
+  it("GET /api/ai-provider-credentials は未ログインで401", async () => {
+    const { GET } = await import("../../app/api/ai-provider-credentials/route");
+    const res = await GET();
+    expect(res.status).toBe(401);
+  });
+
+  it("POST /api/ai-provider-credentials は未ログインで401", async () => {
+    const { POST } = await import("../../app/api/ai-provider-credentials/route");
+    const res = await POST(
+      new Request("http://test/api/ai-provider-credentials", { method: "POST" }),
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("DELETE /api/ai-provider-credentials は未ログインで401", async () => {
+    const { DELETE } = await import("../../app/api/ai-provider-credentials/route");
+    const res = await DELETE(
+      new Request("http://test/api/ai-provider-credentials?provider=anthropic", {
+        method: "DELETE",
+      }),
+    );
+    expect(res.status).toBe(401);
+  });
+
   it("POST /api/report は未ログインで401", async () => {
     const { POST } = await import("../../app/api/report/route");
     const res = await POST(new Request("http://test/api/report", { method: "POST" }));

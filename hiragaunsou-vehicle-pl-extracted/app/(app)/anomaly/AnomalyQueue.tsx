@@ -9,8 +9,18 @@ import type {
 } from "../../../src/usecase/steps/getAnomalyQueue";
 import { FIELD_LABELS } from "../../_lib/fieldLabels";
 import { num, pct, yen } from "../../_lib/format";
+import { ListToolbar, type SortOption } from "../../_components/ListToolbar";
 
 type Judgement = AnomalyRecommendation;
+type Priority = AnomalyQueueItem["priority"];
+
+const QUEUE_SORT_OPTIONS: SortOption[] = [
+  { value: "default", label: "対応する順(既定)" },
+  { value: "priorityDesc", label: "優先度が高い順" },
+  { value: "vehicleNoAsc", label: "車番順" },
+];
+
+const PRIORITY_ORDER: Record<Priority, number> = { 高: 0, 中: 1, 低: 2 };
 
 const JUDGEMENT_LABEL: Record<Judgement, string> = {
   corrected: "入力ミス — 直しに送る",
@@ -46,9 +56,42 @@ export function AnomalyQueue({
   const [lastDone, setLastDone] = useState<{ item: AnomalyQueueItem; judgement: Judgement } | null>(
     null,
   );
+  const [queueSearch, setQueueSearch] = useState("");
+  const [queueSort, setQueueSort] = useState("default");
+  const [priorityFilters, setPriorityFilters] = useState<Set<Priority>>(new Set());
 
   const remaining = items.slice(index);
   const current = remaining[0] ?? null;
+
+  function toggleQueuePriority(key: string) {
+    setPriorityFilters((prev) => {
+      const next = new Set(prev);
+      const p = key as Priority;
+      if (next.has(p)) next.delete(p);
+      else next.add(p);
+      return next;
+    });
+  }
+
+  // 待ち行列の並び自体(remaining)は判定の進み方に使うので変えない。
+  // 検索・絞り込み・並べ替えは、サイドバーの表示だけに効かせ、クリックでその項目へ直接ジャンプできるようにする。
+  const query = queueSearch.trim();
+  let queueView = remaining;
+  if (query) {
+    queueView = queueView.filter(
+      (i) => (i.vehicleNo ?? "").includes(query) || fieldLabel(i.field).includes(query),
+    );
+  }
+  if (priorityFilters.size > 0) {
+    queueView = queueView.filter((i) => priorityFilters.has(i.priority));
+  }
+  if (queueSort === "priorityDesc") {
+    queueView = [...queueView].sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
+  } else if (queueSort === "vehicleNoAsc") {
+    queueView = [...queueView].sort((a, b) =>
+      (a.vehicleNo ?? "").localeCompare(b.vehicleNo ?? "", "ja", { numeric: true }),
+    );
+  }
 
   async function send(id: string, action: Judgement | "reopen") {
     const res = await fetch(`/api/todo/${encodeURIComponent(id)}/resolve`, {
@@ -264,20 +307,42 @@ export function AnomalyQueue({
 
       <aside className="rounded-xl border border-line bg-white p-4">
         <p className="text-xs font-semibold text-ink">残りの待ち行列({remaining.length}件)</p>
+        <div className="mt-2">
+          <ListToolbar
+            searchValue={queueSearch}
+            onSearchChange={setQueueSearch}
+            searchPlaceholder="車番・項目で検索"
+            sortOptions={QUEUE_SORT_OPTIONS}
+            sortValue={queueSort}
+            onSortChange={setQueueSort}
+            filterChips={(["高", "中", "低"] as const).map((p) => ({
+              key: p,
+              label: `優先度${p}`,
+              active: priorityFilters.has(p),
+            }))}
+            onToggleFilter={toggleQueuePriority}
+          />
+        </div>
         <ul className="mt-2 space-y-1">
-          {remaining.slice(0, 12).map((item, i) => (
-            <li
-              key={item.id}
-              className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-xs ${i === 0 ? "bg-brand-soft font-semibold text-brand-deep" : "text-ink-muted"}`}
-            >
-              <span className="num shrink-0">{item.vehicleNo ?? "—"}</span>
-              <span className="min-w-0 flex-1 truncate">{fieldLabel(item.field)}</span>
-              <span className="shrink-0 text-[10px]">{item.priority}</span>
+          {queueView.slice(0, 12).map((item) => (
+            <li key={item.id}>
+              <button
+                type="button"
+                onClick={() => setIndex(items.indexOf(item))}
+                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs ${item.id === current?.id ? "bg-brand-soft font-semibold text-brand-deep" : "text-ink-muted hover:bg-subtle"}`}
+              >
+                <span className="num shrink-0">{item.vehicleNo ?? "—"}</span>
+                <span className="min-w-0 flex-1 truncate">{fieldLabel(item.field)}</span>
+                <span className="shrink-0 text-[10px]">{item.priority}</span>
+              </button>
             </li>
           ))}
         </ul>
-        {remaining.length > 12 && (
-          <p className="mt-2 text-[11px] text-ink-muted">ほか {remaining.length - 12} 件</p>
+        {queueView.length === 0 && (
+          <p className="mt-2 text-[11px] text-ink-muted">条件に合う項目はありません。</p>
+        )}
+        {queueView.length > 12 && (
+          <p className="mt-2 text-[11px] text-ink-muted">ほか {queueView.length - 12} 件</p>
         )}
       </aside>
     </div>

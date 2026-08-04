@@ -5,6 +5,67 @@ import type { VehiclePlCalculated } from "../../domain/rules/vehiclePlCalculatio
 /** Excelブック内で展開してよいXML等の合計サイズ。圧縮爆弾を避けるための上限。 */
 const MAX_EXTRACTED_BYTES = 30 * 1024 * 1024;
 
+/**
+ * 収支表51列(VEHICLE_PL_FIELDS)それぞれが、見出し行でどう表記されるか。
+ * 実データ2件(★車両別収支計算用2026年5月.xlsx / 運送収支表2025-2026 5月更新.xlsx)を
+ * 突き合わせたところ、列順・表記は51列とも一致していたが「fee」列だけ
+ * 「高速他料金」「附帯料金」の2表記が実在したため、両方を許容する。
+ * ここに無い表記は未知の列名として扱い、取込を中断する(あいまい一致で救わない)。
+ */
+export const FIELD_HEADER_NAMES: Record<VehiclePlField, readonly string[]> = {
+  no: ["車番"],
+  type: ["車種名"],
+  depot: ["所属"],
+  reg: ["初年度登録"],
+  code: ["コード"],
+  driver: ["運転者名"],
+  trips: ["運行回数"],
+  slips: ["伝票件数"],
+  hours: ["稼働時間"],
+  km: ["稼働Ｋｍ"],
+  fare: ["運賃"],
+  fee: ["高速他料金", "附帯料金"],
+  sales: ["運送収入　　（運賃＋料金）"],
+  toll: ["道路使用料"],
+  tollDisc: ["高速割引料"],
+  tollNet: ["※運行費計"],
+  fuelIn: ["軽油代　　　　　　　　インタンク"],
+  fuelInQty: ["インタンク　給油量"],
+  fuelOut: ["軽油代　　　　　外部"],
+  fuelOutQty: ["外部　　　　　　給油量"],
+  fuelQty: ["給油量　　　　　合計"],
+  nempi: ["燃費"],
+  adblue: ["外部アドブルー"],
+  fuelTotal: ["※燃料費計"],
+  repair: ["修理費"],
+  tire: ["タイヤ費"],
+  equip: ["備品費"],
+  mainte: ["メンテ　　　　　（委託）"],
+  repairTotal: ["※修繕費計"],
+  salary: ["給与"],
+  bonus: ["賞与"],
+  welfare: ["福利厚生費"],
+  laborTotal: ["※人件費計"],
+  insCompulsory: ["自賠責保険"],
+  insVoluntary: ["任意保険"],
+  insTotal: ["※保険料計"],
+  taxAuto: ["自動車税"],
+  taxWeight: ["自動車重量税"],
+  taxTotal: ["※賦課税計"],
+  miscOther: ["その他諸経費"],
+  miscTotal: ["※諸経費計"],
+  lease: ["車両リース費"],
+  installment: ["車両割賦支払費"],
+  transportTotal: ["※運送費計"],
+  adminFee: ["一般管理費"],
+  adminTotal: ["※管理費計"],
+  fixed: ["固定費"],
+  variable: ["変動費"],
+  expense: ["経費計"],
+  profit: ["損益"],
+  margin: ["利益率"],
+};
+
 /** 既存の「○月収支表」シートをそのまま取り込む際のパース結果。 */
 export interface MonthlyPlWorkbookParseResult {
   sheetName: string;
@@ -16,33 +77,48 @@ export interface MonthlyPlWorkbookParseResult {
 /**
  * Excel (.xlsx) の保存済み計算結果を、車両別収支表の51列に変換する。
  *
- * ファイル名・シート名ではなく、見出し行の「車番」と50列目の「損益」で対象を検出するため、
- * 月替わりのファイル名や年度ブックにも対応する。xlsx の数式は実行せず、Excelが保存した
- * キャッシュ値だけを読む。未計算のブックはExcelで再計算・保存してから再取込する必要がある。
+ * ファイル名・シート名ではなく、見出し行に「車番」「損益」に相当する列名があるかで対象シートを
+ * 検出するため、月替わりのファイル名や年度ブックにも対応する。列の位置(インデックス)には依存せず
+ * 全51列を名前で解決するため、列の並び順が変わっても、未知の列が追加されていても取り込める。
+ * 想定した列名が見つからない場合はベストエフォートで補完せず、原因を特定できる例外を投げて止める。
+ * xlsx の数式は実行せず、Excelが保存したキャッシュ値だけを読む。未計算のブックはExcelで
+ * 再計算・保存してから再取込する必要がある。
  */
 export function parseMonthlyPlWorkbook(
   input: ArrayBuffer | Uint8Array,
   preferredYearMonth?: string,
 ): MonthlyPlWorkbookParseResult {
-  let files: Record<string, Uint8Array>;
-  try {
-    files = unzipSync(toUint8Array(input));
-  } catch {
-    throw new Error("Excel（.xlsx）として読み取れません。xlsx形式のファイルを選択してください。");
+  const bytes = toUint8Array(input);
+  let extractedBytes = 0;
+
+  /**
+   * 指定パスだけを展開する。fflate の unzipSync は filter で対象外のエントリを
+   * 「展開自体しない」(zh() でメタ情報を見てから inflate をスキップする)ため、
+   * 収支表シート以外(実データでは売上モニタリスト等の生データシートが数MB単位である)
+   * を毎回展開してしまう既存実装のCPUコストを避けられる。
+   */
+  function extract(paths: Set<string>): Record<string, Uint8Array> {
+    let out: Record<string, Uint8Array>;
+    try {
+      out = unzipSync(bytes, { filter: (file) => paths.has(file.name) });
+    } catch {
+      throw new Error("Excel（.xlsx）として読み取れません。xlsx形式のファイルを選択してください。");
+    }
+    for (const file of Object.values(out)) extractedBytes += file.byteLength;
+    if (extractedBytes > MAX_EXTRACTED_BYTES) {
+      throw new Error("展開後のExcelデータが30MBを超えています。ファイルを分割して再度取り込んでください。");
+    }
+    return out;
   }
 
-  const extractedBytes = Object.values(files).reduce((total, file) => total + file.byteLength, 0);
-  if (extractedBytes > MAX_EXTRACTED_BYTES) {
-    throw new Error("展開後のExcelデータが30MBを超えています。ファイルを分割して再度取り込んでください。");
-  }
-
-  const workbookXml = readXml(files, "xl/workbook.xml");
-  const relationshipsXml = readXml(files, "xl/_rels/workbook.xml.rels");
+  const metaFiles = extract(new Set(["xl/workbook.xml", "xl/_rels/workbook.xml.rels", "xl/sharedStrings.xml"]));
+  const workbookXml = readXml(metaFiles, "xl/workbook.xml");
+  const relationshipsXml = readXml(metaFiles, "xl/_rels/workbook.xml.rels");
   if (!workbookXml || !relationshipsXml) {
     throw new Error("Excelブックの構成を読み取れませんでした。");
   }
 
-  const sharedStrings = parseSharedStrings(readXml(files, "xl/sharedStrings.xml"));
+  const sharedStrings = parseSharedStrings(readXml(metaFiles, "xl/sharedStrings.xml"));
   const relationshipTargets = parseRelationshipTargets(relationshipsXml);
   const sheets = parseSheets(workbookXml);
 
@@ -51,23 +127,33 @@ export function parseMonthlyPlWorkbook(
     const target = relationshipTargets.get(sheet.relationshipId);
     if (!target) continue;
     const path = resolveSheetPath(target);
-    const sheetXml = readXml(files, path);
+    const sheetFiles = extract(new Set([path]));
+    const sheetXml = readXml(sheetFiles, path);
     if (!sheetXml) continue;
 
     const table = parseSheetRows(sheetXml, sharedStrings);
-    const headerIndex = table.findIndex(isMonthlyPlHeader);
-    if (headerIndex < 0) continue;
+    const located = locateHeader(table, sheet.name);
+    if (!located) continue;
+    const { headerIndex, columns } = located;
 
-    const rows = takeVehicleRows(table, headerIndex)
-      .map(toVehiclePlRow)
+    const rows = takeVehicleRows(table, headerIndex, columns.no)
+      .map((row) => toVehiclePlRow(row, columns))
       .filter((row): row is VehiclePlCalculated => row !== null);
 
     if (rows.length > 0) {
-      candidates.push({
+      const candidate: MonthlyPlWorkbookParseResult = {
         sheetName: sheet.name,
         sheetYearMonth: readSheetYearMonth(table, headerIndex),
         rows,
-      });
+      };
+      candidates.push(candidate);
+
+      // 対象年月が一致するシートが見つかった時点で確定してよい。以降のシートを
+      // 展開・正規表現パースする必要はない(1シートあたり数百KB〜数MBあり、
+      // 無関係シートの解析を続けるだけでCPU時間の大半を消費してしまう)。
+      if (preferredYearMonth && candidate.sheetYearMonth === preferredYearMonth) {
+        return candidate;
+      }
     }
   }
 
@@ -127,9 +213,9 @@ function readSheetYearMonth(table: string[][], headerIndex: number): string | nu
  * 「【保有車両数】」と車種別台数のブロックが続くため、そこで打ち切らないと
  * 集計行が車両として取り込まれ、車種名の列に台数が入るなど列全体が崩れる。
  */
-function takeVehicleRows(table: string[][], headerIndex: number): string[][] {
+function takeVehicleRows(table: string[][], headerIndex: number, noColumnIndex: number): string[][] {
   const body = table.slice(headerIndex + 1);
-  const end = body.findIndex(isDataRegionEnd);
+  const end = body.findIndex((row) => isDataRegionEnd(row, noColumnIndex));
   return end < 0 ? body : body.slice(0, end);
 }
 
@@ -138,11 +224,12 @@ function takeVehicleRows(table: string[][], headerIndex: number): string[][] {
  *
  * 実データ(★運送収支表2025-2026_5月更新.xlsx / 8月収支表)での並びは以下:
  *   ... 車両行 ... / 「合計」 / 「平均」 / 空行 / 「【保有車両数】」 / 「10tW」…車種別台数 / 「合計」
- * row[0] が車番の列。車番は "8190" のような数字だけでなく "129　　1113" "385/100" のような
- * 複合表記もあり、空セル(row[0] === "" または undefined)は車両行の途中にも現れうる。
+ * noColumnIndex は見出し行を名前解決して求めた「車番」列の位置(列順が変わっても追従する)。
+ * 車番は "8190" のような数字だけでなく "129　　1113" "385/100" のような複合表記もあり、
+ * 空セル(該当列が "" または undefined)は車両行の途中にも現れうる。
  */
-function isDataRegionEnd(row: string[]): boolean {
-  const key = (row[0] ?? "").normalize("NFKC").replace(/\s/g, "");
+function isDataRegionEnd(row: string[], noColumnIndex: number): boolean {
+  const key = (row[noColumnIndex] ?? "").normalize("NFKC").replace(/\s/g, "");
   // 空セルは車両行の途中にも現れるため、打ち切りの根拠にしない。
   if (key === "") return false;
   // 「合計」「平均」は車両行直後の集計行、「【保有車両数】」は台数ブロックの見出し。
@@ -243,20 +330,102 @@ function columnIndex(reference: string): number {
   return [...letters.toUpperCase()].reduce((index, letter) => index * 26 + letter.charCodeAt(0) - 64, 0) - 1;
 }
 
-function isMonthlyPlHeader(row: string[]): boolean {
-  return normalizeHeader(row[0]) === "車番" && normalizeHeader(row[49]) === "損益" && row.length >= 51;
-}
-
 function normalizeHeader(value: string | undefined): string {
   return (value ?? "").normalize("NFKC").replace(/\s/g, "").replace(/^\uFEFF/, "");
 }
 
-function toVehiclePlRow(cells: string[]): VehiclePlCalculated | null {
-  const no = normalizeKey(cells[0]);
+/** 見出し行1行分を、正規化した見出しテキスト → 出現した列位置一覧、に変換する。 */
+function buildCellIndex(row: string[]): Map<string, number[]> {
+  const map = new Map<string, number[]>();
+  row.forEach((cell, index) => {
+    const key = normalizeHeader(cell);
+    if (key === "") return;
+    const existing = map.get(key);
+    if (existing) existing.push(index);
+    else map.set(key, [index]);
+  });
+  return map;
+}
+
+/** この行に「車番」「損益」に相当する見出しが(位置に関わらず)両方含まれるか。見出し行の当たりを付けるための緩い判定。 */
+function looksLikeMonthlyPlHeader(cellIndex: Map<string, number[]>): boolean {
+  const hasNo = FIELD_HEADER_NAMES.no.some((name) => cellIndex.has(normalizeHeader(name)));
+  const hasProfit = FIELD_HEADER_NAMES.profit.some((name) => cellIndex.has(normalizeHeader(name)));
+  return hasNo && hasProfit;
+}
+
+/**
+ * 見出し行の全列を名前で51列(VEHICLE_PL_FIELDS)に突き合わせる。
+ * 列の並び順が変わっていても、列名さえ一致すれば解決できる。列が追加されていても、
+ * 見出しに無い未知の列としてそのまま無視する。
+ *
+ * 想定した列名が1つでも見つからない、または同名の列が複数あって一意に決められない場合は、
+ * 担当者が元ファイルを見て原因を特定できるよう、欲しい列名と実際の見出し一覧を含めて例外を投げる。
+ * ベストエフォートでの位置補完やあいまい一致は行わない。
+ */
+function resolveColumns(
+  cellIndex: Map<string, number[]>,
+  sheetName: string,
+  headerRow: string[],
+): Record<VehiclePlField, number> {
+  const columns = {} as Record<VehiclePlField, number>;
+  const missing: string[] = [];
+  const ambiguous: string[] = [];
+
+  for (const field of VEHICLE_PL_FIELDS) {
+    const aliases = FIELD_HEADER_NAMES[field];
+    const matchedAlias = aliases.find((alias) => cellIndex.has(normalizeHeader(alias)));
+    if (!matchedAlias) {
+      missing.push(aliases.join("／"));
+      continue;
+    }
+    const indices = cellIndex.get(normalizeHeader(matchedAlias))!;
+    if (indices.length > 1) {
+      ambiguous.push(`${matchedAlias}(${indices.length}箇所)`);
+      continue;
+    }
+    columns[field] = indices[0]!;
+  }
+
+  if (missing.length > 0 || ambiguous.length > 0) {
+    const actualHeaders =
+      headerRow.filter((cell) => normalizeHeader(cell) !== "").join(" / ") || "(見出しを読み取れませんでした)";
+    const parts: string[] = [];
+    if (missing.length > 0) parts.push(`見つからない列: ${missing.join("、")}`);
+    if (ambiguous.length > 0) parts.push(`同名の列が複数あり判別できない列: ${ambiguous.join("、")}`);
+    throw new Error(
+      `シート「${sheetName}」の収支表見出し行が想定と一致しませんでした。${parts.join(" ")}。実際の見出し: ${actualHeaders}`,
+    );
+  }
+
+  return columns;
+}
+
+/**
+ * シート内から収支表の見出し行を探し、51列の名前解決結果とともに返す。
+ * 「車番」「損益」に相当する見出しが両方見つかった行を対象シートの見出し行とみなし、
+ * そこで51列の突き合わせに失敗した場合は(他の行を探して救わず)例外を投げて中断する。
+ * 「車番」「損益」自体が見当たらない = このシートは収支表ではない、とみなしてシートをスキップする(null)。
+ */
+function locateHeader(
+  table: string[][],
+  sheetName: string,
+): { headerIndex: number; columns: Record<VehiclePlField, number> } | null {
+  for (let index = 0; index < table.length; index++) {
+    const row = table[index]!;
+    const cellIndex = buildCellIndex(row);
+    if (!looksLikeMonthlyPlHeader(cellIndex)) continue;
+    return { headerIndex: index, columns: resolveColumns(cellIndex, sheetName, row) };
+  }
+  return null;
+}
+
+function toVehiclePlRow(cells: string[], columns: Record<VehiclePlField, number>): VehiclePlCalculated | null {
+  const no = normalizeKey(cells[columns.no]);
   if (!no || no === "合計") return null;
 
   const values = Object.fromEntries(
-    VEHICLE_PL_FIELDS.map((field, index) => [field, cells[index] ?? ""]),
+    VEHICLE_PL_FIELDS.map((field) => [field, cells[columns[field]] ?? ""]),
   ) as Record<VehiclePlField, string>;
 
   return {

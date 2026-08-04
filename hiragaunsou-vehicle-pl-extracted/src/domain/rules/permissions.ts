@@ -15,10 +15,19 @@ export type Permission =
   | "approve_anomaly"
   | "edit_master"
   | "confirm_close"
-  | "report_settings";
+  | "report_settings"
+  | "manage_api_keys";
 
 const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
-  admin: ["view", "input", "approve_anomaly", "edit_master", "confirm_close", "report_settings"],
+  admin: [
+    "view",
+    "input",
+    "approve_anomaly",
+    "edit_master",
+    "confirm_close",
+    "report_settings",
+    "manage_api_keys",
+  ],
   input_staff: ["view", "input", "approve_anomaly", "edit_master"],
   executive: ["view", "report_settings"],
 };

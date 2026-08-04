@@ -1,7 +1,7 @@
 import type { CleansingDecisionType, CleansingFlagType } from "../rules/cleansingRules";
 
 /**
- * 業務フロー STEP1「データ整形」の判断履歴の永続化インターフェース。
+ * 業務フロー STEP2「データ整形」の判断履歴の永続化インターフェース。
  * 実装(D1)は Infrastructure層に置く。
  */
 export interface CleansingDecisionRecord {

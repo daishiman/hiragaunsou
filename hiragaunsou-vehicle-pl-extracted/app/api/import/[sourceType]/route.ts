@@ -39,11 +39,26 @@ function isYearMonth(value: string): boolean {
   return /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
 }
 
+/**
+ * 種別判定用に見出し行だけを取り出す。
+ * 見出し行の判定にファイル全文は不要なので、先頭64KB(90列程度の見出し行が
+ * 収まるのに十分な余裕)だけをデコード・パースする。実データのCSVは数百KB〜数MBあり、
+ * 全文をここで一度パースしたうえで各UseCaseがもう一度全文をパースする二重コストは、
+ * ファイルサイズに比例してCloudflare WorkersのCPU時間上限(無料プランは既定10ms)を
+ * 圧迫する要因になっていた。
+ */
+function extractHeaderChunk(content: ArrayBuffer, maxBytes = 64 * 1024): ArrayBuffer {
+  const bytes = new Uint8Array(content);
+  const limit = Math.min(bytes.length, maxBytes);
+  const newline = bytes.subarray(0, limit).indexOf(0x0a);
+  return content.slice(0, newline >= 0 ? newline + 1 : limit);
+}
+
 /** CSVは列見出し、Excelは収支表シート構造で判定する。ファイル名だけには依存しない。 */
 function resolveSourceType(fileName: string, content: ArrayBuffer): Exclude<SourceType, "auto"> | "unknown" {
   const bytes = new Uint8Array(content);
   if (bytes[0] === 0x50 && bytes[1] === 0x4b) return MONTHLY_PL_WORKBOOK_SOURCE_TYPE;
-  const rows = parseCsv(decodeCp932(content));
+  const rows = parseCsv(decodeCp932(extractHeaderChunk(content)));
   return detectFileType(fileName, rows[0] ?? []);
 }
 
@@ -79,7 +94,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ sou
   const importBatchRepo = new D1ImportBatchRepository(db);
   const content = await file.arrayBuffer();
   const input = { yearMonth, fileName: file.name, content, importedBy: session!.id };
-  const detected = resolveSourceType(file.name, content);
+
+  let detected: Exclude<SourceType, "auto"> | "unknown";
+  try {
+    detected = resolveSourceType(file.name, content);
+  } catch (e) {
+    // 種別判定(見出し行の読み取り)自体が想定外に失敗した場合も、フレームワークの
+    // 汎用エラーページに落とさず、原因を特定できるメッセージをJSONで返す。
+    console.error("resolveSourceType failed", { fileName: file.name, error: e });
+    return NextResponse.json({ error: toImportErrorMessage(e) }, { status: 422 });
+  }
   const resolvedSourceType = sourceType === "auto" ? detected : sourceType;
   if (resolvedSourceType === "unknown") {
     return NextResponse.json(
