@@ -1,7 +1,11 @@
 import { and, eq } from "drizzle-orm";
 import type { Db } from "./client";
 import { reviewFlag } from "./schema";
+import { chunkForD1 } from "./d1Limits";
 import type { ReviewFlagRepository } from "../../domain/repositories/VehiclePlRepository";
+
+/** review_flag への1行あたりのバインドパラメータ数(既定値を持つ列は指定しないため、列数より少ない)。 */
+export const REVIEW_FLAG_COLUMNS = 9;
 
 /** D1(Drizzle)によるReviewFlagRepositoryの実装(Infrastructure層アダプタ)。 */
 export class D1ReviewFlagRepository implements ReviewFlagRepository {
@@ -19,19 +23,22 @@ export class D1ReviewFlagRepository implements ReviewFlagRepository {
     }[],
   ): Promise<void> {
     if (flags.length === 0) return;
-    await this.db.insert(reviewFlag).values(
-      flags.map((f) => ({
-        id: crypto.randomUUID(),
-        yearMonth,
-        vehicleNo: f.vehicleNo,
-        field: f.field,
-        type: f.type,
-        severity: f.severity,
-        message: f.message,
-        monthlyReference: f.monthlyReference,
-        status: "open" as const,
-      })),
+    const values = flags.map((f) => ({
+      id: crypto.randomUUID(),
+      yearMonth,
+      vehicleNo: f.vehicleNo,
+      field: f.field,
+      type: f.type,
+      severity: f.severity,
+      message: f.message,
+      monthlyReference: f.monthlyReference,
+      status: "open" as const,
+    }));
+    // 1行9列。D1の100パラメータ制限に収まるよう11行ずつに分割する。
+    const statements = chunkForD1(values, REVIEW_FLAG_COLUMNS).map((chunk) =>
+      this.db.insert(reviewFlag).values(chunk),
     );
+    await this.db.batch(statements as unknown as [(typeof statements)[number]]);
   }
 
   async findOpenByYearMonth(yearMonth: string) {

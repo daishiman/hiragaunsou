@@ -1,0 +1,1 @@
+DROP INDEX `raw_ingestion_batch_idx`;

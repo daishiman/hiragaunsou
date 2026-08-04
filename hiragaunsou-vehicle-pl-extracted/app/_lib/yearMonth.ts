@@ -7,6 +7,23 @@ export function currentYearMonth(): string {
   return `${y}-${m}`;
 }
 
+/**
+ * 取込画面の既定年月。当月ではなく前月を返す。
+ * 収支表は締め後に作るため、当月分の元データはまだ揃っていない。
+ * 既定を当月にすると「2026-08を指定して令和7年8月シートを取り込む」ような
+ * 年月の取り違えを誘発するため、実務上ありうる月を初期値にする。
+ */
+export function defaultImportYearMonth(): string {
+  const [yStr, mStr] = currentYearMonth().split("-");
+  const date = new Date(Date.UTC(Number(yStr), Number(mStr) - 2, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/** YYYY-MM 形式かどうか (画面から渡る年月の検証用) */
+export function isYearMonth(value: string | undefined): value is string {
+  return typeof value === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
+}
+
 /** 年月セレクタ用の選択肢 (新しい→古い順, 当月を含めcount件) */
 export function selectableYearMonths(count: number): string[] {
   const [yStr, mStr] = currentYearMonth().split("-");

@@ -8,6 +8,8 @@ const MAX_EXTRACTED_BYTES = 30 * 1024 * 1024;
 /** 既存の「○月収支表」シートをそのまま取り込む際のパース結果。 */
 export interface MonthlyPlWorkbookParseResult {
   sheetName: string;
+  /** シート見出し「令和N年M月車両別収支表」から復元した年月 (YYYY-MM)。判別できない場合は null。 */
+  sheetYearMonth: string | null;
   rows: VehiclePlCalculated[];
 }
 
@@ -56,26 +58,100 @@ export function parseMonthlyPlWorkbook(
     const headerIndex = table.findIndex(isMonthlyPlHeader);
     if (headerIndex < 0) continue;
 
-    const rows = table
-      .slice(headerIndex + 1)
+    const rows = takeVehicleRows(table, headerIndex)
       .map(toVehiclePlRow)
       .filter((row): row is VehiclePlCalculated => row !== null);
 
-    if (rows.length > 0) candidates.push({ sheetName: sheet.name, rows });
-  }
-
-  if (candidates.length > 0) {
-    const month = preferredYearMonth?.match(/^\d{4}-(\d{2})$/)?.[1];
-    if (month) {
-      const monthPrefix = `${Number(month)}月`;
-      const preferred = candidates.find((candidate) => candidate.sheetName.normalize("NFKC").startsWith(monthPrefix));
-      if (preferred) return preferred;
+    if (rows.length > 0) {
+      candidates.push({
+        sheetName: sheet.name,
+        sheetYearMonth: readSheetYearMonth(table, headerIndex),
+        rows,
+      });
     }
-    return candidates[0]!;
   }
 
-  throw new Error("「車番」から「損益」まで51列の収支表シートを検出できませんでした。");
+  if (candidates.length === 0) {
+    throw new Error("「車番」から「損益」まで51列の収支表シートを検出できませんでした。");
+  }
+
+  if (!preferredYearMonth) return candidates[0]!;
+
+  // 年度ブックには12か月分のシートが入っている。帳票見出しの「令和N年M月」が正本であり、
+  // 一致するシートが無いまま先頭シートで代用すると、別の月の実績を指定月として保存してしまう
+  // (例: 2026-08 を指定 → シート名だけを見て「8月収支表」= 令和7年8月 を取り込む)。
+  // 見出しから年月を読めたブックでは、必ず突き合わせて一致しなければ失敗させる。
+  const dated = candidates.filter((candidate) => candidate.sheetYearMonth !== null);
+  if (dated.length > 0) {
+    const matched = dated.find((candidate) => candidate.sheetYearMonth === preferredYearMonth);
+    if (matched) return matched;
+    const available = dated.map((candidate) => candidate.sheetYearMonth).join(" / ");
+    throw new Error(
+      `このExcelに対象年月 ${preferredYearMonth} のシートがありません。取込可能な年月: ${available}`,
+    );
+  }
+
+  // 見出しに和暦が無いブック(単月の作業用ファイル等)は年を判断できない。
+  // シート名の「○月」で照合し、それも無ければ唯一の候補に限って受け入れる。
+  const month = Number(preferredYearMonth.slice(5, 7));
+  const byName = candidates.find((candidate) =>
+    candidate.sheetName.normalize("NFKC").startsWith(`${month}月`),
+  );
+  if (byName) return byName;
+  if (candidates.length === 1) return candidates[0]!;
+  throw new Error(
+    `このExcelのどのシートが対象年月 ${preferredYearMonth} か判別できませんでした。シート名を「${month}月収支表」の形式にしてください。`,
+  );
 }
+
+/**
+ * 「車番」見出しより上の行にある「令和N年M月車両別収支表」から年月を復元する。
+ * シート名(「1月収益表」のような表記ゆれや年をまたぐ年度ブック)より、
+ * 帳票本体に書かれた和暦見出しの方が信頼できる。
+ */
+function readSheetYearMonth(table: string[][], headerIndex: number): string | null {
+  const heading = table
+    .slice(0, headerIndex)
+    .map((row) => row.filter((cell) => cell !== undefined).join(""))
+    .join(" ")
+    .normalize("NFKC");
+  const match = heading.match(/令和\s*(\d{1,2})\s*年\s*(\d{1,2})\s*月/);
+  if (!match) return null;
+  const year = 2018 + Number(match[1]); // 令和1年 = 2019年
+  return `${year}-${String(Number(match[2])).padStart(2, "0")}`;
+}
+
+/**
+ * 見出し行の下から、車両行が終わるまでを切り出す。
+ * 収支表シートは車両行のあとに「合計」「平均」、さらに空行を挟んで
+ * 「【保有車両数】」と車種別台数のブロックが続くため、そこで打ち切らないと
+ * 集計行が車両として取り込まれ、車種名の列に台数が入るなど列全体が崩れる。
+ */
+function takeVehicleRows(table: string[][], headerIndex: number): string[][] {
+  const body = table.slice(headerIndex + 1);
+  const end = body.findIndex(isDataRegionEnd);
+  return end < 0 ? body : body.slice(0, end);
+}
+
+/**
+ * 車両行の領域が終わったか判定する。true を返した行以降は一切取り込まない。
+ *
+ * 実データ(★運送収支表2025-2026_5月更新.xlsx / 8月収支表)での並びは以下:
+ *   ... 車両行 ... / 「合計」 / 「平均」 / 空行 / 「【保有車両数】」 / 「10tW」…車種別台数 / 「合計」
+ * row[0] が車番の列。車番は "8190" のような数字だけでなく "129　　1113" "385/100" のような
+ * 複合表記もあり、空セル(row[0] === "" または undefined)は車両行の途中にも現れうる。
+ */
+function isDataRegionEnd(row: string[]): boolean {
+  const key = (row[0] ?? "").normalize("NFKC").replace(/\s/g, "");
+  // 空セルは車両行の途中にも現れるため、打ち切りの根拠にしない。
+  if (key === "") return false;
+  // 「合計」「平均」は車両行直後の集計行、「【保有車両数】」は台数ブロックの見出し。
+  // どれも車両行より前には出現しないため、最初に現れた時点で以降をすべて捨てる。
+  return AGGREGATE_ROW_KEYS.has(key) || key.startsWith("【");
+}
+
+/** 車両行の直後に現れる集計行の車番セル。これ以降は車両ではない。 */
+const AGGREGATE_ROW_KEYS = new Set(["合計", "計", "総計", "平均", "平均値"]);
 
 function toUint8Array(input: ArrayBuffer | Uint8Array): Uint8Array {
   return input instanceof Uint8Array ? input : new Uint8Array(input);
