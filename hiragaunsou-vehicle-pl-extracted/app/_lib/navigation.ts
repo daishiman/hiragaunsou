@@ -7,7 +7,15 @@ export type NavBadge = "registration" | "anomaly";
 
 export interface NavItem {
   href: string;
+  /**
+   * サイドバーに出す短い名前。
+   * 「データ取込(STEP1・2・4・7)」のように括弧書きを label に詰めると、
+   * ナビが読み物になって一覧性が死ぬ。STEP番号は step フィールドに分け、
+   * 小さなチップとして脇に置く。
+   */
   label: string;
+  /** 担当するSTEP番号 (業務フロー順の画面のみ) */
+  step?: string;
   /** ヘッダーの現在地表示に使う短い説明 */
   desc: string;
   badge?: NavBadge;
@@ -28,23 +36,27 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { href: "/", label: "ホーム", desc: "今月の締めを業務フローの順に進める" },
       {
         href: "/import",
-        label: "データ取込(STEP1・2・4・7)",
+        label: "データ取込",
+        step: "1・2・4・7",
         desc: "運行実績・売上モニタリスト・給与集計表・完成済み収支表を取込む",
         badge: "registration",
       },
       {
         href: "/cleansing",
-        label: "データ整形(STEP1)",
+        label: "データ整形",
+        step: "1",
         desc: "傭車・2重計上の疑い・諸口の伝票を1件ずつ判断する",
       },
       {
         href: "/manual-entry",
-        label: "手入力(STEP3・5・6)",
+        label: "手入力",
+        step: "3・5・6",
         desc: "燃料費・修繕費・タイヤ・高速料金を請求書から入力する",
       },
       {
         href: "/anomaly",
-        label: "収支表のチェック(STEP7)",
+        label: "チェック",
+        step: "7",
         desc: "いつもと違う値を1件ずつ判定する",
         badge: "anomaly",
       },
@@ -54,7 +66,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     label: "現状データ(閲覧)",
     kind: "data",
     items: [
-      { href: "/grid", label: "月次収支表(STEP8)", desc: "車両×科目の収支をExcel互換で見る" },
+      { href: "/grid", label: "月次収支表", step: "8", desc: "車両×科目の収支をExcel互換で見る" },
       { href: "/annual", label: "年間集計・対前年", desc: "12ヶ月推移と前年比較・Excel突合" },
     ],
   },
@@ -62,8 +74,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     label: "分析",
     kind: "analysis",
     items: [
-      { href: "/dashboard", label: "経営ダッシュボード", desc: "全社の損益とkm単価の分布" },
-      { href: "/deficit", label: "赤字の理由(3分類)", desc: "赤字を原因別に分けて打ち手に繋げる" },
+      { href: "/dashboard", label: "ダッシュボード", desc: "期間の損益・推移・赤字車両・営業所別" },
+      { href: "/deficit", label: "赤字の理由", desc: "赤字を原因別に分けて打ち手に繋げる" },
     ],
   },
   {

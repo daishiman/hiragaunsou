@@ -42,7 +42,7 @@ export default async function GridPage({
       <PageHead
         kind="data"
         title="月次収支表(業務フロー STEP8)"
-        lead={`${yearMonthLabel(yearMonth)}の車両別の収支です。運送収支表への手作業の転記は不要で、必要ならこの画面からCSVで書き出せます。`}
+        lead="車両別の収支。転記は不要で、CSVで書き出せます"
         action={<YearMonthSelect basePath="/grid" value={yearMonth} options={selectableYearMonths(13)} />}
       />
 
@@ -55,7 +55,7 @@ export default async function GridPage({
       )}
 
       {!grid.isEmpty && (
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-line bg-surface px-4 py-3">
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-line bg-white px-4 py-3">
           <p className="text-sm text-ink-muted">
             収支表51列をそのままの並びで書き出します。Excelにそのまま貼り付けられます。
           </p>

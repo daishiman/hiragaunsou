@@ -29,6 +29,8 @@ export function middleware(request: NextRequest) {
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  // HTTPSへの固定。includeSubDomains/preload は workers.dev 配下の他アプリに影響するため付けない。
+  response.headers.set("Strict-Transport-Security", "max-age=31536000");
 
   return response;
 }

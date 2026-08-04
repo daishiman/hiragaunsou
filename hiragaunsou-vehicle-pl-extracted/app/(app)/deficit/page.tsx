@@ -119,7 +119,7 @@ export default async function DeficitPage({
       <PageHead
         kind="analysis"
         title="赤字の理由(3分類)"
-        lead={`${yearMonthLabel(yearMonth)}の赤字 ${data.deficitCount}台を、原因の違いで3つに分けています。分類ごとに取るべき手が違います。`}
+        lead={`赤字 ${data.deficitCount}台を原因の違いで3つに分けています`}
         action={
           <YearMonthSelect basePath="/deficit" value={yearMonth} options={selectableYearMonths(13)} />
         }

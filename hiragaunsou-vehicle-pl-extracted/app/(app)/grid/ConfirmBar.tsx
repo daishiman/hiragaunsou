@@ -47,7 +47,7 @@ export function ConfirmBar({
   return (
     <div
       className={`mb-4 rounded-lg border px-4 py-3 ${
-        state.isConfirmed ? "border-brand bg-brand-soft" : "border-line bg-surface"
+        state.isConfirmed ? "border-brand bg-brand-soft" : "border-line bg-white"
       }`}
     >
       <div className="flex flex-wrap items-center gap-3">

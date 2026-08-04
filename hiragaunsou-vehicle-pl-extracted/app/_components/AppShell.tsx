@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { NAV_GROUPS, findNavItem, type NavBadge } from "../_lib/navigation";
 import { yearMonthLabel } from "../_lib/format";
 
@@ -25,10 +25,11 @@ export function AppShell({ userName, userRole, yearMonth, badges, children }: Ap
   const [navOpen, setNavOpen] = useState(false);
   const current = findNavItem(pathname);
 
-  // 画面遷移したらSPのサイドバーは閉じる (開きっぱなしで内容が隠れるのを防ぐ)
-  useEffect(() => {
-    setNavOpen(false);
-  }, [pathname]);
+  // SPのサイドバーはリンクを押した時点で閉じる。
+  // pathname を見る useEffect で閉じると「描画後に state を書き換える」ことになり、
+  // 余計な再レンダリングが1回入る。閉じるのは遷移の副作用ではなく操作そのものなので、
+  // クリックハンドラで閉じるのが素直。
+  const closeNav = () => setNavOpen(false);
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[14rem_1fr]">
@@ -71,6 +72,7 @@ export function AppShell({ userName, userRole, yearMonth, badges, children }: Ap
                     <li key={item.href}>
                       <Link
                         href={item.href}
+                        onClick={closeNav}
                         aria-current={active ? "page" : undefined}
                         className={[
                           "flex items-center gap-2 rounded-md px-2 py-2 text-[13px]",
@@ -80,6 +82,14 @@ export function AppShell({ userName, userRole, yearMonth, badges, children }: Ap
                         ].join(" ")}
                       >
                         <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                        {item.step && (
+                          <span
+                            className="num shrink-0 rounded bg-subtle px-1 py-0.5 text-[10px] font-semibold text-ink-muted"
+                            title={`業務フロー STEP ${item.step}`}
+                          >
+                            {item.step}
+                          </span>
+                        )}
                         {count > 0 && (
                           <span
                             className={[

@@ -167,7 +167,7 @@ export default async function LogicPage() {
       <PageHead
         kind="spec"
         title="データ設計・自動化方針"
-        lead="収支表の各項目がどこから来て、どう決まるかの一覧です。「確定」以外はヒアリングで詰める項目です。"
+        lead="各項目がどこから来て、どう決まるかの一覧"
       />
 
       <section className="grid gap-3 lg:grid-cols-3">

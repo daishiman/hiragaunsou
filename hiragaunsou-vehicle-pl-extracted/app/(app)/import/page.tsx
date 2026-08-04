@@ -42,7 +42,7 @@ export default async function ImportPage({
       <PageHead
         kind="ops"
         title="月次データ取込"
-        lead="業務フローのSTEP順に元データを取り込みます。傭車(車番88888)は自動で除外されます。"
+        lead="業務フローのSTEP順に元データを取り込みます"
       />
       <ImportForm yearMonth={yearMonth} imported={imported} />
     </div>

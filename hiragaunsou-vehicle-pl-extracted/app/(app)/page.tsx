@@ -42,11 +42,8 @@ export default async function HomePage() {
 
   return (
     <>
-      <PageHead
-        kind="ops"
-        title={`${yearMonthLabel(yearMonth)}度の締め`}
-        lead={`${session.name}さん(${session.role})— 上から順に進めれば締めが終わります。`}
-      />
+      {/* 氏名・権限はサイドバー下部に常時出ているので、ここで繰り返さない */}
+      <PageHead kind="ops" title={`${yearMonthLabel(yearMonth)}度の締め`} />
 
       {/* 現在地: 次にやること1つだけを大きく出す */}
       <section className="rounded-xl border border-line bg-white p-5">
@@ -81,9 +78,7 @@ export default async function HomePage() {
         ) : (
           <div className="mt-4">
             <p className="text-lg font-bold text-ink">今月の締めは完了しています</p>
-            <p className="mt-1 text-sm text-ink-muted">
-              月次収支表・年間集計は最新の状態です。転記作業は不要です。
-            </p>
+            <p className="mt-1 text-sm text-ink-muted">月次収支表・年間集計は最新です</p>
             <Link
               href="/grid"
               className="pressable mt-4 inline-block rounded-md border border-brand px-4 py-2 text-sm font-semibold text-brand-deep hover:bg-brand-soft"
@@ -113,10 +108,11 @@ export default async function HomePage() {
         <h2 className="text-sm font-bold text-ink">締めのあとに見るもの</h2>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {[
+            // 分析の入口はダッシュボードを先頭に。AI要因分析は補助ツールなのでサイドバーに任せる
+            { href: "/dashboard", label: "ダッシュボード", desc: "期間を選んで損益を見る" },
             { href: "/grid", label: "月次収支表", desc: "車両別の内訳を確認する" },
             { href: "/annual", label: "年間集計・対前年", desc: "12ヶ月の推移と前年比" },
             { href: "/deficit", label: "赤字の理由", desc: "赤字車両を3分類で見る" },
-            { href: "/report", label: "AI要因分析レポート", desc: "損益変動の要因を要約" },
           ].map((l) => (
             <Link
               key={l.href}

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 export interface VehicleRow {
@@ -371,7 +372,8 @@ export function ManualEntryStepper({
                           data-step-field
                           type="text"
                           inputMode="decimal"
-                          placeholder="未入力"
+                          // 「足し算のまま書ける」ことは説明文ではなく placeholder で予告する
+                          placeholder="1200+340"
                           value={raw}
                           onChange={(e) => setOptionalValue(f.field, v.vehicleNo, e.target.value)}
                           onKeyDown={handleEnterMovesNext}
@@ -416,22 +418,46 @@ export function ManualEntryStepper({
       }}
       className="flex flex-col gap-6"
     >
-      <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
-        <span className="num">
-          {step + 1} / {STEPS.length}
-        </span>
-        {current.workflowId !== null ? (
-          <span className="num rounded-md bg-brand-soft px-2 py-0.5 font-bold text-brand-deep">
-            業務フロー STEP {current.workflowId}
-          </span>
-        ) : null}
-        <span>{current.label}</span>
-        <span className="num ml-auto">{yearMonth}</span>
-      </div>
+      {/*
+        現在地を「1/6」の文字ではなくレールで見せる。
+        済 (✓) / 現在 / 未着手 を色と記号の両方で描き分け、色だけに頼らない。
+        押せば直接跳べる — 請求書は届いた順に処理するので、順番に進むとは限らない。
+      */}
+      <ol className="flex flex-wrap items-center gap-1.5">
+        {STEPS.map((s, i) => {
+          const state = i < step ? "done" : i === step ? "current" : "todo";
+          return (
+            <li key={s.label}>
+              <button
+                type="button"
+                onClick={() => setStep(i)}
+                aria-current={state === "current" ? "step" : undefined}
+                className={[
+                  "pressable flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs",
+                  state === "current"
+                    ? "border-brand bg-brand font-bold text-white"
+                    : state === "done"
+                      ? "border-brand-soft bg-brand-soft font-semibold text-brand-deep"
+                      : "border-line bg-white text-ink-muted hover:bg-subtle",
+                ].join(" ")}
+              >
+                <span className="num" aria-hidden>
+                  {state === "done" ? "✓" : i + 1}
+                </span>
+                <span>{s.label}</span>
+              </button>
+            </li>
+          );
+        })}
+        <li className="num ml-auto text-xs text-ink-muted">
+          {yearMonth}
+          {current.workflowId !== null ? ` ・ STEP ${current.workflowId}` : ""}
+        </li>
+      </ol>
 
       {restored ? (
         <p className="rounded-md border border-line bg-subtle px-4 py-2 text-xs text-ink-muted">
-          前回までに保存した入力を読み込みました。続きから入力できます。
+          保存した入力を読み込みました。続きから入力できます。
         </p>
       ) : null}
 
@@ -439,17 +465,15 @@ export function ManualEntryStepper({
         {step === 0 ? (
           <div>
             <h2 className="text-sm font-bold text-ink">キリンの輸送協力金・経営支援金</h2>
-            <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-              合計を2等分して、専属車両の「その他」に入れます。請求書の明細はそのまま足し算(1200+340)で書けます。
-            </p>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
               <label className="flex flex-col gap-1 text-xs text-ink">
                 輸送協力金(円)
+                {/* placeholder が「足し算で書ける」ことを説明文なしで予告する */}
                 <input
                   data-step-field
                   type="text"
                   inputMode="decimal"
-                  placeholder="未入力"
+                  placeholder="1200+340"
                   value={kirinTransport}
                   onChange={(e) => setKirinTransport(e.target.value)}
                   onKeyDown={handleEnterMovesNext}
@@ -462,7 +486,7 @@ export function ManualEntryStepper({
                   data-step-field
                   type="text"
                   inputMode="decimal"
-                  placeholder="未入力"
+                  placeholder="1200+340"
                   value={kirinManagement}
                   onChange={(e) => setKirinManagement(e.target.value)}
                   onKeyDown={handleEnterMovesNext}
@@ -470,18 +494,21 @@ export function ManualEntryStepper({
                 />
               </label>
             </div>
-            <p className="num mt-3 text-xs text-ink">
-              {parseVehicleNoList(kirinTargets).join("番・") || "—"}番へそれぞれ{" "}
-              {Math.floor(
-                ((parseSumExpression(kirinTransport) ?? 0) +
-                  (parseSumExpression(kirinManagement) ?? 0)) /
-                  Math.max(parseVehicleNoList(kirinTargets).length, 1),
-              ).toLocaleString("ja-JP")}
-              {" "}円(端数は先頭の車番へ)
-            </p>
-            <p className="mt-2 text-[11px] leading-relaxed text-ink-muted">
-              他の車両もキリン配送に入ることがありますが、スポット運行のため配分対象外です。
-            </p>
+            {/* 説明文ではなく「結果の数字」で何が起きるかを見せる (このステップの主役) */}
+            <div className="mt-4 rounded-lg bg-brand-soft px-4 py-3">
+              <p className="text-xs text-ink-muted">
+                {parseVehicleNoList(kirinTargets).join("番・") || "—"}番へ それぞれ
+              </p>
+              <p className="num mt-0.5 text-3xl font-bold text-ink">
+                {Math.floor(
+                  ((parseSumExpression(kirinTransport) ?? 0) +
+                    (parseSumExpression(kirinManagement) ?? 0)) /
+                    Math.max(parseVehicleNoList(kirinTargets).length, 1),
+                ).toLocaleString("ja-JP")}
+                <span className="ml-0.5 text-base font-semibold text-ink-muted">円</span>
+              </p>
+              <p className="mt-0.5 text-[11px] text-ink-muted">端数は先頭の車番へ</p>
+            </div>
 
             <details className="mt-3 rounded-md border border-line bg-subtle px-3 py-2">
               <summary className="cursor-pointer text-xs font-semibold text-ink">
@@ -498,7 +525,7 @@ export function ManualEntryStepper({
                 />
               </label>
               <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
-                専属契約が変わったらここを直します。設定は保存され、翌月以降もこの車番に配分されます。
+                設定は保存され、翌月以降もこの車番に配分されます。他の車両のキリン配送はスポット運行のため対象外です。
               </p>
             </details>
           </div>
@@ -506,14 +533,9 @@ export function ManualEntryStepper({
 
         {step === 1 ? (
           <div className="flex flex-col gap-4">
-            <div>
-              <h2 className="text-sm font-bold text-ink">燃料費</h2>
-              <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-                インタンクは給油量だけ入力します(金額は単価から自動計算)。外部給油は請求書のとおり入力します。
-              </p>
-            </div>
+            <h2 className="text-sm font-bold text-ink">燃料費</h2>
             <label className="flex flex-col gap-1 text-xs text-ink">
-              インタンク単価(円/ℓ)— 全車のインタンク軽油代に反映されます
+              インタンク単価(円/ℓ)
               <input
                 data-step-field
                 type="number"
@@ -524,6 +546,7 @@ export function ManualEntryStepper({
                 onKeyDown={handleEnterMovesNext}
                 className="num w-40 rounded-md border border-line px-3 py-2 text-right text-lg"
               />
+              <span className="text-[11px] text-ink-muted">全車の軽油代を自動計算</span>
             </label>
             {renderVehicleTable("fuelInQty", "インタンク給油量", "ℓ")}
             {renderVehicleTable("fuelOut", "外部給油代", "円")}
@@ -535,21 +558,37 @@ export function ManualEntryStepper({
         {step === 2 ? (
           <div>
             <h2 className="text-sm font-bold text-ink">人件費(給与集計表)の取込確認</h2>
+            {/* 状態は文章ではなくバッジで。色だけに頼らず「取込済み / 未取込」の文字を必ず出す */}
             {payrollStatus ? (
-              <div className="mt-3 grid grid-cols-[8rem_1fr] gap-2 text-sm">
-                <dt className="text-xs text-ink-muted">取込ファイル</dt>
-                <dd className="text-ink">{payrollStatus.fileName}</dd>
-                <dt className="text-xs text-ink-muted">件数</dt>
-                <dd className="num text-ink">{payrollStatus.rowCount}件</dd>
-                <dt className="text-xs text-ink-muted">取込日時</dt>
-                <dd className="text-ink">
-                  {new Date(payrollStatus.importedAt).toLocaleString("ja-JP")}
-                </dd>
-              </div>
+              <>
+                <p className="mt-3">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-soft px-3 py-1 text-xs font-bold text-brand-deep">
+                    <span aria-hidden>✓</span>取込済み
+                  </span>
+                </p>
+                <dl className="mt-3 grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1.5 text-sm">
+                  <dt className="text-xs text-ink-muted">ファイル</dt>
+                  <dd className="truncate text-ink">{payrollStatus.fileName}</dd>
+                  <dt className="text-xs text-ink-muted">件数</dt>
+                  <dd className="num text-ink">{payrollStatus.rowCount}件</dd>
+                  <dt className="text-xs text-ink-muted">取込日時</dt>
+                  <dd className="num text-ink">
+                    {new Date(payrollStatus.importedAt).toLocaleString("ja-JP")}
+                  </dd>
+                </dl>
+              </>
             ) : (
-              <p className="mt-3 text-sm text-ink-muted">
-                この月の給与集計表(日給者)はまだ取込まれていません。「データ取込」から先に取込んでください。
-              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-caution-border bg-caution-soft px-3 py-1 text-xs font-bold text-ink">
+                  <span aria-hidden>!</span>未取込
+                </span>
+                <Link
+                  href="/import"
+                  className="pressable rounded-md border border-brand px-3 py-1.5 text-xs font-semibold text-brand-deep hover:bg-brand-soft"
+                >
+                  データ取込へ
+                </Link>
+              </div>
             )}
             <label className="mt-4 flex items-center gap-2 text-sm text-ink">
               <input
@@ -564,15 +603,10 @@ export function ManualEntryStepper({
 
         {step === 3 ? (
           <div className="flex flex-col gap-4">
-            <div>
-              <h2 className="text-sm font-bold text-ink">修繕費・タイヤ</h2>
-              <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-                各社の請求書を見て、車番ごとの金額を入力します。集計は自動で行います。
-              </p>
-            </div>
+            <h2 className="text-sm font-bold text-ink">修繕費・タイヤ</h2>
             {renderOptionalTable(
               [{ field: "tireActual", label: "タイヤ代(実費)" }],
-              "空欄のままの車両は、走行距離 × タイヤ単価の標準原価で計算します。0と入力すると「今月はタイヤ代なし」として確定します。",
+              "空欄 = 走行距離 × タイヤ単価で自動計算 / 0 = 今月はタイヤ代なしとして確定",
             )}
             {renderVehicleTable("repairActual", "修繕費(実費)", "円")}
             {renderVehicleTable("equip", "備品費", "円")}
@@ -582,20 +616,13 @@ export function ManualEntryStepper({
 
         {step === 4 ? (
           <div className="flex flex-col gap-4">
-            <div>
-              <h2 className="text-sm font-bold text-ink">高速料金</h2>
-              <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-                高速協の請求書には割引額の合計が載っていません。個別の割引額を
-                <span className="num">「1200+340+560」</span>
-                のように足し算で書けば、その場で合計されます。
-              </p>
-            </div>
+            <h2 className="text-sm font-bold text-ink">高速料金</h2>
             {renderOptionalTable(
               [
                 { field: "tollActual", label: "通行料金(実費)" },
                 { field: "tollDiscountActual", label: "割引額" },
               ],
-              "空欄のままの車両は、売上モニタリストの通行料金 × 組合割引率で計算します。",
+              "空欄 = 売上モニタリストの通行料金 × 組合割引率で自動計算",
             )}
           </div>
         ) : null}
@@ -603,9 +630,7 @@ export function ManualEntryStepper({
         {isLast ? (
           <div>
             <h2 className="text-sm font-bold text-ink">確認して確定</h2>
-            <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-              入力内容をもとに{yearMonth}の収支表を作り直します。この操作は何度でもやり直せます。
-            </p>
+            <p className="mt-1 text-xs text-ink-muted">何度でもやり直せます</p>
             <dl className="mt-4 grid grid-cols-[10rem_1fr] gap-2 text-sm">
               <dt className="text-xs text-ink-muted">対象車両</dt>
               <dd className="num text-ink">{vehicles.length}台</dd>

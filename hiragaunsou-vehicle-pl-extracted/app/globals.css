@@ -6,8 +6,11 @@
   --brand-soft: #e3edfa;
   --brand-mist: #eef3fa;
 
-  --accent: #e8590c;
-  --accent-deep: #c74e0b;
+  /* 白文字を載せる面なので WCAG AA (4.5:1) を満たす濃さに固定する。
+     旧値 #e8590c は白文字で 3.58:1 しかなく Lighthouse で不合格だった。
+     accent(面) 4.64:1 / accent-deep(hover) 6.21:1。 */
+  --accent: #c74e0b;
+  --accent-deep: #a83f08;
 
   --ink: #16191d;
   --ink-muted: #545e6b;

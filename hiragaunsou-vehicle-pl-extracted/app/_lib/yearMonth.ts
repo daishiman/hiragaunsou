@@ -37,6 +37,27 @@ export function selectableYearMonths(count: number): string[] {
   return result;
 }
 
+/** 対象月からnヶ月前の年月 (n=0 は同じ月) */
+export function monthsBefore(yearMonth: string, n: number): string {
+  const [yStr, mStr] = yearMonth.split("-");
+  const date = new Date(Date.UTC(Number(yStr), Number(mStr) - 1 - n, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/**
+ * ダッシュボードの期間プリセット。
+ * 締めの終わった月を見るのが実務なので、基準は当月ではなく前月にする。
+ */
+export function periodPresets(): { label: string; from: string; to: string }[] {
+  const to = defaultImportYearMonth();
+  return [
+    { label: "単月", from: to, to },
+    { label: "3ヶ月", from: monthsBefore(to, 2), to },
+    { label: "6ヶ月", from: monthsBefore(to, 5), to },
+    { label: "12ヶ月", from: monthsBefore(to, 11), to },
+  ];
+}
+
 /** 直近N months (古い→新しい順, targetYearMonthは含めない) */
 export function recentYearMonths(targetYearMonth: string, count: number): string[] {
   const [yStr, mStr] = targetYearMonth.split("-");

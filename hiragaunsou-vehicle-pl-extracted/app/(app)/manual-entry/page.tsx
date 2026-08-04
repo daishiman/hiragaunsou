@@ -63,7 +63,7 @@ export default async function ManualEntryPage({
       <PageHead
         kind="tool"
         title="手入力(業務フロー STEP2・3・5・6)"
-        lead="請求書を見て入力する項目だけを、業務フローの順に1ステップずつ入力します。Enterで次の欄へ移動、「ここまでを保存」でいつでも中断できます。"
+        lead="請求書から入力する項目だけをステップ順に。Enterで次の欄へ"
       />
       <ManualEntryStepper
         yearMonth={yearMonth}

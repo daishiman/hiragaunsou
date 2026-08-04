@@ -32,7 +32,7 @@ export default async function TodoPage({
       <PageHead
         kind="ops"
         title="ToDoボード"
-        lead="未入力・要確認カードの一覧です。異常値の1件ずつの判定は「異常値チェック」から行えます。"
+        lead="未入力・要確認の一覧"
         action={
           <YearMonthSelect basePath="/todo" value={yearMonth} options={selectableYearMonths(13)} />
         }

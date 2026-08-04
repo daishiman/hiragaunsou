@@ -16,6 +16,6 @@ export function normalizeKey(value: string | null | undefined): string {
   if (value == null) return "";
   return value
     .trim()
-    .replace(/[　]/g, "") // 全角スペース除去
+    .replace(/[\u3000]/g, "") // 全角スペース除去
     .replace(/^0+(?=\d)/, ""); // 先頭ゼロ除去 ("00001111" -> "1111")
 }

@@ -15,7 +15,7 @@ export default async function ReportPage() {
       <PageHead
         kind="tool"
         title="AI要因分析レポート"
-        lead="損益変動の要因をAIが要約します。生成のたびにトークン費用が発生します(利用状況で確認できます)。"
+        lead="損益変動の要因をAIが要約します(生成ごとに費用が発生)"
       />
       <ReportGenerator />
     </div>

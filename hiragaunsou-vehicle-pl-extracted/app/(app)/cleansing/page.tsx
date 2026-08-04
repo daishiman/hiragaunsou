@@ -7,7 +7,6 @@ import { D1ImportBatchRepository } from "../../../src/infrastructure/db/D1Import
 import { D1CleansingDecisionRepository } from "../../../src/infrastructure/db/D1CleansingDecisionRepository";
 import { GetCleansingQueueUseCase } from "../../../src/usecase/steps/getCleansingQueue";
 import { currentYearMonth, selectableYearMonths } from "../../_lib/yearMonth";
-import { yearMonthLabel } from "../../_lib/format";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
 import { PageHead } from "../../_components/PageHead";
 import { CleansingQueue } from "./CleansingQueue";
@@ -43,7 +42,7 @@ export default async function CleansingPage({
       <PageHead
         kind="ops"
         title="データ整形(業務フロー STEP1)"
-        lead={`${yearMonthLabel(yearMonth)}の取込データのうち、傭車・2重計上の疑い・諸口にあたる伝票だけを出します。1件ずつ「除外する / 修正して残す / そのまま残す」を選ぶと、収支表に反映されます。`}
+        lead="傭車・2重計上の疑い・諸口の伝票を1件ずつ判断します"
         action={
           <YearMonthSelect basePath="/cleansing" value={yearMonth} options={selectableYearMonths(13)} />
         }

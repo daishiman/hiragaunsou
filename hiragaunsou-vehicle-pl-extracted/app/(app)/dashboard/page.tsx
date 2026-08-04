@@ -6,182 +6,248 @@ import { checkAccess } from "../../../src/infrastructure/auth/accessControl";
 import { createDb } from "../../../src/infrastructure/db/client";
 import { D1VehiclePlRepository } from "../../../src/infrastructure/db/D1VehiclePlRepository";
 import { D1RateMasterRepository } from "../../../src/infrastructure/db/D1MasterRepository";
-import { GetDashboardUseCase } from "../../../src/usecase/steps/getDashboard";
-import { currentYearMonth, selectableYearMonths } from "../../_lib/yearMonth";
-import { kmPriceLabel, man, num, pct, yen, yearMonthLabel } from "../../_lib/format";
-import { YearMonthSelect } from "../../_components/YearMonthSelect";
+import { D1AnnualReferenceRepository } from "../../../src/infrastructure/db/D1AnnualReferenceRepository";
+import { GetPeriodOverviewUseCase } from "../../../src/usecase/steps/getPeriodOverview";
+import {
+  isYearMonth,
+  periodPresets,
+  selectableYearMonths,
+} from "../../_lib/yearMonth";
+import { kmPriceLabel, man, num, pct, yen } from "../../_lib/format";
 import { PageHead } from "../../_components/PageHead";
 import { EmptyState } from "../../_components/EmptyState";
-import { BarRow } from "../../_components/BarRow";
+import { PeriodSelect } from "../../_components/PeriodSelect";
+import { StatTile } from "../../_components/StatTile";
+import { TrendBars } from "../../_components/charts/TrendBars";
+import { ShareBars } from "../../_components/charts/ShareBars";
 
 /**
- * S7 経営ダッシュボード (モック view-dashboard.js に対応)。
- * KPI 4枚 →「利益の構造」→「km単価の分布」の順で、全社の損益がどこから来ているかを1画面で示す。
+ * 経営ダッシュボード。
+ *
+ * この画面の目的は1つ:「この期間、儲かっているか。どこが食っているか」。
+ * 主役は期間損益の1数字で、それ以外はすべて脇役として静かに置く。
+ * 説明文は書かず、推移・構成比・ランキングの図が直接答える形にしている。
  */
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ym?: string }>;
+  searchParams: Promise<{ from?: string; to?: string }>;
 }) {
   const session = await getServerSession();
   if (!session) redirect("/sign-in");
   if (!checkAccess(session, "view")) redirect("/");
 
-  const { ym } = await searchParams;
-  const yearMonth = ym || currentYearMonth();
+  const presets = periodPresets();
+  const fallback = presets[1] ?? presets[0];
+  const params = await searchParams;
+  const from = isYearMonth(params.from) ? params.from : (fallback?.from ?? "");
+  const to = isYearMonth(params.to) ? params.to : (fallback?.to ?? "");
 
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);
-  const useCase = new GetDashboardUseCase(
+  const data = await new GetPeriodOverviewUseCase(
     new D1VehiclePlRepository(db),
     new D1RateMasterRepository(db),
-  );
-  const data = await useCase.execute(yearMonth);
-  const t = data.totals;
+    new D1AnnualReferenceRepository(db),
+  ).execute(from, to);
 
-  // 「利益の構造」の棒は3本とも同じ基準(最大の絶対値)で描く。基準が違う棒を並べない。
-  const structureMax = Math.max(Math.abs(t.profitPos), Math.abs(t.profitNeg), Math.abs(t.profit), 1);
-  const bucketMax = Math.max(...data.kmPriceBuckets.map((b) => b.count), 1);
+  const t = data.totals;
 
   return (
     <>
       <PageHead
         kind="analysis"
         title="経営ダッシュボード"
-        lead={`${yearMonthLabel(yearMonth)}の全社損益と、その損益がどの車両から出ているかを見ます。`}
         action={
-          <YearMonthSelect basePath="/dashboard" value={yearMonth} options={selectableYearMonths(13)} />
+          <PeriodSelect
+            basePath="/dashboard"
+            from={from}
+            to={to}
+            presets={presets}
+            options={selectableYearMonths(25)}
+          />
         }
       />
 
+      <p className="-mt-3 mb-4 text-xs font-semibold text-ink-muted">{data.label}</p>
+
       {data.isEmpty ? (
         <EmptyState
-          title={`${yearMonthLabel(yearMonth)}のデータはまだありません`}
-          description="月次データを取り込むと、ここに全社の損益が表示されます。"
+          title="この期間のデータはまだありません"
+          description="月次データを取り込むと、損益の推移と内訳が表示されます。"
         />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <div className="rounded-xl border border-line bg-white p-4">
-              <p className="text-xs text-ink-muted">売上</p>
-              <p className="num mt-1 text-2xl font-bold text-ink">{man(t.sales)}</p>
-              <p className="mt-1 text-[11px] text-ink-muted">{yen(t.sales)}円</p>
-            </div>
-            <div className="rounded-xl border border-line bg-white p-4">
-              <p className="text-xs text-ink-muted">全社損益</p>
-              <p
-                className={`num mt-1 text-2xl font-bold ${t.profit < 0 ? "text-danger" : "text-accent"}`}
-              >
-                {man(t.profit)}
-              </p>
-              <p className="mt-1 text-[11px] text-ink-muted">利益率 {pct(data.margin)}</p>
-            </div>
-            <div className="rounded-xl border border-line bg-white p-4">
-              <p className="text-xs text-ink-muted">赤字車両</p>
-              <p className="num mt-1 text-2xl font-bold text-ink">
-                {num(t.deficitCars)}
-                <span className="ml-1 text-sm font-normal text-ink-muted">/ {num(t.cars)}台</span>
-              </p>
-              <Link href={`/deficit?ym=${yearMonth}`} className="mt-1 inline-block text-[11px] font-semibold text-brand-deep hover:underline">
-                赤字の理由を見る →
-              </Link>
-            </div>
-            <div className="rounded-xl border border-line bg-white p-4">
-              <p className="text-xs text-ink-muted">1kmあたり原価 / 売上</p>
-              <p className="num mt-1 text-2xl font-bold text-ink">
-                {kmPriceLabel(data.costPerKm)}
-                <span className="ml-1 text-sm font-normal text-ink-muted">
-                  / {kmPriceLabel(data.salesPerKm)}
-                </span>
-              </p>
-              <p className="mt-1 text-[11px] text-ink-muted">
-                損益分岐の目安 {num(data.thresholds.breakEvenKmPrice)}円/km
-              </p>
-            </div>
+          {/* 主役 = 期間損益。他のタイルは同格に揃えて静かに置く */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <StatTile
+              hero
+              label="期間損益"
+              value={man(t.profit)}
+              negative={t.profit < 0}
+              diff={data.salesDiffRatio === null ? null : data.profitDiffRatio}
+              sub={`利益率 ${pct(data.margin)}`}
+            />
+            <StatTile label="売上" value={man(t.sales)} diff={data.salesDiffRatio} />
+            <StatTile
+              label="赤字車両"
+              value={num(data.deficitCount)}
+              unit={`/ ${num(data.vehicleCount)}台`}
+              negative={data.deficitCount > 0}
+              href={`/deficit?ym=${to}`}
+              linkLabel="赤字の理由"
+            />
+            <StatTile
+              label="1kmあたり原価"
+              value={kmPriceLabel(data.costPerKm)}
+              sub={`売上 ${kmPriceLabel(data.salesPerKm)} / 分岐 ${num(
+                data.thresholds.breakEvenKmPrice,
+              )}円`}
+            />
           </div>
 
-          <div className="mt-5 grid gap-4 lg:grid-cols-2">
-            <section className="rounded-xl border border-line bg-white p-5">
-              <h2 className="text-sm font-bold text-ink">利益の構造</h2>
-              <p className="mt-1 text-xs text-ink-muted">
-                黒字車が稼いだ利益を、赤字車の損失がどれだけ食っているか。
-              </p>
-              <div className="mt-3">
-                <BarRow
-                  label="黒字車の利益合計"
-                  value={t.profitPos}
-                  max={structureMax}
-                  display={`${yen(t.profitPos)}円`}
-                />
-                <BarRow
-                  label="赤字車の損失合計"
-                  value={t.profitNeg}
-                  max={structureMax}
-                  display={`${yen(t.profitNeg)}円`}
-                  tone="danger"
-                />
-                <BarRow
-                  label="全社損益"
-                  value={t.profit}
-                  max={structureMax}
-                  display={`${yen(t.profit)}円`}
-                  tone={t.profit < 0 ? "danger" : "brand"}
-                />
-              </div>
-            </section>
-
-            <section className="rounded-xl border border-line bg-white p-5">
-              <h2 className="text-sm font-bold text-ink">km単価の分布(稼働車)</h2>
-              <p className="mt-1 text-xs text-ink-muted">
-                横棒の長さは台数。{num(data.thresholds.breakEvenKmPrice)}円/km
-                を下回る帯が赤字の主戦場です。
-              </p>
-              <div className="mt-3">
-                {data.kmPriceBuckets.map((b) => (
-                  <BarRow
-                    key={b.label}
-                    label={b.label}
-                    value={b.count}
-                    max={bucketMax}
-                    display={`${num(b.count)}台`}
-                    tone={b.belowBreakEven ? "danger" : "brand"}
-                    sub={b.deficit > 0 ? `うち赤字 ${num(b.deficit)}台` : undefined}
-                  />
-                ))}
-              </div>
-            </section>
-          </div>
-
-          <section className="mt-5 rounded-xl border border-line bg-white p-5">
-            <h2 className="text-sm font-bold text-ink">経費の内訳(全社)</h2>
-            <div className="mt-3 grid gap-x-6 sm:grid-cols-2">
-              {(
-                [
-                  ["運行費", t.tollNet],
-                  ["燃料費", t.fuelTotal],
-                  ["修繕費", t.repairTotal],
-                  ["人件費", t.laborTotal],
-                  ["保険料", t.insTotal],
-                  ["賦課税", t.taxTotal],
-                  ["運送費", t.transportTotal],
-                  ["一般管理費", t.adminTotal],
-                ] as const
-              ).map(([label, value]) => (
-                <BarRow
-                  key={label}
-                  label={label}
-                  value={value}
-                  max={Math.max(t.expense, 1)}
-                  display={`${yen(value)}円`}
-                  tone="quiet"
-                />
-              ))}
+          <section className="mt-4 rounded-xl border border-line bg-white p-5">
+            <h2 className="text-sm font-bold text-ink">損益の推移</h2>
+            <div className="mt-3">
+              <TrendBars
+                title="損益"
+                points={data.months.map((m) => ({
+                  label: m.label,
+                  value: m.totals.profit,
+                  reference: m.prevProfit,
+                  isEmpty: m.isEmpty,
+                }))}
+                referenceLabel="前年同月"
+                signed
+              />
             </div>
-            <p className="mt-3 border-t border-line pt-3 text-xs text-ink-muted">
-              経費計 <span className="num font-bold text-ink">{yen(t.expense)}</span> 円 / 走行{" "}
-              <span className="num font-bold text-ink">{num(t.km, 1)}</span> km
-            </p>
           </section>
+
+          <section className="mt-4 rounded-xl border border-line bg-white p-5">
+            <h2 className="text-sm font-bold text-ink">売上の推移</h2>
+            <div className="mt-3">
+              <TrendBars
+                title="売上"
+                points={data.months.map((m) => ({
+                  label: m.label,
+                  value: m.totals.sales,
+                  reference: m.prevSales,
+                  isEmpty: m.isEmpty,
+                }))}
+                referenceLabel="前年同月"
+              />
+            </div>
+          </section>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <section className="rounded-xl border border-line bg-white p-5">
+              <div className="flex items-baseline justify-between gap-2">
+                <h2 className="text-sm font-bold text-ink">経費の内訳</h2>
+                <p className="num text-xs text-ink-muted">計 {man(t.expense)}</p>
+              </div>
+              <div className="mt-3">
+                <ShareBars
+                  items={data.costSlices.map((s) => ({
+                    label: s.label,
+                    value: s.amount,
+                    share: s.share,
+                  }))}
+                />
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-line bg-white p-5">
+              <div className="flex items-baseline justify-between gap-2">
+                <h2 className="text-sm font-bold text-ink">赤字が大きい車両</h2>
+                <p className="num text-xs text-ink-muted">{num(data.deficitCount)}台</p>
+              </div>
+              {data.deficitRanking.length === 0 ? (
+                <p className="mt-6 text-center text-sm text-ink-muted">赤字の車両はありません</p>
+              ) : (
+                <div className="mt-3">
+                  <ShareBars
+                    tone="danger"
+                    items={data.deficitRanking.map((v) => ({
+                      label: `${v.vehicleNo}`,
+                      sub: [v.depot, v.driver].filter(Boolean).join(" / "),
+                      value: v.profit,
+                      href: `/vehicle/${encodeURIComponent(v.vehicleNo)}`,
+                    }))}
+                  />
+                </div>
+              )}
+            </section>
+          </div>
+
+          {data.depots.length > 1 && (
+            <section className="mt-4 rounded-xl border border-line bg-white p-5">
+              <h2 className="text-sm font-bold text-ink">営業所別</h2>
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full min-w-[30rem] text-sm">
+                  <thead>
+                    <tr className="border-b border-line text-xs font-medium text-ink-muted">
+                      <th className="py-2 text-left">所属</th>
+                      <th className="py-2 text-right">台数</th>
+                      <th className="py-2 text-right">赤字</th>
+                      <th className="py-2 text-right">売上(円)</th>
+                      <th className="py-2 text-right">損益(円)</th>
+                      <th className="py-2 text-right">利益率</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.depots.map((d) => (
+                      <tr key={d.depot} className="border-b border-line last:border-b-0">
+                        <td className="py-2 text-ink">{d.depot}</td>
+                        <td className="num py-2 text-right">{num(d.cars)}</td>
+                        <td
+                          className={`num py-2 text-right ${
+                            d.deficitCars > 0 ? "font-bold text-danger" : "text-ink-muted"
+                          }`}
+                        >
+                          {num(d.deficitCars)}
+                        </td>
+                        <td className="num py-2 text-right">{yen(d.sales)}</td>
+                        <td
+                          className={`num py-2 text-right font-bold ${
+                            d.profit < 0 ? "text-danger" : "text-ink"
+                          }`}
+                        >
+                          {yen(d.profit)}
+                        </td>
+                        <td className="num py-2 text-right text-ink-muted">{pct(d.margin)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {/* 一段深い分析は既定で畳む。開く前から中身が分かるラベルにする */}
+          <details className="group mt-4 rounded-xl border border-line bg-white">
+            <summary className="cursor-pointer list-none px-5 py-4 text-sm font-bold text-ink hover:bg-subtle">
+              km単価の分布を見る
+              <span className="ml-2 text-xs font-normal text-ink-muted">
+                {num(data.thresholds.breakEvenKmPrice)}円/km を下回る帯が赤字の主戦場
+              </span>
+            </summary>
+            <div className="border-t border-line px-5 py-4">
+              <ShareBars
+                items={data.kmPriceBuckets.map((b) => ({
+                  label: b.label,
+                  sub: b.deficit > 0 ? `うち赤字 ${num(b.deficit)}台` : undefined,
+                  value: b.count,
+                }))}
+                formatValue={(v) => `${num(v)}台`}
+              />
+            </div>
+          </details>
+
+          <p className="mt-4 text-center text-xs text-ink-muted">
+            <Link href={`/annual?ym=${to}`} className="font-semibold text-brand-deep hover:underline">
+              年間集計・対前年を見る →
+            </Link>
+          </p>
         </>
       )}
     </>

@@ -13,11 +13,20 @@ const STATUS_LABEL: Record<string, string> = {
   done: "完了",
 };
 
+/** 状態は色だけで伝えない。記号+文字ラベルの両方を必ず出す。 */
+const STATUS_MARK: Record<string, string> = {
+  todo: "○",
+  partial: "◐",
+  done: "✓",
+};
+
 /**
  * 業務フロー1ステップの行。
  *
- * 1行で「何番目か・何をするか・どこまで進んだか・どこから来るデータか」が分かるようにし、
- * 判断が要る注記(docx の判断基準・補足)は折りたたんで初見の情報量を抑える。
+ * このカードはホームに8枚並ぶ。1枚あたり4行 (説明・数値・出典・注記) 書くと
+ * 画面が読み物になって「どこまで終わったか」が読み取れなくなるため、
+ * 既定で見せるのは「番号・見出し・状態・数値」の4点だけにする。
+ * 手順の説明・出典・判断ポイントは折りたたみへ逃がす。
  */
 export function WorkflowStepCard({
   progress,
@@ -52,31 +61,32 @@ export function WorkflowStepCard({
           {MODE_LABEL[step.mode]}
         </span>
         <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${statusClass}`}>
-          {STATUS_LABEL[status]}
+          <span aria-hidden>{STATUS_MARK[status]}</span> {STATUS_LABEL[status]}
         </span>
       </div>
 
-      <p className="mt-2 text-xs leading-relaxed text-ink-muted">{step.summary}</p>
-      <p className="num mt-1 text-xs text-ink">{detail}</p>
-      <p className="mt-1 text-[11px] text-ink-muted">出典: {step.source}</p>
+      <p className="num mt-1.5 text-xs text-ink">{detail}</p>
 
-      {step.notes.length > 0 && (
-        <details className="mt-2">
-          <summary className="cursor-pointer text-[11px] font-semibold text-brand-deep">
-            この手順の判断ポイント({step.notes.length}件)
-          </summary>
+      <details className="mt-2">
+        <summary className="cursor-pointer text-[11px] font-semibold text-brand-deep">
+          この手順について
+          {step.notes.length > 0 ? `(判断ポイント ${step.notes.length}件)` : ""}
+        </summary>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">{step.summary}</p>
+        <p className="mt-1 text-[11px] text-ink-muted">出典: {step.source}</p>
+        {step.notes.length > 0 && (
           <ul className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-ink-muted">
             {step.notes.map((n) => (
               <li key={n}>・{n}</li>
             ))}
           </ul>
-          {step.isJudgementHeavy && (
-            <p className="mt-2 rounded-md border border-caution-border bg-caution-soft px-3 py-2 text-[11px] leading-relaxed">
-              この手順には経験に頼っている判断が残っています。迷ったら請求書発行担当に確認してください。
-            </p>
-          )}
-        </details>
-      )}
+        )}
+        {step.isJudgementHeavy && (
+          <p className="mt-2 rounded-md border border-caution-border bg-caution-soft px-3 py-2 text-[11px] leading-relaxed">
+            経験に頼っている判断が残っています。迷ったら請求書発行担当に確認してください。
+          </p>
+        )}
+      </details>
 
       <div className="mt-3">
         {blocked ? (

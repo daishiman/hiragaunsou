@@ -158,10 +158,9 @@ export function CleansingQueue({
 
   if (notImported) {
     return (
-      <div className="rounded-lg border border-line bg-surface p-6">
-        <p className="text-sm text-ink">
-          売上モニタリストがまだ取り込まれていません。先に取込を行うと、確認が必要な伝票をここに出します。
-        </p>
+      <div className="rounded-lg border border-line bg-white p-6">
+        <p className="text-sm font-semibold text-ink">売上モニタリストが未取込です</p>
+        <p className="mt-1 text-sm text-ink-muted">取り込むと確認が必要な伝票をここに出します</p>
         <Link
           href={`/import?ym=${yearMonth}`}
           className="pressable mt-4 inline-block rounded bg-brand px-4 py-2 text-sm font-semibold text-white"
@@ -178,30 +177,34 @@ export function CleansingQueue({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-lg border border-line bg-surface p-4">
-        <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
-          <span className="text-ink-muted">
-            取込済みの伝票 <span className="num font-semibold text-ink">{totalRows}</span> 件
-          </span>
-          <span className="text-ink-muted">
-            傭車(車番88888)として自動で除外{" "}
-            <span className="num font-semibold text-ink">{charteredExcluded}</span> 件
-          </span>
-          <span className="text-ink-muted">
-            確認が必要{" "}
-            <span className="num font-semibold text-ink">{initialItems.length}</span> 件 / うち未判断{" "}
-            <span
-              className={`num font-semibold ${pendingCount > 0 ? "text-accent-deep" : "text-brand-deep"}`}
+      {/*
+        この画面の主役は「あと何件判断すればいいか」の1数字。
+        取込件数・傭車除外件数は判断に使わない背景情報なので、小さく脇に置く。
+      */}
+      <div className="rounded-lg border border-line bg-white p-4">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-xs text-ink-muted">未判断</p>
+            <p
+              className={`num text-4xl font-bold ${pendingCount > 0 ? "text-ink" : "text-ink-muted"}`}
             >
               {pendingCount}
-            </span>{" "}
-            件
-          </span>
+              <span className="ml-0.5 text-base font-semibold text-ink-muted">
+                / {initialItems.length}件
+              </span>
+            </p>
+          </div>
+          <p className="num text-xs text-ink-muted">
+            取込 {totalRows}件 ・ 傭車除外 {charteredExcluded}件
+          </p>
         </div>
 
         {pendingCount === 0 && (
-          <p className="mt-3 rounded bg-brand-soft px-3 py-2 text-sm text-brand-deep">
-            確認が必要な伝票はすべて判断済みです。次のステップ(売上の集計・キリンの協力金)へ進めます。
+          <p className="mt-3 flex flex-wrap items-center gap-3 rounded bg-brand-soft px-3 py-2 text-sm font-semibold text-brand-deep">
+            <span>✓ すべて判断済み</span>
+            <Link href="/manual-entry?step=2" className="underline underline-offset-2">
+              次のステップへ進む
+            </Link>
           </p>
         )}
 
@@ -234,7 +237,7 @@ export function CleansingQueue({
       )}
 
       {visible.length === 0 && (
-        <p className="rounded-lg border border-line bg-surface p-6 text-sm text-ink-muted">
+        <p className="rounded-lg border border-line bg-white p-6 text-sm text-ink-muted">
           表示する伝票はありません。
         </p>
       )}
@@ -244,7 +247,7 @@ export function CleansingQueue({
         return (
           <div
             key={item.rowKey}
-            className={`rounded-lg border bg-surface p-4 ${
+            className={`rounded-lg border bg-white p-4 ${
               local.decision ? "border-line opacity-80" : "border-accent/40"
             }`}
           >

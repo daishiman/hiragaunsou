@@ -7,7 +7,6 @@ import { D1VehiclePlRepository } from "../../../src/infrastructure/db/D1VehicleP
 import { D1ReviewFlagRepository } from "../../../src/infrastructure/db/D1ReviewFlagRepository";
 import { GetAnomalyQueueUseCase } from "../../../src/usecase/steps/getAnomalyQueue";
 import { currentYearMonth, selectableYearMonths } from "../../_lib/yearMonth";
-import { yearMonthLabel } from "../../_lib/format";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
 import { PageHead } from "../../_components/PageHead";
 import { D1VehicleMasterRepository } from "../../../src/infrastructure/db/D1MasterRepository";
@@ -45,8 +44,8 @@ export default async function AnomalyPage({
     <>
       <PageHead
         kind="ops"
-        title="収支表のチェック(業務フロー STEP7)"
-        lead={`${yearMonthLabel(yearMonth)}のうち、いつもの月と大きく違う値を1件ずつ判定します。入力ミスか実績かを決めると締めに進めます。リース料・割賦支払額の変更もここで直せます。`}
+        title="収支表のチェック"
+        lead="いつもと違う値を1件ずつ「入力ミス」か「実績」か判定します"
         action={
           <YearMonthSelect basePath="/anomaly" value={yearMonth} options={selectableYearMonths(13)} />
         }

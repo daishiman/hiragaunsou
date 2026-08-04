@@ -143,14 +143,14 @@ export function ImportForm({
                 className={
                   batches.length > 0
                     ? "rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-deep"
-                    : "rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-ink-muted"
+                    : "rounded-full border border-dashed border-line bg-white px-3 py-1 text-xs font-semibold text-ink-muted"
                 }
               >
-                {batches.length > 0 ? `取込済み ${batches.length}件` : "未取込"}
+                {batches.length > 0 ? `✓ 取込済み ${batches.length}件` : "未取込"}
               </span>
             </div>
 
-            <p className="mt-2 text-xs leading-5 text-ink-muted">{source.hint}</p>
+            <p className="mt-2 text-xs text-ink-muted">{source.hint}</p>
 
             {batches.length > 0 ? (
               <ul className="mt-3 space-y-1 border-l-2 border-line pl-3">
@@ -163,7 +163,9 @@ export function ImportForm({
             ) : null}
 
             {isConflicting ? (
-              <div className="mt-4 rounded-lg border border-warning bg-amber-50 p-4">
+              // border-warning / bg-amber-50 は本プロジェクトのトークンに存在せず
+              // 枠線が消えていた。注意の面は caution トークンで描く。
+              <div className="mt-4 rounded-lg border border-caution-border bg-caution-soft p-4">
                 <p className="text-sm font-bold text-ink">
                   {conflict.sameFileName
                     ? `「${conflict.file.name}」は既に取り込み済みです。入れ直しますか?`
@@ -227,15 +229,16 @@ export function ImportForm({
         );
       })}
 
-      <section className="rounded-xl border border-line bg-white p-5">
-        <h2 className="text-sm font-bold text-ink">取込の扱い</h2>
+      {/* 毎回は読まない前提の説明。畳んで初見の情報量を下げる */}
+      <details className="rounded-xl border border-line bg-white px-5 py-4">
+        <summary className="cursor-pointer text-sm font-bold text-ink">取込の扱い</summary>
         <ul className="mt-3 list-disc space-y-1 pl-5 text-xs leading-5 text-ink-muted">
           <li>車番「88888」は傭車として自動除外します。</li>
           <li>「諸口」と、10・888・5000番の重複候補は削除せず要確認として原本とともに保存します。</li>
           <li>同じ年月の同じ帳票を取り込むと、確認のうえ既存データを削除して入れ直します。</li>
           <li>キリン配賦、燃料・修繕・高速の原票PDF取込は次段階で追加します。</li>
         </ul>
-      </section>
+      </details>
 
       {(imported.monthly_pl_workbook ?? []).length > 0 ? (
         <Link href={`/grid?ym=${yearMonth}`} className="text-sm font-semibold text-brand-deep underline">
