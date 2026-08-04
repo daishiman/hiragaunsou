@@ -11,7 +11,7 @@
  *   - そのうえで STEP7 の計算結果を正解Excel「5月収支表」の全列と突き合わせる
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { parseMonthlyPlWorkbook } from "../../src/infrastructure/parsers/monthlyPlWorkbookParser";
 import { parseVehicleOperationCsv } from "../../src/infrastructure/parsers/vehicleOperationParser";
 import {
@@ -53,11 +53,22 @@ const HOURS_PER_DAY = 24;
 const YEN_TOLERANCE = 1;
 
 describe.skipIf(!hasRealData)("業務フロー STEP1〜8 実データ通し検証 (2026-05)", () => {
-  const expectedRows = parseMonthlyPlWorkbook(readFileSync(DATA.workbook), YM).rows;
-  const expectedByNo = new Map(expectedRows.map((r) => [r.no, r]));
-  const operations = parseVehicleOperationCsv(readFileSync(DATA.operation));
-  const salesRows = parseSalesMonitorCsv(readFileSync(DATA.sales));
-  const payrolls = parsePayrollCsv(readFileSync(DATA.payroll));
+  // describe.skipIf はテストの実行だけを飛ばし、コールバック本体は収集時に必ず評価される。
+  // ここで readFileSync すると実データの無い環境 (CI) で suite ごと ENOENT で落ちるため、
+  // 読み込みは beforeAll に置く (スキップ時はフックも走らない)。
+  let expectedRows: ReturnType<typeof parseMonthlyPlWorkbook>["rows"];
+  let expectedByNo: Map<string, VehiclePlCalculated>;
+  let operations: ReturnType<typeof parseVehicleOperationCsv>;
+  let salesRows: ReturnType<typeof parseSalesMonitorCsv>;
+  let payrolls: ReturnType<typeof parsePayrollCsv>;
+
+  beforeAll(() => {
+    expectedRows = parseMonthlyPlWorkbook(readFileSync(DATA.workbook), YM).rows;
+    expectedByNo = new Map(expectedRows.map((r) => [r.no, r]));
+    operations = parseVehicleOperationCsv(readFileSync(DATA.operation));
+    salesRows = parseSalesMonitorCsv(readFileSync(DATA.sales));
+    payrolls = parsePayrollCsv(readFileSync(DATA.payroll));
+  });
 
   it("STEP1: 運行実績CSVを取り込み、傭車(88888)を自動除外し、要確認行を人の判断に回す", () => {
     expect(operations.length).toBeGreaterThan(0);
