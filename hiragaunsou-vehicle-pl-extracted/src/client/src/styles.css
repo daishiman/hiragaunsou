@@ -1,0 +1,143 @@
+/* docs/design-system.md 準拠のミニマルトークン */
+:root {
+  --brand: #1d63be;
+  --brand-deep: #15498f;
+  --brand-soft: #eef4fc;
+  --accent: #e8590c;
+  --accent-deep: #c74e0b;
+  --ink: #16191d;
+  --ink-muted: #545e6b;
+  --line: #e3e6ea;
+  --subtle: #f5f6f8;
+  --danger: #d93025;
+  --caution-soft: #fdf6e3;
+  --caution-border: #e6c96a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f6f7f9;
+  color: var(--ink);
+  font-family: "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  font-feature-settings: "palt";
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 220px;
+  border-right: 1px solid var(--line);
+  background: #fff;
+  padding: 20px 16px;
+}
+
+.app-name {
+  font-weight: bold;
+  font-size: 0.95rem;
+  margin: 0 0 2px;
+}
+
+.app-sub {
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+  margin: 0 0 20px;
+}
+
+.nav-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.nav-item[aria-current="true"] {
+  background: var(--brand-soft);
+  color: var(--brand-deep);
+  font-weight: 600;
+}
+
+.main {
+  flex: 1;
+  padding: 24px 32px;
+}
+
+.card {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.card h2 {
+  font-size: 0.85rem;
+  margin: 0 0 12px;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.78rem;
+}
+
+th, td {
+  border-bottom: 1px solid var(--line);
+  padding: 6px 8px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+th:first-child, td:first-child {
+  text-align: left;
+}
+
+td.highlight {
+  background: var(--caution-soft);
+  border-left: 2px solid var(--caution-border);
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.badge-critical {
+  background: #fdecea;
+  color: var(--danger);
+}
+
+.badge-warning {
+  background: var(--caution-soft);
+  color: #8a6d1a;
+}
+
+.badge-info {
+  background: var(--subtle);
+  color: var(--ink-muted);
+}
+
+.empty-state {
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}

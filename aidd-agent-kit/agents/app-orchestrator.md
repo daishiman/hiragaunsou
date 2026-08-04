@@ -81,6 +81,6 @@ model: inherit
 
 - ランタイム: Cloudflare Workers(Pages ではなく Workers)
 - DB: D1 / ファイル: R2 / セッション・キャッシュ: KV
-- フレームワーク: Hono(API中心)または Vite + React(SPA)、要件次第で Next.js + OpenNext
+- フレームワーク: 新規構成は Hono(API中心)または Vite + React(SPA)、要件次第で Next.js + OpenNext。既存のNext.js + OpenNextアプリではHonoを追加せず、Next.js Route Handlerを使う
 - 認証: Better Auth(better-auth-google-gate 準拠)
 - デプロイ先: *.demoapps.workers.dev(既存プロジェクトの慣例に従う)

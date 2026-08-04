@@ -11,12 +11,23 @@ venv/
 .env
 .env.*
 !.env.example
+.dev.vars
+.dev.vars.*
 
 # JavaScript
 node_modules/
 dist/
 build/
 coverage/
+*.tsbuildinfo
+
+# Next.js / OpenNext for Cloudflare build output
+.next/
+.open-next/
+next-env.d.ts
+
+# Wrangler local state
+.wrangler/
 
 # Editor and temporary files
 .idea/
@@ -27,3 +38,4 @@ coverage/
 ~$*
 *.tmp
 *.log
+.dev.vars*

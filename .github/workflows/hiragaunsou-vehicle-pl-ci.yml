@@ -1,0 +1,59 @@
+name: hiragaunsou-vehicle-pl CI
+
+# PR作成・更新時に typecheck / test を自動実行する。
+# このリポジトリは複数プロジェクトのモノレポのため、対象パスに変更があるときだけ走らせる。
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "hiragaunsou-vehicle-pl-extracted/**"
+      - ".github/workflows/hiragaunsou-vehicle-pl-ci.yml"
+
+# GITHUB_TOKENの権限は最小(読み取りのみ)。デプロイ等の書き込みはCDワークフロー側でのみ許可する。
+permissions:
+  contents: read
+
+# 同じPRへの連続pushで古い検証を走らせ続けない。main以外は新しいrunを優先する。
+concurrency:
+  group: hiragaunsou-vehicle-pl-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: hiragaunsou-vehicle-pl-extracted
+
+jobs:
+  ci:
+    name: typecheck + test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: hiragaunsou-vehicle-pl-extracted/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm run test -- --run
+
+      - name: Build for Cloudflare
+        run: npm run cf:build
+
+      # OpenNext生成物を含むworker型を生成できることを検証する。
+      # `--check` はRunnerごとのOpenNext出力差でハッシュが非決定的になるため使わず、
+      # 型安全性は上記のTypecheckとCloudflare本番ビルドで担保する。
+      - name: Generate Cloudflare types
+        run: npm run cf-typegen
+
+      # 本番依存だけを対象に、High/Criticalの既知脆弱性をリリースゲートにする。
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high

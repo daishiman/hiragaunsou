@@ -1,0 +1,111 @@
+name: hiragaunsou-vehicle-pl Deploy
+
+# mainブランチへのマージ(push)をトリガーに本番Cloudflare Workersへデプロイする。
+# ビルド/設定確認 → D1マイグレーション → コードデプロイ → 稼働確認の順で実行する。
+on:
+  push:
+    branches: [main]
+    paths:
+      - "hiragaunsou-vehicle-pl-extracted/app/**"
+      - "hiragaunsou-vehicle-pl-extracted/src/**"
+      - "hiragaunsou-vehicle-pl-extracted/migrations/**"
+      - "hiragaunsou-vehicle-pl-extracted/package.json"
+      - "hiragaunsou-vehicle-pl-extracted/package-lock.json"
+      - "hiragaunsou-vehicle-pl-extracted/wrangler.jsonc"
+      - "hiragaunsou-vehicle-pl-extracted/open-next.config.ts"
+      - "hiragaunsou-vehicle-pl-extracted/next.config.ts"
+      - ".github/workflows/hiragaunsou-vehicle-pl-deploy.yml"
+  # 手動での再デプロイ用(マイグレーション未変更でコードだけ再送したい場合等)
+  workflow_dispatch: {}
+
+# GITHUB_TOKENはチェックアウトのみに使う。Cloudflareへの書き込みはCLOUDFLARE_API_TOKEN(Secrets)を使う。
+permissions:
+  contents: read
+
+# D1マイグレーションとWorkersデプロイは並行実行させない。cancelすると途中状態を残すためfalse。
+concurrency:
+  group: hiragaunsou-vehicle-pl-production
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: hiragaunsou-vehicle-pl-extracted
+
+jobs:
+  deploy:
+    name: migrate + build + deploy
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 25
+    env:
+      APP_ORIGIN: ${{ vars.HIRAGAUNSOU_APP_ORIGIN || 'https://hiragaunsou-vehicle-pl.daishimanju.workers.dev' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: hiragaunsou-vehicle-pl-extracted/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm run test -- --run
+
+      - name: Build (OpenNext for Cloudflare)
+        run: npm run cf:build
+
+      # OpenNext生成物を含むworker型を生成できることを検証する。
+      # `--check` はRunnerごとのOpenNext出力差でハッシュが非決定的になるため使わない。
+      - name: Generate Cloudflare types
+        run: npm run cf-typegen
+
+      - name: Verify production configuration
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "CLOUDFLARE_API_TOKEN is not configured"; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "CLOUDFLARE_ACCOUNT_ID is not configured"; exit 1; }
+          case "$APP_ORIGIN" in https://*) ;; *) echo "HIRAGAUNSOU_APP_ORIGIN must use https"; exit 1;; esac
+          if grep -Fq '"WORKSPACE_DOMAINS": "example.co.jp"' wrangler.jsonc; then
+            echo "WORKSPACE_DOMAINS is still the placeholder. Set the actual Google Workspace domain before production deployment."
+            exit 1
+          fi
+
+      - name: Verify Worker bundle (dry run)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy --dry-run
+
+      # D1マイグレーションは d1_migrations テーブルで適用簿管理されるため冪等。
+      # ただし破壊的マイグレーション(DROP TABLE等)を含むPRはコードレビュー段階で
+      # 人間が内容を確認すること(cloudflare-secure-deployスキルの停止条件)。
+      - name: Apply D1 migrations (remote)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler d1 migrations apply hiragaunsou_vehicle_pl --remote
+
+      - name: Deploy to Cloudflare Workers
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy
+
+      - name: Verify D1 migration state
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler d1 migrations list hiragaunsou_vehicle_pl --remote
+
+      - name: Smoke test deployed application
+        run: |
+          curl --fail --silent --show-error --location --retry 3 --retry-all-errors --max-time 20 "$APP_ORIGIN/sign-in" -o /dev/null
+          curl --fail --silent --show-error --location --retry 3 --retry-all-errors --max-time 20 "$APP_ORIGIN/api/me" -o /dev/null

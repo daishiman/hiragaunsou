@@ -31,6 +31,7 @@ Workers + D1 を中心に、**①正しいスタック選定 ②本番品質の 
 | 静的サイトのみ | **E: Workers Assets のみ**(`main` なし) | — |
 
 原則:
+- **既存のNext.js + OpenNextアプリにはHonoを追加しない**。APIはNext.js Route Handlerを使い、レシピB/CはVite SPAまたはHono Workerとして新規に構成する場合だけ選ぶ。
 - **新規プロジェクトは Pages ではなく Workers(static assets)を使う**。機能開発は Workers 側に集中している(公式移行ガイドあり)
 - DB は既定で **D1**。ただし「10GB超 / 本物のトランザクション / Postgres機能」が要るなら Hyperdrive + Postgres に切り替える(D1に Hyperdrive は不要)
 - **OpenNext と Durable Objects は同居させない**。DO が要る場合はリアルタイム専用 Worker を分離する(2 Worker 構成)

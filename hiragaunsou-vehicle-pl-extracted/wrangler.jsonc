@@ -1,0 +1,49 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hiragaunsou-vehicle-pl",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-08-03",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      // Self-reference service binding(OpenNextのキャッシュ再検証で使用)
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "hiragaunsou-vehicle-pl"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "hiragaunsou_vehicle_pl",
+      "database_id": "6ca4b9c7-aae4-4a8d-b8a7-5e55637a7f1a",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "IMPORTS_BUCKET",
+      "bucket_name": "hiragaunsou-vehicle-pl-imports"
+    },
+    {
+      // OpenNext ISR/データキャッシュ用(imports監査ファイルとは別バケット)
+      "binding": "NEXT_INC_CACHE_R2_BUCKET",
+      "bucket_name": "hiragaunsou-vehicle-pl-opennext-cache"
+    }
+  ],
+  "images": {
+    "binding": "IMAGES"
+  },
+  "vars": {
+    // Google Workspace限定ログインの許可ドメイン（カンマ区切り）。
+    "WORKSPACE_DOMAINS": "senpai-lab.com",
+    "BETTER_AUTH_URL": "https://hiragaunsou-vehicle-pl.daishimanju.workers.dev"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "upload_source_maps": true
+}
