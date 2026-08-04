@@ -148,7 +148,7 @@ export default async function AnnualPage({
               href={`/grid?ym=${encodeURIComponent(yearMonth)}`}
               className="ml-auto text-xs font-semibold text-brand-deep hover:underline"
             >
-              車番別の食い違いを見る →
+              車番別の差異を見る →
             </Link>
           </div>
 

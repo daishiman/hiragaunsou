@@ -5,11 +5,11 @@ import { num, yen } from "../../_lib/format";
 const TOP_VEHICLES = 5;
 
 /**
- * 完成済みExcelとの車番別の食い違い一覧。
+ * 完成済みExcelとの車番別の差異一覧。
  *
- * この表は「システムの誤りリスト」ではなく「Excel側の要修正リスト」。
  * 差はExcel上の手作業(列の入れ違い・二重入力・ブック間の不整合)で生じており、
- * システムは収支表のヘッダー定義どおりに計算している。読み間違えられないよう見出しと1行で言い切る。
+ * システムはヘッダー定義どおりに計算する(Excelには合わせない)方針。
+ * ただし画面では原因を断定せず、差がある事実だけを中立に提示して判断は人に委ねる。
  */
 export function ExcelReconcileList({ result }: { result: ExcelReconcileResult }) {
   if (!result.hasExcel) return null;
@@ -20,14 +20,14 @@ export function ExcelReconcileList({ result }: { result: ExcelReconcileResult })
   return (
     <section className="mt-4 rounded-xl border border-line bg-white p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-bold text-ink">Excelとの食い違い(Excel側の要修正)</h2>
+        <h2 className="text-sm font-bold text-ink">Excelとの差異</h2>
         <p className="num text-xs text-ink-muted">
-          突合 {num(result.comparedCount)}台 / 食い違い {num(result.vehicles.length)}台・
+          突合 {num(result.comparedCount)}台 / 差異 {num(result.vehicles.length)}台・
           {num(result.mismatchItemCount)}項目
         </p>
       </div>
       <p className="mt-1 text-xs text-ink-muted">
-        システムは収支表の定義どおりに計算しています。差はExcel側の入力ミス・不整合なので、Excelを修正してください。
+        表ごとの定義どおりに計算すると、以下の項目でExcelと値が異なります。
       </p>
 
       {result.vehicles.length === 0 ? (
@@ -64,7 +64,7 @@ export function ExcelReconcileList({ result }: { result: ExcelReconcileResult })
 function MismatchTable({ vehicles }: { vehicles: ExcelReconcileVehicle[] }) {
   return (
     <table className="w-full min-w-max border-collapse text-xs">
-      <caption className="sr-only">Excelとシステムで食い違った車番別の金額 (円)</caption>
+      <caption className="sr-only">Excelとシステムで値が異なる車番別の金額 (円)</caption>
       <thead>
         <tr className="border-b border-line bg-subtle text-ink-muted">
           <th className="px-3 py-2 text-left font-medium">車番</th>
