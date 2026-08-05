@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { visibleNavGroups, findNavItem, type NavBadge } from "../_lib/navigation";
+import { withYm } from "../_lib/withYm";
+import { useCurrentYm } from "./YmProvider";
 import { signOut } from "../_lib/authClient";
 
 export interface AppShellProps {
@@ -28,6 +30,8 @@ export function AppShell({ userName, userRole, role, badges, children }: AppShel
   const [signingOut, setSigningOut] = useState(false);
   const current = findNavItem(pathname);
   const navGroups = visibleNavGroups(role);
+  // いま見ている対象月。サイドバーから別の画面へ移っても同じ月を見続けられるよう引き継ぐ。
+  const ym = useCurrentYm();
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -114,7 +118,7 @@ export function AppShell({ userName, userRole, role, badges, children }: AppShel
                   return (
                     <li key={item.href}>
                       <Link
-                        href={item.href}
+                        href={withYm(item.href, ym)}
                         onClick={closeNav}
                         aria-current={active ? "page" : undefined}
                         className={[
@@ -196,7 +200,7 @@ export function AppShell({ userName, userRole, role, badges, children }: AppShel
               <Link href="/usage" className="hover:text-brand-deep hover:underline">
                 利用状況
               </Link>
-              <Link href="/import" className="hover:text-brand-deep hover:underline">
+              <Link href={withYm("/import", ym)} className="hover:text-brand-deep hover:underline">
                 月次データ取込
               </Link>
             </nav>

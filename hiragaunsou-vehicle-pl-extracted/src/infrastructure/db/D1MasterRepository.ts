@@ -4,6 +4,7 @@ import { vehicleMaster, driverMaster, rateMaster } from "./schema";
 import type {
   VehicleMasterRepository,
   VehicleMasterRecord,
+  VehicleMasterUpsertInput,
   DriverMasterRepository,
   DriverMasterRecord,
   RateMasterRepository,
@@ -33,6 +34,47 @@ export class D1VehicleMasterRepository implements VehicleMasterRepository {
       lease: r.lease,
       installment: r.installment,
     }));
+  }
+
+  async upsertMany(
+    records: VehicleMasterUpsertInput[],
+  ): Promise<{ inserted: number; updated: number }> {
+    if (records.length === 0) return { inserted: 0, updated: 0 };
+
+    // 新規/更新の内訳は upsert 後には判別できないため、先に既存の車番を1クエリで押さえておく。
+    const existingRows = await this.db
+      .select({ vehicleNo: vehicleMaster.vehicleNo })
+      .from(vehicleMaster);
+    const existing = new Set(existingRows.map((r) => r.vehicleNo));
+
+    const now = new Date();
+    let inserted = 0;
+    let updated = 0;
+    for (const record of records) {
+      await this.db
+        .insert(vehicleMaster)
+        .values({ ...record, active: true, updatedAt: now })
+        .onConflictDoUpdate({
+          target: vehicleMaster.vehicleNo,
+          set: {
+            vehicleType: record.vehicleType,
+            depot: record.depot,
+            costCategory: record.costCategory,
+            insCompulsory: record.insCompulsory,
+            insVoluntary: record.insVoluntary,
+            taxAuto: record.taxAuto,
+            taxWeight: record.taxWeight,
+            lease: record.lease,
+            installment: record.installment,
+            // 一度 active=false にした車両でも、CSVに載っている以上は現役として扱う
+            active: true,
+            updatedAt: now,
+          },
+        });
+      if (existing.has(record.vehicleNo)) updated++;
+      else inserted++;
+    }
+    return { inserted, updated };
   }
 
   async updateLeaseInstallment(

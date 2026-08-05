@@ -623,7 +623,7 @@ export function ManualEntryStepper({
                   <span aria-hidden>!</span>未取込
                 </span>
                 <Link
-                  href="/import?step=4"
+                  href={`/import?step=4&ym=${yearMonth}`}
                   className="pressable rounded-md border border-brand px-3 py-1.5 text-xs font-semibold text-brand-deep hover:bg-brand-soft"
                 >
                   データ取込へ

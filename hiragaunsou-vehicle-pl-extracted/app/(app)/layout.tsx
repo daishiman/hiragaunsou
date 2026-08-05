@@ -5,6 +5,7 @@ import { createDb } from "../../src/infrastructure/db/client";
 import { D1VehiclePlRepository } from "../../src/infrastructure/db/D1VehiclePlRepository";
 import { D1ReviewFlagRepository } from "../../src/infrastructure/db/D1ReviewFlagRepository";
 import { AppShell } from "../_components/AppShell";
+import { YmProvider } from "../_components/YmProvider";
 import { currentYearMonth } from "../_lib/yearMonth";
 
 /**
@@ -26,16 +27,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
 
   return (
-    <AppShell
-      userName={session.name}
-      userRole={session.role}
-      role={session.role}
-      badges={{
-        registration,
-        anomaly: anomalyFlags.filter((f) => f.status === "open").length,
-      }}
-    >
-      {children}
-    </AppShell>
+    <YmProvider>
+      <AppShell
+        userName={session.name}
+        userRole={session.role}
+        role={session.role}
+        badges={{
+          registration,
+          anomaly: anomalyFlags.filter((f) => f.status === "open").length,
+        }}
+      >
+        {children}
+      </AppShell>
+    </YmProvider>
   );
 }

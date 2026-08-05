@@ -151,6 +151,12 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         desc: "誤って取り込まれたデータを確認・削除する",
         permission: "manage_imports",
       },
+      {
+        href: "/admin/vehicle-master",
+        label: "車両マスタ管理",
+        desc: "車番ごとの保険・税・リース料をCSVで一括登録・更新する",
+        permission: "manage_imports",
+      },
     ],
   },
 ] as const;
