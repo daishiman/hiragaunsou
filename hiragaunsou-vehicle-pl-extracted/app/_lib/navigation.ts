@@ -154,7 +154,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       {
         href: "/admin/vehicle-master",
         label: "車両マスタ管理",
-        desc: "車番ごとの保険・税・リース料をCSVで一括登録・更新する",
+        desc: "収支表取込で自動更新される車両マスタを、必要に応じてCSVで手動補正する",
         permission: "manage_imports",
       },
     ],

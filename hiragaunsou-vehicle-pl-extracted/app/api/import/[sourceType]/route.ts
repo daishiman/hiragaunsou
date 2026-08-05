@@ -13,6 +13,8 @@ import {
   MONTHLY_PL_WORKBOOK_SOURCE_TYPE,
 } from "../../../../src/usecase/steps/importMonthlyPlWorkbook";
 import { D1VehiclePlRepository } from "../../../../src/infrastructure/db/D1VehiclePlRepository";
+import { D1VehicleMasterRepository } from "../../../../src/infrastructure/db/D1MasterRepository";
+import { D1AuditLogRepository } from "../../../../src/infrastructure/db/D1AuditLogRepository";
 import { detectFileType } from "../../../../src/infrastructure/parsers/detectFileType";
 import { decodeCp932 } from "../../../../src/infrastructure/parsers/encoding";
 import { parseCsv } from "../../../../src/infrastructure/parsers/csvUtils";
@@ -200,7 +202,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ sou
       fileStorage,
       importBatchRepo,
       new D1VehiclePlRepository(db),
-    ).execute(input);
+      new D1VehicleMasterRepository(db),
+      new D1AuditLogRepository(db),
+    ).execute({ ...input, importedByName: session!.name });
     return NextResponse.json({ sourceType: resolvedSourceType, ...result });
   } catch (e) {
     console.error("import failed", { sourceType: resolvedSourceType, fileName: file.name, error: e });
