@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState, useSyncExternalStore } from "react";
-import { visibleNavGroups, findNavItem, type NavBadge } from "../_lib/navigation";
+import { visibleNavGroups, findNavItem, NAV_ITEMS, type NavBadge, type NavItem } from "../_lib/navigation";
 import { withYm } from "../_lib/withYm";
 import { useCurrentYm } from "./YmProvider";
 import { signOut } from "../_lib/authClient";
+import { useSidebarTooltip } from "./useSidebarTooltip";
 
 /** 折りたたんだグループを覚えておくキー。開いた側ではなく閉じた側を保存する。 */
 const COLLAPSED_GROUPS_KEY = "hiragaunsou:sidebar-collapsed-groups";
@@ -150,29 +151,11 @@ export function AppShell({ userName, userRole, role, badges, children }: AppShel
           ホームは「最初に見るべき場所」として、他のメニュー項目と同じ並びに埋もれさせない。
           常時 brand-soft の面を敷いて視覚的に切り離し、迷ったらまずここ、を伝える。
         */}
-        <div className="border-b border-line px-2 pb-3 pt-3">
-          <Link
-            href="/"
-            onClick={closeNav}
-            aria-current={pathname === "/" ? "page" : undefined}
-            className={[
-              "flex items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm font-bold transition-colors",
-              pathname === "/"
-                ? "bg-brand text-white"
-                : "bg-brand-soft text-brand-deep hover:bg-brand-soft/70",
-            ].join(" ")}
-          >
-            <span>ホーム</span>
-            <span
-              className={[
-                "rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                pathname === "/" ? "bg-white/20 text-white" : "bg-white text-brand-deep",
-              ].join(" ")}
-            >
-              まずはここ
-            </span>
-          </Link>
-        </div>
+        <SidebarHomeLink
+          active={pathname === "/"}
+          closeNav={closeNav}
+          desc={NAV_ITEMS.find((i) => i.href === "/")?.desc ?? ""}
+        />
 
         <nav className="flex-1 px-2 py-1" aria-label="メインメニュー">
           {navGroups.map((group) => {
@@ -215,40 +198,14 @@ export function AppShell({ userName, userRole, role, badges, children }: AppShel
                   const active = current?.href === item.href;
                   const count = item.badge ? badges[item.badge] : 0;
                   return (
-                    <li key={item.href}>
-                      <Link
-                        href={withYm(item.href, ym)}
-                        onClick={closeNav}
-                        aria-current={active ? "page" : undefined}
-                        title={item.desc}
-                        className={[
-                          "flex items-center gap-2 rounded-md px-2 py-2 text-[13px]",
-                          active
-                            ? "bg-brand-soft font-semibold text-brand-deep"
-                            : "text-ink hover:bg-subtle",
-                        ].join(" ")}
-                      >
-                        <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                        {item.step && (
-                          <span
-                            className="num shrink-0 rounded bg-subtle px-1 py-0.5 text-[10px] font-semibold text-ink-muted"
-                            title={`業務フロー STEP ${item.step}`}
-                          >
-                            {item.step}
-                          </span>
-                        )}
-                        {count > 0 && (
-                          <span
-                            className={[
-                              "num shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-bold text-white",
-                              item.badge === "anomaly" ? "bg-danger" : "bg-accent",
-                            ].join(" ")}
-                          >
-                            {count}
-                          </span>
-                        )}
-                      </Link>
-                    </li>
+                    <SidebarNavLink
+                      key={item.href}
+                      item={item}
+                      href={withYm(item.href, ym)}
+                      active={active}
+                      count={count}
+                      closeNav={closeNav}
+                    />
                   );
                 })}
                 </ul>
@@ -309,5 +266,85 @@ export function AppShell({ userName, userRole, role, badges, children }: AppShel
         </footer>
       </div>
     </div>
+  );
+}
+
+interface SidebarHomeLinkProps {
+  active: boolean;
+  closeNav: () => void;
+  desc: string;
+}
+
+/** ホームリンク単体。ホバー説明は自前ツールチップで毎回確実に出す (rules of hooks のため独立コンポーネント化)。 */
+function SidebarHomeLink({ active, closeNav, desc }: SidebarHomeLinkProps) {
+  const { triggerRef, handlers, tooltip } = useSidebarTooltip<HTMLAnchorElement>(desc);
+
+  return (
+    <div className="border-b border-line px-2 pb-3 pt-3">
+      <Link
+        ref={triggerRef}
+        href="/"
+        onClick={closeNav}
+        aria-current={active ? "page" : undefined}
+        {...handlers}
+        className={[
+          "flex items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-sm font-bold transition-colors",
+          active ? "bg-brand text-white" : "bg-brand-soft text-brand-deep hover:bg-brand-soft/70",
+        ].join(" ")}
+      >
+        <span>ホーム</span>
+        <span
+          className={[
+            "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+            active ? "bg-white/20 text-white" : "bg-white text-brand-deep",
+          ].join(" ")}
+        >
+          まずはここ
+        </span>
+      </Link>
+      {tooltip}
+    </div>
+  );
+}
+
+interface SidebarNavLinkProps {
+  item: NavItem;
+  href: string;
+  active: boolean;
+  count: number;
+  closeNav: () => void;
+}
+
+/** グループ内メニュー項目1件。ホバー説明は自前ツールチップで毎回確実に出す (rules of hooks のため独立コンポーネント化)。 */
+function SidebarNavLink({ item, href, active, count, closeNav }: SidebarNavLinkProps) {
+  const { triggerRef, handlers, tooltip } = useSidebarTooltip<HTMLAnchorElement>(item.desc);
+
+  return (
+    <li>
+      <Link
+        ref={triggerRef}
+        href={href}
+        onClick={closeNav}
+        aria-current={active ? "page" : undefined}
+        {...handlers}
+        className={[
+          "flex items-center gap-2 rounded-md px-2 py-2 text-[13px]",
+          active ? "bg-brand-soft font-semibold text-brand-deep" : "text-ink hover:bg-subtle",
+        ].join(" ")}
+      >
+        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+        {count > 0 && (
+          <span
+            className={[
+              "num shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-bold text-white",
+              item.badge === "anomaly" ? "bg-danger" : "bg-accent",
+            ].join(" ")}
+          >
+            {count}
+          </span>
+        )}
+      </Link>
+      {tooltip}
+    </li>
   );
 }

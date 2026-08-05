@@ -181,4 +181,92 @@ describe("AppShell", () => {
     expect(signOutMock).toHaveBeenCalledTimes(1);
     expect(mockReplace).toHaveBeenCalledWith("/sign-in");
   });
+
+  it("業務フローのSTEP番号バッジをサイドバーに表示しない(初心者に分かりにくいため廃止済み)", () => {
+    render(
+      <AppShell
+        userName="今西さん"
+        userRole="管理者"
+        role="admin"
+        badges={{ registration: 0, anomaly: 0 }}
+      >
+        <p>本文</p>
+      </AppShell>,
+    );
+    // 「データ取込」「データ整形」「手入力」「チェック」等のリンクにSTEP番号(1・2・4・7のような数字)が付随しない
+    const importLink = mainNav().getByRole("link", { name: /^データ取込/ });
+    expect(importLink).toHaveTextContent(/^データ取込$/);
+    const cleansingLink = mainNav().getByRole("link", { name: "データ整形" });
+    expect(cleansingLink).toHaveTextContent(/^データ整形$/);
+  });
+
+  it("ホームリンクにホバーするとカスタムツールチップで説明が出る", async () => {
+    const user = userEvent.setup();
+    render(
+      <AppShell
+        userName="今西さん"
+        userRole="管理者"
+        role="admin"
+        badges={{ registration: 0, anomaly: 0 }}
+      >
+        <p>本文</p>
+      </AppShell>,
+    );
+    // ホームリンクはメインメニュー(<nav>)の外、サイドバー上部に単独で配置されている
+    // (アクセシブルネームは「ホーム まずはここ」のバッジ文言も含む)
+    const homeLink = screen.getByRole("link", { name: /^ホーム/ });
+    expect(homeLink).not.toHaveAttribute("title");
+
+    await user.hover(homeLink);
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip).toHaveTextContent("今やることを1つだけ案内します。まずはここから");
+
+    await user.unhover(homeLink);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
+
+  it("ホームリンクは連続ホバーしても毎回ツールチップが再表示される(ネイティブtitleのクールダウンを回避)", async () => {
+    const user = userEvent.setup();
+    render(
+      <AppShell
+        userName="今西さん"
+        userRole="管理者"
+        role="admin"
+        badges={{ registration: 0, anomaly: 0 }}
+      >
+        <p>本文</p>
+      </AppShell>,
+    );
+    const homeLink = screen.getByRole("link", { name: /^ホーム/ });
+
+    await user.hover(homeLink);
+    await screen.findByRole("tooltip");
+    await user.unhover(homeLink);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+    // 1回目を閉じた直後の再ホバーでも表示される
+    await user.hover(homeLink);
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip).toHaveTextContent("今やることを1つだけ案内します。まずはここから");
+  });
+
+  it("サイドバーのメニュー項目にホバーするとカスタムツールチップで説明が出る", async () => {
+    const user = userEvent.setup();
+    render(
+      <AppShell
+        userName="今西さん"
+        userRole="管理者"
+        role="admin"
+        badges={{ registration: 0, anomaly: 0 }}
+      >
+        <p>本文</p>
+      </AppShell>,
+    );
+    const importLink = mainNav().getByRole("link", { name: /^データ取込/ });
+    expect(importLink).not.toHaveAttribute("title");
+
+    await user.hover(importLink);
+    const tooltip = await screen.findByRole("tooltip");
+    expect(tooltip.textContent).toBeTruthy();
+  });
 });

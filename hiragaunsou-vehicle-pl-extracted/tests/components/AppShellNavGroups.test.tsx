@@ -106,16 +106,18 @@ describe("AppShell のサイドバーグループ開閉", () => {
     );
   });
 
-  it("各項目にホバー説明(desc)を title として付ける", () => {
+  it("各項目にホバーするとカスタムツールチップで説明(desc)が出る", async () => {
+    const user = userEvent.setup();
     renderShell();
 
-    expect(mainNav().getByRole("link", { name: "AI設定" })).toHaveAttribute(
-      "title",
-      expect.stringContaining("AI"),
-    );
-    expect(mainNav().getByRole("link", { name: "車両マスタ管理" })).toHaveAttribute(
-      "title",
-      expect.stringContaining("車両マスタ"),
-    );
+    const aiSettingsLink = mainNav().getByRole("link", { name: "AI設定" });
+    expect(aiSettingsLink).not.toHaveAttribute("title");
+    await user.hover(aiSettingsLink);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(/AI/);
+    await user.unhover(aiSettingsLink);
+
+    const vehicleMasterLink = mainNav().getByRole("link", { name: "車両マスタ管理" });
+    await user.hover(vehicleMasterLink);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(/車両マスタ/);
   });
 });

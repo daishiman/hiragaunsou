@@ -18,6 +18,24 @@ describe("NAV_GROUPS / NAV_ITEMS", () => {
     const expectedCount = NAV_GROUPS.reduce((sum, g) => sum + g.items.length, 0);
     expect(NAV_ITEMS.length).toBe(expectedCount);
   });
+
+  it("項目にstepフィールドを持たない(業務フローSTEP番号バッジは初心者に分かりにくいため廃止)", () => {
+    for (const item of NAV_ITEMS) {
+      expect(item).not.toHaveProperty("step");
+    }
+  });
+
+  it("全項目がホバー説明(desc)を持つ(ホームを含め、どの項目もホバーで説明が出る)", () => {
+    for (const item of NAV_ITEMS) {
+      expect(typeof item.desc).toBe("string");
+      expect(item.desc.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("ホーム項目のdescが具体的な説明文になっている", () => {
+    const home = NAV_ITEMS.find((i) => i.href === "/");
+    expect(home?.desc).toBe("今やることを1つだけ案内します。まずはここから");
+  });
 });
 
 describe("visibleNavGroups", () => {
