@@ -10,15 +10,8 @@ export type NavBadge = "registration" | "anomaly";
 
 export interface NavItem {
   href: string;
-  /**
-   * サイドバーに出す短い名前。
-   * 「データ取込(STEP1・2・4・7)」のように括弧書きを label に詰めると、
-   * ナビが読み物になって一覧性が死ぬ。STEP番号は step フィールドに分け、
-   * 小さなチップとして脇に置く。
-   */
+  /** サイドバーに出す短い名前。 */
   label: string;
-  /** 担当するSTEP番号 (業務フロー順の画面のみ) */
-  step?: string;
   /** ヘッダーの現在地表示に使う短い説明 */
   desc: string;
   badge?: NavBadge;
@@ -72,7 +65,6 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       {
         href: "/import",
         label: "データ取込",
-        step: "1・2・4・7",
         desc: "運行実績・売上モニタリスト・給与集計表・完成済み収支表を取込む",
         badge: "registration",
         permission: "input",
@@ -80,21 +72,18 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       {
         href: "/cleansing",
         label: "データ整形",
-        step: "2",
         desc: "傭車・2重計上の疑い・諸口の伝票を1件ずつ判断する",
         permission: "view",
       },
       {
         href: "/manual-entry",
         label: "手入力",
-        step: "2・3・5・6",
         desc: "キリン配分・燃料費・修繕費・タイヤ・高速料金を請求書から入力する",
         permission: "input",
       },
       {
         href: "/anomaly",
         label: "チェック",
-        step: "7",
         desc: "いつもと違う値を1件ずつ判定する",
         badge: "anomaly",
         permission: "view",
@@ -108,7 +97,6 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       {
         href: "/grid",
         label: "月次収支表",
-        step: "8",
         desc: "車両×科目の収支をExcel互換で見る",
         permission: "view",
       },
