@@ -80,7 +80,7 @@ describe("CleansingQueue", () => {
     });
     expect(screen.getByRole("link", { name: "次のステップへ進む" })).toHaveAttribute(
       "href",
-      "/manual-entry?step=2",
+      "/manual-entry?step=2&ym=2026-05",
     );
   });
 
