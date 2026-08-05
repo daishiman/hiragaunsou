@@ -92,6 +92,49 @@ export function parseSalesMonitorCsv(
 }
 
 /**
+ * 積荷日("2026/05/01"・"2026-05-01"等)の年月部分を YYYY-MM で取り出す。読めない値は null。
+ */
+function extractYearMonth(dateStr: string): string | null {
+  const m = /^(\d{4})[-/](\d{2})/.exec(dateStr.trim());
+  if (!m) return null;
+  return `${m[1]}-${m[2]}`;
+}
+
+export interface YearMonthMismatchCheck {
+  /** 積荷日から読み取れた行のうち、最も多かった年月(1件も読み取れなければnull) */
+  dominantYearMonth: string | null;
+  /** 積荷日を読み取れた行数 */
+  matchedRows: number;
+  /** dominantYearMonth に一致した行数 */
+  dominantCount: number;
+}
+
+/**
+ * 取込画面で選んだ対象年月と、ファイル内の積荷日が実際にどの年月のものかを突き合わせるための集計。
+ * 「前月分のファイルを今月の欄に取り込んでしまう」といった取り違えに、取込を確定する前に気づけるようにする。
+ * 行ごとにばらつく(月末月初の混在等)ため、多数決で「このファイルは概ねどの年月か」を判定する。
+ */
+export function detectDominantYearMonth(rows: readonly SalesMonitorRow[]): YearMonthMismatchCheck {
+  const counts = new Map<string, number>();
+  let matchedRows = 0;
+  for (const row of rows) {
+    const ym = extractYearMonth(row.loadDate);
+    if (!ym) continue;
+    matchedRows += 1;
+    counts.set(ym, (counts.get(ym) ?? 0) + 1);
+  }
+  let dominantYearMonth: string | null = null;
+  let dominantCount = 0;
+  for (const [ym, count] of counts) {
+    if (count > dominantCount) {
+      dominantYearMonth = ym;
+      dominantCount = count;
+    }
+  }
+  return { dominantYearMonth, matchedRows, dominantCount };
+}
+
+/**
  * 伝票1行を一意に指すキー。STEP2のデータ整形で下した判断を、この行に貼り付けて保存する。
  *
  * 管理№+行№が伝票の自然キーなので、翌月に同じ伝票が上がってきても・当月に再取込しても

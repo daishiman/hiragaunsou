@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "../../src/infrastructure/auth/session";
 import { SignInButton } from "./SignInButton";
+import { PasswordSignInForm } from "./PasswordSignInForm";
 import { signInErrorMessage } from "./signInErrorMessage";
 
 /** S: サインイン画面。Google Workspace限定ログイン(better-auth-google-gate)。 */
@@ -38,6 +39,18 @@ export default async function SignInPage({
         <div className="mt-6">
           <SignInButton />
         </div>
+
+        <div className="mt-8 flex items-center gap-3 text-xs text-ink-muted">
+          <span className="h-px flex-1 bg-line" />
+          <span>Gmailをお持ちでない方</span>
+          <span className="h-px flex-1 bg-line" />
+        </div>
+        <div className="mt-4">
+          <PasswordSignInForm />
+        </div>
+        <p className="mt-3 text-xs text-ink-muted">
+          パスワードを未設定・お忘れの場合は、管理者から届いた初期設定リンクをご利用いただくか、管理者にお問い合わせください。
+        </p>
       </section>
     </main>
   );

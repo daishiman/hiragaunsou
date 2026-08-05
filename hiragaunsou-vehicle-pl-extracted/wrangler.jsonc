@@ -39,8 +39,11 @@
   },
   "vars": {
     // Google Workspace限定ログインの許可ドメイン（カンマ区切り）。
-    "WORKSPACE_DOMAINS": "senpai-lab.com,tiermind.co.jp",
-    "BETTER_AUTH_URL": "https://hiragaunsou-vehicle-pl.daishimanju.workers.dev"
+    // hiragaunsou.co.jp: 平賀運送本体のドメイン(管理者 h_atsushi@hiragaunsou.co.jp のブートストラップに必要)。
+    "WORKSPACE_DOMAINS": "senpai-lab.com,tiermind.co.jp,hiragaunsou.co.jp",
+    "BETTER_AUTH_URL": "https://hiragaunsou-vehicle-pl.daishimanju.workers.dev",
+    // 初回ログイン時に自動でadminロールを付与するメールアドレス（カンマ区切り）。
+    "BOOTSTRAP_ADMIN_EMAILS": "manjumoto.daishi@senpai-lab.com,h_atsushi@hiragaunsou.co.jp"
   },
   // 未設定のままデプロイして「本番だけ500」になるのを防ぐ(設定漏れならデプロイ自体が失敗する)。
   "secrets": {

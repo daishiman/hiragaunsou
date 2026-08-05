@@ -1,19 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { visibleNavGroups, findNavItem, type NavBadge } from "../_lib/navigation";
-import { yearMonthLabel } from "../_lib/format";
-import { isYearMonth } from "../_lib/yearMonth";
+import { signOut } from "../_lib/authClient";
 
 export interface AppShellProps {
   userName: string;
   userRole: string;
   /** 権限マトリクスの参照キー。サイドバーで開けない画面を除くのに使う */
   role: string;
-  /** サイドバーのバッジ件数などが基準にする「実際の今月」。ヘッダー表示には使わない */
-  yearMonth: string;
   /** ナビのバッジ件数 (0以下は非表示) */
   badges: Record<NavBadge, number>;
   children: React.ReactNode;
@@ -24,17 +21,24 @@ export interface AppShellProps {
  * モック mock/index.html の .layout / .sidebar / .topbar 構成を Next.js に移植したもの。
  * SPではサイドバーをオフキャンバス化し、トップバーのボタンで開閉する。
  */
-export function AppShell({ userName, userRole, role, yearMonth, badges, children }: AppShellProps) {
+export function AppShell({ userName, userRole, role, badges, children }: AppShellProps) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const router = useRouter();
   const [navOpen, setNavOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const current = findNavItem(pathname);
   const navGroups = visibleNavGroups(role);
 
-  // ページ側で ?ym= を選んでいれば、ヘッダーの表示もそれに合わせる。
-  // 無指定のページ(ホーム等)では yearMonth (サーバーの実際の今月) をそのまま出す。
-  const ym = searchParams.get("ym");
-  const displayYearMonth = ym && isYearMonth(ym) ? ym : yearMonth;
+  async function handleSignOut() {
+    setSigningOut(true);
+    try {
+      await signOut();
+      router.replace("/sign-in");
+      router.refresh();
+    } finally {
+      setSigningOut(false);
+    }
+  }
 
   // SPのサイドバーはリンクを押した時点で閉じる。
   // pathname を見る useEffect で閉じると「描画後に state を書き換える」ことになり、
@@ -149,8 +153,18 @@ export function AppShell({ userName, userRole, role, yearMonth, badges, children
         </nav>
 
         <div className="border-t border-line px-4 py-3">
-          <p className="truncate text-xs font-semibold text-ink">{userName}</p>
-          <p className="mt-0.5 text-[11px] text-ink-muted">{userRole}</p>
+          <Link href="/profile" onClick={closeNav} className="block hover:underline">
+            <p className="truncate text-xs font-semibold text-ink">{userName}</p>
+            <p className="mt-0.5 text-[11px] text-ink-muted">{userRole}</p>
+          </Link>
+          <button
+            type="button"
+            onClick={() => void handleSignOut()}
+            disabled={signingOut}
+            className="pressable mt-2 w-full rounded-md border border-line px-2 py-1.5 text-[11px] font-semibold text-ink-muted hover:bg-subtle disabled:opacity-50"
+          >
+            {signingOut ? "ログアウトしています…" : "ログアウト"}
+          </button>
         </div>
       </aside>
 
@@ -168,7 +182,6 @@ export function AppShell({ userName, userRole, role, yearMonth, badges, children
           <p className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
             {current?.label ?? "車両収支管理システム"}
           </p>
-          <p className="num shrink-0 text-xs text-ink-muted">{yearMonthLabel(displayYearMonth)}度</p>
         </header>
 
         <main className="min-w-0 flex-1 px-4 py-6 lg:px-8 lg:py-8">{children}</main>

@@ -18,6 +18,7 @@ import { decodeCp932 } from "../../../../src/infrastructure/parsers/encoding";
 import { parseCsv } from "../../../../src/infrastructure/parsers/csvUtils";
 import { isSameOriginRequest } from "../../../_lib/assertSameOrigin";
 import { findImportSource } from "../../../../src/domain/rules/importSources";
+import { parseSalesMonitorCsv, detectDominantYearMonth } from "../../../../src/infrastructure/parsers/salesMonitorParser";
 
 const SOURCE_TYPES = [
   "auto",
@@ -120,6 +121,34 @@ export async function POST(request: Request, { params }: { params: Promise<{ sou
       { error: `この欄は「${expected}」用です。選択されたファイルは「${actual}」と判定されました。` },
       { status: 422 },
     );
+  }
+
+  // 対象年月チェック。売上モニタリストは伝票ごとに積荷日を持つため、
+  // 「選んだ年月」と「ファイルの中身が実際にどの年月の伝票か」を多数決で突き合わせ、
+  // 前月分ファイルの取り違え等に取込を確定する前に気づけるようにする。
+  // 他の帳票(運行実績・給与集計表)は月内に日付列を持たないため判定できず、対象外。
+  if (resolvedSourceType === "sales_monitor" && form.get("confirmYearMonth") !== "true") {
+    let mismatch: ReturnType<typeof detectDominantYearMonth> | null = null;
+    try {
+      mismatch = detectDominantYearMonth(parseSalesMonitorCsv(content));
+    } catch {
+      mismatch = null; // ここでの判定に失敗しても、取込本体の解析・エラー処理に委ねる
+    }
+    if (mismatch?.dominantYearMonth && mismatch.dominantYearMonth !== yearMonth) {
+      return NextResponse.json(
+        {
+          error: "yearMonthMismatch",
+          yearMonthMismatch: {
+            sourceType: resolvedSourceType,
+            selectedYearMonth: yearMonth,
+            detectedYearMonth: mismatch.dominantYearMonth,
+            matchedRows: mismatch.matchedRows,
+            dominantCount: mismatch.dominantCount,
+          },
+        },
+        { status: 409 },
+      );
+    }
   }
 
   // 入れ直し判定。運行実績は3営業所分が別ファイルで正常に共存するため同名ファイルだけを、

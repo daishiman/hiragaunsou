@@ -138,6 +138,19 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         desc: "AI分析に使うAPIキーを管理する",
         permission: "manage_api_keys",
       },
+      { href: "/profile", label: "マイページ", desc: "自分のアカウント情報を確認・編集する" },
+      {
+        href: "/admin/users",
+        label: "ユーザー管理",
+        desc: "全ユーザーのロール変更・アカウント凍結を行う",
+        permission: "manage_users",
+      },
+      {
+        href: "/admin/import-batches",
+        label: "取込データ管理",
+        desc: "誤って取り込まれたデータを確認・削除する",
+        permission: "manage_imports",
+      },
     ],
   },
 ] as const;

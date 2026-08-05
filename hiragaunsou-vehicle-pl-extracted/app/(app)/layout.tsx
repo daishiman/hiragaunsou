@@ -30,7 +30,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       userName={session.name}
       userRole={session.role}
       role={session.role}
-      yearMonth={yearMonth}
       badges={{
         registration,
         anomaly: anomalyFlags.filter((f) => f.status === "open").length,

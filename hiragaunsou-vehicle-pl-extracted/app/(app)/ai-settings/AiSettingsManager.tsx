@@ -10,10 +10,17 @@ import { MODEL_CATALOG, defaultModelId } from "../../../src/domain/rules/aiModel
 
 const PROVIDER_LABELS: Record<AiProvider, string> = {
   anthropic: "Anthropic (Claude)",
-  openai: "OpenAI (ChatGPT)",
-  google: "Google (Gemini)",
-  xai: "xAI (Grok)",
+  openai: "OpenAI (ChatGPT) (未対応)",
+  google: "Google (Gemini) (未対応)",
+  xai: "xAI (Grok) (未対応)",
 };
+
+/**
+ * 実際にAPIを呼び出す実装(src/infrastructure/ai/配下)があるのはAnthropicのみ。
+ * openai/google/xaiはAPIキーを保存できてしまうが、AI要因分析等のどの機能からも呼び出されない
+ * (近日対応予定)。保存しても使われないことを画面上で明示するためのフラグ。
+ */
+const UNSUPPORTED_PROVIDERS: ReadonlySet<AiProvider> = new Set(["openai", "google", "xai"]);
 
 const PROVIDER_KEY_URLS: Record<AiProvider, string> = {
   anthropic: "https://console.anthropic.com/settings/keys",
@@ -120,6 +127,13 @@ export function AiSettingsManager({
             </select>
           </label>
 
+          {UNSUPPORTED_PROVIDERS.has(provider) ? (
+            <div className="rounded-md border border-caution-border bg-caution-soft px-4 py-3 text-xs leading-relaxed">
+              現在このプロバイダーは未対応です(近日対応予定)。APIキーを保存すること自体は可能ですが、
+              AI要因分析などの機能からはまだ呼び出されず、保存しても利用されません。
+            </div>
+          ) : null}
+
           <p className="text-xs text-ink-muted">
             APIキーの取得方法:{" "}
             <a
@@ -196,6 +210,11 @@ export function AiSettingsManager({
                     末尾 {c.apiKeyLast4} / {c.model} / 更新: {new Date(c.updatedAt).toLocaleString("ja-JP")}
                     {c.updatedBy ? ` (${c.updatedBy})` : ""}
                   </p>
+                  {UNSUPPORTED_PROVIDERS.has(c.provider) ? (
+                    <p className="mt-0.5 text-[11px] text-danger">
+                      未対応のため保存済みですがまだ使用されません
+                    </p>
+                  ) : null}
                 </div>
                 <button
                   type="button"

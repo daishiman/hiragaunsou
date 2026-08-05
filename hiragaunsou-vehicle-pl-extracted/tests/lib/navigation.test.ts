@@ -41,7 +41,7 @@ describe("visibleNavGroups", () => {
   it("権限を一つも持たないロールでは、権限指定の無い画面だけが残る", () => {
     const groups = visibleNavGroups("unknown-role");
     const hrefs = groups.flatMap((g) => g.items.map((i) => i.href));
-    expect(hrefs).toEqual(["/", "/logic"]);
+    expect(hrefs).toEqual(["/", "/logic", "/profile"]);
   });
 
   it("全項目が除外されたグループはそのものが結果から消える", () => {

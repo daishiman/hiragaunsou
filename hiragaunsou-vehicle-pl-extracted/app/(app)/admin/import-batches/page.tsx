@@ -1,0 +1,40 @@
+import { redirect } from "next/navigation";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getServerSession } from "../../../../src/infrastructure/auth/session";
+import { checkAccess } from "../../../../src/infrastructure/auth/accessControl";
+import { createDb } from "../../../../src/infrastructure/db/client";
+import { D1ImportBatchRepository } from "../../../../src/infrastructure/db/D1ImportBatchRepository";
+import { D1AuditLogRepository } from "../../../../src/infrastructure/db/D1AuditLogRepository";
+import {
+  ListImportBatchDeletionLogUseCase,
+  ListImportBatchesUseCase,
+} from "../../../../src/usecase/steps/manageImportBatches";
+import { PageHead } from "../../../_components/PageHead";
+import { ImportBatchesManager } from "./ImportBatchesManager";
+
+/**
+ * /admin/import-batches: 管理者による全期間・全帳票種別の取込バッチ管理画面 (manage_imports=admin専用)。
+ * 「別の月のサンプルデータが誤って本番へ取り込まれた」といった事故を、開発者にSQLを打ってもらわず
+ * 管理者自身が発見・削除できるようにする。
+ */
+export default async function AdminImportBatchesPage() {
+  const session = await getServerSession();
+  if (!session) redirect("/sign-in");
+  if (!checkAccess(session, "manage_imports")) redirect("/");
+
+  const { env } = await getCloudflareContext({ async: true });
+  const db = createDb(env.DB);
+  const batches = await new ListImportBatchesUseCase(new D1ImportBatchRepository(db)).execute();
+  const deletionLog = await new ListImportBatchDeletionLogUseCase(new D1AuditLogRepository(db)).execute();
+
+  return (
+    <div className="max-w-5xl">
+      <PageHead
+        kind="tool"
+        title="取込データ管理"
+        lead="全期間・全帳票種別の取込バッチを確認し、誤って取り込まれたデータを削除します。削除は取り消せません。"
+      />
+      <ImportBatchesManager initialBatches={batches} initialDeletionLog={deletionLog} />
+    </div>
+  );
+}

@@ -17,6 +17,8 @@ export const user = sqliteTable("user", {
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
   role: text("role").default("input_staff"),
+  /** 管理者がアカウントを無効化(凍結)した場合 true。true のユーザーは新規セッションを作れない。 */
+  banned: integer("banned", { mode: "boolean" }).default(false).notNull(),
 });
 
 export const session = sqliteTable(

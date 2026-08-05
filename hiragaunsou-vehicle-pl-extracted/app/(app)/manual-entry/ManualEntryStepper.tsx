@@ -27,6 +27,16 @@ export type PayrollStatus = {
   importedAt: number;
 } | null;
 
+export interface PayrollDetailRow {
+  vehicleNo: string;
+  vehicleType: string;
+  depot: string;
+  driverName: string | null;
+  driverCount: number;
+  salary: number;
+  welfare: number;
+}
+
 /** 0を「入力済み」として扱ってよい項目(未入力でも0円で困らない) */
 type NumericField =
   | "repairActual"
@@ -96,6 +106,15 @@ function parseVehicleNoList(raw: string): string[] {
 }
 
 /**
+ * 車番・運転者検索の全角/半角ゆらぎを吸収する。
+ * NFKC正規化で全角英数字・全角スペースを半角化してから小文字化して比較する
+ * (「２４」でも「24」でも同じ車両がヒットするようにする)。
+ */
+function normalizeSearchText(raw: string): string {
+  return raw.normalize("NFKC").toLowerCase();
+}
+
+/**
  * 画面のステップ = 業務フロー docx のステップ。
  * システム都合の並びにせず、手順書と同じ番号・同じ言葉で並べる(現在地を見失わせない)。
  */
@@ -120,12 +139,14 @@ export function ManualEntryStepper({
   vehicles,
   prefill,
   payrollStatus,
+  payrollDetail = [],
   initialWorkflowStep = null,
 }: {
   yearMonth: string;
   vehicles: VehicleRow[];
   prefill: PrefillValues;
   payrollStatus: PayrollStatus;
+  payrollDetail?: PayrollDetailRow[];
   initialWorkflowStep?: string | null;
 }) {
   const [step, setStep] = useState(() => initialIndexFromWorkflowStep(initialWorkflowStep));
@@ -160,10 +181,12 @@ export function ManualEntryStepper({
   // 車両テーブルは何十行にもなるので、車番・運転者名で絞り込めるようにする。
   // どのステップのどの表にも同じ検索語を使い回す(表ごとに検索欄を出すと逆に分かりにくいため)。
   const filteredVehicles = useMemo(() => {
-    const query = vehicleSearch.trim();
+    const query = normalizeSearchText(vehicleSearch.trim());
     if (!query) return vehicles;
     return vehicles.filter(
-      (v) => v.vehicleNo.includes(query) || (v.driver ?? "").includes(query),
+      (v) =>
+        normalizeSearchText(v.vehicleNo).includes(query) ||
+        normalizeSearchText(v.driver ?? "").includes(query),
     );
   }, [vehicles, vehicleSearch]);
 
@@ -607,6 +630,42 @@ export function ManualEntryStepper({
                 </Link>
               </div>
             )}
+            {payrollDetail.length > 0 ? (
+              <div className="mt-4">
+                <h3 className="text-xs font-bold text-ink-muted">車両別内訳(社員コード→運転者マスタ→車両で集計)</h3>
+                <div className="mt-1.5 max-h-[40vh] overflow-y-auto rounded-md border border-line">
+                  <table className="min-w-full text-sm">
+                    <thead className="sticky top-0 bg-subtle">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs font-bold text-ink-muted">車番</th>
+                        <th className="px-3 py-2 text-left text-xs font-bold text-ink-muted">運転者</th>
+                        <th className="px-3 py-2 text-right text-xs font-bold text-ink-muted">総支給額</th>
+                        <th className="px-3 py-2 text-right text-xs font-bold text-ink-muted">社保合計</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {payrollDetail.map((row) => (
+                        <tr key={row.vehicleNo} className="border-t border-line">
+                          <td className="px-3 py-2 num">{row.vehicleNo}</td>
+                          <td className="px-3 py-2">
+                            {row.driverName ?? <span className="text-danger">未割当</span>}
+                          </td>
+                          <td className="px-3 py-2 text-right num">
+                            {row.salary.toLocaleString("ja-JP")}円
+                          </td>
+                          <td className="px-3 py-2 text-right num">
+                            {row.welfare.toLocaleString("ja-JP")}円
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-1.5 text-[11px] text-ink-muted">
+                  「未割当」は運転者マスタに給与データと一致する車両が見つからなかった車両です。取り漏れがないか確認してください。
+                </p>
+              </div>
+            ) : null}
             <label className="mt-4 flex items-center gap-2 text-sm text-ink">
               <input
                 type="checkbox"
