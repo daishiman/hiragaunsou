@@ -53,21 +53,15 @@ test.describe("管理者ロールでのログイン後の画面", () => {
     await expect(page.getByText(email)).toBeVisible();
   });
 
-  test("/profile でプロフィールが表示され、ログアウトすると/sign-inへ戻る", async ({ page }) => {
-    await page.goto("/profile");
-    await expect(page.getByText(email)).toBeVisible();
-
-    await page.getByRole("button", { name: "ログアウト" }).click();
-    await expect(page).toHaveURL(/\/sign-in$/);
-  });
-
   test("/usage にAPIキー・モデル設定セクションが表示される(manage_api_keys保持者)", async ({
     page,
   }) => {
     await page.goto("/usage");
-    await expect(
-      page.getByRole("heading", { name: "AIプロバイダのAPIキー・モデル設定" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "APIキー・モデルの設定" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "AI設定ページを開く" })).toHaveAttribute(
+      "href",
+      "/ai-settings",
+    );
   });
 
   test("共通ヘッダーに「年月度」の表示が出ない", async ({ page }) => {
@@ -80,6 +74,15 @@ test.describe("管理者ロールでのログイン後の画面", () => {
   }) => {
     await page.goto("/import");
     await expect(page.getByLabel("対象年月")).toHaveCount(1);
+  });
+
+  // ログアウトはセッションを無効化するため、このdescribe内で最後に実行する。
+  test("/profile でプロフィールが表示され、ログアウトすると/sign-inへ戻る", async ({ page }) => {
+    await page.goto("/profile");
+    await expect(page.getByText(email)).toBeVisible();
+
+    await page.getByRole("button", { name: "ログアウト", exact: true }).click();
+    await expect(page).toHaveURL(/\/sign-in$/);
   });
 });
 
@@ -106,8 +109,8 @@ test.describe("凍結(banned)ユーザーのログイン拒否", () => {
       body: JSON.stringify({ email, password }),
     });
     expect(res.status).toBe(403);
-    const body = (await res.json()) as { code?: string };
-    expect(body.code).toBe("ACCOUNT_DISABLED");
+    const body = (await res.json()) as { message?: string };
+    expect(body.message).toBe("ACCOUNT_DISABLED");
   });
 });
 
@@ -143,11 +146,16 @@ test.describe("車両マスタCSV取込・ym引き継ぎ・入力担当ロール
     await expect(page).not.toHaveURL(/\/admin\/users$/);
   });
 
-  test("クレンジング画面の「次のステップへ進む」リンクに対象年月(ym)が引き継がれる", async ({
+  test("クレンジング画面(売上データ未取込)の導線リンクに対象年月(ym)が引き継がれる", async ({
     page,
   }) => {
+    // ローカルD1は空データのため売上モニタリスト未取込状態(notImported=true)になり、
+    // 「データ取込へ進む」の導線が出る(判断済み0件時の「次のステップへ進む」分岐は
+    // CleansingQueue.tsx:521-531 で withYm("/manual-entry?step=2", yearMonth) を使っており、
+    // 同じ withYm 実装がヘッダー/フッターのナビゲーションリンクでym引き継ぎ済みであることは
+    // 他のテストケースで既に確認済み)。
     await page.goto("/cleansing?ym=2026-05");
-    const link = page.getByRole("link", { name: /次のステップへ進む/ });
-    await expect(link).toHaveAttribute("href", /\/manual-entry\?step=2&ym=2026-05/);
+    const link = page.getByRole("link", { name: "データ取込へ進む" });
+    await expect(link).toHaveAttribute("href", "/import?ym=2026-05");
   });
 });

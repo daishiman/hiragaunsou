@@ -208,7 +208,7 @@ export default async function HomePage() {
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {[
             { href: "/grid", label: "月次収支表", desc: "車両別の内訳を確認する" },
-            { href: "/annual", label: "年間集計・対前年", desc: "12ヶ月の推移と前年比" },
+            { href: "/annual", label: "年間集計・対前年", desc: "13ヶ月の推移と前年比" },
             { href: "/deficit", label: "赤字の理由", desc: "赤字車両を3分類で見る" },
           ].map((l) => (
             <Link

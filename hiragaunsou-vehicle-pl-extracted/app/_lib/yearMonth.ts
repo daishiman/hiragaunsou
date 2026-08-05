@@ -54,7 +54,8 @@ export function periodPresets(): { label: string; from: string; to: string }[] {
     { label: "単月", from: to, to },
     { label: "3ヶ月", from: monthsBefore(to, 2), to },
     { label: "6ヶ月", from: monthsBefore(to, 5), to },
-    { label: "12ヶ月", from: monthsBefore(to, 11), to },
+    // 1年前の同月と当月を並べて見比べられるよう、12ではなく13ヶ月にする
+    { label: "13ヶ月", from: monthsBefore(to, 12), to },
   ];
 }
 

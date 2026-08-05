@@ -2,11 +2,65 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { visibleNavGroups, findNavItem, type NavBadge } from "../_lib/navigation";
 import { withYm } from "../_lib/withYm";
 import { useCurrentYm } from "./YmProvider";
 import { signOut } from "../_lib/authClient";
+
+/** 折りたたんだグループを覚えておくキー。開いた側ではなく閉じた側を保存する。 */
+const COLLAPSED_GROUPS_KEY = "hiragaunsou:sidebar-collapsed-groups";
+
+/**
+ * 開閉状態は localStorage という「Reactの外の状態」なので useSyncExternalStore で読む。
+ * useEffect で読み込んで setState する書き方だと初回描画のあとに必ず再描画が入るうえ、
+ * サーバ描画との食い違いも自前で面倒を見る必要がある。
+ * サーバ側スナップショットは空 = 全グループ開いた状態に倒す。
+ */
+const collapsedStoreListeners = new Set<() => void>();
+
+function subscribeCollapsedGroups(onChange: () => void): () => void {
+  collapsedStoreListeners.add(onChange);
+  // 別タブで畳んだ結果もこのタブに反映する
+  window.addEventListener("storage", onChange);
+  return () => {
+    collapsedStoreListeners.delete(onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
+/** 生の文字列を返す。参照が毎回変わると無限ループになるため、配列に変換せず値のまま返す。 */
+function collapsedGroupsSnapshot(): string {
+  try {
+    return window.localStorage.getItem(COLLAPSED_GROUPS_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function collapsedGroupsServerSnapshot(): string {
+  return "";
+}
+
+function parseCollapsedGroups(raw: string): readonly string[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
+  } catch {
+    // 壊れた値は「全部開いている」に倒す
+    return [];
+  }
+}
+
+function writeCollapsedGroups(next: readonly string[]): void {
+  try {
+    window.localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify(next));
+  } catch {
+    // 保存できなくても開閉自体は続けられるので握りつぶす
+  }
+  for (const listener of collapsedStoreListeners) listener();
+}
 
 export interface AppShellProps {
   userName: string;
@@ -32,6 +86,21 @@ export function AppShell({ userName, userRole, role, badges, children }: AppShel
   const navGroups = visibleNavGroups(role);
   // いま見ている対象月。サイドバーから別の画面へ移っても同じ月を見続けられるよう引き継ぐ。
   const ym = useCurrentYm();
+
+  const collapsedRaw = useSyncExternalStore(
+    subscribeCollapsedGroups,
+    collapsedGroupsSnapshot,
+    collapsedGroupsServerSnapshot,
+  );
+  const collapsedGroups = useMemo(() => parseCollapsedGroups(collapsedRaw), [collapsedRaw]);
+
+  function toggleGroup(label: string) {
+    writeCollapsedGroups(
+      collapsedGroups.includes(label)
+        ? collapsedGroups.filter((l) => l !== label)
+        : [...collapsedGroups, label],
+    );
+  }
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -105,14 +174,44 @@ export function AppShell({ userName, userRole, role, badges, children }: AppShel
           </Link>
         </div>
 
-        <nav className="flex-1 px-2 py-3" aria-label="メインメニュー">
-          {navGroups.map((group) => (
-            <div key={group.label} className="mb-4">
-              <p className="px-2 pb-1.5 text-[11px] font-semibold tracking-wide text-ink-muted">
-                {group.label}
-              </p>
-              <ul>
-                {group.items.filter((item) => item.href !== "/").map((item) => {
+        <nav className="flex-1 px-2 py-1" aria-label="メインメニュー">
+          {navGroups.map((group) => {
+            const items = group.items.filter((item) => item.href !== "/");
+            // 現在地を含むグループは畳ませない。開閉のせいで自分の居場所を見失わせないため。
+            const hasCurrent = items.some((item) => item.href === current?.href);
+            const open = hasCurrent || !collapsedGroups.includes(group.label);
+            const panelId = `nav-group-${encodeURIComponent(group.label)}`;
+            return (
+              <div key={group.label} className="border-t border-line py-2 first:border-t-0">
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.label)}
+                  aria-expanded={open}
+                  aria-controls={panelId}
+                  disabled={hasCurrent}
+                  className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[11px] font-semibold tracking-wide text-ink-muted hover:bg-subtle disabled:cursor-default disabled:hover:bg-transparent"
+                >
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 10 10"
+                    aria-hidden="true"
+                    className={[
+                      "shrink-0 transition-transform duration-150",
+                      open ? "rotate-90" : "",
+                    ].join(" ")}
+                  >
+                    <path d="M3 1.5 L7 5 L3 8.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <span className="min-w-0 flex-1 truncate">{group.label}</span>
+                  {!open && (
+                    <span className="num shrink-0 rounded bg-subtle px-1.5 py-0.5 text-[10px] font-semibold text-ink-muted">
+                      {items.length}
+                    </span>
+                  )}
+                </button>
+                <ul id={panelId} hidden={!open}>
+                {items.map((item) => {
                   const active = current?.href === item.href;
                   const count = item.badge ? badges[item.badge] : 0;
                   return (
@@ -121,6 +220,7 @@ export function AppShell({ userName, userRole, role, badges, children }: AppShel
                         href={withYm(item.href, ym)}
                         onClick={closeNav}
                         aria-current={active ? "page" : undefined}
+                        title={item.desc}
                         className={[
                           "flex items-center gap-2 rounded-md px-2 py-2 text-[13px]",
                           active
@@ -151,9 +251,10 @@ export function AppShell({ userName, userRole, role, badges, children }: AppShel
                     </li>
                   );
                 })}
-              </ul>
-            </div>
-          ))}
+                </ul>
+              </div>
+            );
+          })}
         </nav>
 
         <div className="border-t border-line px-4 py-3">

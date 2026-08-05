@@ -115,7 +115,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       {
         href: "/annual",
         label: "年間集計・対前年",
-        desc: "12ヶ月推移と前年比較・Excel突合",
+        desc: "13ヶ月推移と前年比較・Excel突合",
         permission: "view",
       },
     ],

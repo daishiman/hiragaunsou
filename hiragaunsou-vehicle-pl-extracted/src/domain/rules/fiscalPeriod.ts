@@ -51,3 +51,12 @@ export function sameMonthPreviousYear(yearMonth: string): string {
 export function monthLabel(yearMonth: string): string {
   return `${parse(yearMonth).month}月`;
 }
+
+/**
+ * 年をまたぐ推移グラフ用の短いラベル (例: 2025-08 → 25/8)。
+ * 直近13ヶ月は先頭と末尾が同じ月になるため、monthLabel では区別できない。
+ */
+export function shortMonthLabel(yearMonth: string): string {
+  const { year, month } = parse(yearMonth);
+  return `${String(year).slice(-2)}/${month}`;
+}
