@@ -71,11 +71,14 @@ jobs:
       - name: Apply D1 migrations (local, for E2E)
         run: npm run db:migrate:local
 
-      # Google OAuth自体は呼ばない(未ログイン時のリダイレクト/サインイン画面のUXのみ検証)ため、
+      # Google OAuth自体は呼ばない(招待経由のメール/パスワード作成パスでログイン後の画面も検証する)ため、
       # secretsはcreateAuth()の初期化が落ちないためのダミー値で足りる。
-      - name: E2E smoke test (unauthenticated UX)
+      # BETTER_AUTH_URLはtrustedOriginsの判定に使われるため、webServerが起動する
+      # http://localhost:3000 と一致させないと sign-in が Invalid origin で失敗する。
+      - name: E2E smoke test
         env:
           BETTER_AUTH_SECRET: ci-dummy-secret-not-used-for-real-auth
+          BETTER_AUTH_URL: http://localhost:3000
           GOOGLE_CLIENT_ID: ci-dummy-client-id
           GOOGLE_CLIENT_SECRET: ci-dummy-client-secret
         run: npm run test:e2e

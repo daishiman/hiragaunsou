@@ -1,10 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * 認証(Google OAuth)が必須の画面が大半のため、E2Eは現時点では
- * 「未ログイン時のリダイレクト/公開ページ」というUXの土台部分に限定している。
- * ログイン後の画面遷移まで含めるには、本番と分離したテスト専用の認証バイパスを
- * 別途設計・合意した上で追加する必要がある(docs/testing-strategy.md参照)。
+ * 認証(Google OAuth)が必須の画面が大半のため、未ログイン時のリダイレクト/公開ページに加え、
+ * ログイン後の画面は招待経由のメール/パスワード作成パス(本番コード非改変、tests/e2e/helpers/
+ * 配下で完結)でセッションを発行して検証する(docs/testing-strategy.md参照)。
  */
 export default defineConfig({
   testDir: "./tests/e2e",
