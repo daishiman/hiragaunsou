@@ -58,6 +58,24 @@ export const rawIngestion = sqliteTable(
   (table) => [index("raw_ingestion_ym_source_idx").on(table.yearMonth, table.sourceType)],
 );
 
+/**
+ * 管理操作の監査ログ (誰が/いつ/何をしたか)。
+ * 当面は取込バッチ削除(csv_import_batch/raw_ingestion)のみを記録する。
+ * 対象が既に消えた後も「何を消したか」を追える必要があるため、対象テーブルへの
+ * 外部キーは持たず、削除時点のスナップショットをJSONで保持する。
+ */
+export const adminAuditLog = sqliteTable("admin_audit_log", {
+  id: text("id").primaryKey(),
+  actorId: text("actor_id").references(() => user.id),
+  actorName: text("actor_name").notNull(),
+  action: text("action").notNull(), // 例: "delete_import_batch"
+  summary: text("summary").notNull(), // 画面に出す人間可読な要約
+  detailJson: text("detail_json"), // 構造化データ(JSON文字列)
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+    .notNull(),
+});
+
 /** 車両マスタ (保険・税・リース・配賦単価等、連鎖確定の土台) */
 export const vehicleMaster = sqliteTable("vehicle_master", {
   vehicleNo: text("vehicle_no").primaryKey(),
@@ -378,6 +396,36 @@ export const aiProviderCredential = sqliteTable("ai_provider_credential", {
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .notNull(),
   updatedBy: text("updated_by").references(() => user.id),
+});
+
+/**
+ * ユーザー招待(仮登録)。管理者が /admin/users からメールアドレス+ロールを予約すると、
+ * 本人が実際にGoogle Workspaceアカウントで初めてサインインした時点で、そのロールが
+ * 自動的に適用される (src/infrastructure/auth/auth.ts の user.create.before フック参照)。
+ * ログインの許可・拒否自体はWORKSPACE_DOMAINS(hd claim検証)がそのまま担う。
+ */
+export const userInvitation = sqliteTable("user_invitation", {
+  id: text("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  role: text("role").notNull(),
+  invitedBy: text("invited_by")
+    .notNull()
+    .references(() => user.id),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+    .notNull(),
+  acceptedAt: integer("accepted_at", { mode: "timestamp_ms" }),
+  revoked: integer("revoked", { mode: "boolean" }).default(false).notNull(),
+  /**
+   * "google": 既存方式。本人が実際にGoogle Workspaceアカウントで初めてサインインした時点で
+   *   ロールが適用される(user.create.beforeフック)。
+   * "password": Gmailを持たない社内ユーザー向け。招待作成と同時にuser行を作成し、
+   *   better-auth標準のパスワードリセット機構(requestPasswordReset/resetPassword)で
+   *   発行した初期パスワード設定リンクを管理者が本人へ安全な経路で手渡しする。
+   *   本人が実際にパスワードを設定して初めてサインインした時点でacceptedAtが確定する
+   *   (session.create.beforeフック)。
+   */
+  authMethod: text("auth_method").notNull().default("google"),
 });
 
 /**

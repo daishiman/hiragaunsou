@@ -17,6 +17,15 @@ type Conflict = {
   superseded: Batch[];
 };
 
+type YearMonthMismatch = {
+  sourceType: ImportSourceType;
+  file: File;
+  selectedYearMonth: string;
+  detectedYearMonth: string;
+  matchedRows: number;
+  dominantCount: number;
+};
+
 function formatDateTime(epochMs: number): string {
   return new Date(epochMs).toLocaleString("ja-JP", {
     timeZone: "Asia/Tokyo",
@@ -67,6 +76,7 @@ export function ImportForm({
   const [pending, setPending] = useState<ImportSourceType | null>(null);
   const [results, setResults] = useState<Partial<Record<ImportSourceType, Result>>>({});
   const [conflict, setConflict] = useState<Conflict | null>(null);
+  const [yearMonthMismatch, setYearMonthMismatch] = useState<YearMonthMismatch | null>(null);
 
   const doneCount = IMPORT_SOURCES.filter((source) => (imported[source.sourceType] ?? []).length > 0).length;
 
@@ -82,13 +92,20 @@ export function ImportForm({
   const focusSourceType =
     explicitFocusSourceType ?? nextIncompleteSource?.sourceType ?? lastSource.sourceType;
 
-  async function upload(sourceType: ImportSourceType, file: File, replace: boolean) {
+  async function upload(
+    sourceType: ImportSourceType,
+    file: File,
+    replace: boolean,
+    confirmYearMonth = false,
+  ) {
     setPending(sourceType);
     setConflict(null);
+    setYearMonthMismatch(null);
     const form = new FormData();
     form.append("file", file);
     form.append("yearMonth", yearMonth);
     if (replace) form.append("replace", "true");
+    if (confirmYearMonth) form.append("confirmYearMonth", "true");
 
     try {
       // サーバーに全く到達できなかった場合(オフライン・DNS失敗等)と、サーバーが
@@ -125,6 +142,23 @@ export function ImportForm({
         return;
       }
 
+      if (res.status === 409 && data.error === "yearMonthMismatch") {
+        const m = data.yearMonthMismatch as {
+          selectedYearMonth: string;
+          detectedYearMonth: string;
+          matchedRows: number;
+          dominantCount: number;
+        };
+        setYearMonthMismatch({
+          sourceType,
+          file,
+          selectedYearMonth: m.selectedYearMonth,
+          detectedYearMonth: m.detectedYearMonth,
+          matchedRows: m.matchedRows,
+          dominantCount: m.dominantCount,
+        });
+        return;
+      }
       if (res.status === 409) {
         const c = data.conflict as { sameFileName: boolean; superseded: Batch[] };
         setConflict({ sourceType, file, sameFileName: c.sameFileName, superseded: c.superseded });
@@ -162,6 +196,7 @@ export function ImportForm({
             onChange={(e) => {
               setResults({});
               setConflict(null);
+              setYearMonthMismatch(null);
               router.replace(`/import?ym=${e.target.value}`);
             }}
             className="rounded-md border border-line bg-white px-2 py-1 text-sm font-normal text-ink"
@@ -192,6 +227,7 @@ export function ImportForm({
         const result = results[source.sourceType];
         const isPending = pending === source.sourceType;
         const isConflicting = conflict?.sourceType === source.sourceType;
+        const isYearMonthMismatching = yearMonthMismatch?.sourceType === source.sourceType;
         // ホームの特定STEPカードから来たときは、その帳票だけを主役にして他を畳む。
         // フォーカス無し(サイドバー「データ取込」から直接来た)ときは全部を並列に見せる。
         const isFocused = !focusSourceType || source.sourceType === focusSourceType;
@@ -237,6 +273,42 @@ export function ImportForm({
               </Link>
             ) : null}
 
+            {isYearMonthMismatching ? (
+              <div className="mt-4 rounded-lg border border-caution-border bg-caution-soft p-4">
+                <p className="text-sm font-bold text-ink">
+                  「{yearMonthMismatch.file.name}」の中身は主に {yearMonthMismatch.detectedYearMonth}{" "}
+                  の伝票のようです。対象年月「{yearMonthMismatch.selectedYearMonth}」と違いますが、このまま取り込みますか?
+                </p>
+                <p className="mt-2 text-xs leading-5 text-ink-muted">
+                  積荷日を読み取れた {yearMonthMismatch.matchedRows} 件中 {yearMonthMismatch.dominantCount}{" "}
+                  件が {yearMonthMismatch.detectedYearMonth} でした。前月分など別の年月のファイルを取り違えていないか確認してください。
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void upload(
+                        yearMonthMismatch.sourceType,
+                        yearMonthMismatch.file,
+                        false,
+                        true,
+                      )
+                    }
+                    className="rounded-md bg-brand-deep px-4 py-2 text-sm font-semibold text-white"
+                  >
+                    このまま取り込む
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setYearMonthMismatch(null)}
+                    className="rounded-md border border-line px-4 py-2 text-sm font-semibold text-ink"
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             {isConflicting ? (
               // border-warning / bg-amber-50 は本プロジェクトのトークンに存在せず
               // 枠線が消えていた。注意の面は caution トークンで描く。
@@ -280,7 +352,7 @@ export function ImportForm({
                   </button>
                 </div>
               </div>
-            ) : (
+            ) : isYearMonthMismatching ? null : (
               <input
                 type="file"
                 accept={source.accept}
@@ -295,7 +367,7 @@ export function ImportForm({
             )}
 
             {isPending ? <p className="mt-2 text-xs text-ink-muted">取り込んでいます…</p> : null}
-            {result && !isConflicting ? (
+            {result && !isConflicting && !isYearMonthMismatching ? (
               <p className={`mt-2 text-xs leading-5 ${result.ok ? "text-ink-muted" : "text-danger"}`}>
                 {result.fileName}: {result.message}
               </p>

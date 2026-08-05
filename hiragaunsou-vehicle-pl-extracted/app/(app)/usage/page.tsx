@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../src/infrastructure/auth/session";
@@ -34,16 +35,20 @@ export default async function UsagePage() {
   const pricing = readPricing(env);
   const summary = summarizeUsage(logs, pricing);
 
+  // APIキー・モデル設定は/ai-settings画面の責務(1画面1責務)。ここでは
+  // manage_api_keys権限を持つ人にだけ、設定画面への案内リンクを出す(UIそのものは移設しない)。
+  const canManageApiKeys = checkAccess(session, "manage_api_keys");
+
   return (
     <div className="max-w-3xl">
       <PageHead kind="tool" title="利用状況" lead="AI(Claude API)利用の概算費用です。" />
 
       <div className="rounded-md border border-caution-border bg-caution-soft px-4 py-3 text-xs leading-relaxed">
-        表示金額はトークン数からの概算です。請求の正はAnthropicのコンソールを確認してください。
+        表示金額はトークン数からの概算です。請求の正はAnthropicのコンソールを確認してください。現在、費用集計の対象はAnthropic(Claude)経由の呼び出しのみです(他プロバイダは未対応のため集計されません)。
       </div>
 
       <section className="mt-6 rounded-xl border border-line bg-white p-5 text-center">
-        <p className="text-xs text-ink-muted">今月の概算費用</p>
+        <p className="text-xs text-ink-muted">今月の概算費用(Anthropic/Claudeのみ集計)</p>
         <p className="num mt-1 text-4xl font-bold text-accent">
           ¥{Math.round(summary.totalCostJpy).toLocaleString("ja-JP")}
         </p>
@@ -106,6 +111,21 @@ export default async function UsagePage() {
           </div>
         )}
       </section>
+
+      {canManageApiKeys ? (
+        <section className="mt-6 rounded-xl border border-line bg-white p-5">
+          <h2 className="text-sm font-bold text-ink">APIキー・モデルの設定</h2>
+          <p className="mt-1 text-xs text-ink-muted">
+            AIプロバイダのAPIキー登録・モデル選択は「AI設定」ページで行えます(この画面は利用実績の閲覧に専念しています)。
+          </p>
+          <Link
+            href="/ai-settings"
+            className="pressable mt-3 inline-block rounded-md border border-brand bg-brand-soft px-4 py-1.5 text-xs font-semibold text-brand-deep"
+          >
+            AI設定ページを開く
+          </Link>
+        </section>
+      ) : null}
     </div>
   );
 }

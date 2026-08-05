@@ -11,6 +11,57 @@ import type {
 } from "../../domain/repositories/MasterRepository";
 import type { CleansingDecisionRecord } from "../../domain/repositories/CleansingDecisionRepository";
 import { applyCleansingDecisions } from "./getCleansingQueue";
+import type { DriverMasterRecord } from "../../domain/repositories/MasterRepository";
+
+/** 車両1台分の給与集計(社員コード→運転者マスタ→車両の連鎖の結果)。 */
+export interface VehiclePayrollAggregate {
+  vehicleNo: string;
+  /** 2人乗務等で複数名いる場合は "/" 区切り */
+  driverName: string;
+  /** 総支給額(複数名の場合は合算) */
+  salary: number;
+  /** 社保合計額(複数名の場合は合算) */
+  welfare: number;
+  /** 乗務員数(賞与は1人あたりの支給額のため、2人乗務車両は2人分になる) */
+  driverCount: number;
+}
+
+/**
+ * 社員コード→運転者マスタ→車両、の連鎖で給与集計表(raw_ingestion)を車両単位に集約する。
+ * STEP7の収支確定(このファイル内)と、STEP3「人件費の確認」画面の車両別内訳表示
+ * (getPayrollDetailByVehicle.ts)の両方から呼ばれる共通ロジック。
+ * 二重実装すると突合ロジックがずれる恐れがあるため、ここに一本化する。
+ */
+export function aggregatePayrollByVehicle(
+  payrollRawRows: readonly { naturalKey: string | null; raw: unknown }[],
+  drivers: readonly DriverMasterRecord[],
+): Map<string, VehiclePayrollAggregate> {
+  const payrollByEmployee = new Map<string, PayrollRecord>();
+  for (const r of payrollRawRows) {
+    if (r.naturalKey) payrollByEmployee.set(r.naturalKey, r.raw as PayrollRecord);
+  }
+
+  const result = new Map<string, VehiclePayrollAggregate>();
+  for (const driver of drivers) {
+    if (!driver.vehicleNo) continue;
+    const payroll = payrollByEmployee.get(driver.employeeCode);
+    const existing = result.get(driver.vehicleNo) ?? {
+      vehicleNo: driver.vehicleNo,
+      driverName: "",
+      salary: 0,
+      welfare: 0,
+      driverCount: 0,
+    };
+    result.set(driver.vehicleNo, {
+      vehicleNo: driver.vehicleNo,
+      driverName: existing.driverName ? `${existing.driverName}/${driver.driverName}` : driver.driverName,
+      salary: existing.salary + (payroll?.totalPay ?? 0),
+      welfare: existing.welfare + (payroll?.socialInsuranceTotal ?? 0),
+      driverCount: existing.driverCount + 1,
+    });
+  }
+  return result;
+}
 
 /**
  * STEP7: 収支確定(締め)ユースケース。
@@ -111,28 +162,7 @@ export class FinalizeMonthlyPlUseCase {
     );
     const salesAgg = aggregateSalesByVehicle(salesRows);
 
-    const payrollByEmployee = new Map<string, PayrollRecord>();
-    for (const r of payrollRawRows) {
-      if (r.naturalKey) payrollByEmployee.set(r.naturalKey, r.raw as PayrollRecord);
-    }
-
-    const driversByVehicle = new Map<
-      string,
-      { name: string; salary: number; welfare: number; count: number }
-    >();
-    for (const driver of drivers) {
-      if (!driver.vehicleNo) continue;
-      const payroll = payrollByEmployee.get(driver.employeeCode);
-      const existing =
-        driversByVehicle.get(driver.vehicleNo) ?? { name: "", salary: 0, welfare: 0, count: 0 };
-      driversByVehicle.set(driver.vehicleNo, {
-        name: existing.name ? `${existing.name}/${driver.driverName}` : driver.driverName,
-        salary: existing.salary + (payroll?.totalPay ?? 0),
-        welfare: existing.welfare + (payroll?.socialInsuranceTotal ?? 0),
-        // 賞与は運転者1人あたりの支給額なので、2人乗務の車両は2人分になる
-        count: existing.count + 1,
-      });
-    }
+    const driversByVehicle = aggregatePayrollByVehicle(payrollRawRows, drivers);
 
     const manualByVehicle = new Map<string, ManualVehicleInput>();
     for (const m of input.manualInputs) {
@@ -162,7 +192,7 @@ export class FinalizeMonthlyPlUseCase {
         depot: vehicle.depot,
         reg: vehicle.regDate,
         code: null,
-        driver: driver?.name ?? null,
+        driver: driver?.driverName ?? null,
         trips: op?.tripCount ?? 0,
         slips: sales?.slipCount ?? 0,
         hours: op?.operatingHours ?? 0,
@@ -187,7 +217,7 @@ export class FinalizeMonthlyPlUseCase {
         taxAuto: vehicle.taxAuto,
         taxWeight: vehicle.taxWeight,
         miscOther: manual.miscOther,
-        driverCount: driver?.count ?? 0,
+        driverCount: driver?.driverCount ?? 0,
         lease: vehicle.lease,
         installment: vehicle.installment,
         standardCostRate,

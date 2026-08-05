@@ -88,7 +88,7 @@ export default async function AnnualPage({
       {data.isEmpty ? (
         <EmptyState
           title="この期のデータはまだありません"
-          description="月次データを取り込むと、12ヶ月の推移と対前年比較が表示されます。"
+          description="月次データを取り込むと、13ヶ月の推移と対前年比較が表示されます。"
         />
       ) : (
         <>
@@ -153,34 +153,34 @@ export default async function AnnualPage({
           </div>
 
           <section className="mt-4 rounded-xl border border-line bg-white p-5">
-            <h2 className="text-sm font-bold text-ink">損益の12ヶ月推移</h2>
+            <h2 className="text-sm font-bold text-ink">損益の13ヶ月推移</h2>
             <div className="mt-3">
               <TrendBars
                 title="損益"
-                points={data.months.map((m, i) => ({
+                points={data.trend.map((m) => ({
                   label: m.label,
-                  value: m.totals.profit,
-                  reference: data.comparison[i]?.prevProfit ?? null,
+                  value: m.profit,
+                  reference: m.prevProfit,
                   isEmpty: m.isEmpty,
                 }))}
-                referenceLabel="前期同月"
+                referenceLabel="前年同月"
                 signed
               />
             </div>
           </section>
 
           <section className="mt-4 rounded-xl border border-line bg-white p-5">
-            <h2 className="text-sm font-bold text-ink">売上の12ヶ月推移</h2>
+            <h2 className="text-sm font-bold text-ink">売上の13ヶ月推移</h2>
             <div className="mt-3">
               <TrendBars
                 title="売上"
-                points={data.months.map((m, i) => ({
+                points={data.trend.map((m) => ({
                   label: m.label,
-                  value: m.totals.sales,
-                  reference: data.comparison[i]?.prevSales ?? null,
+                  value: m.sales,
+                  reference: m.prevSales,
                   isEmpty: m.isEmpty,
                 }))}
-                referenceLabel="前期同月"
+                referenceLabel="前年同月"
               />
             </div>
           </section>

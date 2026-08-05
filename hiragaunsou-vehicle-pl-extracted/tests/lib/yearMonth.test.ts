@@ -118,7 +118,7 @@ describe("periodPresets", () => {
     vi.useRealTimers();
   });
 
-  it("前月を基準に単月・3・6・12ヶ月のプリセットを返す", () => {
+  it("前月を基準に単月・3・6・13ヶ月のプリセットを返す", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-05T00:00:00Z"));
     // defaultImportYearMonth() は前月の 2026-07 を返す
@@ -126,7 +126,8 @@ describe("periodPresets", () => {
       { label: "単月", from: "2026-07", to: "2026-07" },
       { label: "3ヶ月", from: "2026-05", to: "2026-07" },
       { label: "6ヶ月", from: "2026-02", to: "2026-07" },
-      { label: "12ヶ月", from: "2025-08", to: "2026-07" },
+      // 1年前の同月(2025-07)を含めるため13ヶ月
+      { label: "13ヶ月", from: "2025-07", to: "2026-07" },
     ]);
   });
 });

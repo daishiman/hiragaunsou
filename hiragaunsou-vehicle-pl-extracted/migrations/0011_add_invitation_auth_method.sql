@@ -1,0 +1,1 @@
+ALTER TABLE `user_invitation` ADD `auth_method` text DEFAULT 'google' NOT NULL;

@@ -4,11 +4,18 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 let mockPathname = "/dashboard";
-let mockSearchParams = new URLSearchParams();
+const mockPush = vi.fn();
+const mockReplace = vi.fn();
+const mockRefresh = vi.fn();
 
 vi.mock("next/navigation", () => ({
   usePathname: () => mockPathname,
-  useSearchParams: () => mockSearchParams,
+  useRouter: () => ({ push: mockPush, replace: mockReplace, refresh: mockRefresh }),
+}));
+
+const { signOutMock } = vi.hoisted(() => ({ signOutMock: vi.fn(async () => {}) }));
+vi.mock("../../app/_lib/authClient", () => ({
+  signOut: signOutMock,
 }));
 
 import { AppShell } from "../../app/_components/AppShell";
@@ -21,7 +28,10 @@ function mainNav() {
 describe("AppShell", () => {
   beforeEach(() => {
     mockPathname = "/dashboard";
-    mockSearchParams = new URLSearchParams();
+    mockPush.mockClear();
+    mockReplace.mockClear();
+    mockRefresh.mockClear();
+    signOutMock.mockClear();
   });
 
   it("admin(role)ではAI設定など管理権限限定の項目もサイドバーに表示する", () => {
@@ -30,7 +40,6 @@ describe("AppShell", () => {
         userName="今西さん"
         userRole="管理者"
         role="admin"
-        yearMonth="2026-05"
         badges={{ registration: 0, anomaly: 0 }}
       >
         <p>本文</p>
@@ -46,7 +55,6 @@ describe("AppShell", () => {
         userName="社長"
         userRole="経営者"
         role="executive"
-        yearMonth="2026-05"
         badges={{ registration: 0, anomaly: 0 }}
       >
         <p>本文</p>
@@ -67,7 +75,6 @@ describe("AppShell", () => {
         userName="今西さん"
         userRole="管理者"
         role="admin"
-        yearMonth="2026-05"
         badges={{ registration: 0, anomaly: 0 }}
       >
         <p>本文</p>
@@ -88,7 +95,6 @@ describe("AppShell", () => {
         userName="今西さん"
         userRole="管理者"
         role="admin"
-        yearMonth="2026-05"
         badges={{ registration: 3, anomaly: 0 }}
       >
         <p>本文</p>
@@ -97,52 +103,18 @@ describe("AppShell", () => {
     expect(screen.getByText("3")).toBeInTheDocument();
   });
 
-  it("?ymが未指定のときはpropsのyearMonthをヘッダーに表示する", () => {
-    mockSearchParams = new URLSearchParams();
+  it("ヘッダーに年月度の表示を出さない(利用者を混乱させるため削除済み)", () => {
     render(
       <AppShell
         userName="今西さん"
         userRole="管理者"
         role="admin"
-        yearMonth="2026-05"
         badges={{ registration: 0, anomaly: 0 }}
       >
         <p>本文</p>
       </AppShell>,
     );
-    expect(screen.getByText("2026年5月度")).toBeInTheDocument();
-  });
-
-  it("正しい形式の?ymがあればそちらをヘッダーに表示する", () => {
-    mockSearchParams = new URLSearchParams("ym=2026-03");
-    render(
-      <AppShell
-        userName="今西さん"
-        userRole="管理者"
-        role="admin"
-        yearMonth="2026-05"
-        badges={{ registration: 0, anomaly: 0 }}
-      >
-        <p>本文</p>
-      </AppShell>,
-    );
-    expect(screen.getByText("2026年3月度")).toBeInTheDocument();
-  });
-
-  it("不正な形式の?ymは無視してpropsのyearMonthを使う", () => {
-    mockSearchParams = new URLSearchParams("ym=invalid");
-    render(
-      <AppShell
-        userName="今西さん"
-        userRole="管理者"
-        role="admin"
-        yearMonth="2026-05"
-        badges={{ registration: 0, anomaly: 0 }}
-      >
-        <p>本文</p>
-      </AppShell>,
-    );
-    expect(screen.getByText("2026年5月度")).toBeInTheDocument();
+    expect(screen.queryByText(/\d{4}年\d{1,2}月度/)).not.toBeInTheDocument();
   });
 
   it("ユーザー名・ロールを表示し、子要素をmain内に描画する", () => {
@@ -151,7 +123,6 @@ describe("AppShell", () => {
         userName="今西さん"
         userRole="管理者"
         role="admin"
-        yearMonth="2026-05"
         badges={{ registration: 0, anomaly: 0 }}
       >
         <p>ここが本文</p>
@@ -169,7 +140,6 @@ describe("AppShell", () => {
         userName="今西さん"
         userRole="管理者"
         role="admin"
-        yearMonth="2026-05"
         badges={{ registration: 0, anomaly: 0 }}
       >
         <p>本文</p>
@@ -179,5 +149,36 @@ describe("AppShell", () => {
     expect(menuButton).toHaveAttribute("aria-expanded", "false");
     await user.click(menuButton);
     expect(menuButton).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("ユーザー名はマイページへのリンクになっている", () => {
+    render(
+      <AppShell
+        userName="今西さん"
+        userRole="管理者"
+        role="admin"
+        badges={{ registration: 0, anomaly: 0 }}
+      >
+        <p>本文</p>
+      </AppShell>,
+    );
+    expect(screen.getByRole("link", { name: /今西さん/ })).toHaveAttribute("href", "/profile");
+  });
+
+  it("ログアウトボタンを押すとsignOutを呼びsign-inへ遷移する", async () => {
+    const user = userEvent.setup();
+    render(
+      <AppShell
+        userName="今西さん"
+        userRole="管理者"
+        role="admin"
+        badges={{ registration: 0, anomaly: 0 }}
+      >
+        <p>本文</p>
+      </AppShell>,
+    );
+    await user.click(screen.getByRole("button", { name: "ログアウト" }));
+    expect(signOutMock).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledWith("/sign-in");
   });
 });

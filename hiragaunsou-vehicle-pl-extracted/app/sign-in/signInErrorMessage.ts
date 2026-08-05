@@ -18,6 +18,8 @@ const MESSAGES: Record<string, string> = {
   invalid_code: "Googleとの認証に失敗しました。もう一度お試しください。",
   email_not_found: "Googleアカウントからメールアドレスを取得できませんでした。",
   signup_disabled: "このアカウントは登録が許可されていません。管理者にお問い合わせください。",
+  account_disabled:
+    "このアカウントは管理者により凍結されています。心当たりが無い場合は管理者にお問い合わせください。",
 };
 
 const FALLBACK = "サインインに失敗しました。お手数ですが、もう一度お試しください。";

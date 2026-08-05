@@ -10,6 +10,7 @@ import {
   type CleansingFlagType,
 } from "../../../src/domain/rules/cleansingRules";
 import { yen } from "../../_lib/format";
+import { withYm } from "../../_lib/withYm";
 import { ListToolbar, type SortOption } from "../../_components/ListToolbar";
 
 type SortKey = "default" | "loadDateDesc" | "vehicleNoAsc";
@@ -520,7 +521,10 @@ export function CleansingQueue({
         {pendingCount === 0 && (
           <p className="mt-3 flex flex-wrap items-center gap-3 rounded bg-brand-soft px-3 py-2 text-sm font-semibold text-brand-deep">
             <span>✓ すべて判断済み</span>
-            <Link href="/manual-entry?step=2" className="underline underline-offset-2">
+            <Link
+              href={withYm("/manual-entry?step=2", yearMonth)}
+              className="underline underline-offset-2"
+            >
               次のステップへ進む
             </Link>
           </p>

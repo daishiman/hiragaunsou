@@ -13,11 +13,14 @@ import {
   MONTHLY_PL_WORKBOOK_SOURCE_TYPE,
 } from "../../../../src/usecase/steps/importMonthlyPlWorkbook";
 import { D1VehiclePlRepository } from "../../../../src/infrastructure/db/D1VehiclePlRepository";
+import { D1VehicleMasterRepository } from "../../../../src/infrastructure/db/D1MasterRepository";
+import { D1AuditLogRepository } from "../../../../src/infrastructure/db/D1AuditLogRepository";
 import { detectFileType } from "../../../../src/infrastructure/parsers/detectFileType";
 import { decodeCp932 } from "../../../../src/infrastructure/parsers/encoding";
 import { parseCsv } from "../../../../src/infrastructure/parsers/csvUtils";
 import { isSameOriginRequest } from "../../../_lib/assertSameOrigin";
 import { findImportSource } from "../../../../src/domain/rules/importSources";
+import { parseSalesMonitorCsv, detectDominantYearMonth } from "../../../../src/infrastructure/parsers/salesMonitorParser";
 
 const SOURCE_TYPES = [
   "auto",
@@ -122,6 +125,34 @@ export async function POST(request: Request, { params }: { params: Promise<{ sou
     );
   }
 
+  // 対象年月チェック。売上モニタリストは伝票ごとに積荷日を持つため、
+  // 「選んだ年月」と「ファイルの中身が実際にどの年月の伝票か」を多数決で突き合わせ、
+  // 前月分ファイルの取り違え等に取込を確定する前に気づけるようにする。
+  // 他の帳票(運行実績・給与集計表)は月内に日付列を持たないため判定できず、対象外。
+  if (resolvedSourceType === "sales_monitor" && form.get("confirmYearMonth") !== "true") {
+    let mismatch: ReturnType<typeof detectDominantYearMonth> | null = null;
+    try {
+      mismatch = detectDominantYearMonth(parseSalesMonitorCsv(content));
+    } catch {
+      mismatch = null; // ここでの判定に失敗しても、取込本体の解析・エラー処理に委ねる
+    }
+    if (mismatch?.dominantYearMonth && mismatch.dominantYearMonth !== yearMonth) {
+      return NextResponse.json(
+        {
+          error: "yearMonthMismatch",
+          yearMonthMismatch: {
+            sourceType: resolvedSourceType,
+            selectedYearMonth: yearMonth,
+            detectedYearMonth: mismatch.dominantYearMonth,
+            matchedRows: mismatch.matchedRows,
+            dominantCount: mismatch.dominantCount,
+          },
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   // 入れ直し判定。運行実績は3営業所分が別ファイルで正常に共存するため同名ファイルだけを、
   // それ以外は月1ファイルなのでその月の取込全体を、置き換え対象とする。
   const batches = await importBatchRepo.findBatches(yearMonth, resolvedSourceType);
@@ -171,7 +202,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ sou
       fileStorage,
       importBatchRepo,
       new D1VehiclePlRepository(db),
-    ).execute(input);
+      new D1VehicleMasterRepository(db),
+      new D1AuditLogRepository(db),
+    ).execute({ ...input, importedByName: session!.name });
     return NextResponse.json({ sourceType: resolvedSourceType, ...result });
   } catch (e) {
     console.error("import failed", { sourceType: resolvedSourceType, fileName: file.name, error: e });

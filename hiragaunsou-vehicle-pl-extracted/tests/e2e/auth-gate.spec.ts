@@ -19,6 +19,16 @@ test.describe("未ログイン時のアクセス制御", () => {
     await expect(page).toHaveURL(/\/sign-in$/);
   });
 
+  test("マイページも未ログインだとサインイン画面へリダイレクトされる", async ({ page }) => {
+    await page.goto("/profile");
+    await expect(page).toHaveURL(/\/sign-in$/);
+  });
+
+  test("ユーザー管理画面も未ログインだとサインイン画面へリダイレクトされる", async ({ page }) => {
+    await page.goto("/admin/users");
+    await expect(page).toHaveURL(/\/sign-in$/);
+  });
+
   test("サインイン画面にはGoogleログインボタンが表示される", async ({ page }) => {
     await page.goto("/sign-in");
     await expect(page.getByRole("button", { name: /Google/ })).toBeVisible();

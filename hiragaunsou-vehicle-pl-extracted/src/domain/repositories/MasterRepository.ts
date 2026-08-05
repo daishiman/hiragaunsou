@@ -20,8 +20,32 @@ export interface VehicleMasterRecord {
   installment: number;
 }
 
+/**
+ * 車両マスタの一括登録・更新の入力。
+ * regDate は収支計算に使わないため取込対象外とし、既存値を維持する。
+ */
+export interface VehicleMasterUpsertInput {
+  vehicleNo: string;
+  vehicleType: string;
+  depot: string;
+  costCategory: string;
+  insCompulsory: number;
+  insVoluntary: number;
+  taxAuto: number;
+  taxWeight: number;
+  lease: number;
+  installment: number;
+}
+
 export interface VehicleMasterRepository {
   findAllActive(): Promise<VehicleMasterRecord[]>;
+
+  /**
+   * 車番をキーに一括で登録・更新する (CSV一括取込)。
+   * 台数は数十台規模で、毎月まとめて登録し直す運用のため、差分ではなく全件upsertでよい。
+   * 新規と更新の内訳を返すのは、取込結果を「新規2件・更新3件」と人が確認できるようにするため。
+   */
+  upsertMany(records: VehicleMasterUpsertInput[]): Promise<{ inserted: number; updated: number }>;
 
   /**
    * リース料・割賦支払額を更新する (業務フロー STEP7「変更があれば都度修正する」)。

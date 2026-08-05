@@ -1,6 +1,7 @@
 import { and, count, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import type { Db } from "./client";
 import { csvImportBatch, rawIngestion } from "./schema";
+import { user } from "./auth-schema";
 import { chunkForD1 } from "./d1Limits";
 import type { ImportBatchRepository } from "../../domain/repositories/VehiclePlRepository";
 
@@ -143,6 +144,56 @@ export class D1ImportBatchRepository implements ImportBatchRepository {
       importedAt: row.importedAt.getTime(),
       status: row.status,
     };
+  }
+
+  /**
+   * 管理画面(/admin/import-batches)向け: 全期間・全帳票種別の取込バッチを新しい順に返す。
+   * インターフェース(ImportBatchRepository)には含めない管理専用の拡張メソッド
+   * (通常業務のUseCaseからは使わせず、誤って全件走査するコードが増えるのを防ぐ)。
+   */
+  async listAll(): Promise<
+    {
+      id: string;
+      sourceType: string;
+      yearMonth: string;
+      fileName: string;
+      rowCount: number;
+      excludedRowCount: number;
+      status: string;
+      importedAt: number;
+      importedByName: string | null;
+    }[]
+  > {
+    const rows = await this.db
+      .select({
+        id: csvImportBatch.id,
+        sourceType: csvImportBatch.sourceType,
+        yearMonth: csvImportBatch.yearMonth,
+        fileName: csvImportBatch.fileName,
+        rowCount: csvImportBatch.rowCount,
+        excludedRowCount: csvImportBatch.excludedRowCount,
+        status: csvImportBatch.status,
+        importedAt: csvImportBatch.importedAt,
+        importedByName: user.name,
+      })
+      .from(csvImportBatch)
+      .leftJoin(user, eq(csvImportBatch.importedBy, user.id))
+      .orderBy(desc(csvImportBatch.importedAt));
+    return rows.map((r) => ({ ...r, importedAt: r.importedAt.getTime() }));
+  }
+
+  /** 管理画面向け: 削除前確認・監査ログ記録用に1件だけ取得する。 */
+  async findById(id: string): Promise<{
+    id: string;
+    sourceType: string;
+    yearMonth: string;
+    fileName: string;
+    rowCount: number;
+  } | null> {
+    const rows = await this.db.select().from(csvImportBatch).where(eq(csvImportBatch.id, id)).limit(1);
+    const row = rows[0];
+    if (!row) return null;
+    return { id: row.id, sourceType: row.sourceType, yearMonth: row.yearMonth, fileName: row.fileName, rowCount: row.rowCount };
   }
 
   async countRawRowsWithFlags(yearMonth: string, sourceType: string): Promise<number> {

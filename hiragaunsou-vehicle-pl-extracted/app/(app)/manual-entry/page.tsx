@@ -6,6 +6,8 @@ import { createDb } from "../../../src/infrastructure/db/client";
 import { D1VehicleMasterRepository, D1RateMasterRepository } from "../../../src/infrastructure/db/D1MasterRepository";
 import { D1VehiclePlRepository } from "../../../src/infrastructure/db/D1VehiclePlRepository";
 import { D1ImportBatchRepository } from "../../../src/infrastructure/db/D1ImportBatchRepository";
+import { D1DriverMasterRepository } from "../../../src/infrastructure/db/D1MasterRepository";
+import { GetPayrollDetailByVehicleUseCase } from "../../../src/usecase/steps/getPayrollDetailByVehicle";
 import { currentYearMonth, selectableYearMonths } from "../../_lib/yearMonth";
 import { PageHead } from "../../_components/PageHead";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
@@ -30,13 +32,29 @@ export default async function ManualEntryPage({
   const rateMasterRepo = new D1RateMasterRepository(db);
   const vehiclePlRepo = new D1VehiclePlRepository(db);
   const importBatchRepo = new D1ImportBatchRepository(db);
+  const driverMasterRepo = new D1DriverMasterRepository(db);
 
-  const [vehicles, existingRows, rates, payrollBatch] = await Promise.all([
+  const [vehicles, existingRows, rates, payrollBatch, drivers, payrollDetail] = await Promise.all([
     vehicleMasterRepo.findAllActive(),
     vehiclePlRepo.findByYearMonth(yearMonth),
     rateMasterRepo.getRates(yearMonth),
     importBatchRepo.findLatestBatch(yearMonth, "payroll"),
+    driverMasterRepo.findAll(),
+    new GetPayrollDetailByVehicleUseCase(importBatchRepo, vehicleMasterRepo, driverMasterRepo).execute(
+      yearMonth,
+    ),
   ]);
+
+  // 運転者マスタは車番と1:1ではない(2人乗務等)ため、同じ車番の運転者名は"/"区切りでまとめる。
+  const driverNameByVehicle = new Map<string, string>();
+  for (const driver of drivers) {
+    if (!driver.vehicleNo) continue;
+    const existing = driverNameByVehicle.get(driver.vehicleNo);
+    driverNameByVehicle.set(
+      driver.vehicleNo,
+      existing ? `${existing}/${driver.driverName}` : driver.driverName,
+    );
+  }
 
   const byVehicle = new Map(existingRows.map((r) => [r.no, r]));
   const pick = (field: "repair" | "fuelOut" | "fuelOutQty" | "fuelInQty" | "adblue" | "equip" | "mainte" | "miscOther") => {
@@ -77,9 +95,13 @@ export default async function ManualEntryPage({
       <ManualEntryStepper
         key={yearMonth}
         yearMonth={yearMonth}
-        vehicles={vehicles.map((v) => ({ vehicleNo: v.vehicleNo, driver: null }))}
+        vehicles={vehicles.map((v) => ({
+          vehicleNo: v.vehicleNo,
+          driver: driverNameByVehicle.get(v.vehicleNo) ?? null,
+        }))}
         prefill={prefill}
         payrollStatus={payrollBatch}
+        payrollDetail={payrollDetail}
         initialWorkflowStep={step ?? null}
       />
     </div>

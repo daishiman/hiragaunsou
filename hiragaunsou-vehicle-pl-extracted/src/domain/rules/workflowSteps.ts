@@ -39,8 +39,10 @@ export interface WorkflowStepDefinition {
 export const WORKFLOW_STEPS: readonly WorkflowStepDefinition[] = [
   {
     id: 1,
-    title: "車両別運行実績表の取り込み",
-    summary: "3営業所分のCSVを取り込む",
+    // 実際にはデジタコの運行実績のほか給与集計表・完成済み収支表もこの入口から入れるため、
+    // 帳票名そのままの「車両別運行実績表」ではなく「車両実績表等」と呼ぶ(画面の呼び名に合わせる)
+    title: "車両実績表等の取り込み",
+    summary: "3営業所分の車両別運行実績表(CSV)を取り込む",
     source: "ITP-WEBServiceV3『車両別運行実績表』",
     mode: "import",
     href: "/import?step=1",

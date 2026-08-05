@@ -6,8 +6,7 @@ import { createDb } from "../../../src/infrastructure/db/client";
 import { D1ImportBatchRepository } from "../../../src/infrastructure/db/D1ImportBatchRepository";
 import { IMPORT_SOURCES } from "../../../src/domain/rules/importSources";
 import { PageHead } from "../../_components/PageHead";
-import { YearMonthSelect } from "../../_components/YearMonthSelect";
-import { defaultImportYearMonth, isYearMonth, selectableYearMonths } from "../../_lib/yearMonth";
+import { defaultImportYearMonth, isYearMonth } from "../../_lib/yearMonth";
 import { ImportForm } from "./ImportForm";
 
 /**
@@ -45,9 +44,6 @@ export default async function ImportPage({
         title="月次データ取込"
         lead="業務フローのSTEP順に元データを取り込みます"
         showHomeLink
-        action={
-          <YearMonthSelect basePath="/import" value={yearMonth} options={selectableYearMonths(13)} />
-        }
       />
       <ImportForm
         key={yearMonth}
