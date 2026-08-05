@@ -15,6 +15,7 @@ import { GetWorkflowProgressUseCase } from "../../src/usecase/steps/getWorkflowP
 import { GetPeriodOverviewUseCase } from "../../src/usecase/steps/getPeriodOverview";
 import { currentYearMonth, defaultImportYearMonth } from "../_lib/yearMonth";
 import { yearMonthLabel, man, num, kmPriceLabel, pct } from "../_lib/format";
+import { withYm } from "../_lib/withYm";
 import { PageHead } from "../_components/PageHead";
 import { WorkflowStepCard } from "../_components/WorkflowStepCard";
 import { EmptyState } from "../_components/EmptyState";
@@ -144,13 +145,21 @@ export default async function HomePage() {
 
         {next ? (
           <div className="mt-4">
-            <p className="text-2xl font-bold text-ink sm:text-3xl">
-              STEP {next.step.id}　{next.step.title}
+            {/*
+              見出しだけを大きく置くと「STEP 1 車両実績表等の取り込み」という名詞の羅列になり、
+              初めて開いた人には何をすればよいか伝わらない。何月分を・どの手順から始めればよいかを
+              1つの文章として読める形にする。
+            */}
+            <p className="text-xl font-bold leading-relaxed text-ink sm:text-2xl">
+              {progress.doneCount === 0 ? "まずは" : "次は"}
+              <span className="num">{yearMonthLabel(yearMonth)}度</span>の
+              <br className="hidden sm:block" />
+              STEP {next.step.id}「{next.step.title}」から始めましょう
             </p>
-            <p className="mt-1.5 text-sm text-ink-muted">{next.step.summary}</p>
+            <p className="mt-2 text-sm leading-relaxed text-ink-muted">{next.step.summary}</p>
             <p className="num mt-2 text-xs text-ink-muted">{next.detail}</p>
             <Link
-              href={next.step.href}
+              href={withYm(next.step.href, yearMonth)}
               className="pressable mt-5 inline-block rounded-md bg-accent px-6 py-3 text-base font-bold text-white hover:bg-accent-deep"
             >
               STEP {next.step.id} を開く
@@ -161,7 +170,7 @@ export default async function HomePage() {
             <p className="text-2xl font-bold text-ink sm:text-3xl">今月の締めは完了しています</p>
             <p className="mt-1.5 text-sm text-ink-muted">月次収支表・年間集計は最新です</p>
             <Link
-              href="/grid"
+              href={withYm("/grid", yearMonth)}
               className="pressable mt-5 inline-block rounded-md border border-brand bg-white px-6 py-3 text-base font-bold text-brand-deep hover:bg-brand-soft"
             >
               月次収支表を見る
@@ -186,6 +195,7 @@ export default async function HomePage() {
               <WorkflowStepCard
                 progress={s}
                 isNext={next?.step.id === s.step.id}
+                yearMonth={yearMonth}
               />
             </li>
           ))}

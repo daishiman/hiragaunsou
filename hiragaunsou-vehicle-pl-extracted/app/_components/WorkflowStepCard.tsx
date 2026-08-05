@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { WorkflowStepProgress } from "../../src/usecase/steps/getWorkflowProgress";
+import { withYm } from "../_lib/withYm";
 
 const MODE_LABEL: Record<string, string> = {
   import: "取込",
@@ -31,14 +32,21 @@ const STATUS_MARK: Record<string, string> = {
 export function WorkflowStepCard({
   progress,
   isNext,
+  yearMonth,
 }: {
   progress: WorkflowStepProgress;
   isNext: boolean;
+  /**
+   * 進捗を集計している対象月。手順を開くリンクに引き継ぐ。
+   * これが無いと、ホームが「2026年8月度」の進捗を出しているのに /import は既定の前月
+   * (2026-07)を開いてしまい、見ていた月と作業する月がずれる。
+   */
+  yearMonth?: string;
 }) {
   const { step, status, detail, blocked } = progress;
 
   if (!isNext) {
-    return <CompactRow progress={progress} />;
+    return <CompactRow progress={progress} yearMonth={yearMonth} />;
   }
 
   return (
@@ -84,7 +92,7 @@ export function WorkflowStepCard({
           <p className="text-xs text-ink-muted">STEP 1・2 の取込が終わると着手できます</p>
         ) : (
           <Link
-            href={step.href}
+            href={withYm(step.href, yearMonth)}
             className="pressable inline-block rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-deep"
           >
             この手順を開く
@@ -99,7 +107,13 @@ export function WorkflowStepCard({
  * 完了済み・まだ先のステップの表示。
  * 1行に畳んで小さく・控えめに置き、クリックすれば詳細(判断ポイント・出典・リンク)を開ける。
  */
-function CompactRow({ progress }: { progress: WorkflowStepProgress }) {
+function CompactRow({
+  progress,
+  yearMonth,
+}: {
+  progress: WorkflowStepProgress;
+  yearMonth?: string;
+}) {
   const { step, status, detail, blocked } = progress;
 
   const rowClass = [
@@ -141,7 +155,7 @@ function CompactRow({ progress }: { progress: WorkflowStepProgress }) {
             <p className="text-[11px] text-ink-muted">STEP 1・2 の取込が終わると着手できます</p>
           ) : (
             <Link
-              href={step.href}
+              href={withYm(step.href, yearMonth)}
               className="pressable inline-block rounded-md border border-line px-2.5 py-1 text-[11px] font-semibold text-ink hover:bg-subtle"
             >
               {status === "done" ? "内容を見直す" : "この手順を開く"}
