@@ -100,7 +100,7 @@ const consumer = new cloudflare.WorkerScript("consumer", {
 ```typescript
 const pages = new cloudflare.PagesProject("my-site", {
     accountId, name: "my-site", productionBranch: "main",
-    buildConfig: {buildCommand: "npm run build", destinationDir: "dist"},
+    buildConfig: {buildCommand: "pnpm run build", destinationDir: "dist"},
     source: {
         type: "github",
         config: {owner: "my-org", repoName: "my-repo", productionBranch: "main"},

@@ -57,7 +57,7 @@ app_id = "<APP_ID_2>"
 After adding the binding, generate TypeScript types:
 
 ```bash
-npx wrangler types
+pnpm wrangler types
 ```
 
 This creates the `Env` interface with each binding typed as `Flagship`:
@@ -78,13 +78,13 @@ The `Flagship` type comes from `@cloudflare/workers-types`.
 ### Server-Side (Workers, Node.js)
 
 ```bash
-npm i @cloudflare/flagship @openfeature/server-sdk
+pnpm install @cloudflare/flagship @openfeature/server-sdk
 ```
 
 ### Browser
 
 ```bash
-npm i @cloudflare/flagship @openfeature/web-sdk
+pnpm install @cloudflare/flagship @openfeature/web-sdk
 ```
 
 ---
@@ -198,5 +198,5 @@ App IDs are shown in the Cloudflare dashboard under **Compute > Flagship**.
 Flagship bindings work in local dev with `wrangler dev`. Flag evaluation uses the live Flagship configuration — there is no local flag store. Ensure the `app_id` in your Wrangler config points to a valid app.
 
 ```bash
-npx wrangler dev
+pnpm wrangler dev
 ```

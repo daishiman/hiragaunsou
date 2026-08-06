@@ -17,7 +17,7 @@ export ZONE_ID="your_zone_id_here"
 ## TypeScript SDK Usage
 
 ```bash
-npm install cloudflare
+pnpm add cloudflare
 ```
 
 ```typescript

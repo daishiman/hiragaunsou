@@ -147,7 +147,7 @@ frame-src https://challenges.cloudflare.com;
 
 ### React
 ```bash
-npm install @marsidev/react-turnstile
+pnpm add @marsidev/react-turnstile
 ```
 ```jsx
 import Turnstile from '@marsidev/react-turnstile';
@@ -160,7 +160,7 @@ import Turnstile from '@marsidev/react-turnstile';
 
 ### Vue
 ```bash
-npm install vue-turnstile
+pnpm add vue-turnstile
 ```
 ```vue
 <template>
@@ -173,7 +173,7 @@ import VueTurnstile from 'vue-turnstile';
 
 ### Svelte
 ```bash
-npm install svelte-turnstile
+pnpm add svelte-turnstile
 ```
 ```svelte
 <script>
@@ -208,7 +208,7 @@ export default function TurnstileWidget({ sitekey, onSuccess }) {
 ## Cloudflare Pages Plugin
 
 ```bash
-npm install @cloudflare/pages-plugin-turnstile
+pnpm add @cloudflare/pages-plugin-turnstile
 ```
 
 ```typescript

@@ -17,7 +17,7 @@ const worker = new cloudflare.WorkerScript("worker", {
 // RIGHT: Build first, then deploy
 import * as command from "@pulumi/command";
 const build = new command.local.Command("build", {
-    create: "npm run build",
+    create: "pnpm run build",
     dir: "./worker",
 });
 const worker = new cloudflare.WorkerScript("worker", {

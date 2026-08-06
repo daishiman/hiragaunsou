@@ -64,9 +64,9 @@ const data: AuthResponse = await response.json();
 
 ```bash
 # Set secret
-npx wrangler secret put API_KEY
-cat api-key.txt | npx wrangler secret put API_KEY
-npx wrangler secret put API_KEY --env staging
+pnpm wrangler secret put API_KEY
+cat api-key.txt | pnpm wrangler secret put API_KEY
+pnpm wrangler secret put API_KEY --env staging
 ```
 
 ```typescript
@@ -180,7 +180,7 @@ await stub.fetch(new Request('https://fake/increment'));
 ## Anti-Patterns
 
 **❌ Hardcoding credentials:** `const apiKey = 'sk_live_abc123'`  
-**✅** `npx wrangler secret put API_KEY`
+**✅** `pnpm wrangler secret put API_KEY`
 
 **❌ Using REST API:** `fetch('https://api.cloudflare.com/.../kv/...')`  
 **✅** `env.MY_KV.get('key')`

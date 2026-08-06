@@ -16,7 +16,7 @@
 ## TypeScript
 
 ```bash
-npm install --save-dev @cloudflare/workers-types
+pnpm add -D @cloudflare/workers-types
 ```
 
 ```typescript

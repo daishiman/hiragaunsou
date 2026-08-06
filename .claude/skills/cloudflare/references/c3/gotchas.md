@@ -7,13 +7,13 @@
 **Error:** "Invalid namespace ID"  
 **Fix:** Replace placeholders in wrangler.jsonc with real IDs:
 ```bash
-npx wrangler kv namespace create MY_KV  # Get real ID
+pnpm wrangler kv namespace create MY_KV  # Get real ID
 ```
 
 ### Authentication
 
 **Error:** "Not authenticated"  
-**Fix:** `npx wrangler login` or set `CLOUDFLARE_API_TOKEN`
+**Fix:** `pnpm wrangler login` or set `CLOUDFLARE_API_TOKEN`
 
 ### Name Conflict
 
@@ -33,11 +33,11 @@ Wrong platform? Recreate with correct `--platform` flag.
 
 **"Cannot find name 'KVNamespace'"**
 ```bash
-npm run cf-typegen  # Regenerate types
+pnpm run cf-typegen  # Regenerate types
 # Restart TS server in editor
 ```
 
-**Missing types after config change:** Re-run `npm run cf-typegen`
+**Missing types after config change:** Re-run `pnpm run cf-typegen`
 
 ## Package Manager
 
@@ -51,7 +51,7 @@ rm package-lock.json  # If using pnpm
 
 **CI hangs on prompts:**
 ```bash
-npm create cloudflare@latest my-app -- \
+pnpm create cloudflare@latest my-app -- \
   --type=hello-world --lang=ts --no-git --no-deploy
 ```
 
@@ -66,7 +66,7 @@ env:
 
 | Framework | Issue | Fix |
 |-----------|-------|-----|
-| Next.js | create-next-app failed | `npm cache clean --force`, retry |
+| Next.js | create-next-app failed | `pnpm store prune`, retry |
 | Astro | Adapter missing | Install `@astrojs/cloudflare` |
 | Remix | Module errors | Update `@remix-run/cloudflare*` |
 
@@ -85,8 +85,8 @@ env:
 | Error | Cause | Fix |
 |-------|-------|-----|
 | Invalid namespace ID | Placeholder binding | Create resource, update config |
-| Not authenticated | No login | `npx wrangler login` |
-| Cannot find KVNamespace | Missing types | `npm run cf-typegen` |
+| Not authenticated | No login | `pnpm wrangler login` |
+| Cannot find KVNamespace | Missing types | `pnpm run cf-typegen` |
 | Worker already exists | Name conflict | Change `name` |
 | CI hangs | Missing flags | Add --type, --lang, --no-deploy |
 | Template not found | Bad name | Check cloudflare/templates |

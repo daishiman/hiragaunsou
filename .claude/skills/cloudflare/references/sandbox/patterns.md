@@ -77,7 +77,7 @@ export default {
 **Dockerfile**:
 ```dockerfile
 FROM docker.io/cloudflare/sandbox:0.7.0
-RUN npm install -g ws
+RUN pnpm add -g ws
 EXPOSE 8080
 ```
 
@@ -137,7 +137,7 @@ export default {
     
     await sandbox.exec(`git clone -b ${branch} ${repo} /workspace/repo`);
     
-    const install = await sandbox.exec('npm install', {
+    const install = await sandbox.exec('pnpm install', {
       cwd: '/workspace/repo',
       stream: true,
       onOutput: (stream, data) => console.log(data)
@@ -147,7 +147,7 @@ export default {
       return Response.json({ success: false, error: 'Install failed' });
     }
     
-    const test = await sandbox.exec('npm test', { cwd: '/workspace/repo' });
+    const test = await sandbox.exec('pnpm test', { cwd: '/workspace/repo' });
     
     return Response.json({
       success: test.success,

@@ -87,7 +87,7 @@ Bindings are how Workers access Cloudflare resources (storage, compute, services
 
 2. **Generate types:**
 ```bash
-npx wrangler types
+pnpm wrangler types
 ```
 
 3. **Access in Worker:**

@@ -7,7 +7,7 @@ Use `@cloudflare/vitest-pool-workers` to test DOs inside the Workers runtime.
 ### Install Dependencies
 
 ```bash
-npm i -D vitest@~3.2.0 @cloudflare/vitest-pool-workers
+pnpm add -D vitest@~3.2.0 @cloudflare/vitest-pool-workers
 ```
 
 ### vitest.config.ts
@@ -250,8 +250,8 @@ describe("SQLite", () => {
 ## Running Tests
 
 ```bash
-npx vitest        # Watch mode
-npx vitest run    # Single run
+pnpm vitest        # Watch mode
+pnpm vitest run    # Single run
 ```
 
 package.json:

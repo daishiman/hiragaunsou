@@ -100,7 +100,7 @@ export default {
 ## Monitoring
 
 ```bash
-npx wrangler tail  # Check for sampling/write errors
+pnpm wrangler tail  # Check for sampling/write errors
 ```
 
 ```sql

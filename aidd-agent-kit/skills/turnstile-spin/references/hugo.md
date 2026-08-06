@@ -62,7 +62,7 @@ export async function onRequestPost({ request, env }) {
 }
 ```
 
-Set the secret with `npx wrangler pages secret put TURNSTILE_SECRET` (or via the dashboard's Pages → your project → Settings → Environment variables → Add secret).
+Set the secret with `pnpm wrangler pages secret put TURNSTILE_SECRET` (or via the dashboard's Pages → your project → Settings → Environment variables → Add secret).
 
 **External backend**: any Node/Ruby/Python/Go handler can do the same call. See the [vanilla-html reference](./vanilla-html.md) for non-Cloudflare-specific snippets.
 

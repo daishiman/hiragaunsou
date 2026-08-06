@@ -37,8 +37,8 @@ export default {
 ## Dependencies
 
 ```bash
-npm install postal-mime mimetext
-npm install -D @cloudflare/workers-types wrangler typescript
+pnpm add postal-mime mimetext
+pnpm add -D @cloudflare/workers-types wrangler typescript
 ```
 
 Use postal-mime v2.x, mimetext v3.x.
@@ -58,7 +58,7 @@ Use postal-mime v2.x, mimetext v3.x.
 ## Local Development
 
 ```bash
-npx wrangler dev
+pnpm wrangler dev
 
 # Test receiving
 curl --request POST 'http://localhost:8787/cdn-cgi/handler/email' \
@@ -77,8 +77,8 @@ Sent emails write to local `.eml` files.
 - [ ] Update wrangler.jsonc with production IDs
 
 ```bash
-npx wrangler deploy
-npx wrangler deployments list
+pnpm wrangler deploy
+pnpm wrangler deployments list
 ```
 
 ## Dashboard Setup
@@ -91,16 +91,16 @@ npx wrangler deployments list
 ## Secrets
 
 ```bash
-npx wrangler secret put API_KEY
+pnpm wrangler secret put API_KEY
 # Access: env.API_KEY
 ```
 
 ## Monitoring
 
 ```bash
-npx wrangler tail
-npx wrangler tail --status error
-npx wrangler tail --format json
+pnpm wrangler tail
+pnpm wrangler tail --status error
+pnpm wrangler tail --format json
 ```
 
 ## Troubleshooting

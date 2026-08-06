@@ -3,7 +3,7 @@
 ## Installation
 
 ```bash
-npm install @cloudflare/puppeteer  # or @cloudflare/playwright
+pnpm add @cloudflare/puppeteer  # or @cloudflare/playwright
 ```
 
 **Use Cloudflare packages** - standard `puppeteer`/`playwright` won't work in Workers.
@@ -74,5 +74,5 @@ curl -X POST \
 |-------|----------|
 | `MYBROWSER is undefined` | Use `wrangler dev --remote` |
 | `nodejs_compat not enabled` | Add to `compatibility_flags` |
-| `Module not found` | `npm install @cloudflare/puppeteer` |
+| `Module not found` | `pnpm add @cloudflare/puppeteer` |
 | `Browser Rendering not available` | Enable in dashboard |

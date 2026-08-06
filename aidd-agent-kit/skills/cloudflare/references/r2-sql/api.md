@@ -11,7 +11,7 @@ Content-Type: application/json
 Body: {"query": "<SQL>"}
 ```
 
-CLI: `npx wrangler r2 sql query "{WAREHOUSE}" "<SQL>"` (with `WRANGLER_R2_SQL_AUTH_TOKEN`).
+CLI: `pnpm wrangler r2 sql query "{WAREHOUSE}" "<SQL>"` (with `WRANGLER_R2_SQL_AUTH_TOKEN`).
 
 ## Response Format
 

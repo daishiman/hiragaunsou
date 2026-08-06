@@ -94,12 +94,12 @@ export default {
 Next.js版と同じ順序で行う。
 
 1. CLI専用auth configを用意する。
-2. `npx auth@latest generate`でDrizzle schemaを生成する。
-3. `npx drizzle-kit generate`でD1 migrationを作る。
-4. `npx wrangler d1 migrations apply <db> --local`。
+2. `pnpm dlx auth@latest generate`でDrizzle schemaを生成する。
+3. `pnpm drizzle-kit generate`でD1 migrationを作る。
+4. `pnpm wrangler d1 migrations apply <db> --local`。
 5. test/build後に`--remote`。
 6. `setup-cloudflare-secrets.sh`で本番Secretを登録する。
-7. `npx wrangler deploy`。
+7. `pnpm wrangler deploy`。
 
 `wrangler.jsonc`に`compatibility_flags: ["nodejs_compat"]`を設定し、Secret値は書かない。
 

@@ -5,8 +5,8 @@ Enable the catalog, create tokens, turn on automatic maintenance, connect client
 ## Step 1: Create Bucket + Enable Catalog
 
 ```bash
-npx wrangler r2 bucket create my-bucket
-npx wrangler r2 bucket catalog enable my-bucket
+pnpm wrangler r2 bucket create my-bucket
+pnpm wrangler r2 bucket catalog enable my-bucket
 ```
 
 `enable` outputs the two values used everywhere:
@@ -32,11 +32,11 @@ R2 Data Catalog runs compaction and snapshot expiration for you.
 
 ```bash
 # Compaction — merges small files (target size MB; default 128)
-npx wrangler r2 bucket catalog compaction enable my-bucket \
+pnpm wrangler r2 bucket catalog compaction enable my-bucket \
   --target-size 128 --token $API_TOKEN
 
 # Snapshot expiration — removes old snapshots AND their unreferenced data files
-npx wrangler r2 bucket catalog snapshot-expiration enable my-bucket \
+pnpm wrangler r2 bucket catalog snapshot-expiration enable my-bucket \
   --token $API_TOKEN --older-than-days 7 --retain-last 10
 ```
 
@@ -47,7 +47,7 @@ Compaction needs a **stored credential** to access files. `compaction enable` (a
 ## Step 4: Verify
 
 ```bash
-npx wrangler r2 bucket catalog status my-bucket
+pnpm wrangler r2 bucket catalog status my-bucket
 # or control-plane API:
 curl -s "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/r2-catalog/$BUCKET" \
   -H "Authorization: Bearer $API_TOKEN"
@@ -88,7 +88,7 @@ R2_TOKEN=<api-token>
 ## Disable Catalog
 
 ```bash
-npx wrangler r2 bucket catalog disable my-bucket
+pnpm wrangler r2 bucket catalog disable my-bucket
 ```
 
 Preserves data and metadata; tables become inaccessible via the catalog until re-enabled.

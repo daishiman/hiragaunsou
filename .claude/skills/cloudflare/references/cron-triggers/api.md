@@ -118,7 +118,7 @@ export default {
 **Local development (/__scheduled endpoint):**
 ```bash
 # Start dev server
-npx wrangler dev
+pnpm wrangler dev
 
 # Trigger any cron
 curl "http://localhost:8787/__scheduled?cron=*/5+*+*+*+*"

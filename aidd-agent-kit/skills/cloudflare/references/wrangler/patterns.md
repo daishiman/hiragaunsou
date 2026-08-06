@@ -98,7 +98,7 @@ describe("API", () => {
 
 ### Testing with Vitest
 
-Install: `npm install -D vitest @cloudflare/vitest-pool-workers`
+Install: `pnpm add -D vitest @cloudflare/vitest-pool-workers`
 
 **vitest.config.ts:**
 ```typescript

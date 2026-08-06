@@ -48,7 +48,7 @@ RUN pip3 install --no-cache-dir \
 **Node.js**:
 ```dockerfile
 FROM docker.io/cloudflare/sandbox:0.7.0
-RUN npm install -g typescript ts-node
+RUN pnpm add -g typescript ts-node
 ```
 
 **CRITICAL**: `EXPOSE` required for `wrangler dev` port access. Production auto-exposes all ports.

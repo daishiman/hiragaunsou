@@ -47,6 +47,6 @@ description: アプリ・Webサービス・業務ツールの制作を、要件�
 
 ## §4. 他の仕組みとの接続
 
-- **インフラ・デプロイ・セキュリティ**はプロジェクトの CLAUDE.md / AIDD Starter Kit / Field Autopilot Kit のガードレールに従う(本スキルはその上のプロダクト層であり、下位ガードレールを上書きしない)
-- **非IT依頼者**(Field Autopilot運用)の場合: T1/T2の内容を平易な日本語の「仕様確認カード」に翻訳して見せる。内部成果物としてはT1〜T4を常にフル作成する
+- **インフラ・デプロイ・セキュリティ**はプロジェクトの CLAUDE.md と本キット同梱のスキル(cloudflare / workers-best-practices / wrangler / cloudflare-secure-deploy / better-auth-google-gate / launch-security)のガードレールに従う(本スキルはその上のプロダクト層であり、これらのガードレールを上書きしない)
+- **非IT依頼者**の場合: T1/T2の内容を平易な日本語の「仕様確認カード」に翻訳して見せる。内部成果物としてはT1〜T4を常にフル作成する
 - 会話原則(専門用語を使わない・質問は選択式で一度に1つ)は依頼者のITリテラシーに合わせて適用する

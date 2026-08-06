@@ -6,13 +6,13 @@ Setup, environment variables, and wrangler configuration.
 
 ```bash
 # Official Cloudflare SDK (Node.js, Workers, Pages)
-npm install cloudflare
+pnpm add cloudflare
 
 # React component library
-npm install @cloudflare/stream-react
+pnpm add @cloudflare/stream-react
 
 # TUS resumable uploads (large files)
-npm install tus-js-client
+pnpm add tus-js-client
 ```
 
 ## Environment Variables

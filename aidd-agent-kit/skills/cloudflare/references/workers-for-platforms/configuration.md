@@ -109,7 +109,7 @@ Deploy HTML/CSS/images with Workers. See [api.md](./api.md#static-assets) for up
 ```
 
 ```bash
-npx wrangler deploy --name customer-site --dispatch-namespace production
+pnpm wrangler deploy --name customer-site --dispatch-namespace production
 ```
 
 ### Dashboard Deployment

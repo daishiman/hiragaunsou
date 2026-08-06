@@ -43,6 +43,8 @@ node <skill-dir>/scripts/inspect-project.mjs --project <project-root>
 | 既存Better Authあり | 上記該当リファレンス＋`references/security-and-testing.md`で差分監査 |
 | Cloudflareでない／DBがD1でない | 勝手に移行せず、現在の構成と変更範囲を説明して確認する |
 
+既存アプリの構成を変更しない。**Next.js + OpenNext + D1 と判定した場合は、APIをNext.js Route Handlerで実装し、Honoを追加しない。** Honoのリファレンスは、Honoまたは素のWorker構成として判定されたプロジェクトだけで使用する。
+
 依存バージョンやCLI構文は変わり得る。実装前に`references/official-sources.md`を読み、公式ドキュメントを再確認する。
 
 ## 2. 発見できない値だけ確定する

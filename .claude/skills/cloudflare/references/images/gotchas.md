@@ -95,5 +95,5 @@ console.log('Content-Type:', response.headers.get('Content-Type'));
 // curl -I "https://imagedelivery.net/{hash}/{id}/width=800,format=avif"
 
 // Monitor logs
-// npx wrangler tail
+// pnpm wrangler tail
 ```

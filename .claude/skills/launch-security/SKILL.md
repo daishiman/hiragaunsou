@@ -49,7 +49,7 @@ security-reviewer / code-reviewer / database-reviewer エージェントを併�
 - [ ] 認証・公開フォーム・コスト発生エンドポイントにレート制限（公開フォームはTurnstile検討 → Skill turnstile-spin）
 - [ ] CORSは明示的な許可オリジンリスト
 - [ ] ファイルアップロードは型・サイズ検証+R2キー正規化
-- [ ] `npm audit` のhigh/criticalゼロ（または対処方針を文書化）
+- [ ] `pnpm audit` のhigh/criticalゼロ（または対処方針を文書化）
 - [ ] インフラ・CI/CD・WAFは `references/cloud-infrastructure-security.md`
 
 #### B. 例外処理・エラー設計・攻撃対処

@@ -94,14 +94,17 @@
 
   <div class="os-badge">Mac版</div>
   <h1>AI開発エージェントキット<br>セットアップマニュアル</h1>
-  <p class="lead-sub">バージョン 1.1.0 ／ 所要時間 約5分</p>
+  <p class="lead-sub">バージョン 1.3.0 ／ 所要時間 約5分</p>
 
   <div class="box">
     <p class="big">このキットは何?</p>
-    <p>Claude Code(AIがアプリを作ってくれるツール)に、<strong>プロの開発ノウハウ集(スキル16個)</strong> と <strong>開発を最初から最後まで自動で進める司令塔(エージェント)</strong> を追加するキットです。</p>
+    <p>Claude Code(AIがアプリを作ってくれるツール)に、<strong>プロの開発ノウハウ集(スキル17個)</strong> と <strong>開発を最初から最後まで自動で進める司令塔(エージェント)</strong> を追加するキットです。</p>
     <p>インストールすると、Claude Code に</p>
     <p class="quote">/build-app 社員の勤怠を管理するアプリを作って</p>
     <p>と一言頼むだけで、要件の整理 → デザイン → 開発 → 公開 → 品質チェックまでを、決められた手順で自動的に進めてくれるようになります。</p>
+    <p>公開した後は</p>
+    <p class="quote">/improve-app 月ごとの集計をグラフでも見たい</p>
+    <p>と頼むだけで、今あるアプリを壊さずに機能を1つずつ追加・改善していけます。</p>
   </div>
 
   <div class="toc">
@@ -165,11 +168,32 @@
         <li>もう一度ダブルクリックします。</li>
       </ol>
         </div>
+
+        <h3>ターミナルでコマンド実行してインストールする方法(上級者向け)</h3>
+        <p>ダブルクリックの代わりに、ターミナル(Claude Code の Bash ツール等)からコマンドで実行することもできます。挙動はダブルクリックと完全に同じです。</p>
+        <div class="cmd-sample">cd aidd-agent-kit フォルダのパス
+bash install-mac.command</div>
+        <p><strong>インストール先を <code>~/.claude</code> 以外にしたい場合</strong>(例: 特定のプロジェクト直下にある <code>.claude</code> にだけ導入したい場合)は、このインストーラーは <code>~/.claude</code> に固定されているため使えません。代わりに <code>skills</code>・<code>agents</code>・<code>commands</code> の中身をそのプロジェクトの <code>.claude</code> へ手動でコピーしてください(既存ファイルと重複する場合は、上書き前に別フォルダへコピーしてバックアップしてから行うと安全です)。</p>
         </div>
       </div>
 
       <div class="step">
         <div class="step-num">3</div>
+        <div class="step-body">
+          <h3>開発環境を準備する(初回のみ)</h3>
+          <p>アプリ開発には <strong>Node.js</strong> と <strong>pnpm</strong> という2つの道具が必要です。付属のスクリプトで両方まとめて入ります。</p>
+          <ol>
+          <li>フォルダの中の <code>setup-env-mac.command</code> をダブルクリックします。</li>
+          <li>黒い画面が開き、自動でインストールが進みます(2〜5分)。</li>
+          <li><strong>「セットアップが完了しました!」</strong> と表示されたら成功です。</li>
+          </ol>
+          <p>このスクリプトでは、あわせて <strong>Claude Code と Cloudflare(アプリの公開先)の連携設定(MCP: Claude Code と外部サービスをつなぐ仕組み)</strong> も自動で行われます。初回に利用するとき、ブラウザで許可を求める画面が開くことがありますが、<strong>「許可」を押していただければ大丈夫</strong>です。</p>
+          <p class="quote">すでに入っている場合は「インストール済みです」と表示されるだけなので、何度実行しても問題ありません。「開発元を検証できないため開けません」と出たときは、STEP 2 と同じ方法(右クリック → 開く)で開いてください。</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">4</div>
         <div class="step-body">
           <h3>動作確認する</h3>
           <ol>
@@ -193,6 +217,16 @@
     <li><strong>何ができるか</strong>(例: 予約できる、一覧が見られる、承認できる)</li>
     <li><strong>公開範囲</strong>(例: 社内限定 / ログインが必要 / 一般公開)</li>
   </ol>
+
+  <h3>公開した後に育てるとき</h3>
+  <p>最初のアプリは「業務に必要な機能一式」がそろった状態で公開されますが、使ってみると「これも欲しい」が必ず出てきます。そのときは <code>/improve-app</code> に続けて要望を書くだけです。</p>
+  <div class="cmd-sample">/improve-app 車両ごとの一覧を印刷しやすいレイアウトでも見たい</div>
+  <ul>
+    <li>要望を書かずに <code>/improve-app</code> だけ入力すると、<strong>残課題リスト(次にやることの候補一覧)</strong>から選べます。</li>
+    <li>複数の要望があっても、<strong>1件ずつ</strong>安全に追加されます(今動いているアプリを壊さないためです)。</li>
+    <li>変更内容は自動で記録されます。試してみて問題があったときは <code>/undo-app</code> と入力すれば、<strong>1つ前の状態に戻せます</strong>。</li>
+  </ul>
+  <div class="cmd-sample">/undo-app さっき追加した印刷レイアウトをいったん取り消したい</div>
 
   <h3>コマンドを使わなくてもOK</h3>
   <p>普通に「在庫管理のアプリを作りたい」と話しかけるだけでも、自動的にこのエージェントが動きます。確実に動かしたいときは <code>/build-app</code> を使ってください。</p>
@@ -231,6 +265,9 @@
       <p><code>.claude</code> に既に同じ名前のファイルがあったため、<strong>上書きする前に自動でバックアップ</strong>したという意味です。インストール自体は成功しています。</p>
       <div class="cmd-sample">~/.claude/backup-20260726-143000/</div>
       <p>元に戻したいときは、このフォルダの中身を元の場所へ戻してください。不要になったら、フォルダごと削除して構いません。</p>
+      <div class="faq-q">Q7. セットアップスクリプトが「インストールに失敗しました」と表示する</div>
+      <p>社内ネットワークの通信制限(必要なファイルのダウンロード先がブロックされている)が原因の場合があります。</p>
+      <p><strong>この画面を閉じずに、そのまま社内のIT担当者・導入支援の担当者にお見せください。</strong> どの通信が止められているかが画面に出ているため、担当者側で対応できます。</p>
 
   <h2 id="list">インストールされるものの一覧</h2>
   <p>すべて <code>~/.claude</code> フォルダの中に入ります。Claude Code の設定ファイルや、他のアプリには影響しません。</p>
@@ -245,16 +282,19 @@
     <tr><td>app-orchestrator</td><td>要件整理→デザイン→開発→公開→品質チェックを順番に進める司令塔</td></tr>
   </table>
 
-  <h3>コマンド — 1個</h3>
+  <h3>コマンド — 3個</h3>
   <table>
     <tr><th>名前</th><th>役割</th></tr>
-    <tr><td>/build-app</td><td>司令塔を一発で呼び出すコマンド</td></tr>
+    <tr><td>/build-app</td><td>新しいアプリを最初から公開まで作るコマンド</td></tr>
+    <tr><td>/improve-app</td><td>公開済みのアプリに機能追加・改善を1件ずつ行うコマンド</td></tr>
+    <tr><td>/undo-app</td><td>直前の変更を取り消して、アプリを1つ前の状態に戻すコマンド</td></tr>
   </table>
 
-  <h3>スキル(開発ノウハウ集) — 16個</h3>
+  <h3>スキル(開発ノウハウ集) — 17個</h3>
   <table>
     <tr><th>名前</th><th>内容</th></tr>
       <tr><td>app-excellence</td><td>アプリ開発全体の進め方・品質基準</td></tr>
+      <tr><td>mvp-first-development</td><td>まず必要な機能一式で公開し、残課題を管理しながら育てる進め方</td></tr>
       <tr><td>jp-web-design</td><td>日本語アプリのデザインルール</td></tr>
       <tr><td>ux-design</td><td>使いやすさ(UX)の設計ルール</td></tr>
       <tr><td>cloudflare-secure-deploy</td><td>安全にインターネット公開する手順</td></tr>
@@ -274,14 +314,21 @@
 
   <h2 id="update">更新・アンインストール</h2>
   <h3>更新するとき</h3>
-  <p>新しいバージョンを受け取ったら、<strong>STEP 1 から同じ手順を繰り返すだけ</strong>です。古いファイルは自動でバックアップされてから置き換わります。更新後は Claude Code を再起動してください。</p>
+  <p>新しいバージョンを受け取ったら、<strong>STEP 1 から同じ手順を繰り返すだけ</strong>です。古いファイルは自動でバックアップされてから置き換わり、<strong>後から入れた新しいキットの内容が常に正</strong>になります。</p>
+  <ul>
+    <li>新しいキットで<strong>なくなった古いスキルやコマンドは、自動で整理</strong>されます(バックアップフォルダへ移動します)。片付けのためにご自身で何かを削除する必要はありません。</li>
+    <li>整理の対象は<strong>このキットが入れたものだけ</strong>です。ご自身で追加されたスキルやコマンドには触れません。</li>
+    <li>使いながら貯まったノウハウ(ナレッジ)は<strong>消えません</strong>。そのまま引き継がれます。</li>
+  </ul>
+  <p>更新後は Claude Code を再起動してください。</p>
 
   <h3>アンインストールしたいとき</h3>
   <p>Finder で <code>~/.claude</code> を開き(Command + Shift + G → <code>~/.claude</code>)、次を削除します。</p>
   <ol>
-    <li><code>skills</code> フォルダの中の、<strong>上の表にある16個のフォルダ</strong></li>
+    <li><code>skills</code> フォルダの中の、<strong>上の表にある17個のフォルダ</strong></li>
     <li><code>agents</code> フォルダの中の <code>app-orchestrator.md</code></li>
-    <li><code>commands</code> フォルダの中の <code>build-app.md</code></li>
+    <li><code>commands</code> フォルダの中の <code>build-app.md</code>・<code>improve-app.md</code>・<code>undo-app.md</code></li>
+    <li><code>.claude</code> フォルダ直下にある <code>aidd-agent-kit.version</code> と <code>aidd-agent-kit.manifest</code>(このキットが何を入れたかを記録したファイルです)</li>
   </ol>
   <div class="warn">
     <div class="warn-title">注意</div>
@@ -294,12 +341,19 @@
   <ul>
     <li><strong>Claude の有料プラン</strong>(Claude Code が利用できるプラン)</li>
     <li><strong>Cloudflare アカウント</strong>(アプリの公開先。無料プランで開始可能)と <code>wrangler login</code> によるログイン</li>
+    <li><strong>GitHub アカウント</strong>(アプリの変更履歴の保存先。<strong>プライベートリポジトリ</strong>=自社の関係者だけが見られる保管場所を使用します)</li>
+    <li><strong>Claude Code と外部サービスの連携設定(MCP: Claude Code と外部サービスをつなぐ仕組み)</strong>
+      <ul>
+        <li><strong>GitHub との連携</strong> と <strong>Cloudflare との連携</strong> が必要です</li>
+        <li>このうち <strong>Cloudflare との連携は、付属のセットアップスクリプトが自動で設定します</strong>(STEP 3)</li>
+      </ul>
+    </li>
     <li>Googleログイン機能を使う場合: <strong>Google Cloud</strong> の OAuth 設定(手順はスキル内に日本語で収録済み)</li>
     <li>AI機能を使う場合: <strong>OpenAI / Anthropic 等の APIキー</strong></li>
   </ul>
 
   <div class="footer">
-    AI開発エージェントキット v1.1.0 ／ 本キットに関するお問い合わせ: 株式会社TierMind
+    AI開発エージェントキット v1.3.0 ／ 本キットに関するお問い合わせ: 株式会社TierMind
   </div>
 
 </div>

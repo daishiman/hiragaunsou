@@ -18,7 +18,7 @@ if (Date.now() % 1000 === 0) {
 }
 ```
 
-**Detection:** `npx wrangler tail` → look for "sampling enabled"
+**Detection:** `pnpm wrangler tail` → look for "sampling enabled"
 
 ### writeDataPoint Returns void
 

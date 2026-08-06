@@ -85,7 +85,7 @@ export default defineConfig({ plugins: [react(), tailwindcss(), cloudflare()] })
 {
   "dev": "vite",
   "build": "tsc -b && vite build",
-  "deploy": "npm run build && wrangler deploy -c dist/<app_name>/wrangler.json"
+  "deploy": "pnpm run build && wrangler deploy -c dist/<app_name>/wrangler.json"
   // ★ vite-plugin はビルド時に dist/<name>/wrangler.json を生成する。デプロイはそれを -c で指定。
   //   素の `wrangler deploy` はソースの wrangler.jsonc を使ってしまい assets 解決が壊れる
 }

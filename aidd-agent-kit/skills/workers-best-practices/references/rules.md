@@ -338,10 +338,10 @@ A Promise that is not `await`ed, `return`ed, or passed to `ctx.waitUntil()` is a
 
 ```bash
 # ESLint
-npx eslint --rule '{"@typescript-eslint/no-floating-promises": "error"}' src/
+pnpm eslint --rule '{"@typescript-eslint/no-floating-promises": "error"}' src/
 
 # oxlint
-npx oxlint --deny typescript/no-floating-promises src/
+pnpm oxlint --deny typescript/no-floating-promises src/
 ```
 
 ```ts

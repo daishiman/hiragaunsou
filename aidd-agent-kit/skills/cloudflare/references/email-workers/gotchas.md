@@ -104,7 +104,7 @@ if (message.rawSize > 5_000_000) {
 }
 ```
 
-Monitor: `npx wrangler tail`
+Monitor: `pnpm wrangler tail`
 
 ## Limits
 

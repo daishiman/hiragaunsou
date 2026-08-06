@@ -67,7 +67,7 @@ export default {
 
 **Test locally:**
 ```bash
-npx wrangler dev
+pnpm wrangler dev
 curl "http://localhost:8787/__scheduled?cron=*/5+*+*+*+*"
 ```
 

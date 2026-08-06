@@ -7,7 +7,7 @@ Code templates for CLI, REST, and Worker access. For performance/partitioning be
 ```bash
 export WRANGLER_R2_SQL_AUTH_TOKEN=$API_TOKEN
 
-npx wrangler r2 sql query "${ACCOUNT_ID}_my-bucket" "
+pnpm wrangler r2 sql query "${ACCOUNT_ID}_my-bucket" "
   SELECT category, COUNT(*) AS cnt, round(AVG(amount), 2) AS avg_amount
   FROM analytics.events
   WHERE __ingest_ts >= '2026-01-01T00:00:00Z'
@@ -72,7 +72,7 @@ export default {
 ```
 
 ```bash
-npx wrangler secret put R2_SQL_TOKEN
+pnpm wrangler secret put R2_SQL_TOKEN
 ```
 
 ## Example Queries
@@ -111,7 +111,7 @@ SELECT * FROM logs.requests WHERE __ingest_ts < '<last_ts>' ORDER BY __ingest_ts
 
 ## Pipelines → R2 SQL
 
-After `npx wrangler pipelines setup` (Data Catalog destination), wait for first flush (3–7 min), then query the table. See [pipelines/patterns.md](../pipelines/patterns.md).
+After `pnpm wrangler pipelines setup` (Data Catalog destination), wait for first flush (3–7 min), then query the table. See [pipelines/patterns.md](../pipelines/patterns.md).
 
 ## See Also
 

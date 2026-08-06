@@ -56,7 +56,7 @@ Need to test Workers?
 ## Setup
 
 ```bash
-npm i -D miniflare
+pnpm add -D miniflare
 ```
 
 Requires ES modules in `package.json`:

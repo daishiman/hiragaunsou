@@ -43,33 +43,33 @@ Workers + D1 を中心に、**①正しいスタック選定 ②本番品質の 
 
 ```bash
 # 1. プロジェクト作成(スキャフォールドを使う。手組みしない)
-npm create cloudflare@latest -- <app-name> --framework=next   # レシピA
-npm create cloudflare@latest -- <app-name> --framework=react  # レシピB
+pnpm create cloudflare@latest -- <app-name> --framework=next   # レシピA
+pnpm create cloudflare@latest -- <app-name> --framework=react  # レシピB
 
 # 2. リソースをプロビジョニング(IDを控えて wrangler.jsonc に記入)
-npx wrangler d1 create <app-name>-db
-npx wrangler r2 bucket create <app-name>-docs    # 必要な場合
+pnpm wrangler d1 create <app-name>-db
+pnpm wrangler r2 bucket create <app-name>-docs    # 必要な場合
 # ※ Cloudflare MCP(d1_database_create / r2_bucket_create / kv_namespace_create)でも可。
 #   作成・一覧・調査は MCP が便利。ただしコードのデプロイ・secrets・migrations は wrangler CLI が正
 
 # 3. wrangler.jsonc をベースライン(§3)に整える。compatibility_date は今日の日付
 
 # 4. D1 マイグレーション(必ず migrations 方式。単発 schema.sql 直実行は避ける)
-npx wrangler d1 migrations create <db-name> init
+pnpm wrangler d1 migrations create <db-name> init
 # → SQL記述(テーブル + インデックス + CHECK制約。§4)
-npx wrangler d1 migrations apply <db-name> --local    # ローカルで検証
-npx wrangler d1 migrations apply <db-name> --remote   # ★コードのデプロイより先に適用
+pnpm wrangler d1 migrations apply <db-name> --local    # ローカルで検証
+pnpm wrangler d1 migrations apply <db-name> --remote   # ★コードのデプロイより先に適用
 
 # 5. シークレット設定(vars に秘密を書かない。§5)
-npx wrangler secret put SESSION_SECRET
+pnpm wrangler secret put SESSION_SECRET
 # ローカルは .dev.vars(.gitignore 必須)
 
 # 6. 型生成 + ローカル検証(workerd 上で確認してからデプロイ)
-npx wrangler types
-npm run build && npm run preview   # OpenNextは opennextjs-cloudflare preview
+pnpm wrangler types
+pnpm run build && pnpm run preview   # OpenNextは opennextjs-cloudflare preview
 
 # 7. デプロイ
-npm run deploy
+pnpm run deploy
 # 8. デプロイ後検証(§8): 本番URLを実際に叩く・wrangler tail・Access確認
 ```
 
@@ -174,7 +174,7 @@ npm run deploy
 
 - `observability.enabled: true`(Workers Logs GA: 保持7日・無料枠超は約$0.60/M行 → 高トラフィックは `head_sampling_rate: 0.01–0.1`)
 - `upload_source_maps: true` でスタックトレースが原コード行に解決される
-- 本番デバッグ: `npx wrangler tail <name>` (outcome `exceededCpu` 等が見える)
+- 本番デバッグ: `pnpm wrangler tail <name>` (outcome `exceededCpu` 等が見える)
 - ビジネスメトリクス(AI利用回数等)は Analytics Engine binding(`writeDataPoint`)。デプロイバージョン別に切りたいときは `version_metadata` binding の id を index に入れる
 
 ---
@@ -189,10 +189,10 @@ npm run deploy
 
 ### リスクの高い変更(スキーマ破壊・認証変更・決済系)
 ```bash
-npx wrangler versions upload            # デプロイせずバージョン作成 → プレビューURL発行
+pnpm wrangler versions upload            # デプロイせずバージョン作成 → プレビューURL発行
 # プレビューURLでスモークテスト
-npx wrangler versions deploy            # 10%/90% 等の段階配信
-npx wrangler rollback                   # 問題発生時(直近100バージョンまで戻せる)
+pnpm wrangler versions deploy            # 10%/90% 等の段階配信
+pnpm wrangler rollback                   # 問題発生時(直近100バージョンまで戻せる)
 ```
 
 ### CI(Workers Builds)

@@ -46,9 +46,9 @@ API_TOKEN="dev-token-123"
 
 ### Production
 ```bash
-echo "secret-value" | npx wrangler pages secret put SECRET_KEY --project-name=my-project
-npx wrangler pages secret list --project-name=my-project
-npx wrangler pages secret delete SECRET_KEY --project-name=my-project
+echo "secret-value" | pnpm wrangler pages secret put SECRET_KEY --project-name=my-project
+pnpm wrangler pages secret list --project-name=my-project
+pnpm wrangler pages secret delete SECRET_KEY --project-name=my-project
 ```
 
 Access: `env.SECRET_KEY`
@@ -100,7 +100,7 @@ Controls which requests invoke Functions (auto-generated for most frameworks):
 ## TypeScript
 
 ```bash
-npx wrangler types --path='./functions/types.d.ts'
+pnpm wrangler types --path='./functions/types.d.ts'
 ```
 
 Point `types` in `functions/tsconfig.json` to generated file.
@@ -139,10 +139,10 @@ Connect local dev server to production bindings instead of local mocks:
 
 ```bash
 # All bindings remote
-npx wrangler pages dev ./dist --remote
+pnpm wrangler pages dev ./dist --remote
 
 # Specific bindings remote (others local)
-npx wrangler pages dev ./dist --remote --kv=KV --d1=DB
+pnpm wrangler pages dev ./dist --remote --kv=KV --d1=DB
 ```
 
 **Use cases**:
@@ -155,25 +155,25 @@ npx wrangler pages dev ./dist --remote --kv=KV --d1=DB
 - Use only for read-heavy debugging or with non-production accounts
 - Consider creating separate preview environments instead
 
-**Requirements**: Must be logged in (`npx wrangler login`) with access to bindings.
+**Requirements**: Must be logged in (`pnpm wrangler login`) with access to bindings.
 
 ## Local Dev
 
 ```bash
 # Basic
-npx wrangler pages dev ./dist
+pnpm wrangler pages dev ./dist
 
 # With bindings
-npx wrangler pages dev ./dist --kv KV --d1 DB=local-db-id
+pnpm wrangler pages dev ./dist --kv KV --d1 DB=local-db-id
 
 # Remote bindings (production data)
-npx wrangler pages dev ./dist --remote
+pnpm wrangler pages dev ./dist --remote
 
 # Persistence
-npx wrangler pages dev ./dist --persist-to=./.wrangler/state/v3
+pnpm wrangler pages dev ./dist --persist-to=./.wrangler/state/v3
 
 # Proxy mode (SSR frameworks)
-npx wrangler pages dev -- npm run dev
+pnpm wrangler pages dev -- pnpm run dev
 ```
 
 ## Limits (as of Jan 2026)

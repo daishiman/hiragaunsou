@@ -47,7 +47,7 @@ interface Env {
 ## Local Development
 
 ```bash
-npx wrangler dev
+pnpm wrangler dev
 
 # Test with curl
 curl -X POST 'http://localhost:8787/__email' \
@@ -62,7 +62,7 @@ Body'
 ## Deployment
 
 ```bash
-npx wrangler deploy
+pnpm wrangler deploy
 ```
 
 **Connect to Email Routing:**
@@ -89,7 +89,7 @@ yourdomain.com. IN TXT "v=spf1 include:_spf.mx.cloudflare.net ~all"
 
 ```bash
 # Secrets (encrypted)
-npx wrangler secret put API_KEY
+pnpm wrangler secret put API_KEY
 
 # Variables (plain)
 # wrangler.jsonc
@@ -106,7 +106,7 @@ interface Env {
 ## TypeScript Setup
 
 ```bash
-npm install --save-dev @cloudflare/workers-types
+pnpm add -D @cloudflare/workers-types
 ```
 
 ```json
@@ -136,7 +136,7 @@ export default {
 ## Dependencies
 
 ```bash
-npm install postal-mime
+pnpm add postal-mime
 ```
 
 ```typescript
@@ -161,8 +161,8 @@ export default {
 # wrangler.prod.jsonc
 { "name": "worker-prod", "vars": { "ENV": "prod" } }
 
-npx wrangler deploy --config wrangler.dev.jsonc
-npx wrangler deploy --config wrangler.prod.jsonc
+pnpm wrangler deploy --config wrangler.dev.jsonc
+pnpm wrangler deploy --config wrangler.prod.jsonc
 ```
 
 ## CI/CD (GitHub Actions)
@@ -179,8 +179,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
-      - run: npm ci
-      - run: npx wrangler deploy
+      - run: ppnpm install --frozen-lockfile
+      - run: pnpm wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 ```

@@ -40,7 +40,7 @@ Sources → Stream → Pipeline (SQL) → Sink → R2
 
 ```bash
 # Interactive — creates stream + sink + pipeline, optionally bucket + catalog
-npx wrangler pipelines setup
+pnpm wrangler pipelines setup
 ```
 
 Minimal Worker producer:

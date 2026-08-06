@@ -73,7 +73,7 @@
 Set via CLI (never in config):
 
 ```bash
-npx wrangler secret put API_KEY
+pnpm wrangler secret put API_KEY
 ```
 
 Access: `env.API_KEY`
@@ -104,8 +104,8 @@ Bindings without IDs are auto-created:
 ### Automatic Type Generation (Recommended)
 
 ```bash
-npm install -D @cloudflare/workers-types
-npx wrangler types  # Generates .wrangler/types/runtime.d.ts from wrangler.jsonc
+pnpm add -D @cloudflare/workers-types
+pnpm wrangler types  # Generates .wrangler/types/runtime.d.ts from wrangler.jsonc
 ```
 
 `tsconfig.json`:
@@ -134,7 +134,7 @@ export default {
 };
 ```
 
-Re-run `npx wrangler types` after changing bindings in wrangler.jsonc
+Re-run `pnpm wrangler types` after changing bindings in wrangler.jsonc
 
 ### Manual Type Definition (Legacy)
 
@@ -173,9 +173,9 @@ interface Env {
 ## Deployment Commands
 
 ```bash
-npx wrangler deploy              # Production
-npx wrangler deploy --env staging
-npx wrangler deploy --dry-run    # Validate only
+pnpm wrangler deploy              # Production
+pnpm wrangler deploy --env staging
+pnpm wrangler deploy --dry-run    # Validate only
 ```
 
 ## See Also

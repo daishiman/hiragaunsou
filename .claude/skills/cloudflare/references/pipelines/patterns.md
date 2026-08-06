@@ -106,7 +106,7 @@ If a sink's bucket is deleted or its token expires, events are accepted but lost
 Pipelines can't change. Version + dual-write:
 
 ```bash
-npx wrangler pipelines streams create events_v2 --schema-file v2.json
+pnpm wrangler pipelines streams create events_v2 --schema-file v2.json
 ```
 ```typescript
 await Promise.all([env.EVENTS_V1.send([event]), env.EVENTS_V2.send([event])]);

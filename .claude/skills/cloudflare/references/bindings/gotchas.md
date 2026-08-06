@@ -34,17 +34,17 @@ export default {
 ### "env.MY_KV is undefined"
 
 **Cause:** Name mismatch or not configured  
-**Solution:** Check wrangler.jsonc (case-sensitive), run `npx wrangler types`, verify `npx wrangler kv namespace list`
+**Solution:** Check wrangler.jsonc (case-sensitive), run `pnpm wrangler types`, verify `pnpm wrangler kv namespace list`
 
 ### "Property 'MY_KV' does not exist on type 'Env'"
 
 **Cause:** Types not generated  
-**Solution:** `npx wrangler types`
+**Solution:** `pnpm wrangler types`
 
 ### "preview_id is required for --remote"
 
 **Cause:** Missing preview binding  
-**Solution:** Add `"preview_id": "dev-id"` or use `npx wrangler dev` (local mode)
+**Solution:** Add `"preview_id": "dev-id"` or use `pnpm wrangler dev` (local mode)
 
 ### "Secret updated but Worker still uses old value"
 
@@ -57,18 +57,18 @@ export default {
 **Solution:**
 ```bash
 # Check key exists
-npx wrangler kv key get --binding=MY_KV "your-key"
+pnpm wrangler kv key get --binding=MY_KV "your-key"
 
 # Verify namespace ID
-npx wrangler kv namespace list
+pnpm wrangler kv namespace list
 
 # Check environment
-npx wrangler deployments list
+pnpm wrangler deployments list
 ```
 
 ### "D1 database not found"
 
-**Solution:** `npx wrangler d1 list`, verify ID in wrangler.jsonc
+**Solution:** `pnpm wrangler d1 list`, verify ID in wrangler.jsonc
 
 ### "Service binding returns 'No such service'"
 
@@ -76,13 +76,13 @@ npx wrangler deployments list
 **Solution:**
 ```bash
 # List deployed Workers
-npx wrangler deployments list --name=target-worker
+pnpm wrangler deployments list --name=target-worker
 
 # Check service binding config
 cat wrangler.jsonc | grep -A2 services
 
 # Deploy target first
-cd ../target-worker && npx wrangler deploy
+cd ../target-worker && pnpm wrangler deploy
 ```
 
 ### "Rate limit exceeded" on KV writes
@@ -95,7 +95,7 @@ cd ../target-worker && npx wrangler deploy
 ### Missing @cloudflare/workers-types
 
 **Error:** `Cannot find name 'Request'`  
-**Solution:** `npm install -D @cloudflare/workers-types`, add to tsconfig.json `"types"`
+**Solution:** `pnpm add -D @cloudflare/workers-types`, add to tsconfig.json `"types"`
 
 ### Binding Type Mismatches
 
@@ -112,11 +112,11 @@ if (!value) return new Response('Not found', { status: 404 });
 
 ### Wrong Environment Deployed
 
-**Solution:** Check `npx wrangler deployments list`, use `--env` flag
+**Solution:** Check `pnpm wrangler deployments list`, use `--env` flag
 
 ### Secrets Not Per-Environment
 
-**Solution:** Set per environment: `npx wrangler secret put API_KEY --env staging`
+**Solution:** Set per environment: `pnpm wrangler secret put API_KEY --env staging`
 
 ## Development Gotchas
 
@@ -124,8 +124,8 @@ if (!value) return new Response('Not found', { status: 404 });
 - dev: Uses `preview_id` or local bindings, secrets not available
 - deploy: Uses production `id`, secrets available
 
-**Access secrets in dev:** `npx wrangler dev --remote`  
-**Persist local data:** `npx wrangler dev --persist`
+**Access secrets in dev:** `pnpm wrangler dev --remote`  
+**Persist local data:** `pnpm wrangler dev --persist`
 
 ## Performance Gotchas
 
@@ -177,29 +177,29 @@ const [user, config] = await Promise.all([
 
 ```bash
 # Check configuration
-npx wrangler deploy --dry-run       # Validate config without deploying
-npx wrangler kv namespace list      # List KV namespaces
-npx wrangler secret list            # List secrets (not values)
-npx wrangler deployments list       # Recent deployments
+pnpm wrangler deploy --dry-run       # Validate config without deploying
+pnpm wrangler kv namespace list      # List KV namespaces
+pnpm wrangler secret list            # List secrets (not values)
+pnpm wrangler deployments list       # Recent deployments
 
 # Inspect bindings
-npx wrangler kv key list --binding=MY_KV
-npx wrangler kv key get --binding=MY_KV "key-name"
-npx wrangler r2 object get my-bucket/file.txt
-npx wrangler d1 execute my-db --command="SELECT * FROM sqlite_master"
+pnpm wrangler kv key list --binding=MY_KV
+pnpm wrangler kv key get --binding=MY_KV "key-name"
+pnpm wrangler r2 object get my-bucket/file.txt
+pnpm wrangler d1 execute my-db --command="SELECT * FROM sqlite_master"
 
 # Test locally
-npx wrangler dev                  # Local mode
-npx wrangler dev --remote         # Production bindings
-npx wrangler dev --persist        # Persist data across restarts
+pnpm wrangler dev                  # Local mode
+pnpm wrangler dev --remote         # Production bindings
+pnpm wrangler dev --persist        # Persist data across restarts
 
 # Verify types
-npx wrangler types
+pnpm wrangler types
 cat .wrangler/types/runtime.d.ts | grep "interface Env"
 
 # Debug specific binding issues
-npx wrangler tail                 # Stream logs in real-time
-npx wrangler tail --format=pretty # Formatted logs
+pnpm wrangler tail                 # Stream logs in real-time
+pnpm wrangler tail --format=pretty # Formatted logs
 ```
 
 ## See Also

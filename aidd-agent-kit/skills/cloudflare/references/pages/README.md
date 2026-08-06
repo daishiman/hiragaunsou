@@ -18,13 +18,13 @@ Dashboard → Workers & Pages → Create → Connect to Git → Configure build
 
 ### 2. Direct Upload
 ```bash
-npx wrangler pages deploy ./dist --project-name=my-project
-npx wrangler pages deploy ./dist --project-name=my-project --branch=staging
+pnpm wrangler pages deploy ./dist --project-name=my-project
+pnpm wrangler pages deploy ./dist --project-name=my-project --branch=staging
 ```
 
 ### 3. C3 CLI
 ```bash
-npm create cloudflare@latest my-app
+pnpm create cloudflare@latest my-app
 # Select framework → auto-setup + deploy
 ```
 
@@ -38,22 +38,22 @@ npm create cloudflare@latest my-app
 
 ```bash
 # Create
-npm create cloudflare@latest
+pnpm create cloudflare@latest
 
 # Local dev
-npx wrangler pages dev ./dist
+pnpm wrangler pages dev ./dist
 
 # Deploy
-npx wrangler pages deploy ./dist --project-name=my-project
+pnpm wrangler pages deploy ./dist --project-name=my-project
 
 # Types
-npx wrangler types --path='./functions/types.d.ts'
+pnpm wrangler types --path='./functions/types.d.ts'
 
 # Secrets
-echo "value" | npx wrangler pages secret put KEY --project-name=my-project
+echo "value" | pnpm wrangler pages secret put KEY --project-name=my-project
 
 # Logs
-npx wrangler pages deployment tail --project-name=my-project
+pnpm wrangler pages deployment tail --project-name=my-project
 ```
 
 ## Resources

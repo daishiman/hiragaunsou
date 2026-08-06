@@ -49,7 +49,7 @@ export default {
 
 2. Start dev server:
 ```bash
-npx wrangler dev
+pnpm wrangler dev
 ```
 
 3. Use correct endpoint format (URL-encode spaces as `+`):
@@ -63,7 +63,7 @@ curl "http://localhost:8787/__scheduled?cron=*/5 * * * *"
 
 4. Update Wrangler if outdated:
 ```bash
-npm install -g wrangler@latest
+pnpm add -g wrangler@latest
 ```
 
 ### "waitUntil() Tasks Not Completing"

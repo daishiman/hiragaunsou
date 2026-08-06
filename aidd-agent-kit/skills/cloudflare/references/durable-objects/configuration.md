@@ -102,7 +102,7 @@ Separate DO namespaces per environment (staging/production have distinct object 
 }
 ```
 
-Deploy: `npx wrangler deploy --env production`
+Deploy: `pnpm wrangler deploy --env production`
 
 ## Limits & Settings
 
@@ -139,18 +139,18 @@ type DurableObjectNamespace<T> = {
 
 ```bash
 # Development
-npx wrangler dev                    # Local dev
-npx wrangler dev --remote           # Test against production DOs
+pnpm wrangler dev                    # Local dev
+pnpm wrangler dev --remote           # Test against production DOs
 
 # Deployment
-npx wrangler deploy                 # Deploy + auto-apply migrations
-npx wrangler deploy --dry-run       # Validate migrations without deploying
-npx wrangler deploy --env production
+pnpm wrangler deploy                 # Deploy + auto-apply migrations
+pnpm wrangler deploy --dry-run       # Validate migrations without deploying
+pnpm wrangler deploy --env production
 
 # Management
-npx wrangler durable-objects list                      # List namespaces
-npx wrangler durable-objects info <namespace> <id>     # Inspect specific DO
-npx wrangler durable-objects delete <namespace> <id>   # Delete DO (destroys data)
+pnpm wrangler durable-objects list                      # List namespaces
+pnpm wrangler durable-objects info <namespace> <id>     # Inspect specific DO
+pnpm wrangler durable-objects delete <namespace> <id>   # Delete DO (destroys data)
 ```
 
 ## See Also

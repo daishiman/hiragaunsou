@@ -155,7 +155,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
 **Supported** (2026): SvelteKit, Astro, Nuxt, Qwik, Solid Start
 
 ```bash
-npm create cloudflare@latest my-app -- --framework=svelte
+pnpm create cloudflare@latest my-app -- --framework=svelte
 ```
 
 ### SvelteKit

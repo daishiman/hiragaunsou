@@ -117,7 +117,7 @@ resource "cloudflare_pages_project" "site" {
       d1_databases = { DB = cloudflare_d1_database.app.id }
     }
   }
-  build_config { build_command = "npm run build"; destination_dir = "dist" }
+  build_config { build_command = "pnpm run build"; destination_dir = "dist" }
   source { type = "github"; config { owner = "org"; repo_name = "site"; production_branch = "main" }}
 }
 

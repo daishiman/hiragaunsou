@@ -5,7 +5,7 @@
 Workers-native web framework with excellent TypeScript support and middleware ecosystem.
 
 ```bash
-npm install hono
+pnpm add hono
 ```
 
 ### Basic Setup

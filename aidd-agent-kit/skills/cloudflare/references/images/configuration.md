@@ -205,7 +205,7 @@ const signedUrl = signUrl('image-id', 'public', Date.now() + 3600, env.SIGNING_K
 ## Local Development
 
 ```bash
-npx wrangler dev --remote
+pnpm wrangler dev --remote
 ```
 
 Must use `--remote` for Images binding access.

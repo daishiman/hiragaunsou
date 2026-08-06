@@ -48,10 +48,10 @@ const user = await session.prepare('SELECT * FROM users WHERE name = ?').bind('A
 ### "wrangler types not generating TypeScript definitions"
 
 **Cause:** Type generation not configured or outdated  
-**Solution:** Run `npx wrangler types` after changing bindings in wrangler.jsonc:
+**Solution:** Run `pnpm wrangler types` after changing bindings in wrangler.jsonc:
 
 ```bash
-npx wrangler types  # Generates .wrangler/types/runtime.d.ts
+pnpm wrangler types  # Generates .wrangler/types/runtime.d.ts
 ```
 
 Add to `tsconfig.json`: `"include": [".wrangler/types/**/*.ts"]`
