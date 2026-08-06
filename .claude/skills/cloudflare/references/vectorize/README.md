@@ -8,7 +8,7 @@ Globally distributed vector database for AI applications. Store and query vector
 
 ```typescript
 // 1. Create index
-// npx wrangler vectorize create my-index --dimensions=768 --metric=cosine
+// pnpm wrangler vectorize create my-index --dimensions=768 --metric=cosine
 
 // 2. Configure binding (wrangler.jsonc)
 // { "vectorize": [{ "binding": "VECTORIZE", "index_name": "my-index" }] }

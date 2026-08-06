@@ -29,7 +29,7 @@ export default {
 https://{stream-id}.ingest.cloudflare.com
 ```
 
-Get `{stream-id}` from `npx wrangler pipelines streams list`.
+Get `{stream-id}` from `pnpm wrangler pipelines streams list`.
 
 ```bash
 # Batch (preferred)

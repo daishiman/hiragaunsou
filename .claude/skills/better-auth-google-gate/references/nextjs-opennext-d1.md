@@ -27,8 +27,8 @@ Google OAuth
 新規構成の例:
 
 ```bash
-npm install better-auth @better-auth/drizzle-adapter drizzle-orm
-npm install -D drizzle-kit wrangler @cloudflare/workers-types @opennextjs/cloudflare
+pnpm add better-auth @better-auth/drizzle-adapter drizzle-orm
+pnpm add -D drizzle-kit wrangler @cloudflare/workers-types @opennextjs/cloudflare
 ```
 
 既存Better Authを更新する場合、core、adapter、CLI、schemaをまとめて確認する。lockfileを維持する。
@@ -38,8 +38,8 @@ npm install -D drizzle-kit wrangler @cloudflare/workers-types @opennextjs/cloudf
 既存D1がなければ実行する。
 
 ```bash
-npx wrangler whoami
-npx wrangler d1 create <app-slug>-auth
+pnpm wrangler whoami
+pnpm wrangler d1 create <app-slug>-auth
 ```
 
 返された`database_name`と`database_id`を`wrangler.jsonc`の`d1_databases`へ設定する。
@@ -120,12 +120,12 @@ return betterAuth({
 runtime authはD1 bindingを必要とするため、CLIから読み込める副作用のない`src/auth.cli.ts`を分離する。ダミー値はschema生成専用で、実行時コードからimportしない。
 
 ```bash
-npx auth@latest info --config src/auth.cli.ts
-npx auth@latest generate \
+pnpm dlx auth@latest info --config src/auth.cli.ts
+pnpm dlx auth@latest generate \
   --config src/auth.cli.ts \
   --output src/lib/auth-schema.ts \
   --yes
-npx drizzle-kit generate
+pnpm drizzle-kit generate
 ```
 
 `drizzle.config.ts`の例:
@@ -143,8 +143,8 @@ export default defineConfig({
 生成差分に`user`、`account`、`session`、`verification`があることを確認する。DB-backed rate limitを使う場合は`rate_limit`も必要。生成済みschemaを手で簡略化しない。
 
 ```bash
-npx wrangler d1 migrations apply <database-name> --local
-npx wrangler d1 migrations apply <database-name> --remote
+pnpm wrangler d1 migrations apply <database-name> --local
+pnpm wrangler d1 migrations apply <database-name> --remote
 ```
 
 本番適用はローカルtest/build成功後に行う。

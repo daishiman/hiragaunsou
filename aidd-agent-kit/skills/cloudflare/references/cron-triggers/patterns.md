@@ -112,7 +112,7 @@ export default {
 };
 ```
 
-**View logs:** `npx wrangler tail` or Dashboard → Workers & Pages → Worker → Logs
+**View logs:** `pnpm wrangler tail` or Dashboard → Workers & Pages → Worker → Logs
 
 ## Durable Objects Coordination
 
@@ -150,7 +150,7 @@ class Default(WorkerEntrypoint):
 **Local testing with /__scheduled:**
 ```bash
 # Start dev server
-npx wrangler dev
+pnpm wrangler dev
 
 # Test specific cron
 curl "http://localhost:8787/__scheduled?cron=*/5+*+*+*+*"

@@ -20,7 +20,7 @@ interface Env {
 }
 ```
 
-**Generate types:** `npx wrangler types` (auto-creates worker-configuration.d.ts from wrangler.jsonc)
+**Generate types:** `pnpm wrangler types` (auto-creates worker-configuration.d.ts from wrangler.jsonc)
 
 ## PostgreSQL (node-postgres) - RECOMMENDED
 

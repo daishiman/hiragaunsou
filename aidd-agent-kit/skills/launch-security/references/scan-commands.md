@@ -88,14 +88,14 @@ grep -rn --include="*.py" \
 
 #### 2.6 Dependency Vulnerabilities
 ```bash
-# npm audit
-npm audit --json 2>/dev/null | head -50
-
-# Or pnpm
+# pnpm audit
 pnpm audit --json 2>/dev/null | head -50
 
+# Or pnpm
+ppnpm audit --json 2>/dev/null | head -50
+
 # Check for outdated packages
-npm outdated 2>/dev/null | head -20
+pnpm outdated 2>/dev/null | head -20
 ```
 
 #### 2.7 Security Headers Check
@@ -143,20 +143,28 @@ grep -rn --include="*.{ts,tsx,js,jsx}" \
   --exclude-dir={node_modules,.git,dist,build,.next} . 2>/dev/null
 ```
 
-#### 2.10 Database Security (Supabase/PostgreSQL)
-```bash
-# Check RLS policies in migrations
-grep -rn --include="*.sql" \
-  -E "ENABLE ROW LEVEL SECURITY|CREATE POLICY" \
-  . 2>/dev/null
+#### 2.10 Database Security (Cloudflare D1 / SQLite)
 
-# Check for tables without RLS
+D1 (SQLite) にはデータベース側の行レベルアクセス制御が存在しない。アクセス制御はアプリ層 (API ハンドラでのセッション確認と所有者チェック) が唯一の防御線になるため、そこを重点的に検査する。
+
+```bash
+# List tables defined in migrations (each one needs an app-layer owner check)
 grep -rn --include="*.sql" \
   "CREATE TABLE" . 2>/dev/null
 
-# Check DB connection security
+# Check that API handlers verify the session before touching D1
 grep -rn --include="*.{ts,tsx,js,jsx}" \
-  -E "DATABASE_URL|DB_HOST|pg\.connect" \
+  -E "auth\.api\.getSession|getSession\(|requireUser|requireSession" \
+  --exclude-dir={node_modules,.git,dist,build,.next} . 2>/dev/null
+
+# Find D1 queries that filter only by id (missing an owner/tenant condition)
+grep -rn --include="*.{ts,tsx,js,jsx}" \
+  -E "DB\.prepare\(|db\.(select|update|delete)\(" \
+  --exclude-dir={node_modules,.git,dist,build,.next} . 2>/dev/null
+
+# Check for raw SQL string interpolation (SQL injection risk)
+grep -rn --include="*.{ts,tsx,js,jsx}" \
+  -E "prepare\(\`.*\\\$\{" \
   --exclude-dir={node_modules,.git,dist,build,.next} . 2>/dev/null
 ```
 

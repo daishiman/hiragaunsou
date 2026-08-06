@@ -29,30 +29,30 @@ Unstructured streams (no schema) store everything in a single `value` column.
 ## Option A: Interactive (Simplest)
 
 ```bash
-npx wrangler pipelines setup   # creates stream + sink + pipeline, optionally bucket + catalog
+pnpm wrangler pipelines setup   # creates stream + sink + pipeline, optionally bucket + catalog
 ```
 
 ## Option B: Wrangler CLI (Explicit)
 
 ```bash
 # 1. Stream
-npx wrangler pipelines streams create my_stream --schema-file schema.json
+pnpm wrangler pipelines streams create my_stream --schema-file schema.json
 
 # 2. Sink — R2 Data Catalog (Iceberg). Creates the namespace + table.
-npx wrangler pipelines sinks create my_sink \
+pnpm wrangler pipelines sinks create my_sink \
   --type r2-data-catalog \
   --bucket my-bucket --namespace my_namespace --table my_table \
   --catalog-token $API_TOKEN \
   --compression zstd --roll-interval 300
 
 # 2b. Sink — R2 raw Parquet (alternative)
-npx wrangler pipelines sinks create my_sink \
+pnpm wrangler pipelines sinks create my_sink \
   --type r2 --bucket my-bucket --format parquet \
   --path analytics/events --partitioning "year=%Y/month=%m/day=%d" \
   --access-key-id $KEY --secret-access-key $SECRET
 
 # 3. Pipeline (SQL connects stream → sink)
-npx wrangler pipelines create my_pipeline \
+pnpm wrangler pipelines create my_pipeline \
   --sql "INSERT INTO my_sink SELECT * FROM my_stream"
 ```
 
@@ -105,7 +105,7 @@ curl -X POST "$BASE_URL/pipelines" -H "Authorization: Bearer $API_TOKEN" \
 { "pipelines": [ { "stream": "<STREAM_ID>", "binding": "MY_STREAM" } ] }
 ```
 
-> Binding field is `"stream"` as of June 2026 (was `"pipeline"`, still accepted). Use the **stream ID** (`wrangler pipelines streams list`), not the pipeline ID. Redeploy after adding. Generate typed bindings with `npx wrangler types` → `Pipeline<Cloudflare.MyStreamRecord>` from `cloudflare:pipelines`.
+> Binding field is `"stream"` as of June 2026 (was `"pipeline"`, still accepted). Use the **stream ID** (`wrangler pipelines streams list`), not the pipeline ID. Redeploy after adding. Generate typed bindings with `pnpm wrangler types` → `Pipeline<Cloudflare.MyStreamRecord>` from `cloudflare:pipelines`.
 
 ## Terraform
 

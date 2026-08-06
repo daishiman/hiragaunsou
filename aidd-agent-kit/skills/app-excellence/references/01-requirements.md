@@ -35,7 +35,7 @@
 依頼者にNFRを質問しない(答えられない)。以下を既定値として適用し、逸脱が必要な場合のみ提起する:
 
 - 性能: checklists/performance.md の予算
-- セキュリティ: AIDD Starter Kit / Field Kit の必須実装(認証・RLS・監査ログ)
+- セキュリティ: Skill better-auth-google-gate / launch-security の必須実装(認証・アプリ層でのアクセス制御・監査ログ)
 - アクセシビリティ: checklists/accessibility-jp.md(WCAG 2.2 AA相当)
 - 可用性: 業務時間内の障害は15分以内に自動ロールバックで復旧(CI設計に内包)
 - データ: 日次バックアップ/削除はゴミ箱方式/保持期間は依頼者確認

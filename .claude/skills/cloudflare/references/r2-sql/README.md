@@ -23,7 +23,7 @@ For full function lists, data types, and pricing, **retrieve the live docs** —
 | Value | Format |
 |-------|--------|
 | REST endpoint | `https://api.sql.cloudflarestorage.com/api/v1/accounts/{ACCOUNT_ID}/r2-sql/query/{BUCKET}` |
-| Wrangler | `npx wrangler r2 sql query "{WAREHOUSE}" "<SQL>"` with `WRANGLER_R2_SQL_AUTH_TOKEN` set |
+| Wrangler | `pnpm wrangler r2 sql query "{WAREHOUSE}" "<SQL>"` with `WRANGLER_R2_SQL_AUTH_TOKEN` set |
 | Warehouse | `{ACCOUNT_ID}_{BUCKET}` |
 
 > The REST endpoint is `api.sql.cloudflarestorage.com` — **not** `api.cloudflare.com/.../r2/sql`.
@@ -31,9 +31,9 @@ For full function lists, data types, and pricing, **retrieve the live docs** —
 ## Quick Start
 
 ```bash
-npx wrangler r2 bucket catalog enable my-bucket           # 1. enable catalog
+pnpm wrangler r2 bucket catalog enable my-bucket           # 1. enable catalog
 export WRANGLER_R2_SQL_AUTH_TOKEN=<r2-token>              # 2. auth (Admin R&W + R2 SQL Read)
-npx wrangler r2 sql query "$ACCOUNT_ID"_my-bucket \
+pnpm wrangler r2 sql query "$ACCOUNT_ID"_my-bucket \
   "SELECT * FROM default.my_table LIMIT 10"                # 3. query
 ```
 

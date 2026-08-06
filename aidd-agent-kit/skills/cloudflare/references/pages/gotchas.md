@@ -16,7 +16,7 @@
 
 **Problem**: `env.BINDING` undefined or errors  
 **Causes**: wrangler.jsonc syntax error; wrong binding IDs; missing `.dev.vars`; out-of-sync types  
-**Solution**: Validate config, verify IDs, create `.dev.vars`, run `npx wrangler types`
+**Solution**: Validate config, verify IDs, create `.dev.vars`, run `pnpm wrangler types`
 
 ## Build Failures
 
@@ -40,7 +40,7 @@
 
 **Problem**: Type errors in Functions code  
 **Causes**: Types not generated; Env interface doesn't match wrangler.jsonc  
-**Solution**: Run `npx wrangler types --path='./functions/types.d.ts'`; update Env interface
+**Solution**: Run `pnpm wrangler types --path='./functions/types.d.ts'`; update Env interface
 
 ## Local Dev Issues
 
@@ -102,7 +102,7 @@ console.log('Env:', Object.keys(env));
 console.log('Params:', params);
 ```
 
-**View logs**: `npx wrangler pages deployment tail --project-name=my-project`
+**View logs**: `pnpm wrangler pages deployment tail --project-name=my-project`
 
 ## Smart Placement Issues
 
@@ -137,10 +137,10 @@ console.log('Params:', params);
 
 ### Remote Binding Auth Errors
 
-**Problem**: `npx wrangler pages dev --remote` fails with "Unauthorized" or auth error  
+**Problem**: `pnpm wrangler pages dev --remote` fails with "Unauthorized" or auth error  
 **Cause**: Not logged in, session expired, or insufficient account permissions  
 **Solution**: 
-1. Run `npx wrangler login` to re-authenticate
+1. Run `pnpm wrangler login` to re-authenticate
 2. Verify account has access to project and bindings
 3. Check binding IDs match production configuration
 
@@ -158,7 +158,7 @@ console.log('Params:', params);
 
 ### "Binding not found"
 **Cause**: Binding not configured or types out of sync  
-**Solution**: Verify wrangler.jsonc, run `npx wrangler types`
+**Solution**: Verify wrangler.jsonc, run `pnpm wrangler types`
 
 ### "Request exceeded CPU limit"
 **Cause**: Code execution too slow or heavy compute  

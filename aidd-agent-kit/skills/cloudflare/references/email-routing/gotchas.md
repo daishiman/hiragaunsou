@@ -116,7 +116,7 @@ const subj = message.headers.get("subject")?.toLowerCase() || "";
 ### Local
 
 ```bash
-npx wrangler dev
+pnpm wrangler dev
 
 curl -X POST 'http://localhost:8787/__email' \
   --header 'content-type: message/rfc822' \
@@ -130,7 +130,7 @@ Body'
 ### Production
 
 ```bash
-npx wrangler tail
+pnpm wrangler tail
 ```
 
 ### Pattern

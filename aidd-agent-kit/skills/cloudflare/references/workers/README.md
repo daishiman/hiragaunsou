@@ -30,12 +30,12 @@ export default {
 ## Essential Commands
 
 ```bash
-npx wrangler dev                    # Local dev
-npx wrangler dev --remote           # Remote dev (actual resources)
-npx wrangler deploy                 # Production
-npx wrangler deploy --env staging   # Specific environment
-npx wrangler tail                   # Stream logs
-npx wrangler secret put API_KEY     # Set secret
+pnpm wrangler dev                    # Local dev
+pnpm wrangler dev --remote           # Remote dev (actual resources)
+pnpm wrangler deploy                 # Production
+pnpm wrangler deploy --env staging   # Specific environment
+pnpm wrangler tail                   # Stream logs
+pnpm wrangler secret put API_KEY     # Set secret
 ```
 
 ## When to Use Workers
@@ -52,9 +52,9 @@ npx wrangler secret put API_KEY     # Set secret
 ## Quick Start
 
 ```bash
-npm create cloudflare@latest my-worker -- --type hello-world
+pnpm create cloudflare@latest my-worker -- --type hello-world
 cd my-worker
-npx wrangler dev
+pnpm wrangler dev
 ```
 
 ## Handler Signatures

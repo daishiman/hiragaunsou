@@ -55,7 +55,7 @@ const forked = await repo.fork("starter-repo-copy", {
 ### Binding Notes
 
 - Current docs describe the runtime binding surface as `create`, `get`, `list`, `delete`, and repo-handle methods like `info`, `createToken`, and `fork`.
-- Use `npx wrangler types` in the target project and treat the generated `worker-configuration.d.ts` as the source of truth for that environment.
+- Use `pnpm wrangler types` in the target project and treat the generated `worker-configuration.d.ts` as the source of truth for that environment.
 - If generated types appear to expose `import()` or a different `get()` shape, verify the live docs before depending on those methods.
 
 Verify current runtime behavior in the live docs before depending on methods that are not shown in the Workers binding reference.

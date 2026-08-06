@@ -56,7 +56,7 @@ const { text } = await generateText({
 });
 ```
 
-**Install:** `npm install ai-gateway-provider ai @ai-sdk/openai @ai-sdk/anthropic`
+**Install:** `pnpm add ai-gateway-provider ai @ai-sdk/openai @ai-sdk/anthropic`
 
 ## Pattern 2: OpenAI SDK
 

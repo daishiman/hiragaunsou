@@ -33,7 +33,7 @@ curl -X GET "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/cache/cache_res
 ### TypeScript SDK
 
 ```bash
-npm install cloudflare
+pnpm add cloudflare
 ```
 
 ```typescript

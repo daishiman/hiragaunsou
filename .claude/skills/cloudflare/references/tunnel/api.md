@@ -11,7 +11,7 @@ Authorization: Bearer ${CF_API_TOKEN}
 
 ## TypeScript SDK
 
-Install: `npm install cloudflare`
+Install: `pnpm add cloudflare`
 
 ```typescript
 import Cloudflare from 'cloudflare';

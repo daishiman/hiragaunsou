@@ -13,7 +13,7 @@ Auth and setup. For the current permission matrix and wrangler flags, pull `http
 ## Enable Catalog + Get Warehouse
 
 ```bash
-npx wrangler r2 bucket catalog enable my-bucket
+pnpm wrangler r2 bucket catalog enable my-bucket
 ```
 
 You query by **warehouse** name (`{ACCOUNT_ID}_{BUCKET}`), shown in the output alongside the Catalog URI.
@@ -41,8 +41,8 @@ curl -X POST \
 ## Verify Setup
 
 ```bash
-npx wrangler r2 sql query "${ACCOUNT_ID}_my-bucket" "SHOW DATABASES"
-npx wrangler r2 sql query "${ACCOUNT_ID}_my-bucket" "SHOW TABLES IN default"
+pnpm wrangler r2 sql query "${ACCOUNT_ID}_my-bucket" "SHOW DATABASES"
+pnpm wrangler r2 sql query "${ACCOUNT_ID}_my-bucket" "SHOW TABLES IN default"
 ```
 
 ## See Also

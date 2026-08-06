@@ -12,14 +12,14 @@ Fetch the latest `@cloudflare/workers-types` before reviewing. The project may h
 
 ```bash
 mkdir -p /tmp/workers-types-latest && \
-  npm pack @cloudflare/workers-types --pack-destination /tmp/workers-types-latest && \
+  pnpm pack @cloudflare/workers-types --pack-destination /tmp/workers-types-latest && \
   tar -xzf /tmp/workers-types-latest/cloudflare-workers-types-*.tgz -C /tmp/workers-types-latest
 # Types are at /tmp/workers-types-latest/package/index.d.ts
 ```
 
 Search this file for the specific type, class, or interface under review. Do not guess type names.
 
-Alternative: `npx wrangler types` generates a typed `Env` interface from the local wrangler config.
+Alternative: `pnpm wrangler types` generates a typed `Env` interface from the local wrangler config.
 
 Fallback: read `node_modules/@cloudflare/workers-types/index.d.ts`. Note the installed version.
 
@@ -160,7 +160,7 @@ Valid: plain objects, arrays, strings, numbers, booleans, null, `ArrayBuffer`, `
 5. **Check config** — compatibility_date, nodejs_compat, observability, secrets, binding-code consistency
 6. **Check patterns** — streaming, floating promises, global state, serialization boundaries
 7. **Check security** — crypto usage, secret handling, timing-safe comparisons, error handling
-8. **Validate with tools** — `npx tsc --noEmit`, lint for `no-floating-promises`
+8. **Validate with tools** — `pnpm tsc --noEmit`, lint for `no-floating-promises`
 9. **Assess risk** — HIGH (auth, crypto, bindings), MEDIUM (business logic, config), LOW (style, comments)
 
 ### Output format

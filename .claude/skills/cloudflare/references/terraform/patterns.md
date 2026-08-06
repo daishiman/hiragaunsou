@@ -105,7 +105,7 @@ output "d1_database_id" { value = cloudflare_d1_database.app.id }
 ```hcl
 resource "cloudflare_pages_project" "frontend" {
   account_id = var.account_id; name = "frontend"; production_branch = "main"
-  build_config { build_command = "npm run build"; destination_dir = "dist" }
+  build_config { build_command = "pnpm run build"; destination_dir = "dist" }
 }
 resource "cloudflare_worker_script" "api" {
   account_id = var.account_id; name = "api"; content = file("api-worker.js")

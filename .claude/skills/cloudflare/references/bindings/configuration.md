@@ -15,18 +15,18 @@
 
 **Create commands:**
 ```bash
-npx wrangler kv namespace create MY_KV
-npx wrangler r2 bucket create my-bucket
-npx wrangler d1 create my-db
-npx wrangler vectorize create my-index --dimensions=768 --metric=cosine
-npx wrangler queues create my-queue
+pnpm wrangler kv namespace create MY_KV
+pnpm wrangler r2 bucket create my-bucket
+pnpm wrangler d1 create my-db
+pnpm wrangler vectorize create my-index --dimensions=768 --metric=cosine
+pnpm wrangler queues create my-queue
 
 # List existing resources
-npx wrangler kv namespace list
-npx wrangler r2 bucket list
-npx wrangler d1 list
-npx wrangler vectorize list
-npx wrangler queues list
+pnpm wrangler kv namespace list
+pnpm wrangler r2 bucket list
+pnpm wrangler d1 list
+pnpm wrangler vectorize list
+pnpm wrangler queues list
 ```
 
 ## Compute Bindings
@@ -46,7 +46,7 @@ npx wrangler queues list
 
 **Create workflows:**
 ```bash
-npx wrangler workflows create my-workflow
+pnpm wrangler workflows create my-workflow
 ```
 
 ## Platform Bindings
@@ -78,7 +78,7 @@ npx wrangler workflows create my-workflow
 
 **Secrets (never in config):**
 ```bash
-npx wrangler secret put API_KEY
+pnpm wrangler secret put API_KEY
 ```
 
 ## Environment-Specific Configuration
@@ -100,8 +100,8 @@ npx wrangler secret put API_KEY
 
 **Deploy:**
 ```bash
-npx wrangler deploy              # Production
-npx wrangler deploy --env staging
+pnpm wrangler deploy              # Production
+pnpm wrangler deploy --env staging
 ```
 
 ## Local Development
@@ -118,7 +118,7 @@ npx wrangler deploy --env staging
 
 **Or use remote:**
 ```bash
-npx wrangler dev --remote  # Uses production bindings
+pnpm wrangler dev --remote  # Uses production bindings
 ```
 
 ## Complete Example
@@ -178,7 +178,7 @@ Queue consumer handler: `export default { async queue(batch, env) { /* process b
 
 - **64 binding limit** (all types combined)
 - **Secrets**: Always use `wrangler secret put`, never commit
-- **Types**: Run `npx wrangler types` after config changes
+- **Types**: Run `pnpm wrangler types` after config changes
 - **Environments**: Use `env` field for staging/production variants
 - **Development**: Use `preview_id` or `--remote` flag
 - **IDs vs Names**: Some bindings use `id` (KV, D1), others use `name` (R2, Queues)

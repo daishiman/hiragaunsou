@@ -2,7 +2,7 @@
 
 Manage Cloudflare Email Service from the command line and coding agents.
 
-For full CLI reference, run `npx wrangler email --help`. For Dashboard setup, see the [getting started docs](https://developers.cloudflare.com/email-service/get-started/).
+For full CLI reference, run `pnpm wrangler email --help`. For Dashboard setup, see the [getting started docs](https://developers.cloudflare.com/email-service/get-started/).
 
 ## Wrangler Email Commands
 
@@ -32,8 +32,8 @@ This auto-adds SPF (TXT) and DKIM (CNAME/TXT) records. DNS usually propagates wi
 ### Via CLI
 
 ```bash
-npx wrangler email sending enable yourdomain.com
-npx wrangler email sending dns get yourdomain.com   # Verify records
+pnpm wrangler email sending enable yourdomain.com
+pnpm wrangler email sending dns get yourdomain.com   # Verify records
 ```
 
 ## Local Development
@@ -45,7 +45,7 @@ Add `"remote": true` to send real emails during `wrangler dev`:
 ```
 
 ```bash
-npx wrangler dev
+pnpm wrangler dev
 ```
 
 Emails are actually sent — use test addresses you control. Remove `"remote": true` before deploying.
@@ -103,7 +103,7 @@ GraphQL analytics queries also work through `execute` — see [deliverability.md
 ## Sending from CLI / Agents
 
 ```bash
-npx wrangler email sending send \
+pnpm wrangler email sending send \
   --from "agent@yourdomain.com" \
   --to "developer@company.com" \
   --subject "Deployment Complete" \

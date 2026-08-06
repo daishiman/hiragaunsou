@@ -3,9 +3,9 @@
 ## Invocation
 
 ```bash
-npm create cloudflare@latest [name] [-- flags]  # NPM requires --
+pnpm create cloudflare@latest [name] [-- flags]  # NPM requires --
 yarn create cloudflare [name] [flags]
-pnpm create cloudflare@latest [name] [-- flags]
+ppnpm create cloudflare@latest [name] [-- flags]
 ```
 
 ## Core Flags
@@ -52,20 +52,20 @@ CF_TELEMETRY_DISABLED=1     # Disable telemetry
 
 ```bash
 # TypeScript Worker
-npm create cloudflare@latest my-api -- --type=hello-world --lang=ts --no-deploy
+pnpm create cloudflare@latest my-api -- --type=hello-world --lang=ts --no-deploy
 
 # Next.js on Pages
-npm create cloudflare@latest my-app -- --type=web-app --framework=next --platform=pages --ts
+pnpm create cloudflare@latest my-app -- --type=web-app --framework=next --platform=pages --ts
 
 # Astro blog
-npm create cloudflare@latest my-blog -- --type=web-app --framework=astro --ts --deploy
+pnpm create cloudflare@latest my-blog -- --type=web-app --framework=astro --ts --deploy
 
 # CI: non-interactive
-npm create cloudflare@latest my-app -- --type=web-app --framework=next --ts --no-git --no-deploy
+pnpm create cloudflare@latest my-app -- --type=web-app --framework=next --ts --no-git --no-deploy
 
 # GitHub template
-npm create cloudflare@latest -- --template=cloudflare/templates/worker-openapi
+pnpm create cloudflare@latest -- --template=cloudflare/templates/worker-openapi
 
 # Convert existing project
-npm create cloudflare@latest . -- --type=pre-existing --existing-script=./build/worker.js
+pnpm create cloudflare@latest . -- --type=pre-existing --existing-script=./build/worker.js
 ```

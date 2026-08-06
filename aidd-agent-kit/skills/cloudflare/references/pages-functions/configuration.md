@@ -5,7 +5,7 @@
 **Generate types from wrangler.jsonc** (replaces deprecated `@cloudflare/workers-types`):
 
 ```bash
-npx wrangler types
+pnpm wrangler types
 ```
 
 Creates `worker-configuration.d.ts` with typed `Env` interface based on your bindings.
@@ -77,7 +77,7 @@ SECRET_KEY="my-secret-value"
 
 Accessed via `ctx.env.SECRET_KEY`. Set production secrets:
 ```bash
-echo "value" | npx wrangler pages secret put SECRET_KEY --project-name=my-app
+echo "value" | pnpm wrangler pages secret put SECRET_KEY --project-name=my-app
 ```
 
 ## Static Config Files
@@ -102,21 +102,21 @@ echo "value" | npx wrangler pages secret put SECRET_KEY --project-name=my-app
 
 ```bash
 # Dev server
-npx wrangler pages dev ./dist
+pnpm wrangler pages dev ./dist
 
 # With bindings
-npx wrangler pages dev ./dist --kv=KV --d1=DB=db-id --r2=BUCKET
+pnpm wrangler pages dev ./dist --kv=KV --d1=DB=db-id --r2=BUCKET
 
 # Durable Objects (2 terminals)
-cd do-worker && npx wrangler dev
-cd pages-project && npx wrangler pages dev ./dist --do COUNTER=Counter@do-worker
+cd do-worker && pnpm wrangler dev
+cd pages-project && pnpm wrangler pages dev ./dist --do COUNTER=Counter@do-worker
 
 # Deploy
-npx wrangler pages deploy ./dist
-npx wrangler pages deploy ./dist --branch preview
+pnpm wrangler pages deploy ./dist
+pnpm wrangler pages deploy ./dist --branch preview
 
 # Download config
-npx wrangler pages download config my-project
+pnpm wrangler pages download config my-project
 ```
 
 **See also:** [api.md](./api.md) for binding usage examples

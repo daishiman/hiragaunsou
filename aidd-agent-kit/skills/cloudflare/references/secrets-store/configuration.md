@@ -167,19 +167,19 @@ Deploy options:
     CLOUDFLARE_API_TOKEN: ${{ secrets.CF_TOKEN }}
   run: |
     echo "${{ secrets.API_KEY }}" | \
-    npx wrangler secrets-store secret create $STORE_ID \
+    pnpm wrangler secrets-store secret create $STORE_ID \
       --name API_KEY --scopes workers --remote
 
 - name: Deploy
-  run: npx wrangler deploy
+  run: pnpm wrangler deploy
 ```
 
 ### GitLab CI
 
 ```yaml
 script:
-  - echo "$API_KEY_VALUE" | npx wrangler secrets-store secret create $STORE_ID --name API_KEY --scopes workers --remote
-  - npx wrangler deploy
+  - echo "$API_KEY_VALUE" | pnpm wrangler secrets-store secret create $STORE_ID --name API_KEY --scopes workers --remote
+  - pnpm wrangler deploy
 ```
 
 See: [api.md](./api.md), [patterns.md](./patterns.md)

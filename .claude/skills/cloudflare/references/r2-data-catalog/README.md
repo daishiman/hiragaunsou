@@ -19,7 +19,7 @@ This reference is a fast-start with verified connection details and code. For li
 
 ## Connection Values
 
-Use the exact **Catalog URI** and **Warehouse** printed by `npx wrangler r2 bucket catalog enable <bucket>` (also shown in the dashboard). They follow these formats:
+Use the exact **Catalog URI** and **Warehouse** printed by `pnpm wrangler r2 bucket catalog enable <bucket>` (also shown in the dashboard). They follow these formats:
 
 | Value | Format | Example |
 |-------|--------|---------|

@@ -6,17 +6,17 @@ Configuration guide for RealtimeKit setup, client SDKs, and wrangler integration
 
 ### React
 ```bash
-npm install @cloudflare/realtimekit @cloudflare/realtimekit-react-ui
+pnpm add @cloudflare/realtimekit @cloudflare/realtimekit-react-ui
 ```
 
 ### Angular
 ```bash
-npm install @cloudflare/realtimekit @cloudflare/realtimekit-angular-ui
+pnpm add @cloudflare/realtimekit @cloudflare/realtimekit-angular-ui
 ```
 
 ### Web Components/HTML
 ```bash
-npm install @cloudflare/realtimekit @cloudflare/realtimekit-ui
+pnpm add @cloudflare/realtimekit @cloudflare/realtimekit-ui
 ```
 
 ## Client SDK Configuration

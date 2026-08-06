@@ -2,7 +2,7 @@
 
 ## TypeScript Types
 
-Cloudflare generates binding types via `npx wrangler types`. This creates `.wrangler/types/runtime.d.ts` with your Env interface.
+Cloudflare generates binding types via `pnpm wrangler types`. This creates `.wrangler/types/runtime.d.ts` with your Env interface.
 
 ### Generated Env Interface
 
@@ -98,17 +98,17 @@ addEventListener('fetch', (event) => {
 
 ```bash
 # Install wrangler
-npm install -D wrangler
+pnpm add -D wrangler
 
 # Generate types from wrangler.jsonc
-npx wrangler types
+pnpm wrangler types
 ```
 
 ### After Changing Bindings
 
 ```bash
 # Added/modified binding in wrangler.jsonc
-npx wrangler types
+pnpm wrangler types
 
 # TypeScript now sees updated Env interface
 ```
@@ -165,13 +165,13 @@ await stub.fetch(new Request('https://fake/increment'));
 
 | Type Source | When Generated | Use Case |
 |-------------|----------------|----------|
-| `@cloudflare/workers-types` | npm install | Base Workers APIs (Request, Response, etc.) |
+| `@cloudflare/workers-types` | pnpm install | Base Workers APIs (Request, Response, etc.) |
 | `wrangler types` | After config change | Your specific bindings (Env interface) |
 
 **Install both:**
 ```bash
-npm install -D @cloudflare/workers-types
-npx wrangler types
+pnpm add -D @cloudflare/workers-types
+pnpm wrangler types
 ```
 
 ## Type Safety Best Practices
@@ -188,7 +188,7 @@ async fetch(request: Request, env: Env) { }
 2. **Run wrangler types after config changes:**
 ```bash
 # After editing wrangler.jsonc
-npx wrangler types
+pnpm wrangler types
 ```
 
 3. **Check generated types match config:**

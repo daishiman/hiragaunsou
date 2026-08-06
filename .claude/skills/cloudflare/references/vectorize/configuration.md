@@ -3,7 +3,7 @@
 ## Create Index
 
 ```bash
-npx wrangler vectorize create my-index --dimensions=768 --metric=cosine
+pnpm wrangler vectorize create my-index --dimensions=768 --metric=cosine
 ```
 
 **⚠️ Dimensions and metric are immutable** - cannot change after creation.

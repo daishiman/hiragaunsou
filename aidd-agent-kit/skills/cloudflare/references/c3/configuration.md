@@ -35,8 +35,8 @@ C3 generates **placeholder IDs** that must be replaced before deploy:
 
 **Replace with real IDs:**
 ```bash
-npx wrangler kv namespace create MY_KV   # Returns real ID
-npx wrangler d1 create my-database       # Returns real database_id
+pnpm wrangler kv namespace create MY_KV   # Returns real ID
+pnpm wrangler d1 create my-database       # Returns real database_id
 ```
 
 **Deployment error if not replaced:**
@@ -60,7 +60,7 @@ Error: Invalid KV namespace ID "placeholder_kv_id"
 
 Run after adding bindings:
 ```bash
-npm run cf-typegen
+pnpm run cf-typegen
 ```
 
 Generates `.wrangler/types/runtime.d.ts`:
@@ -75,7 +75,7 @@ interface Env {
 
 1. Review `wrangler.jsonc` - check name, compatibility_date
 2. Replace placeholder binding IDs with real resource IDs
-3. Run `npm run cf-typegen`
-4. Test: `npm run dev`
-5. Deploy: `npm run deploy`
-6. Add secrets: `npx wrangler secret put SECRET_NAME`
+3. Run `pnpm run cf-typegen`
+4. Test: `pnpm run dev`
+5. Deploy: `pnpm run deploy`
+6. Add secrets: `pnpm wrangler secret put SECRET_NAME`

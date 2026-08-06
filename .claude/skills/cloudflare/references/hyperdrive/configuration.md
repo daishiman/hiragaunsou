@@ -7,23 +7,23 @@ See [README.md](./README.md) for overview.
 **PostgreSQL:**
 ```bash
 # Basic
-npx wrangler hyperdrive create my-db \
+pnpm wrangler hyperdrive create my-db \
   --connection-string="postgres://user:pass@host:5432/db"
 
 # Custom cache
-npx wrangler hyperdrive create my-db \
+pnpm wrangler hyperdrive create my-db \
   --connection-string="postgres://..." \
   --max-age=120 --swr=30
 
 # No cache
-npx wrangler hyperdrive create my-db \
+pnpm wrangler hyperdrive create my-db \
   --connection-string="postgres://..." \
   --caching-disabled=true
 ```
 
 **MySQL:**
 ```bash
-npx wrangler hyperdrive create my-db \
+pnpm wrangler hyperdrive create my-db \
   --connection-string="mysql://user:pass@host:3306/db"
 ```
 
@@ -43,7 +43,7 @@ npx wrangler hyperdrive create my-db \
 }
 ```
 
-**Generate TypeScript types:** Run `npx wrangler types` to auto-generate `worker-configuration.d.ts` from your wrangler.jsonc.
+**Generate TypeScript types:** Run `pnpm wrangler types` to auto-generate `worker-configuration.d.ts` from your wrangler.jsonc.
 
 **Multiple configs:**
 ```jsonc
@@ -58,10 +58,10 @@ npx wrangler hyperdrive create my-db \
 ## Management
 
 ```bash
-npx wrangler hyperdrive list
-npx wrangler hyperdrive get <ID>
-npx wrangler hyperdrive update <ID> --max-age=180
-npx wrangler hyperdrive delete <ID>
+pnpm wrangler hyperdrive list
+pnpm wrangler hyperdrive get <ID>
+pnpm wrangler hyperdrive update <ID> --max-age=180
+pnpm wrangler hyperdrive delete <ID>
 ```
 
 ## Config Options
@@ -122,7 +122,7 @@ cloudflared tunnel create my-db-tunnel
 #    Policy: Service Auth token from step 3
 
 # 5. Create Hyperdrive
-npx wrangler hyperdrive create my-private-db \
+pnpm wrangler hyperdrive create my-private-db \
   --host=db-tunnel.example.com \
   --user=dbuser --password=dbpass --database=prod \
   --access-client-id=<ID> --access-client-secret=<SECRET>
@@ -136,7 +136,7 @@ npx wrangler hyperdrive create my-private-db \
 ```bash
 # Env var (takes precedence)
 export CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="postgres://user:pass@localhost:5432/dev"
-npx wrangler dev
+pnpm wrangler dev
 
 # wrangler.jsonc
 {"hyperdrive": [{"binding": "HYPERDRIVE", "localConnectionString": "postgres://..."}]}
@@ -153,7 +153,7 @@ export CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="mysql://user:pa
 
 **Option 2: Remote execution:**
 ```bash
-npx wrangler dev --remote  # Uses deployed config, affects production
+pnpm wrangler dev --remote  # Uses deployed config, affects production
 ```
 
 See [api.md](./api.md), [patterns.md](./patterns.md), [gotchas.md](./gotchas.md).

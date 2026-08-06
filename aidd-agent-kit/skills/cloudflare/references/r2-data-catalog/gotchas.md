@@ -43,7 +43,7 @@ Control-plane URL separator for nested namespaces is **`%1F`** (Unit Separator),
 
 ## Debug Checklist
 
-1. `npx wrangler r2 bucket catalog status <bucket>` — enabled?
+1. `pnpm wrangler r2 bucket catalog status <bucket>` — enabled?
 2. Token has R2 Storage (Admin R&W) + R2 Data Catalog (R&W)?
 3. `catalog.list_namespaces()` succeeds?
 4. Catalog URI = `catalog.cloudflarestorage.com/{ACCOUNT_ID}/{BUCKET}`, warehouse = `{ACCOUNT_ID}_{BUCKET}`?

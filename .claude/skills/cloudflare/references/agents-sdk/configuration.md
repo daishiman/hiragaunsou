@@ -44,13 +44,13 @@ interface Env {
 
 ```bash
 # Local dev
-npx wrangler dev
+pnpm wrangler dev
 
 # Deploy production
-npx wrangler deploy
+pnpm wrangler deploy
 
 # Set secrets
-npx wrangler secret put OPENAI_API_KEY
+pnpm wrangler secret put OPENAI_API_KEY
 ```
 
 ## Agent Routing
@@ -175,8 +175,8 @@ For exposing tools via Model Context Protocol:
 }
 
 // Set secrets via CLI
-// npx wrangler secret put GITHUB_CLIENT_ID
-// npx wrangler secret put GITHUB_CLIENT_SECRET
+// pnpm wrangler secret put GITHUB_CLIENT_ID
+// pnpm wrangler secret put GITHUB_CLIENT_SECRET
 ```
 
 Then register in agent code (see api.md MCP section).

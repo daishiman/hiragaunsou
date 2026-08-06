@@ -14,12 +14,12 @@
 
 **Client (PartyTracks):**
 ```bash
-npm install partytracks @cloudflare/calls
+pnpm add partytracks @cloudflare/calls
 ```
 
 **Client (React + PartyTracks):**
 ```bash
-npm install partytracks @cloudflare/calls observable-hooks
+pnpm add partytracks @cloudflare/calls observable-hooks
 # Observable hooks: useObservableAsValue, useValueAsObservable
 ```
 

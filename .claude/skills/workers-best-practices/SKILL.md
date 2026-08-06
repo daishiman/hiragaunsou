@@ -23,7 +23,7 @@ Before reviewing or writing Workers code, retrieve the current best practices pa
 ```bash
 # Fetch latest workers types
 mkdir -p /tmp/workers-types-latest && \
-  npm pack @cloudflare/workers-types --pack-destination /tmp/workers-types-latest && \
+  pnpm pack @cloudflare/workers-types --pack-destination /tmp/workers-types-latest && \
   tar -xzf /tmp/workers-types-latest/cloudflare-workers-types-*.tgz -C /tmp/workers-types-latest
 # Types at /tmp/workers-types-latest/package/index.d.ts
 ```
@@ -108,7 +108,7 @@ mkdir -p /tmp/workers-types-latest && \
 4. **Check config** — compatibility_date, nodejs_compat, observability, secrets, binding-code consistency
 5. **Check patterns** — streaming, floating promises, global state, serialization boundaries
 6. **Check security** — crypto usage, secret handling, timing-safe comparisons, error handling
-7. **Validate with tools** — `npx tsc --noEmit`, lint for `no-floating-promises`
+7. **Validate with tools** — `pnpm tsc --noEmit`, lint for `no-floating-promises`
 8. **Reference rules** — see `references/rules.md` for each rule's correct pattern
 
 ## Scope

@@ -19,7 +19,7 @@
 
 **Problem:** `ctx.env.MY_BINDING` shows type error  
 **Cause:** No type definition for `Env`  
-**Solution:** Run `npx wrangler types` or manually define:
+**Solution:** Run `pnpm wrangler types` or manually define:
 ```typescript
 interface Env { MY_BINDING: KVNamespace; }
 export const onRequest: PagesFunction<Env> = async (ctx) => { /* ... */ };
@@ -31,7 +31,7 @@ export const onRequest: PagesFunction<Env> = async (ctx) => { /* ... */ };
 **Cause:** `.dev.vars` is local-only, not deployed  
 **Solution:** Set production secrets:
 ```bash
-echo "value" | npx wrangler pages secret put SECRET_KEY --project-name=my-app
+echo "value" | pnpm wrangler pages secret put SECRET_KEY --project-name=my-app
 ```
 
 ## Debugging
@@ -48,8 +48,8 @@ export async function onRequest(ctx) {
 
 ```bash
 # Stream real-time logs
-npx wrangler pages deployment tail
-npx wrangler pages deployment tail --status error
+pnpm wrangler pages deployment tail
+pnpm wrangler pages deployment tail --status error
 ```
 
 ```jsonc

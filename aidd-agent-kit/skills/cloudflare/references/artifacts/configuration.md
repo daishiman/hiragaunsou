@@ -19,7 +19,7 @@ If you authenticate with `wrangler login`, current docs say Wrangler requests `a
 Regenerate Worker types after adding the binding:
 
 ```bash
-npx wrangler types
+pnpm wrangler types
 ```
 
 Use the generated binding type in your environment definition:

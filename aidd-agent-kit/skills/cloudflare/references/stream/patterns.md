@@ -4,7 +4,7 @@ Common workflows, full-stack flows, and best practices.
 
 ## React Stream Player
 
-`npm install @cloudflare/stream-react`
+`pnpm add @cloudflare/stream-react`
 
 ```tsx
 import { Stream } from '@cloudflare/stream-react';
@@ -70,7 +70,7 @@ export function VideoUploader() {
 
 ## TUS Resumable Upload
 
-For large files (>500MB). `npm install tus-js-client`
+For large files (>500MB). `pnpm add tus-js-client`
 
 ```typescript
 import * as tus from 'tus-js-client';

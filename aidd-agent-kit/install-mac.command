@@ -2,14 +2,20 @@
 # =====================================================
 #  AI開発エージェントキット インストーラー (Mac用)
 #  ダブルクリックするだけでインストールされます
-#  v1.1.0
+#  既に導入済みの場合は「このキットの内容が正」として
+#  上書き更新し、廃止された古いスキルは自動で整理します
+#  v1.3.0
 # =====================================================
 cd "$(dirname "$0")"
 
-KIT_VERSION="1.1.0"
+KIT_VERSION="1.3.0"
 CLAUDE_DIR="$HOME/.claude"
 STAMP=$(date +%Y%m%d-%H%M%S)
 BACKUP_DIR="$CLAUDE_DIR/backup-$STAMP"
+# このキットが「自分で入れたもの」を記録するファイル。
+# 次回の更新時に、新しいキットに含まれなくなったものだけを安全に整理するために使う。
+MANIFEST="$CLAUDE_DIR/aidd-agent-kit.manifest"
+VERSION_FILE="$CLAUDE_DIR/aidd-agent-kit.version"
 
 # 画面を閉じずにメッセージを見せてから終了する
 finish() {
@@ -29,7 +35,7 @@ echo "  バージョン $KIT_VERSION"
 echo "==============================================="
 echo ""
 
-# --- ステップ 1/5: キット本体の確認 ---------------------------
+# --- ステップ 1/6: キット本体の確認 ---------------------------
 if [ ! -d "skills" ] || [ ! -d "agents" ] || [ ! -d "commands" ]; then
   echo "[エラー] インストールに必要なフォルダが見つかりません。"
   echo ""
@@ -38,7 +44,7 @@ if [ ! -d "skills" ] || [ ! -d "agents" ] || [ ! -d "commands" ]; then
   finish 1
 fi
 
-# --- ステップ 2/5: インストール先の確認 -------------------------
+# --- ステップ 2/6: インストール先の確認 -------------------------
 echo "インストール先: $CLAUDE_DIR"
 echo ""
 
@@ -49,6 +55,17 @@ if [ ! -d "$CLAUDE_DIR" ]; then
   echo "先に Claude Code を起動してサインインを済ませてから、"
   echo "もう一度このインストーラーを実行してください。"
   finish 1
+fi
+
+# 既に導入済みなら、更新であることを表示する(後からインストールした方が正)
+if [ -f "$VERSION_FILE" ]; then
+  PREV_VERSION=$(head -n 1 "$VERSION_FILE")
+  echo "現在インストールされているバージョン: $PREV_VERSION"
+  echo "このキット($KIT_VERSION)の内容で上書き更新します。"
+  echo "(常に、後からインストールしたキットの内容が正になります)"
+  echo "使用中に蓄積されたナレッジ(各スキル内の knowledge/ など、"
+  echo "キットが配布していない追加ファイル)は消さずにそのまま残します。"
+  echo ""
 fi
 
 # 書き込み先がシンボリックリンク（別の場所への近道）になっていないか調べる。
@@ -82,7 +99,7 @@ check_symlink "$CLAUDE_DIR/commands" "commands"
 
 mkdir -p "$CLAUDE_DIR/skills" "$CLAUDE_DIR/agents" "$CLAUDE_DIR/commands"
 
-# --- ステップ 3/5: 既存ファイルのバックアップ --------------------
+# --- ステップ 3/6: 既存ファイルのバックアップ --------------------
 CONFLICTS=""
 for dir in skills/*/; do
   name=$(basename "$dir")
@@ -100,7 +117,7 @@ done
 if [ -n "$CONFLICTS" ]; then
   COUNT=$(echo $CONFLICTS | wc -w | tr -d ' ')
   echo "同じ名前のファイルが ${COUNT} 件見つかりました。"
-  echo "上書きする前に、念のためバックアップを作成します。"
+  echo "このキットの内容で上書きします(上書き前にバックアップを作成します)。"
   echo ""
   for item in $CONFLICTS; do
     mkdir -p "$BACKUP_DIR/$(dirname "$item")"
@@ -110,19 +127,48 @@ if [ -n "$CONFLICTS" ]; then
   echo ""
 fi
 
-# --- ステップ 4/5: コピー ------------------------------------
+# --- ステップ 4/6: 廃止された古いスキル等の整理 -------------------
+# 「以前このキットが入れたもの(記録ファイルにある)」のうち、
+# 「新しいキットには含まれないもの」だけをバックアップへ移動する。
+# ユーザーが自分で追加したスキル等には一切触れない。
+if [ -f "$MANIFEST" ]; then
+  REMOVED=0
+  while IFS= read -r item; do
+    # 安全装置: 想定パス以外・上位フォルダ参照は無視する
+    case "$item" in *..*) continue ;; esac
+    case "$item" in
+      skills/*|agents/*.md|commands/*.md) ;;
+      *) continue ;;
+    esac
+    [ -e "$CLAUDE_DIR/$item" ] || continue
+    if [ ! -e "$item" ]; then
+      mkdir -p "$BACKUP_DIR/$(dirname "$item")"
+      cp -R "$CLAUDE_DIR/$item" "$BACKUP_DIR/$item"
+      rm -rf "${CLAUDE_DIR:?}/$item"
+      REMOVED=$((REMOVED + 1))
+    fi
+  done < "$MANIFEST"
+  if [ "$REMOVED" -gt 0 ]; then
+    echo "新しいキットに含まれなくなった古いスキル等を ${REMOVED} 件、"
+    echo "バックアップへ移動して整理しました。"
+    echo "(中にナレッジが入っていた場合もバックアップに残っています)"
+    echo ""
+  fi
+fi
+
+# --- ステップ 5/6: コピー ------------------------------------
 echo "(1/3) スキル(開発ノウハウ集)をコピーしています..."
 cp -R skills/. "$CLAUDE_DIR/skills/"
 
 echo "(2/3) エージェント(自動開発の司令塔)をコピーしています..."
 cp -R agents/. "$CLAUDE_DIR/agents/"
 
-echo "(3/3) コマンド(/build-app)をコピーしています..."
+echo "(3/3) コマンド(/build-app, /improve-app, /undo-app)をコピーしています..."
 cp -R commands/. "$CLAUDE_DIR/commands/"
 
 echo ""
 
-# --- ステップ 5/5: 全件検証 -----------------------------------
+# --- ステップ 6/6: 全件検証と導入記録の更新 ----------------------
 set +e
 MISSING=""
 
@@ -146,13 +192,21 @@ for f in agents/*.md commands/*.md; do
 done
 
 if [ -z "$MISSING" ]; then
+  # 今回入れたものの一覧を記録する(次回更新時の整理に使う)
+  {
+    for dir in skills/*/; do echo "skills/$(basename "$dir")"; done
+    for f in agents/*.md; do [ -e "$f" ] && echo "$f"; done
+    for f in commands/*.md; do [ -e "$f" ] && echo "$f"; done
+  } > "$MANIFEST"
+  echo "$KIT_VERSION" > "$VERSION_FILE"
+
   echo "==============================================="
   echo "  インストールが完了しました！"
   echo "==============================================="
   echo ""
   echo "  スキル: ${INSTALLED_SKILLS}個 / ${EXPECTED_SKILLS}個"
   echo "  エージェント: app-orchestrator"
-  echo "  コマンド: /build-app"
+  echo "  コマンド: /build-app, /improve-app, /undo-app"
   if [ -n "$CONFLICTS" ]; then
     echo ""
     echo "  以前のファイルは次の場所に保存してあります:"

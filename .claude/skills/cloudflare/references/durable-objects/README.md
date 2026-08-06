@@ -160,9 +160,9 @@ See [DO Storage](../do-storage/README.md) for complete guide.
 ## Essential Commands
 
 ```bash
-npx wrangler dev              # Local dev with DOs
-npx wrangler dev --remote     # Test against prod DOs
-npx wrangler deploy           # Deploy + auto-apply migrations
+pnpm wrangler dev              # Local dev with DOs
+pnpm wrangler dev --remote     # Test against prod DOs
+pnpm wrangler deploy           # Deploy + auto-apply migrations
 ```
 
 ## Resources

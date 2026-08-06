@@ -96,13 +96,13 @@ Schedule crons during low-carbon periods for carbon-aware execution:
 
 ```bash
 # Deploy with config crons
-npx wrangler deploy
+pnpm wrangler deploy
 
 # Deploy specific environment
-npx wrangler deploy --env production
+pnpm wrangler deploy --env production
 
 # View deployments
-npx wrangler deployments list
+pnpm wrangler deployments list
 ```
 
 **⚠️ Changes take up to 15 minutes to propagate globally**

@@ -75,10 +75,10 @@ export default function Form() {
 ### Vue / Svelte
 
 ```vue
-<!-- Vue: npm install vue-turnstile -->
+<!-- Vue: pnpm add vue-turnstile -->
 <VueTurnstile :site-key="SITE_KEY" @success="token = $event" />
 
-<!-- Svelte: npm install svelte-turnstile -->
+<!-- Svelte: pnpm add svelte-turnstile -->
 <Turnstile siteKey={SITE_KEY} on:turnstile-callback={(e) => token = e.detail.token} />
 ```
 

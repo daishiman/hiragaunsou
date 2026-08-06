@@ -168,7 +168,7 @@ const worker = new cloudflare.WorkerScript("worker", {
 
 ```typescript
 import * as command from "@pulumi/command";
-const build = new command.local.Command("build", {create: "npm run build", dir: "./worker"});
+const build = new command.local.Command("build", {create: "pnpm run build", dir: "./worker"});
 const worker = new cloudflare.WorkerScript("worker", {
     accountId, name: "my-worker",
     content: build.stdout.apply(() => fs.readFileSync("./worker/dist/index.js", "utf8")),

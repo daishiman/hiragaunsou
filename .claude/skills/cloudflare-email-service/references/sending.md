@@ -21,7 +21,7 @@ For local development, add `"remote": true` so email sends are proxied to the re
 { "send_email": [{ "name": "EMAIL", "remote": true }] }
 ```
 
-Run `npx wrangler types` to auto-generate the `Env` interface with your `EMAIL` binding. This produces a `worker-configuration.d.ts` with the real `SendEmail`, `EmailAttachment`, `EmailAddress`, and related types from the workerd runtime. Always use these generated types — do not define them manually.
+Run `pnpm wrangler types` to auto-generate the `Env` interface with your `EMAIL` binding. This produces a `worker-configuration.d.ts` with the real `SendEmail`, `EmailAttachment`, `EmailAddress`, and related types from the workerd runtime. Always use these generated types — do not define them manually.
 
 **Note:** Workers binding uses `email` in the from object (`EmailAddress` type). REST API uses `address`. See [rest-api.md](rest-api.md).
 
@@ -150,7 +150,7 @@ msg.addMessage({ contentType: "text/html", data: "<h1>Hello</h1>" });
 await env.EMAIL.send(new EmailMessage("sender@yourdomain.com", "recipient@example.com", msg.asRaw()));
 ```
 
-Requires `npm install mimetext` and `"nodejs_compat"` in compatibility flags.
+Requires `pnpm add mimetext` and `"nodejs_compat"` in compatibility flags.
 
 ## Agents SDK Email
 

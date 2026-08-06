@@ -42,7 +42,7 @@ describe("Business logic", () => {
 Full Workers runtime in Vitest. Reads `wrangler.toml`.
 
 ```bash
-npm i -D @cloudflare/vitest-pool-workers
+pnpm add -D @cloudflare/vitest-pool-workers
 ```
 
 ```js
