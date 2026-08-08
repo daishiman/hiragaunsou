@@ -184,9 +184,27 @@ describe("GET /api/manual-entry", () => {
       yearMonth: "2026-05",
       manualInputs: records,
       kirinTargetVehicleNos: ["24", "300"],
+      kirin: { transportSupport: 0, managementSupport: 0 },
     });
     expect(manualFindMock).toHaveBeenCalledWith("2026-05");
     expect(appSettingGetMock).toHaveBeenCalledWith("kirin_target_vehicle_nos");
+  });
+
+  /**
+   * 金額を返さないと画面は空欄で表示され、輸送協力金だけ直して保存した瞬間に
+   * 経営支援金が0で上書きされて消える(POSTは2つセットで保存するため)。
+   */
+  it("保存済みのキリンの受取額を金額つきで返す", async () => {
+    manualFindMock.mockResolvedValue([]);
+    appSettingGetMock.mockResolvedValue("24,300");
+    savedRates.set("kirin_transport_support::2026-05", 120000);
+    savedRates.set("kirin_management_support::2026-05", 80000);
+
+    const { GET } = await importRoute();
+    const res = await GET(getRequest("?yearMonth=2026-05"));
+    const body = (await res.json()) as { kirin: { transportSupport: number; managementSupport: number } };
+
+    expect(body.kirin).toEqual({ transportSupport: 120000, managementSupport: 80000 });
   });
 
   it("入力の取得と設定の取得を並行実行する(直列だと待ち合わせで完了しない)", async () => {

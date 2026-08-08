@@ -44,14 +44,20 @@ export async function GET(request: Request) {
 
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);
-  const [records, kirinTargets] = await Promise.all([
+  const rateMasterRepo = new D1RateMasterRepository(db);
+  const [records, kirinTargets, kirinTransport, kirinManagement] = await Promise.all([
     new D1ManualInputRepository(db).findByYearMonth(yearMonth),
     new D1AppSettingRepository(db).get(APP_SETTING_KEYS.kirinTargetVehicleNos),
+    // 金額も返す。返さないと再訪時に空欄で表示され、片方だけ入力し直したときに
+    // もう片方が0で上書きされて消える(POSTは2つセットで保存するため)。
+    rateMasterRepo.getRate(RATE_KEYS.kirinTransportSupport, yearMonth, 0),
+    rateMasterRepo.getRate(RATE_KEYS.kirinManagementSupport, yearMonth, 0),
   ]);
   return NextResponse.json({
     yearMonth,
     manualInputs: records,
     kirinTargetVehicleNos: parseVehicleNoList(kirinTargets) ?? [...DEFAULT_KIRIN_TARGET_VEHICLES],
+    kirin: { transportSupport: kirinTransport, managementSupport: kirinManagement },
   });
 }
 

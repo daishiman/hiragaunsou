@@ -9,7 +9,7 @@ import { D1ManualInputRepository } from "../../src/infrastructure/db/D1ManualInp
 import { D1ReviewFlagRepository } from "../../src/infrastructure/db/D1ReviewFlagRepository";
 import { D1VehiclePlRepository } from "../../src/infrastructure/db/D1VehiclePlRepository";
 import { D1CleansingDecisionRepository } from "../../src/infrastructure/db/D1CleansingDecisionRepository";
-import { D1RateMasterRepository } from "../../src/infrastructure/db/D1MasterRepository";
+import { D1RateMasterRepository, RATE_KEYS } from "../../src/infrastructure/db/D1MasterRepository";
 import { D1AnnualReferenceRepository } from "../../src/infrastructure/db/D1AnnualReferenceRepository";
 import { GetWorkflowProgressUseCase } from "../../src/usecase/steps/getWorkflowProgress";
 import { GetPeriodOverviewUseCase } from "../../src/usecase/steps/getPeriodOverview";
@@ -46,6 +46,15 @@ export default async function HomePage() {
       new D1VehiclePlRepository(db),
       new D1ReviewFlagRepository(db),
       new D1CleansingDecisionRepository(db),
+      // キリンの協力金は rate_master に入る。手入力画面で入力済みかどうかはここを見る。
+      async (ym) => {
+        const rateMasterRepo = new D1RateMasterRepository(db);
+        const [transport, management] = await Promise.all([
+          rateMasterRepo.getRate(RATE_KEYS.kirinTransportSupport, ym, 0),
+          rateMasterRepo.getRate(RATE_KEYS.kirinManagementSupport, ym, 0),
+        ]);
+        return transport + management;
+      },
     ).execute(yearMonth),
     canViewAnalysis
       ? new GetPeriodOverviewUseCase(
