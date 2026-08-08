@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatVehicleNoLabel } from "../../../../src/domain/rules/towedVehicle";
 import { redirect } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../../src/infrastructure/auth/session";
@@ -13,6 +14,9 @@ import { kmPriceLabel, num, yen, yearMonthLabel } from "../../../_lib/format";
 import { PageHead } from "../../../_components/PageHead";
 import { EmptyState } from "../../../_components/EmptyState";
 import { BarRow } from "../../../_components/BarRow";
+import { D1VehiclePlOverrideRepository } from "../../../../src/infrastructure/db/D1VehiclePlOverrideRepository";
+import type { OverridableField } from "../../../../src/domain/rules/vehiclePlOverride";
+import { VehiclePlOverrideEditor } from "./VehiclePlOverrideEditor";
 
 /** COST_BREAKDOWN_FIELDS(getVehicleHistory.ts)と対応する日本語ラベル + 売上分 */
 const FACTOR_CATEGORY_LABELS: Record<DeficitFactorCategory, string> = {
@@ -63,14 +67,43 @@ export default async function VehicleDetailPage({
     ? await new D1DeficitFactorAnalysisRepository(db).findOne(vehicleNo, yearMonth)
     : null;
 
+  // 上書きは「収支表から外す」を含むため、行が消えている月でも読む
+  // (読まないと、外した車両を元に戻す手段が画面から無くなる)。
+  const overrides = await new D1VehiclePlOverrideRepository(db).findByYearMonth(yearMonth);
+  const savedOverride = overrides.find((o) => o.vehicleNo === vehicleNo) ?? null;
+  const canEdit = checkAccess(session, "input");
+
+  // トレーラを吸収した行は、この画面の数字がトラクタ単独のものではなくなる。
+  // 何が足されているのか分からないまま見せると、車両マスタの登録内容を疑えなくなる。
+  const towedVehicleNos = current?.towedVehicleNos ?? [];
+  const vehicleNoLabel = formatVehicleNoLabel(vehicleNo, towedVehicleNos);
+
+  // driverCount は収支表の列に無い(賞与の計算にだけ使う)ため、ここでは出せない。
+  const currentValues: Partial<Record<OverridableField, number | null>> = {
+    trips: current?.trips ?? null,
+    slips: current?.slips ?? null,
+    hours: current?.hours ?? null,
+    km: current?.km ?? null,
+    fare: current?.fare ?? null,
+    fee: current?.fee ?? null,
+    salary: current?.salary ?? null,
+    welfare: current?.welfare ?? null,
+    driverCount: null,
+    bonusMonthly: current?.bonus ?? null,
+  };
+
   return (
     <>
       <PageHead
         kind="data"
-        title={`車番 ${vehicleNo}`}
+        title={`車番 ${vehicleNoLabel}`}
         lead={
           current
-            ? `${current.type} / ${current.depot} / 運転者 ${current.driver ?? "—"} — ${yearMonthLabel(yearMonth)}`
+            ? `${current.type} / ${current.depot} / 運転者 ${current.driver ?? "—"} — ${yearMonthLabel(yearMonth)}${
+                towedVehicleNos.length > 0
+                  ? ` / トレーラ ${towedVehicleNos.join("・")} を合算しています`
+                  : ""
+              }`
             : `${yearMonthLabel(yearMonth)}のデータ`
         }
         action={
@@ -86,7 +119,11 @@ export default async function VehicleDetailPage({
       {!data.found ? (
         <EmptyState
           title={`${yearMonthLabel(yearMonth)}に車番 ${vehicleNo} のデータはありません`}
-          description="対象月を変えるか、月次データを取り込んでください。"
+          description={
+            savedOverride?.excluded
+              ? "この車両は今月の収支表から外す設定になっています。下の欄で取り消せます。"
+              : "対象月を変えるか、月次データを取り込んでください。"
+          }
         />
       ) : (
         <>
@@ -235,6 +272,25 @@ export default async function VehicleDetailPage({
           </section>
         </>
       )}
+
+      {canEdit ? (
+        <VehiclePlOverrideEditor
+          yearMonth={yearMonth}
+          vehicleNo={vehicleNo}
+          currentValues={currentValues}
+          saved={
+            savedOverride
+              ? {
+                  excluded: savedOverride.excluded,
+                  values: savedOverride.values,
+                  reason: savedOverride.reason,
+                  updatedAt: savedOverride.updatedAt.toISOString(),
+                  updatedByName: savedOverride.updatedByName,
+                }
+              : null
+          }
+        />
+      ) : null}
     </>
   );
 }

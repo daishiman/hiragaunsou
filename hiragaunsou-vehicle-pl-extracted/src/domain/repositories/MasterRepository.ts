@@ -10,7 +10,7 @@ export interface VehicleMasterRecord {
   vehicleType: string;
   depot: string;
   regDate: string | null;
-  /** STANDARD_COST_RATES のキー (6.5t/large/semiTrailer/unic/medium) */
+  /** STANDARD_COST_RATES のキー (6.5t/large/semiTrailer/unic/medium/trailer) */
   costCategory: string;
   insCompulsory: number;
   insVoluntary: number;
@@ -18,6 +18,11 @@ export interface VehicleMasterRecord {
   taxWeight: number;
   lease: number;
   installment: number;
+  /**
+   * トレーラ(被けん引車)が、どのトラクタにけん引されるか。トレーラ行だけが持つ。
+   * 値が入っている車両は単独では収支表に出さず、けん引側の行に合算される。
+   */
+  towedByVehicleNo?: string | null;
 }
 
 /**
@@ -35,6 +40,8 @@ export interface VehicleMasterUpsertInput {
   taxWeight: number;
   lease: number;
   installment: number;
+  /** けん引するトラクタの車番 (トレーラ行のみ)。CSVに列が無ければ既存値を維持する。 */
+  towedByVehicleNo?: string | null;
 }
 
 export interface VehicleMasterRepository {
@@ -56,6 +63,14 @@ export interface VehicleMasterRepository {
     lease: number,
     installment: number,
   ): Promise<void>;
+
+  /**
+   * トレーラ(被けん引車)のけん引先トラクタを設定する。null で解除。
+   *
+   * この対応表は元データのどのCSVにも無く、現行Excelの行ラベル(「129/1113」)だけが
+   * 持っている情報なので、人が画面で登録する以外に手段がない。
+   */
+  updateTowedBy(vehicleNo: string, towedByVehicleNo: string | null): Promise<void>;
 }
 
 /** 運転者マスタ (社員コードで車番と紐づく。1:1ではない) */
@@ -65,8 +80,21 @@ export interface DriverMasterRecord {
   vehicleNo: string | null;
 }
 
+export interface DriverMasterUpsertInput {
+  employeeCode: string;
+  driverName: string;
+  vehicleNo: string | null;
+}
+
 export interface DriverMasterRepository {
   findAll(): Promise<DriverMasterRecord[]>;
+
+  /**
+   * 社員コードをキーに一括で登録・更新する (CSV一括取込)。
+   * 車両マスタと同じく、毎月まとめて登録し直す運用のため全件upsertでよい。
+   * 新規と更新の内訳を返すのは、取込結果を人が確認してから確定できるようにするため。
+   */
+  upsertMany(records: DriverMasterUpsertInput[]): Promise<{ inserted: number; updated: number }>;
 }
 
 /**
@@ -82,6 +110,12 @@ export interface RateMasterRepository {
    * getRates と同じフォールバック順 (月指定→全期間共通→既定値)。
    */
   getDeficitThresholds(yearMonth: string): Promise<DeficitThresholds>;
+
+  /**
+   * レート単価を1件だけ読む (キリン協力金の受取額など、RateSettings に含まれない設定値用)。
+   * getRates と同じフォールバック順 (月指定→全期間共通→引数の既定値)。
+   */
+  getRate(key: string, yearMonth: string, fallback: number): Promise<number>;
 
   /**
    * レート単価を1件 upsert する (手入力画面「インタンク単価」用, §2.2)。

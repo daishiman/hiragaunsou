@@ -15,7 +15,10 @@ import type {
   CleansingDecisionRepository,
 } from "../../src/domain/repositories/CleansingDecisionRepository";
 import { DEFAULT_DEFICIT_THRESHOLDS } from "../../src/domain/rules/deficitClassification";
-import type { VehiclePlCalculated } from "../../src/domain/rules/vehiclePlCalculation";
+import {
+  DEFAULT_RATE_SETTINGS,
+  type VehiclePlCalculated,
+} from "../../src/domain/rules/vehiclePlCalculation";
 
 /** 年月 → 行 のマップを与えるだけで済む収支リポジトリのスタブ */
 export function stubVehiclePlRepo(
@@ -60,12 +63,9 @@ export function stubRateMasterRepo(
   overrides: Partial<Awaited<ReturnType<RateMasterRepository["getDeficitThresholds"]>>> = {},
 ): RateMasterRepository {
   return {
-    getRates: async () => ({
-      tollDiscountRate: 0.356,
-      adminFeeRate: 0.169,
-      bonusAnnual: 400_000,
-      tankPricePerLiter: 120,
-    }),
+    // 率の具体値はテストの検証対象ではないので既定値を借りる。ここに数値を書くと
+    // 既定値を変えたときにスタブだけが古い値を返し、齟齬が見えなくなる。
+    getRates: async () => ({ ...DEFAULT_RATE_SETTINGS, tankPricePerLiter: 120 }),
     getDeficitThresholds: async () => ({ ...DEFAULT_DEFICIT_THRESHOLDS, ...overrides }),
     setRate: async () => {},
   };

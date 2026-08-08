@@ -1,4 +1,4 @@
-import { count, eq, getTableColumns, inArray, sql, sum, type SQL } from "drizzle-orm";
+import { and, count, eq, getTableColumns, inArray, sql, sum, type SQL } from "drizzle-orm";
 import type { Db } from "./client";
 import { vehiclePl } from "./schema";
 import type { VehiclePlRepository } from "../../domain/repositories/VehiclePlRepository";
@@ -42,6 +42,9 @@ export class D1VehiclePlRepository implements VehiclePlRepository {
           id: `${yearMonth}::${row.no}`,
           yearMonth,
           vehicleNo: row.no,
+          // 吸収したトレーラの車番。車番そのものはトラクタのままなので、
+          // 収支表の「129/1113」というラベルはここからしか復元できない。
+          towedVehicleNos: (row.towedVehicleNos ?? []).join(","),
           type: row.type,
           depot: row.depot,
           reg: row.reg,
@@ -104,6 +107,15 @@ export class D1VehiclePlRepository implements VehiclePlRepository {
     await this.db.batch(statements as unknown as [typeof statements[number]]);
   }
 
+  async removeVehicles(yearMonth: string, vehicleNos: readonly string[]): Promise<void> {
+    if (vehicleNos.length === 0) return;
+    await this.db
+      .delete(vehiclePl)
+      .where(
+        and(eq(vehiclePl.yearMonth, yearMonth), inArray(vehiclePl.vehicleNo, [...vehicleNos])),
+      );
+  }
+
   async findByYearMonth(yearMonth: string): Promise<VehiclePlCalculated[]> {
     const rows = await this.db.select().from(vehiclePl).where(eq(vehiclePl.yearMonth, yearMonth));
     return rows.map(mapRow);
@@ -162,6 +174,7 @@ export class D1VehiclePlRepository implements VehiclePlRepository {
 function mapRow(row: typeof vehiclePl.$inferSelect): VehiclePlCalculated {
   return {
     no: row.vehicleNo,
+    towedVehicleNos: row.towedVehicleNos ? row.towedVehicleNos.split(",") : [],
     type: row.type,
     depot: row.depot,
     reg: row.reg,

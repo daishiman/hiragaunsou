@@ -65,13 +65,23 @@ vi.mock("../../src/infrastructure/db/D1CleansingDecisionRepository", async (impo
   };
 });
 
-const { setRateMock } = vi.hoisted(() => ({ setRateMock: vi.fn() }));
+/**
+ * キリンの受取額は「保存してから読み直して配賦する」経路になったため、
+ * setRate/getRate が繋がっていないと配賦が消える。レートマスタの読み書きを
+ * 1つのMapで模して、保存した値がそのまま再計算に渡ることまで確認できるようにする。
+ */
+const { setRateMock, getRateMock, savedRates } = vi.hoisted(() => ({
+  savedRates: new Map<string, number>(),
+  setRateMock: vi.fn(),
+  getRateMock: vi.fn(),
+}));
 vi.mock("../../src/infrastructure/db/D1MasterRepository", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../src/infrastructure/db/D1MasterRepository")>();
   return {
     RATE_KEYS: actual.RATE_KEYS,
     D1RateMasterRepository: class {
       setRate = setRateMock;
+      getRate = getRateMock;
     },
     D1VehicleMasterRepository: class {},
     D1DriverMasterRepository: class {},
@@ -80,6 +90,11 @@ vi.mock("../../src/infrastructure/db/D1MasterRepository", async (importOriginal)
 
 vi.mock("../../src/infrastructure/db/D1ImportBatchRepository", () => ({
   D1ImportBatchRepository: class {},
+}));
+vi.mock("../../src/infrastructure/db/D1VehiclePlOverrideRepository", () => ({
+  D1VehiclePlOverrideRepository: class {
+    findByYearMonth = async () => [];
+  },
 }));
 vi.mock("../../src/infrastructure/db/D1VehiclePlRepository", () => ({
   D1VehiclePlRepository: class {},
@@ -121,9 +136,18 @@ beforeEach(() => {
   manualFindMock.mockResolvedValue([]);
   upsertManyMock.mockResolvedValue(undefined);
   appSettingGetMock.mockResolvedValue(null);
-  appSettingSetMock.mockResolvedValue(undefined);
+  // 配賦先車番も「保存 → 再計算側が読み直す」経路になったため、書いた値が読めるよう繋ぐ。
+  appSettingSetMock.mockImplementation(async (_key: string, value: string) => {
+    appSettingGetMock.mockResolvedValue(value);
+  });
   cleansingFindMock.mockResolvedValue([]);
-  setRateMock.mockResolvedValue(undefined);
+  savedRates.clear();
+  setRateMock.mockImplementation(async (key: string, yearMonth: string | null, value: number) => {
+    savedRates.set(`${key}::${yearMonth}`, value);
+  });
+  getRateMock.mockImplementation(async (key: string, yearMonth: string, fallback: number) =>
+    savedRates.get(`${key}::${yearMonth}`) ?? fallback,
+  );
   executeMock.mockResolvedValue({ yearMonth: "2026-05", vehicleCount: 3 });
 });
 
@@ -460,6 +484,7 @@ describe("POST /api/manual-entry の保存と確定", () => {
       manualInputs: savedRecords,
       kirinAllocations: [],
       cleansingDecisions: decisions,
+      overrides: [],
     });
     expect(cleansingFindMock).toHaveBeenCalledWith("2026-05", "sales_monitor");
   });

@@ -1,79 +1,10 @@
 import { isCharteredVehicle } from "../../domain/rules/charteredVehicle";
 import type { FileStorageRepository } from "../../domain/repositories/FileStorageRepository";
-import type { ImportBatchRepository, VehiclePlRepository } from "../../domain/repositories/VehiclePlRepository";
-import type {
-  VehicleMasterRepository,
-  VehicleMasterUpsertInput,
-} from "../../domain/repositories/MasterRepository";
-import type { AuditLogRepository } from "../../domain/repositories/AuditLogRepository";
-import type { VehiclePlCalculated } from "../../domain/rules/vehiclePlCalculation";
+import type { ImportBatchRepository } from "../../domain/repositories/VehiclePlRepository";
 import { parseMonthlyPlWorkbook } from "../../infrastructure/parsers/monthlyPlWorkbookParser";
-import { mapVehicleTypeToCostCategory } from "../../infrastructure/parsers/vehicleMasterParser";
 
-/** 既存Excelの完成済み「○月収支表」を、移行期間の正本データとして取り込む種別。 */
+/** 完成済み「○月収支表」Excel。答え合わせの相手として取り込むだけの参照データ。 */
 export const MONTHLY_PL_WORKBOOK_SOURCE_TYPE = "monthly_pl_workbook";
-
-/** Excel取込に伴う車両マスタ自動更新。手動CSV取込(import_vehicle_master)と区別する。 */
-export const SYNC_VEHICLE_MASTER_ACTION = "sync_vehicle_master_from_workbook";
-
-/** 車両マスタに反映できなかった行と、その理由。 */
-export interface VehicleMasterSyncSkip {
-  vehicleNo: string;
-  vehicleType: string;
-  reason: string;
-}
-
-export interface VehicleMasterSyncResult {
-  inserted: number;
-  updated: number;
-  skipped: VehicleMasterSyncSkip[];
-}
-
-/**
- * 収支表の行から車両マスタ相当の9項目を抜き出す。
- *
- * 収支表は毎月そのExcelが正本として更新されるため、取り込むたびに全件を上書きする。
- * 車種名から原価カテゴリを判定できない行は、既定値に丸めると修繕費・タイヤ費の単価が
- * 誤ったまま気付かれずに残るため、更新せず理由付きで返して人が対処できるようにする。
- * 同じ車番が複数行ある場合は後勝ち(シート下方の行が新しい前提)。
- */
-export function buildVehicleMasterRecords(rows: readonly VehiclePlCalculated[]): {
-  records: VehicleMasterUpsertInput[];
-  skipped: VehicleMasterSyncSkip[];
-} {
-  const byVehicleNo = new Map<string, VehicleMasterUpsertInput>();
-  const skipped: VehicleMasterSyncSkip[] = [];
-
-  for (const row of rows) {
-    const vehicleNo = row.no.trim();
-    if (vehicleNo === "") continue;
-
-    const costCategory = mapVehicleTypeToCostCategory(row.type);
-    if (costCategory === null) {
-      skipped.push({
-        vehicleNo,
-        vehicleType: row.type,
-        reason: `車種名「${row.type}」から原価カテゴリを判定できません`,
-      });
-      continue;
-    }
-
-    byVehicleNo.set(vehicleNo, {
-      vehicleNo,
-      vehicleType: row.type,
-      depot: row.depot,
-      costCategory,
-      insCompulsory: row.insCompulsory,
-      insVoluntary: row.insVoluntary,
-      taxAuto: row.taxAuto,
-      taxWeight: row.taxWeight,
-      lease: row.lease,
-      installment: row.installment,
-    });
-  }
-
-  return { records: [...byVehicleNo.values()], skipped };
-}
 
 export interface ImportMonthlyPlWorkbookInput {
   yearMonth: string;
@@ -92,26 +23,28 @@ export interface ImportMonthlyPlWorkbookResult {
   vehicleCount: number;
   charteredExcluded: number;
   needsReviewCount: number;
-  /** 車両マスタの自動更新結果。連携先が未設定の場合は null。 */
-  vehicleMasterSync: VehicleMasterSyncResult | null;
 }
 
 /**
- * STEP 7〜8の既存成果物をD1に移すユースケース。
- * CSV/PDF取込の完全自動化へ移行する間も、毎月の完成表をWebで閲覧・比較できるようにする。
- * 「88888」だけは確定ルールなので除外し、諸口・過去実績のある重複候補は消さずに要確認として残す。
+ * 完成済みExcelを「答え合わせの相手」として取り込むユースケース。
+ *
+ * 収支表そのものは、業務フローどおり
+ *   運行実績CSV / 売上モニタリストCSV / 給与集計表CSV / 車両マスタ / 運転者マスタ / 手入力
+ * だけから作られる。このExcelはその入力ではない。
+ *
+ * かつてこのユースケースはExcelの完成値を vehicle_pl へ直接書き、さらに車両マスタまで
+ * 上書きしていた。その結果、CSVの紐付けが1つも通っていなくても表は完成してしまい、
+ * 「CSVから作られた表」と「Excelを写しただけの表」が画面上で区別できなかった
+ * (実際、本番の2026年5月のデータはExcelを写したものだった)。
+ *
+ * そのため現在は raw_ingestion に原文を残すだけに徹し、計算に効くものは何も書かない。
+ * 取り込んだ値は GetExcelReconciliationUseCase が車番別の突合表に使う。
+ * ここに書き込み先を足すと、また「Excelで表が完成してしまう」状態に戻るので足さないこと。
  */
 export class ImportMonthlyPlWorkbookUseCase {
   constructor(
     private readonly fileStorage: FileStorageRepository,
     private readonly importBatchRepo: ImportBatchRepository,
-    private readonly vehiclePlRepo: VehiclePlRepository,
-    /**
-     * 収支表から車両マスタを自動更新するための連携先。
-     * 未指定でも取込自体は成立させたいため任意とし、その場合はマスタ更新を行わない。
-     */
-    private readonly vehicleMasterRepo?: VehicleMasterRepository,
-    private readonly auditLog?: AuditLogRepository,
   ) {}
 
   async execute(input: ImportMonthlyPlWorkbookInput): Promise<ImportMonthlyPlWorkbookResult> {
@@ -146,8 +79,6 @@ export class ImportMonthlyPlWorkbookUseCase {
       input.yearMonth,
       rawRows,
     );
-    await this.vehiclePlRepo.upsertMany(input.yearMonth, kept);
-    const vehicleMasterSync = await this.syncVehicleMaster(input, kept);
 
     return {
       batchId,
@@ -157,48 +88,7 @@ export class ImportMonthlyPlWorkbookUseCase {
       vehicleCount: kept.length,
       charteredExcluded,
       needsReviewCount: rawRows.filter((row) => row.flags.length > 0).length,
-      vehicleMasterSync,
     };
-  }
-
-  /**
-   * 収支表の内容で車両マスタを上書きする。
-   * 保険料・税・リース料は収支計算の土台であり、毎月の取込のたびに最新化されるべき情報だが、
-   * ここで失敗しても収支表そのものの取込は成立している。マスタ更新の失敗で取込全体を
-   * ロールバック扱いにすると再取込を強いることになるため、例外は握らず監査ログの記録のみ行う。
-   */
-  private async syncVehicleMaster(
-    input: ImportMonthlyPlWorkbookInput,
-    rows: readonly VehiclePlCalculated[],
-  ): Promise<VehicleMasterSyncResult | null> {
-    if (!this.vehicleMasterRepo) return null;
-
-    const { records, skipped } = buildVehicleMasterRecords(rows);
-    if (records.length === 0) return { inserted: 0, updated: 0, skipped };
-
-    const { inserted, updated } = await this.vehicleMasterRepo.upsertMany(records);
-
-    await this.auditLog?.record({
-      actorId: input.importedBy,
-      actorName: input.importedByName ?? input.importedBy ?? "system",
-      action: SYNC_VEHICLE_MASTER_ACTION,
-      summary:
-        `${input.yearMonth}の収支表取込により車両マスタ ${records.length}件を自動更新` +
-        `(新規${inserted}件・更新${updated}件` +
-        (skipped.length > 0 ? `・対象外${skipped.length}件` : "") +
-        ")",
-      detail: {
-        yearMonth: input.yearMonth,
-        fileName: input.fileName,
-        total: records.length,
-        inserted,
-        updated,
-        vehicleNos: records.map((r) => r.vehicleNo),
-        skipped,
-      },
-    });
-
-    return { inserted, updated, skipped };
   }
 }
 

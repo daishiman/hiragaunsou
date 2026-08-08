@@ -25,12 +25,20 @@ function numberCell(ref: string, value: number): string {
   return `<c r="${ref}"><v>${value}</v></c>`;
 }
 
-function rowXml(rowNumber: number, values: (string | number)[]): string {
-  return `<row r="${rowNumber}">${values.map((value, index) => (
-    typeof value === "number"
-      ? numberCell(`${columnName(index)}${rowNumber}`, value)
-      : inlineCell(`${columnName(index)}${rowNumber}`, value)
-  )).join("")}</row>`;
+/**
+ * 書式だけ設定された空セル。Excelは未入力セルをこの自己終了タグで保存するため、
+ * 実データ(収支表の「メンテ(委託)」「車両リース費」列)と同じ形をテストでも再現する。
+ */
+function emptyCell(ref: string): string {
+  return `<c r="${ref}" s="18"/>`;
+}
+
+function rowXml(rowNumber: number, values: (string | number | null)[]): string {
+  return `<row r="${rowNumber}">${values.map((value, index) => {
+    const ref = `${columnName(index)}${rowNumber}`;
+    if (value === null) return emptyCell(ref);
+    return typeof value === "number" ? numberCell(ref, value) : inlineCell(ref, value);
+  }).join("")}</row>`;
 }
 
 export interface MonthlyPlWorkbookFixtureOptions {
@@ -44,6 +52,11 @@ export interface MonthlyPlWorkbookFixtureOptions {
   omitAggregateRow?: boolean;
   /** シート名。省略時は "5月収支表"。シート名と対象年月の照合ロジックを検証するテストで使う。 */
   sheetName?: string;
+  /**
+   * 値を持たせず、書式だけの空セル `<c r="..." s="18"/>` として出力する列。
+   * 実データの収支表では未入力の「メンテ(委託)」「車両リース費」がこの形で保存される。
+   */
+  emptyFields?: readonly VehiclePlField[];
 }
 
 /** テスト用の最小xlsx。車番10は諸口・重複候補、88888は傭車として使う。 */
@@ -64,16 +77,20 @@ export function buildMonthlyPlWorkbookFixture(options: MonthlyPlWorkbookFixtureO
     sales: 500000,
     fuelTotal: 120000,
     repair: 25000,
+    repairTotal: 33000,
+    installment: 154498,
     expense: 420000,
     profit: 80000,
     margin: 0.16,
   };
-  const first = fields.map((field): string | number => {
+  const empty = new Set(options.emptyFields ?? []);
+  const first = fields.map((field): string | number | null => {
+    if (empty.has(field)) return null;
     if (field in firstValues) return firstValues[field]!;
     return 0;
   });
 
-  const chartered = fields.map((field): string | number => {
+  const chartered = fields.map((field): string | number | null => {
     if (field === "no") return 88888;
     if (field === "driver") return "傭車";
     return 0;

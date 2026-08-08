@@ -15,6 +15,7 @@ import { PageHead } from "../../_components/PageHead";
 import { EmptyState } from "../../_components/EmptyState";
 import { ConfirmMonthlyPlUseCase } from "../../../src/usecase/steps/confirmMonthlyPl";
 import { GridTable } from "./GridTable";
+import { D1VehiclePlOverrideRepository } from "../../../src/infrastructure/db/D1VehiclePlOverrideRepository";
 import { ExcelReconcileList } from "./ExcelReconcileList";
 import { ConfirmBar } from "./ConfirmBar";
 
@@ -35,11 +36,16 @@ export default async function GridPage({
   const db = createDb(env.DB);
   const plRepo = new D1VehiclePlRepository(db);
   const flagRepo = new D1ReviewFlagRepository(db);
-  const [grid, confirmation, reconciliation] = await Promise.all([
-    new GetMonthlyGridUseCase(plRepo, flagRepo).execute(yearMonth),
+  // Excelとの差もセルの所見として表に出すため、突合を先に済ませてからグリッドを組む。
+  const [confirmation, reconciliation] = await Promise.all([
     new ConfirmMonthlyPlUseCase(plRepo, flagRepo).status(yearMonth),
     new GetExcelReconciliationUseCase(plRepo, new D1ImportBatchRepository(db)).execute(yearMonth),
   ]);
+  const grid = await new GetMonthlyGridUseCase(
+    plRepo,
+    flagRepo,
+    new D1VehiclePlOverrideRepository(db),
+  ).execute(yearMonth, reconciliation);
 
   return (
     <>
@@ -82,7 +88,7 @@ export default async function GridPage({
         />
       ) : (
         <>
-          <GridTable rows={grid.rows} yearMonth={yearMonth} />
+          <GridTable rows={grid.rows} yearMonth={yearMonth} review={grid.review} />
           <ExcelReconcileList result={reconciliation} />
         </>
       )}

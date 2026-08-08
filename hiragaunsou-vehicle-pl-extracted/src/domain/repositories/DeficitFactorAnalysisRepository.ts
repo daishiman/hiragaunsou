@@ -30,6 +30,14 @@ export interface DeficitFactorAnalysisRecord {
   summary: string;
   factors: DeficitFactorItem[];
   model: string;
+  /**
+   * 分析した時点の損益(円)。分析文が前提にしていた金額のスナップショット。
+   *
+   * これが無いと「車番が既にあるか」しかキャッシュの鍵にできず、率マスタや手入力が
+   * 変わって損益が動いても古い説明文が残り続ける (一般管理費率の改定で実際に起きた)。
+   * null はこの列が無かった頃のレコード。陳腐化を判定できないので再分析対象として扱う。
+   */
+  profitAtAnalysis: number | null;
   updatedAt: number;
 }
 
@@ -39,6 +47,8 @@ export interface DeficitFactorAnalysisUpsertInput {
   summary: string;
   factors: DeficitFactorItem[];
   model: string;
+  /** 分析対象にしたときの損益(円)。次回この値と現在値を比べて陳腐化を判定する */
+  profitAtAnalysis: number;
 }
 
 export interface DeficitFactorAnalysisRepository {

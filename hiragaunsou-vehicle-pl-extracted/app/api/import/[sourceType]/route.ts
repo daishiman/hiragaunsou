@@ -12,9 +12,6 @@ import {
   ImportMonthlyPlWorkbookUseCase,
   MONTHLY_PL_WORKBOOK_SOURCE_TYPE,
 } from "../../../../src/usecase/steps/importMonthlyPlWorkbook";
-import { D1VehiclePlRepository } from "../../../../src/infrastructure/db/D1VehiclePlRepository";
-import { D1VehicleMasterRepository } from "../../../../src/infrastructure/db/D1MasterRepository";
-import { D1AuditLogRepository } from "../../../../src/infrastructure/db/D1AuditLogRepository";
 import { detectFileType } from "../../../../src/infrastructure/parsers/detectFileType";
 import { decodeCp932 } from "../../../../src/infrastructure/parsers/encoding";
 import { parseCsv } from "../../../../src/infrastructure/parsers/csvUtils";
@@ -198,13 +195,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ sou
       const result = await new ImportPayrollUseCase(fileStorage, importBatchRepo).execute(input);
       return NextResponse.json({ sourceType: resolvedSourceType, ...result });
     }
-    const result = await new ImportMonthlyPlWorkbookUseCase(
-      fileStorage,
-      importBatchRepo,
-      new D1VehiclePlRepository(db),
-      new D1VehicleMasterRepository(db),
-      new D1AuditLogRepository(db),
-    ).execute({ ...input, importedByName: session!.name });
+    // 完成済みExcelは答え合わせの相手として保管するだけ。収支表はCSVと手入力から作る。
+    // ここに車両マスタや手入力への書き込みを足すと、CSVが1本も通っていなくても表が
+    // 完成してしまう(実際に本番の2026年5月データがそうなっていた)ので足さないこと。
+    const result = await new ImportMonthlyPlWorkbookUseCase(fileStorage, importBatchRepo).execute({
+      ...input,
+      importedByName: session!.name,
+    });
     return NextResponse.json({ sourceType: resolvedSourceType, ...result });
   } catch (e) {
     console.error("import failed", { sourceType: resolvedSourceType, fileName: file.name, error: e });

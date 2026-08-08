@@ -118,6 +118,6 @@ describe("AppShell のサイドバーグループ開閉", () => {
 
     const vehicleMasterLink = mainNav().getByRole("link", { name: "車両マスタ管理" });
     await user.hover(vehicleMasterLink);
-    expect(await screen.findByRole("tooltip")).toHaveTextContent(/車両マスタ/);
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(/リース料/);
   });
 });

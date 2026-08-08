@@ -1,5 +1,7 @@
 .DS_Store
 .wrangler/
 
-hiragaunsou-vehicle-pl-extracted/data/
+# 実データ(個人情報・取引情報)。末尾スラッシュを付けないのは、data がディレクトリではなく
+# シンボリックリンクの場合にマッチしなくなり、git status に顔を出してしまうため。
+hiragaunsou-vehicle-pl-extracted/data
 

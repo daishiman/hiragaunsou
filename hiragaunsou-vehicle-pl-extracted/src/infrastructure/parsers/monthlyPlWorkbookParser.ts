@@ -279,11 +279,22 @@ function resolveSheetPath(target: string): string {
   return `xl/${target.replace(/^\.\//, "")}`;
 }
 
+/**
+ * 行・セルの走査。
+ *
+ * Excelは「書式だけ設定された空セル」を `<c r="AB4" s="18"/>` の自己終了タグで保存する
+ * (実データの収支表では、未入力の「メンテ(委託)」「車両リース費」列がまさにこの形)。
+ * `</c>` を必須にした正規表現ではこれにマッチできず、`<c r="AB4" s="18"/` を開始タグと
+ * 誤認して次のセルの `<v>` を空セルの値として取り込み、本来のセルを丸ごと落としてしまう
+ * (メンテ費に修繕費計の額が入り、修繕費計が0になる、という実害が出ていた)。
+ * 閉じタグ形式と自己終了形式の両方を1つの正規表現で受けるため、`\/>` の分岐を明示する。
+ * 中身が空の行 `<row .../>` も同じ理由で自己終了を許す。
+ */
 function parseSheetRows(xml: string, sharedStrings: string[]): string[][] {
   const rows: string[][] = [];
-  for (const rowMatch of xml.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
+  for (const rowMatch of xml.matchAll(/<row\b[^>]*?(?:\/>|>([\s\S]*?)<\/row>)/g)) {
     const cells: string[] = [];
-    for (const cellMatch of (rowMatch[1] ?? "").matchAll(/<c\b([^>]*)>([\s\S]*?)<\/c>/g)) {
+    for (const cellMatch of (rowMatch[1] ?? "").matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
       const ref = attribute(cellMatch[1] ?? "", "r");
       if (!ref) continue;
       const column = columnIndex(ref);

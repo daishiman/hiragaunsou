@@ -15,6 +15,7 @@ function mapRow(row: typeof deficitFactorAnalysis.$inferSelect): DeficitFactorAn
     summary: row.summary,
     factors: JSON.parse(row.factorsJson) as DeficitFactorItem[],
     model: row.model,
+    profitAtAnalysis: row.profitAtAnalysis,
     updatedAt: row.updatedAt.getTime(),
   };
 }

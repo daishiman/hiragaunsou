@@ -5,6 +5,7 @@ import { hasPermission } from "../../../src/domain/rules/permissions";
 import { GetMonthlyGridUseCase } from "../../../src/usecase/steps/getMonthlyGrid";
 import { D1VehiclePlRepository } from "../../../src/infrastructure/db/D1VehiclePlRepository";
 import { D1ReviewFlagRepository } from "../../../src/infrastructure/db/D1ReviewFlagRepository";
+import { D1VehiclePlOverrideRepository } from "../../../src/infrastructure/db/D1VehiclePlOverrideRepository";
 import { createDb } from "../../../src/infrastructure/db/client";
 
 /** F1 月次収支グリッド (S2画面): 車両×51列。Presentation層はUseCase呼び出しのみ、業務ロジックは持たない。 */
@@ -24,6 +25,7 @@ export async function GET(request: Request) {
   const useCase = new GetMonthlyGridUseCase(
     new D1VehiclePlRepository(db),
     new D1ReviewFlagRepository(db),
+    new D1VehiclePlOverrideRepository(db),
   );
   const response = await useCase.execute(yearMonth);
   return NextResponse.json(response);

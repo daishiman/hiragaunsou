@@ -38,6 +38,12 @@ vi.mock("../../src/infrastructure/db/D1ReviewFlagRepository", () => ({
   },
 }));
 
+vi.mock("../../src/infrastructure/db/D1VehiclePlOverrideRepository", () => ({
+  D1VehiclePlOverrideRepository: class {
+    findByYearMonth = async () => [];
+  },
+}));
+
 type GridBody = {
   yearMonth: string;
   fields: string[];

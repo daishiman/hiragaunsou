@@ -3,9 +3,43 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { VehiclePlField } from "../../../src/domain/entities/VehiclePl";
-import type { GridRow } from "../../../src/usecase/steps/getMonthlyGrid";
+import type { GridReviewSummary, GridRow } from "../../../src/usecase/steps/getMonthlyGrid";
+import {
+  heaviestSeverity,
+  type ReviewSeverity,
+  type VehiclePlIssue,
+} from "../../../src/domain/rules/vehiclePlReview";
 import { FIELD_LABELS, isNumericField } from "../../_lib/fieldLabels";
 import { kmPriceLabel, num, pct, yen } from "../../_lib/format";
+
+/** 重さごとの見え方。面の色だけで区別せず、凡例の語と1対1で対応させる。 */
+const SEVERITY_STYLE: Record<ReviewSeverity, { cell: string; chip: string; label: string }> = {
+  blocking: {
+    cell: "border border-danger-border bg-danger-soft",
+    chip: "border-danger-border bg-danger-soft text-danger",
+    label: "要修正",
+  },
+  warning: {
+    cell: "border border-caution-border bg-caution-soft",
+    chip: "border-caution-border bg-caution-soft text-ink",
+    label: "要確認",
+  },
+  info: {
+    cell: "border border-brand-soft bg-brand-mist",
+    chip: "border-brand-soft bg-brand-mist text-brand-deep",
+    label: "参考",
+  },
+};
+
+function heaviestOf(issues: readonly VehiclePlIssue[]): ReviewSeverity {
+  return heaviestSeverity(issues) ?? "info";
+}
+
+function formatIssueValue(value: number | string | null): string {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "number") return Number.isInteger(value) ? num(value) : num(value, 2);
+  return value;
+}
 
 /** 疑似列: km単価 (= 運送収入 / 稼働Km)。DBには持たず表示時に算出する。 */
 const KM_PRICE = "_kmPrice";
@@ -149,11 +183,22 @@ function isTextColumn(col: ColumnKey): boolean {
  * 既定は要約15列。Excel互換の全列はセグメント切替で開示する(段階的開示)。
  * 所属・車種・赤字のみのフィルタ、合計行、車両ドリルダウンを備える。
  */
-export function GridTable({ rows, yearMonth }: { rows: GridRow[]; yearMonth: string }) {
+export function GridTable({
+  rows,
+  yearMonth,
+  review,
+}: {
+  rows: GridRow[];
+  yearMonth: string;
+  review: GridReviewSummary;
+}) {
   const [mode, setMode] = useState<"summary" | "full">("summary");
   const [depot, setDepot] = useState("");
   const [type, setType] = useState("");
   const [deficitOnly, setDeficitOnly] = useState(false);
+  const [reviewOnly, setReviewOnly] = useState(false);
+  /** 開いている所見。表の下に判断材料を出すため、セルの位置だけを持つ。 */
+  const [opened, setOpened] = useState<{ vehicleNo: string; field: string } | null>(null);
 
   const depots = useMemo(
     () => Array.from(new Set(rows.map((r) => String(r.values.depot ?? "")).filter(Boolean))).sort(),
@@ -170,9 +215,11 @@ export function GridTable({ rows, yearMonth }: { rows: GridRow[]; yearMonth: str
         if (depot && String(r.values.depot ?? "") !== depot) return false;
         if (type && String(r.values.type ?? "") !== type) return false;
         if (deficitOnly && Number(r.values.profit ?? 0) >= 0) return false;
+        // 「参考」しか付いていない車両は確認の手を止める必要が無いので、絞り込みでは残さない。
+        if (reviewOnly && !r.issues.some((i) => i.severity !== "info")) return false;
         return true;
       }),
-    [rows, depot, type, deficitOnly],
+    [rows, depot, type, deficitOnly, reviewOnly],
   );
 
   const groups = mode === "full" ? GROUPS_FULL : GROUPS_SUMMARY;
@@ -190,15 +237,26 @@ export function GridTable({ rows, yearMonth }: { rows: GridRow[]; yearMonth: str
     return acc;
   }, [filtered, columns]);
 
-  // 要約表示では詳細列の異常を親列に寄せて、ハイライトが消えないようにする
-  const highlightSet = (row: GridRow): Set<string> => {
-    const set = new Set<string>();
-    for (const f of row.highlightedFields) {
-      set.add(f);
-      if (mode === "summary" && PARENT[f]) set.add(PARENT[f] as string);
+  /**
+   * セルごとの所見。要約表示では詳細列に付いた所見を親列に寄せて、
+   * 列を畳んだ瞬間に印が消えてしまわないようにする(消えると見落としになる)。
+   */
+  const issuesByCell = (row: GridRow): Map<string, VehiclePlIssue[]> => {
+    const map = new Map<string, VehiclePlIssue[]>();
+    const add = (key: string, issue: VehiclePlIssue) => {
+      const list = map.get(key) ?? [];
+      list.push(issue);
+      map.set(key, list);
+    };
+    for (const issue of row.issues) {
+      add(issue.field, issue);
+      if (mode === "summary" && PARENT[issue.field]) add(PARENT[issue.field] as string, issue);
     }
-    return set;
+    return map;
   };
+
+  const openedRow = opened ? filtered.find((r) => r.vehicleNo === opened.vehicleNo) ?? null : null;
+  const openedIssues = openedRow && opened ? (issuesByCell(openedRow).get(opened.field) ?? []) : [];
 
   const totalKmPrice =
     (totals.km ?? 0) > 0 ? (totals.sales ?? 0) / (totals.km as number) : null;
@@ -264,10 +322,22 @@ export function GridTable({ rows, yearMonth }: { rows: GridRow[]; yearMonth: str
           赤字のみ
         </label>
 
+        <label className="flex items-center gap-1.5 text-xs text-ink">
+          <input
+            type="checkbox"
+            checked={reviewOnly}
+            onChange={(e) => setReviewOnly(e.target.checked)}
+            className="size-4"
+          />
+          確認が必要な車両のみ
+        </label>
+
         <p className="num ml-auto text-xs text-ink-muted">
           {filtered.length} / {rows.length} 台
         </p>
       </div>
+
+      <ReviewSummaryBar review={review} vehicleCount={rows.length} />
 
       <div className="overflow-x-auto rounded-xl border border-line bg-white">
         <table className="min-w-max border-collapse text-xs">
@@ -296,40 +366,58 @@ export function GridTable({ rows, yearMonth }: { rows: GridRow[]; yearMonth: str
           </thead>
           <tbody>
             {filtered.map((row) => {
-              const highlights = highlightSet(row);
+              const cellIssues = issuesByCell(row);
               const profit = Number(row.values.profit ?? 0);
               return (
                 <tr key={row.vehicleNo} className="border-b border-line last:border-b-0 hover:bg-subtle">
                   {columns.map((col) => {
                     const value = rawValue(row, col);
-                    const highlighted = highlights.has(col);
+                    const issues = cellIssues.get(col) ?? [];
+                    const severity = issues.length > 0 ? heaviestOf(issues) : null;
+                    const isOpen =
+                      opened?.vehicleNo === row.vehicleNo && opened.field === col;
                     if (col === "no") {
                       return (
                         <td
                           key={col}
-                          className="sticky left-0 z-10 whitespace-nowrap bg-white px-3 py-2"
+                          className={`sticky left-0 z-10 whitespace-nowrap px-3 py-2 ${row.severity === "blocking" ? "bg-danger-soft" : "bg-white"}`}
                         >
                           <Link
                             href={`/vehicle/${encodeURIComponent(row.vehicleNo)}?ym=${yearMonth}`}
                             className="num font-semibold text-brand-deep hover:underline"
                           >
-                            {row.vehicleNo}
+                            {row.vehicleNoLabel ?? row.vehicleNo}
                           </Link>
                         </td>
                       );
                     }
+                    const content = formatCell(col, value);
                     return (
                       <td
                         key={col}
-                        title={highlighted ? "例月と比較して異常の疑いがあります" : undefined}
                         className={[
                           "whitespace-nowrap px-3 py-2",
                           isTextColumn(col) ? "text-left" : "num text-right",
                           col === "profit" && profit < 0 ? "font-bold text-danger" : "",
-                          highlighted ? "border border-caution-border bg-caution-soft" : "",
+                          severity ? SEVERITY_STYLE[severity].cell : "",
+                          isOpen ? "outline outline-2 outline-brand" : "",
                         ].join(" ")}
                       >
-                        {formatCell(col, value)}
+                        {severity ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOpened(isOpen ? null : { vehicleNo: row.vehicleNo, field: col })
+                            }
+                            aria-expanded={isOpen}
+                            title={issues[0]?.title}
+                            className="w-full text-inherit underline decoration-dotted underline-offset-2"
+                          >
+                            {content}
+                          </button>
+                        ) : (
+                          content
+                        )}
                       </td>
                     );
                   })}
@@ -379,10 +467,132 @@ export function GridTable({ rows, yearMonth }: { rows: GridRow[]; yearMonth: str
         </table>
       </div>
 
-      <p className="mt-3 text-xs text-ink-muted">
-        車番をクリックすると、その車両の経費内訳・12ヶ月推移・実力損益を確認できます。
-        黄色いセルは例月と比べて異常の疑いがある値です。
-      </p>
+      {openedRow && openedIssues.length > 0 ? (
+        <IssuePanel
+          vehicleNo={openedRow.vehicleNo}
+          field={opened!.field}
+          issues={openedIssues}
+          onClose={() => setOpened(null)}
+        />
+      ) : (
+        <p className="mt-3 text-xs text-ink-muted">
+          色の付いたセルを押すと、なぜ確認が必要なのかと、判断のための比較値が下に出ます。
+          車番を押すと、その車両の経費内訳・12ヶ月推移・実力損益を確認できます。
+        </p>
+      )}
     </>
+  );
+}
+
+/**
+ * 「今月あと何を見ればよいか」を件数で先に示す。
+ * 表を上から全部見る運用に戻さないための入口で、ここが空なら確認作業は終わっている。
+ */
+function ReviewSummaryBar({
+  review,
+  vehicleCount,
+}: {
+  review: GridReviewSummary;
+  vehicleCount: number;
+}) {
+  const total = review.blocking + review.warning;
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-line bg-white px-4 py-2.5">
+      {total === 0 ? (
+        <p className="text-sm font-semibold text-ink">
+          確認が必要な箇所はありません。{vehicleCount}台すべてこのまま確定できます。
+        </p>
+      ) : (
+        <>
+          <p className="text-sm text-ink">
+            <span className="font-semibold">{total}件</span>だけ確認してください。
+            残り{review.cleanVehicles}台は指摘なしです。
+          </p>
+          {(["blocking", "warning", "info"] as const).map((severity) => {
+            const count = review[severity];
+            if (count === 0) return null;
+            return (
+              <span
+                key={severity}
+                className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${SEVERITY_STYLE[severity].chip}`}
+              >
+                {SEVERITY_STYLE[severity].label} {count}
+              </span>
+            );
+          })}
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 指摘の中身。「印が付いている」だけでは人はOK/NGを決められないので、
+ * 何と比べてそう判断したのかを値で並べ、直しに行く先も一緒に置く。
+ */
+function IssuePanel({
+  vehicleNo,
+  field,
+  issues,
+  onClose,
+}: {
+  vehicleNo: string;
+  field: string;
+  issues: VehiclePlIssue[];
+  onClose: () => void;
+}) {
+  return (
+    <div className="mt-3 rounded-xl border border-line bg-white p-4">
+      <div className="flex items-start gap-3">
+        <h3 className="text-sm font-bold text-ink">
+          車番 {vehicleNo} ／ {FIELD_LABELS[field as VehiclePlField] ?? field}
+        </h3>
+        <button
+          type="button"
+          onClick={onClose}
+          className="ml-auto rounded border border-line px-2 py-0.5 text-xs text-ink-muted hover:bg-subtle"
+        >
+          閉じる
+        </button>
+      </div>
+
+      <ul className="mt-3 space-y-3">
+        {issues.map((issue, index) => (
+          <li key={`${issue.code}-${index}`} className="rounded-lg border border-line p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${SEVERITY_STYLE[issue.severity].chip}`}
+              >
+                {SEVERITY_STYLE[issue.severity].label}
+              </span>
+              <span className="text-sm font-semibold text-ink">{issue.title}</span>
+            </div>
+            <p className="mt-1.5 text-xs leading-relaxed text-ink-muted">{issue.reason}</p>
+
+            {issue.comparisons.length > 0 && (
+              <dl className="mt-2 flex flex-wrap gap-x-6 gap-y-1">
+                {issue.comparisons.map((comparison) => (
+                  <div key={comparison.label} className="flex items-baseline gap-1.5">
+                    <dt className="text-[11px] text-ink-muted">{comparison.label}</dt>
+                    <dd className="num text-xs font-semibold text-ink">
+                      {formatIssueValue(comparison.value)}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+
+            {issue.fix && (
+              <Link
+                href={issue.fix.href}
+                className="mt-2 inline-block text-xs font-semibold text-brand-deep hover:underline"
+              >
+                {issue.fix.label} →
+              </Link>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

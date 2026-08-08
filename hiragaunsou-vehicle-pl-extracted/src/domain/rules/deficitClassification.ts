@@ -18,6 +18,14 @@ export interface DeficitThresholds {
   breakEvenKmPrice: number;
 }
 
+/**
+ * rate_master に行が無いときだけ使われる保険値 (モックの暫定ルールと同値)。業務上の正ではない。
+ *
+ * breakEvenKmPrice の 170 はモック由来のきりの良い数字で、2026-08 の実測 (稼働車の
+ * 経費計÷稼働Km) は 176.9 円/km だった。実測に合わせた 177 は migrations/0015 で
+ * rate_master に投入済み。ここを書き換えるのではなく、値を変えたいときは
+ * rate_master を更新する (既定値を動かすと、マスタが未設定の環境だけ挙動が変わる)。
+ */
 export const DEFAULT_DEFICIT_THRESHOLDS: DeficitThresholds = {
   idleSales: 300000,
   repairSpike: 300000,
