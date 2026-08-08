@@ -1,7 +1,8 @@
 import { assertRequiredHeaders, parseCsv, toRecords } from "./csvUtils";
 import { decodeCp932 } from "./encoding";
 import { parseMonthlyPlWorkbook } from "./monthlyPlWorkbookParser";
-import { parseJapaneseAmount, normalizeKey } from "./numberUtils";
+import { parseJapaneseAmount, normalizeKey, splitCompositeVehicleNo } from "./numberUtils";
+import type { ImportSourceInfo } from "./importSource";
 import { TRAILER_VEHICLE_TYPE_PATTERN } from "../../domain/rules/towedVehicle";
 
 /** 列順が変わっても取り込めるよう、名前で検証する必須列。 */
@@ -114,6 +115,8 @@ interface VehicleMasterSourceRow {
 export interface VehicleMasterParseResult {
   valid: VehicleMasterImportRow[];
   errors: VehicleMasterImportRowError[];
+  /** 元データのどこを読んだか (画面に出して人が確かめられるようにする) */
+  source?: ImportSourceInfo;
 }
 
 /**
@@ -129,6 +132,19 @@ function classifySourceRows(sources: readonly VehicleMasterSourceRow[]): Vehicle
 
   for (const source of sources) {
     if (source.vehicleNo === "") continue; // 合計行・空行はエラーにせず読み飛ばす
+
+    // 完成済みの収支表(運送収支表ブック)は、けん引の組を1行にまとめて車番を
+    // 「129 1113」と書く。マスタは1台1行なので、そのまま登録すると "1291113" という
+    // 実在しない車両ができ、以後どの実績とも結合できない行が静かに残る。
+    const parts = splitCompositeVehicleNo(source.vehicleNo);
+    if (parts.length > 1) {
+      errors.push({
+        rowNumber: source.rowNumber,
+        vehicleNo: source.vehicleNo,
+        reason: `車番が「${parts.join(" / ")}」と2台分まとめて書かれています。車両マスタは1台ずつ登録するため、けん引の組をまとめる前のExcel「★車両別収支計算用」を選ぶか、この行を1台ずつに分けてください`,
+      });
+      continue;
+    }
 
     const costCategory = mapVehicleTypeToCostCategory(source.vehicleType);
     if (!costCategory) {
@@ -183,7 +199,15 @@ export function parseVehicleMasterWorkbook(
   input: ArrayBuffer | Uint8Array,
   preferredYearMonth?: string,
 ): VehicleMasterParseResult {
-  const { rows } = parseMonthlyPlWorkbook(input, preferredYearMonth);
+  // 保険・税・リース料は「その月の実績」ではなく車両ごとの決まった金額なので、対象年月の
+  // シートが無くてもいちばん新しい月で代用してよい ("useLatest")。ここを月次収支表の取込と
+  // 同じ厳格さ("throw")にしていたため、8月に既定の対象月(6月)で5月までのブックを選ぶと
+  // 必ず失敗し、画面には0台のまま何も登録されない、という行き止まりになっていた。
+  const { rows, sheetName, sheetYearMonth } = parseMonthlyPlWorkbook(
+    input,
+    preferredYearMonth,
+    "useLatest",
+  );
 
   const sources: VehicleMasterSourceRow[] = rows.map((row, index) => ({
     rowNumber: index + 2, // 見出し行を1行目として数える (CSV経路と合わせる)
@@ -200,7 +224,17 @@ export function parseVehicleMasterWorkbook(
 
   const result = classifySourceRows(sources);
   applyTowedByFromRowOrder(result.valid);
-  return result;
+  return {
+    ...result,
+    source: {
+      kind: "excel",
+      sheetName,
+      sheetYearMonth,
+      ...(preferredYearMonth && sheetYearMonth !== preferredYearMonth
+        ? { fallbackFromYearMonth: preferredYearMonth }
+        : {}),
+    },
+  };
 }
 
 /**
@@ -264,5 +298,5 @@ export function parseVehicleMasterCsv(
     installment: parseJapaneseAmount(r["車両割賦支払費"]),
   }));
 
-  return classifySourceRows(sources);
+  return { ...classifySourceRows(sources), source: { kind: "csv" } };
 }

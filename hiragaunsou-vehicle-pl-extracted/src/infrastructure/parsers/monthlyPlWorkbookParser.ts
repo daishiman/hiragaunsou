@@ -84,9 +84,22 @@ export interface MonthlyPlWorkbookParseResult {
  * xlsx の数式は実行せず、Excelが保存したキャッシュ値だけを読む。未計算のブックはExcelで
  * 再計算・保存してから再取込する必要がある。
  */
+/**
+ * 対象年月のシートが見つからなかったときの振る舞い。
+ *
+ * "throw" (既定): 月次収支表の取込。指定月の実績として別の月を保存すると数字が黙って狂うため、
+ *   一致しなければ必ず失敗させる。
+ * "useLatest": マスタの取込。保険・税・リース料は「その月の実績」ではなく車両そのものの属性で、
+ *   どの月のシートから読んでも同じ値が入る。ここで失敗させると、8月に前月分(6月)を既定として
+ *   選んでいる画面から5月までしか無いブックを取り込めない、という理由の分かりにくい行き止まりになる。
+ *   代わりにいちばん新しい月のシートを使い、どのシートを読んだかを呼び出し側が画面に出す。
+ */
+export type YearMonthMismatchPolicy = "throw" | "useLatest";
+
 export function parseMonthlyPlWorkbook(
   input: ArrayBuffer | Uint8Array,
   preferredYearMonth?: string,
+  onYearMonthMismatch: YearMonthMismatchPolicy = "throw",
 ): MonthlyPlWorkbookParseResult {
   const bytes = toUint8Array(input);
   let extractedBytes = 0;
@@ -171,6 +184,11 @@ export function parseMonthlyPlWorkbook(
   if (dated.length > 0) {
     const matched = dated.find((candidate) => candidate.sheetYearMonth === preferredYearMonth);
     if (matched) return matched;
+    if (onYearMonthMismatch === "useLatest") {
+      return dated.reduce((newest, candidate) =>
+        candidate.sheetYearMonth! > newest.sheetYearMonth! ? candidate : newest,
+      );
+    }
     const available = dated.map((candidate) => candidate.sheetYearMonth).join(" / ");
     throw new Error(
       `このExcelに対象年月 ${preferredYearMonth} のシートがありません。取込可能な年月: ${available}`,
@@ -185,6 +203,9 @@ export function parseMonthlyPlWorkbook(
   );
   if (byName) return byName;
   if (candidates.length === 1) return candidates[0]!;
+  // マスタ取込は「どの月のシートでも同じ値が入る」ため、判別できなくても止めない。
+  // どのシートを読んだかは呼び出し側が sheetName を画面に出して人に確かめてもらう。
+  if (onYearMonthMismatch === "useLatest") return candidates[0]!;
   throw new Error(
     `このExcelのどのシートが対象年月 ${preferredYearMonth} か判別できませんでした。シート名を「${month}月収支表」の形式にしてください。`,
   );
