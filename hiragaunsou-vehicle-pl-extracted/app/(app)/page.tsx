@@ -17,7 +17,6 @@ import { currentYearMonth, defaultImportYearMonth } from "../_lib/yearMonth";
 import { yearMonthLabel, man, num, kmPriceLabel, pct } from "../_lib/format";
 import { withYm } from "../_lib/withYm";
 import { PageHead } from "../_components/PageHead";
-import { WorkflowStepCard } from "../_components/WorkflowStepCard";
 import { EmptyState } from "../_components/EmptyState";
 import { StatTile } from "../_components/StatTile";
 import { Disclosure } from "../_components/Disclosure";
@@ -195,27 +194,6 @@ export default async function HomePage() {
           </div>
         )}
       </section>
-
-      {/*
-        全体の手順。いま取り組むステップは上の「次にやること」で大きく出しているので、
-        8ステップの一覧そのものは折りたたむ。残り件数は畳んだ見出しに出したままにして、
-        全8ステップの存在と進み具合は開かなくても分かるようにする。
-      */}
-      <Disclosure
-        summary={`作成手順(全8ステップ)を見る(残り ${progress.totalCount - progress.doneCount}件)`}
-      >
-        <ol className="grid gap-2">
-          {progress.steps.map((s) => (
-            <li key={s.step.id}>
-              <WorkflowStepCard
-                progress={s}
-                isNext={next?.step.id === s.step.id}
-                yearMonth={yearMonth}
-              />
-            </li>
-          ))}
-        </ol>
-      </Disclosure>
 
       {/* ダッシュボードは最上段のサマリに導線があるので、ここでは他の閲覧系画面だけを並べる */}
       <Disclosure summary="もっと詳しく見る">

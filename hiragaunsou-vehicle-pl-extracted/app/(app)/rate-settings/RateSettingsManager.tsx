@@ -9,6 +9,7 @@ import {
 } from "../../../src/domain/rules/rateMasterCatalog";
 import type { RateMasterEntry } from "../../../src/infrastructure/db/D1MasterRepository";
 import { Disclosure } from "../../_components/Disclosure";
+import { StagePanel } from "../../_components/StagePanel";
 
 const KIND_UNIT: Record<RateValueKind, string> = {
   rate: "%",
@@ -16,6 +17,14 @@ const KIND_UNIT: Record<RateValueKind, string> = {
   yen_per_liter: "円/ℓ",
   yen_per_km: "円/km",
 };
+
+/**
+ * 月別値が標準の項目は、月次の締め作業で確認・変更する可能性が高い。
+ * 全期間共通が標準の項目は、年度・規程・判定基準を見直すときだけ触る。
+ * 新しい率を追加したときも catalog の scope だけで正しい場所へ出るようにする。
+ */
+const FREQUENTLY_CHANGED = RATE_MASTER_CATALOG.filter((def) => def.scope === "monthly");
+const RARELY_CHANGED = RATE_MASTER_CATALOG.filter((def) => def.scope === "common");
 
 /**
  * 画面に出す値 ⇄ 保存する値の変換。率だけ % で見せる。
@@ -128,16 +137,10 @@ export function RateSettingsManager({
     }
   }
 
-  return (
-    <div className="space-y-4">
-      {saveState.status === "done" && (
-        <p className="rounded-lg border border-line bg-subtle px-4 py-2 text-xs text-ink">
-          {saveState.message}
-        </p>
-      )}
-
+  function renderTable(definitions: readonly RateMasterKeyDef[], ariaLabel: string) {
+    return (
       <div className="overflow-x-auto rounded-xl border border-line bg-white">
-        <table className="w-full min-w-max border-collapse text-xs">
+        <table aria-label={ariaLabel} className="w-full min-w-max border-collapse text-xs">
           <thead>
             <tr className="border-b border-line bg-subtle text-ink-muted">
               <th className="px-3 py-2 text-left font-medium">項目</th>
@@ -147,7 +150,7 @@ export function RateSettingsManager({
             </tr>
           </thead>
           <tbody>
-            {RATE_MASTER_CATALOG.map((def) => {
+            {definitions.map((def) => {
               const common = findEntry(entries, def.key, "common", yearMonth);
               const monthly = findEntry(entries, def.key, "monthly", yearMonth);
               const applied = monthly?.value ?? common?.value ?? resolved[camelKey(def.key)];
@@ -155,8 +158,7 @@ export function RateSettingsManager({
                 <tr key={def.key} className="border-b border-line align-top last:border-0">
                   {/*
                     項目の説明とキー名は、率を1つ直すたびに読むものではない。
-                    表に常時並べると16項目ぶんの説明文が画面を埋めるので、下の折りたたみへ移した
-                    (文章はそのまま。消していない)。
+                    表に常時並べず、下の説明用折りたたみに全文を残す。
                   */}
                   <td className="px-3 py-2">
                     <p className="font-semibold text-ink">{def.label}</p>
@@ -192,6 +194,40 @@ export function RateSettingsManager({
           </tbody>
         </table>
       </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {saveState.status === "done" && (
+        <p className="rounded-lg border border-line bg-subtle px-4 py-2 text-xs text-ink">
+          {saveState.message}
+        </p>
+      )}
+
+      <section aria-labelledby="frequently-changed-rates" className="space-y-2">
+        <div>
+          <h2 id="frequently-changed-rates" className="text-sm font-bold text-ink">
+            よく変える項目
+          </h2>
+          <p className="mt-0.5 text-xs text-ink-muted">
+            月ごとの単価・受取額です。締め作業のときに確認します。
+          </p>
+        </div>
+        {renderTable(FREQUENTLY_CHANGED, "よく変える項目")}
+      </section>
+
+      <StagePanel
+        title="めったに変えない項目"
+        summary={`${RARELY_CHANGED.length}項目`}
+        openLabel="めったに変えない項目を開く"
+        closeLabel="めったに変えない項目を閉じる"
+      >
+        <p className="mb-3 text-xs text-ink-muted">
+          年度・規程・赤字判定の基準を見直すときだけ変更します。
+        </p>
+        {renderTable(RARELY_CHANGED, "めったに変えない項目")}
+      </StagePanel>
 
       <Disclosure summary="各項目の意味と、月別値・共通値の使い分けを見る">
         <p>
