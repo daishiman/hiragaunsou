@@ -91,9 +91,13 @@ vi.mock("../../src/infrastructure/db/D1MasterRepository", async (importOriginal)
 vi.mock("../../src/infrastructure/db/D1ImportBatchRepository", () => ({
   D1ImportBatchRepository: class {},
 }));
+const { markAppliedMock } = vi.hoisted(() => ({ markAppliedMock: vi.fn() }));
 vi.mock("../../src/infrastructure/db/D1VehiclePlOverrideRepository", () => ({
   D1VehiclePlOverrideRepository: class {
     findByYearMonth = async () => [];
+    // 収支表を作り直したあとは、上書きに「反映済み」の印を付ける
+    // (付けないと収支表の画面に「反映待ち」が残り続ける)。
+    markApplied = markAppliedMock;
   },
 }));
 vi.mock("../../src/infrastructure/db/D1VehiclePlRepository", () => ({
@@ -505,6 +509,29 @@ describe("POST /api/manual-entry の保存と確定", () => {
       overrides: [],
     });
     expect(cleansingFindMock).toHaveBeenCalledWith("2026-05", "sales_monitor");
+  });
+
+  it("収支表を作り直したら、上書きに「反映済み」の印を付ける(反映待ちが残り続けないように)", async () => {
+    const { POST } = await importRoute();
+    const res = await POST(postRequest({ yearMonth: "2026-05", manualInputs: [rawInput] }));
+
+    expect(res.status).toBe(200);
+    expect(markAppliedMock).toHaveBeenCalledTimes(1);
+    const [yearMonth, asOf] = markAppliedMock.mock.calls[0] as [string, Date];
+    expect(yearMonth).toBe("2026-05");
+    // 印は「再計算を始めた時刻」で付ける。終わった時刻だと、計算中に入った直しまで
+    // 反映済みになって静かに古い数字が残る。
+    expect(asOf).toBeInstanceOf(Date);
+  });
+
+  it("保存だけ(saveOnly)のときは収支表を作り直さないので、反映済みの印も付けない", async () => {
+    const { POST } = await importRoute();
+    const res = await POST(
+      postRequest({ yearMonth: "2026-05", manualInputs: [rawInput], saveOnly: true }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(markAppliedMock).not.toHaveBeenCalled();
   });
 
   it("確定は保存の後に行う(保存に失敗したら確定へ進まない)", async () => {
