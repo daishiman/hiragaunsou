@@ -4,11 +4,15 @@ import { getServerSession } from "../../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../../src/infrastructure/auth/accessControl";
 import { createDb } from "../../../../src/infrastructure/db/client";
 import { D1VehicleMasterRepository } from "../../../../src/infrastructure/db/D1MasterRepository";
-import { parseVehicleMasterCsv } from "../../../../src/infrastructure/parsers/vehicleMasterParser";
+import { parseVehicleMasterFile } from "../../../../src/infrastructure/parsers/vehicleMasterParser";
 import { isSameOriginRequest } from "../../../_lib/assertSameOrigin";
 
-/** 車両マスタCSV1件あたりの上限(5MB)。数十台分の一覧なので実データは数KB程度。 */
-const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+/**
+ * 1件あたりの上限(20MB)。CSVなら数KBだが、社内Excel「★車両別収支計算用」を
+ * そのまま受け付けるため月次収支表の取込 (/api/import) と同じ上限に揃える
+ * (実データは1.3MB、年度ブックはこれより大きい)。
+ */
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 
 /**
  * 車両マスタ管理 (/admin/vehicle-master 画面のバックエンド、manage_imports 権限=admin専用)。
@@ -45,14 +49,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "fileが必要です" }, { status: 400 });
   }
   if (file.size > MAX_UPLOAD_BYTES) {
-    return NextResponse.json({ error: "ファイルサイズが上限(5MB)を超えています" }, { status: 413 });
+    return NextResponse.json({ error: "ファイルサイズが上限(20MB)を超えています" }, { status: 413 });
   }
 
+  // 対象年月は任意。年度ブック(12か月分のシート)を渡されたときに、どのシートの
+  // 保険・税・リース料をマスタとするかを決めるために使う。
+  const yearMonth = form.get("yearMonth");
+  const preferredYearMonth = typeof yearMonth === "string" && yearMonth !== "" ? yearMonth : undefined;
+
   try {
-    const { valid, errors } = parseVehicleMasterCsv(await file.arrayBuffer());
+    const { valid, errors } = parseVehicleMasterFile(await file.arrayBuffer(), preferredYearMonth);
     return NextResponse.json({ fileName: file.name, valid, errors });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "CSVの解析に失敗しました";
+    const message = e instanceof Error ? e.message : "ファイルの解析に失敗しました";
     return NextResponse.json({ error: message }, { status: 422 });
   }
 }

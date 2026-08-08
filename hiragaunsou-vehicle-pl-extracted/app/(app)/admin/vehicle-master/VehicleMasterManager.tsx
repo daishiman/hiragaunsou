@@ -113,10 +113,12 @@ export function VehicleMasterManager({
     try {
       const form = new FormData();
       form.append("file", file);
+      // 年度ブック(12か月分のシート)を渡されたとき、どの月のシートを見るかの手掛かり。
+      form.append("yearMonth", yearMonth);
       const res = await fetch("/api/admin/vehicle-master", { method: "POST", body: form });
       const data = (await res.json().catch(() => null)) as (Preview & { error?: string }) | null;
       if (!res.ok || !data) {
-        setError(data?.error ?? "CSVの読み込みに失敗しました");
+        setError(data?.error ?? "ファイルの読み込みに失敗しました");
         return;
       }
       setPreview({ fileName: data.fileName, valid: data.valid, errors: data.errors });
@@ -135,16 +137,22 @@ export function VehicleMasterManager({
       const res = await fetch("/api/admin/vehicle-master/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ records: preview.valid }),
+        body: JSON.stringify({ records: preview.valid, yearMonth }),
       });
       const data = (await res.json().catch(() => null)) as
-        | { inserted?: number; updated?: number; error?: string }
+        | { inserted?: number; updated?: number; recalculated?: boolean; error?: string }
         | null;
       if (!res.ok || !data) {
         setError(data?.error ?? "取込に失敗しました");
         return;
       }
-      setDone(`車両マスタを更新しました(新規${data.inserted ?? 0}件・更新${data.updated ?? 0}件)`);
+      const towed = towedCount > 0 ? `・けん引先${towedCount}組` : "";
+      setDone(
+        `車両マスタを更新しました(新規${data.inserted ?? 0}件・更新${data.updated ?? 0}件${towed})。` +
+          (data.recalculated
+            ? `${yearMonth}の収支表も作り直しました。`
+            : `${yearMonth}の収支表はまだ作り直していません(データ取込が済んでから収支表を作成してください)。`),
+      );
       setPreview(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
 
@@ -163,20 +171,23 @@ export function VehicleMasterManager({
 
   const newCount = preview?.valid.filter((r) => !existingNos.has(r.vehicleNo)).length ?? 0;
   const updateCount = (preview?.valid.length ?? 0) - newCount;
+  /** Excelの行の並びから復元できたけん引の組数。人が見て確かめられるよう件数を出す。 */
+  const towedCount = preview?.valid.filter((r) => r.towedByVehicleNo).length ?? 0;
 
   return (
     <div className="space-y-6">
       <section className="rounded-xl border border-line bg-white p-5">
-        <h2 className="text-sm font-bold text-ink">CSVを取り込む</h2>
+        <h2 className="text-sm font-bold text-ink">ファイルを取り込む</h2>
         <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-          社内Excel「車両別収支計算用」の収支表シートから、車番・車種名・所属・自賠責保険・任意保険・
-          自動車税・自動車重量税・車両リース費・車両割賦支払費の9列を書き出したCSVを選んでください。
+          社内Excel「★車両別収支計算用」をそのまま選んでください({yearMonth}
+          の収支表シートから車番・車種名・所属・保険・税・リース費・割賦費を読み取ります)。
+          CSVに書き出す必要はありません。CSVを選ぶ場合は、その9列を書き出したものにしてください。
           車種名から原価カテゴリ(修繕費・タイヤ費の標準単価)を自動判定します。
         </p>
         <input
           ref={fileInputRef}
           type="file"
-          accept=".csv,text/csv"
+          accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           disabled={busy}
           onChange={(e) => {
             const file = e.target.files?.[0];
@@ -198,10 +209,18 @@ export function VehicleMasterManager({
             </p>
           </div>
 
+          {towedCount > 0 ? (
+            <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+              Excelの行の並び(トラクタの直下に被けん引車)から、けん引先を{towedCount}
+              組復元しました。下の「けん引先」列で組み合わせを確かめてから取り込んでください
+              (違っていれば取込後に一覧で選び直せます)。
+            </p>
+          ) : null}
+
           {preview.errors.length > 0 ? (
             <div className="mt-3 rounded-md border border-caution-border bg-caution-soft px-3 py-2">
               <p className="text-xs font-semibold text-ink">
-                以下の行は取り込めません(CSVの車種名を直してから入れ直してください)
+                以下の行は取り込めません(元ファイルの車種名を直してから入れ直してください)
               </p>
               <ul className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-ink">
                 {preview.errors.map((e) => (
@@ -221,6 +240,7 @@ export function VehicleMasterManager({
                   <th className="py-2 pr-3">車番</th>
                   <th className="py-2 pr-3">車種名</th>
                   <th className="py-2 pr-3">原価区分</th>
+                  <th className="py-2 pr-3">けん引先</th>
                   <th className="py-2 pr-3">所属</th>
                   <th className="py-2 pr-3">自賠責</th>
                   <th className="py-2 pr-3">任意保険</th>
@@ -244,6 +264,9 @@ export function VehicleMasterManager({
                     <td className="py-2 pr-3 text-ink-muted">{r.vehicleType}</td>
                     <td className="py-2 pr-3 text-ink-muted">
                       {COST_CATEGORY_LABELS[r.costCategory] ?? r.costCategory}
+                    </td>
+                    <td className="num py-2 pr-3 text-ink-muted">
+                      {r.towedByVehicleNo ? `→ ${r.towedByVehicleNo}` : "—"}
                     </td>
                     <td className="py-2 pr-3 text-ink-muted">{r.depot}</td>
                     <td className="num py-2 pr-3 text-ink-muted">{yen(r.insCompulsory)}</td>
