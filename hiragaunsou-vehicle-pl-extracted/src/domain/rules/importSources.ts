@@ -51,10 +51,14 @@ export const IMPORT_SOURCES: readonly ImportSourceDefinition[] = [
   {
     // 収支表の入力ではなく、出来上がった表の答え合わせの相手。
     // これを取り込んでも収支表の数値は1つも変わらない(突合画面にだけ現れる)。
+    //
+    // 答え合わせの相手は STEP7 の結果、つまり『★車両別収支計算用』の収支表シート。
+    // 『★運送収支表』年度ブックは STEP8 の転記先=本システムが作る成果物であって、
+    // 数字の供給元ではない (docs/product/data-flow-map.md §0)。入力の一覧に並べない。
     sourceType: "monthly_pl_workbook",
     step: "答え合わせ",
     label: "完成済み 車両別収支表(Excel) ※照合用",
-    system: "★運送収支表 年度ブック",
+    system: "★車両別収支計算用 の収支表シート",
     hint: "Excelで作った月の答え合わせに使う。取り込んでも収支表の数値は変わらない",
     accept: ".xlsx",
     multiFile: false,

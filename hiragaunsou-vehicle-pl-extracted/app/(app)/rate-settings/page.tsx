@@ -61,7 +61,14 @@ export default async function RateSettingsPage({
             <Link href="/admin/driver-master" className="underline">
               運転者マスタ管理
             </Link>
-            で、同じ社内Excelから取り込みます。
+            で、同じ社内Excel「★車両別収支計算用2026年5月.xlsx」から取り込みます。
+          </p>
+          <p>
+            どの数字がどのファイルから来るかの全体像は
+            <Link href="/logic" className="underline">
+              データ設計・自動化方針
+            </Link>
+            にまとめています。
           </p>
         </SourceDataNote>
       </div>

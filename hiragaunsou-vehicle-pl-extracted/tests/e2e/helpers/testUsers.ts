@@ -24,15 +24,34 @@ async function getLocalEnv() {
   return { env: proxy.env as unknown as AuthEnv & { DB: D1Database }, dispose: proxy.dispose };
 }
 
+/**
+ * ローカルD1は sqlite ファイル1つなので、preview サーバー(workerd)が動いたまま
+ * getPlatformProxy から書き込むと SQLITE_BUSY で弾かれることがある。
+ * 弾かれるのは一瞬の競合で、少し待てば必ず通る。ここで吸収しないと、
+ * 準備・後片付けの失敗がテスト本体の失敗として報告されて原因を見失う。
+ */
+async function withBusyRetry<T>(run: () => Promise<T>, attempts = 5): Promise<T> {
+  for (let i = 1; ; i += 1) {
+    try {
+      return await run();
+    } catch (e) {
+      if (i >= attempts || !/SQLITE_BUSY|database is locked/i.test(String(e))) throw e;
+      await new Promise((r) => setTimeout(r, 150 * i));
+    }
+  }
+}
+
 export async function createTestUser(spec: TestUserSpec): Promise<void> {
   const { env, dispose } = await getLocalEnv();
   try {
     const auth = createAuth(env, {
       internalInviteProvisioning: { email: spec.email, role: spec.role },
     });
-    await auth.api.signUpEmail({
-      body: { email: spec.email, password: spec.password, name: spec.name },
-    });
+    await withBusyRetry(() =>
+      auth.api.signUpEmail({
+        body: { email: spec.email, password: spec.password, name: spec.name },
+      }),
+    );
   } finally {
     await dispose();
   }
@@ -52,19 +71,25 @@ export async function clearMasterImportTestData(spec: {
 }): Promise<void> {
   const { env, dispose } = await getLocalEnv();
   try {
-    await env.DB.prepare(
-      "DELETE FROM admin_audit_log WHERE actor_id IN (SELECT id FROM user WHERE email = ?)",
-    )
-      .bind(spec.actorEmail)
-      .run();
+    await withBusyRetry(() =>
+      env.DB.prepare(
+        "DELETE FROM admin_audit_log WHERE actor_id IN (SELECT id FROM user WHERE email = ?)",
+      )
+        .bind(spec.actorEmail)
+        .run(),
+    );
     const codes = spec.employeeCodes.map(() => "?").join(",");
-    await env.DB.prepare(`DELETE FROM driver_master WHERE employee_code IN (${codes})`)
-      .bind(...spec.employeeCodes)
-      .run();
+    await withBusyRetry(() =>
+      env.DB.prepare(`DELETE FROM driver_master WHERE employee_code IN (${codes})`)
+        .bind(...spec.employeeCodes)
+        .run(),
+    );
     const nos = spec.vehicleNos.map(() => "?").join(",");
-    await env.DB.prepare(`DELETE FROM vehicle_master WHERE vehicle_no IN (${nos})`)
-      .bind(...spec.vehicleNos)
-      .run();
+    await withBusyRetry(() =>
+      env.DB.prepare(`DELETE FROM vehicle_master WHERE vehicle_no IN (${nos})`)
+        .bind(...spec.vehicleNos)
+        .run(),
+    );
   } finally {
     await dispose();
   }
@@ -74,7 +99,9 @@ export async function clearMasterImportTestData(spec: {
 export async function deleteTestUserByEmail(email: string): Promise<void> {
   const { env, dispose } = await getLocalEnv();
   try {
-    await env.DB.prepare("DELETE FROM user WHERE email = ?").bind(email).run();
+    await withBusyRetry(() =>
+      env.DB.prepare("DELETE FROM user WHERE email = ?").bind(email).run(),
+    );
   } finally {
     await dispose();
   }
@@ -89,7 +116,7 @@ export async function deleteTestUserByEmail(email: string): Promise<void> {
 export async function clearRateLimits(): Promise<void> {
   const { env, dispose } = await getLocalEnv();
   try {
-    await env.DB.prepare("DELETE FROM rate_limit").run();
+    await withBusyRetry(() => env.DB.prepare("DELETE FROM rate_limit").run());
   } finally {
     await dispose();
   }

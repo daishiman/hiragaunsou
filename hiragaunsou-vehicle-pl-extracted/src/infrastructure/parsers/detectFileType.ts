@@ -3,18 +3,23 @@ import type { SOURCE_TYPES } from "../db/schema";
 export type SourceType = (typeof SOURCE_TYPES)[number];
 
 /**
- * ファイル名の完全一致に依存せず、接頭辞・接尾辞・キーワードとカラム構成でファイル種別を自動判定する。
- * ファイル名は月替わりで変化する前提 (例: "車両別運行実績表(燃費計算)本社.csv" は営業所名部分が変わり得る)。
+ * ファイル種別を自動判定する。**列構成を先に見て、ファイル名は最後の手がかりにしか使わない。**
+ *
+ * 社内のファイル名は月ごと・将来ともに変わる (実データの "5給与集計表(日給者).csv" の先頭の
+ * "5" は月、"車両別運行実績表(燃費計算)本社.csv" の末尾は営業所名)。名前を先に信じると、
+ * 中身が別物の改名ファイルを取り違えて取り込む。逆に列構成は出力元システムの仕様なので安定している。
+ * 判定に使う列は docs/product/data-flow-map.md §6 と対応させる。
  */
 export function detectFileType(
   fileName: string,
   header: string[],
 ): SourceType | "unknown" {
-  const byName = detectByFileName(fileName);
-  if (byName !== "unknown") return byName;
-  return detectByHeader(header);
+  const byHeader = detectByHeader(header);
+  if (byHeader !== "unknown") return byHeader;
+  return detectByFileName(fileName);
 }
 
+/** 列見出しが読めなかった (壊れたCSV・空ファイル) ときだけの保険。 */
 function detectByFileName(fileName: string): SourceType | "unknown" {
   const normalized = fileName.normalize("NFKC");
   if (normalized.includes("運行実績表")) return "vehicle_operation";
