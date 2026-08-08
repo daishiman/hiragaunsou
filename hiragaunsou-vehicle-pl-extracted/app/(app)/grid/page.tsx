@@ -16,6 +16,7 @@ import { EmptyState } from "../../_components/EmptyState";
 import { ConfirmMonthlyPlUseCase } from "../../../src/usecase/steps/confirmMonthlyPl";
 import { GridTable } from "./GridTable";
 import { D1VehiclePlOverrideRepository } from "../../../src/infrastructure/db/D1VehiclePlOverrideRepository";
+import { D1PlIssueAckRepository } from "../../../src/infrastructure/db/D1PlIssueAckRepository";
 import { ExcelReconcileList } from "./ExcelReconcileList";
 import { ConfirmBar } from "./ConfirmBar";
 
@@ -45,6 +46,7 @@ export default async function GridPage({
     plRepo,
     flagRepo,
     new D1VehiclePlOverrideRepository(db),
+    new D1PlIssueAckRepository(db),
   ).execute(yearMonth, reconciliation);
 
   return (
@@ -57,28 +59,6 @@ export default async function GridPage({
         action={<YearMonthSelect basePath="/grid" value={yearMonth} options={selectableYearMonths(13)} />}
       />
 
-      {!grid.isEmpty && (
-        <ConfirmBar
-          status={confirmation}
-          yearMonth={yearMonth}
-          canConfirm={checkAccess(session, "input")}
-        />
-      )}
-
-      {!grid.isEmpty && (
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-line bg-white px-4 py-3">
-          <p className="text-sm text-ink-muted">
-            収支表51列をそのままの並びで書き出します。Excelにそのまま貼り付けられます。
-          </p>
-          <a
-            href={`/api/export?yearMonth=${encodeURIComponent(yearMonth)}`}
-            className="pressable ml-auto rounded border border-brand px-3 py-1.5 text-sm font-semibold text-brand-deep"
-          >
-            CSVで書き出す
-          </a>
-        </div>
-      )}
-
       {grid.isEmpty ? (
         <EmptyState
           title={`${yearMonthLabel(yearMonth)}のデータはまだありません`}
@@ -87,10 +67,44 @@ export default async function GridPage({
           actionHref="/import"
         />
       ) : (
-        <>
-          <GridTable rows={grid.rows} yearMonth={yearMonth} review={grid.review} />
-          <ExcelReconcileList result={reconciliation} />
-        </>
+        <GridTable
+          rows={grid.rows}
+          yearMonth={yearMonth}
+          review={grid.review}
+          // 確定済みの月を直せてしまうと、再計算で確定が自動的に外れる既存の仕組みと衝突し、
+          // 確定したはずの月が黙って未確定に戻る。直すには先に確定を取り消してもらう。
+          canEdit={checkAccess(session, "input") && !confirmation.isConfirmed}
+          lockedReason={
+            confirmation.isConfirmed
+              ? "この月は確定済みです。数字を直すには、上の「確定を取り消す」を押してください。"
+              : checkAccess(session, "input")
+                ? null
+                : "閲覧のみの権限のため、数字を直したり確認済みにしたりはできません。"
+          }
+          // 確定・書き出し・Excel突合は「表を見る」ときの操作。
+          // 1件ずつ確認している最中には出さないよう、表と一緒に出し分けてもらう。
+          header={
+            <>
+              <ConfirmBar
+                status={confirmation}
+                yearMonth={yearMonth}
+                canConfirm={checkAccess(session, "input")}
+              />
+              <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-line bg-white px-4 py-3">
+                <p className="text-sm text-ink-muted">
+                  収支表51列をそのままの並びで書き出します。Excelにそのまま貼り付けられます。
+                </p>
+                <a
+                  href={`/api/export?yearMonth=${encodeURIComponent(yearMonth)}`}
+                  className="pressable ml-auto rounded border border-brand px-3 py-1.5 text-sm font-semibold text-brand-deep"
+                >
+                  CSVで書き出す
+                </a>
+              </div>
+            </>
+          }
+          footer={<ExcelReconcileList result={reconciliation} />}
+        />
       )}
     </>
   );

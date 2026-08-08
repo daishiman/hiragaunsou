@@ -1,13 +1,15 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { SessionUser } from "../../src/infrastructure/auth/session";
+import { VehiclePlOverrideConflictError } from "../../src/usecase/steps/saveVehiclePlOverride";
 
 /**
  * /api/vehicle-pl/override (収支表の数値を人が手で上書きする) のRoute Handlerを検証する。
  *
  * このルートが守るべきなのは
  *   1. 入力権限とCSRF防御 (上書きは収支表の数字を直接書き換えるので、閲覧のみのロールに触らせない)
- *   2. 保存・取消のたびに必ずその月を再計算すること
- *      (上書きだけ保存して再計算を飛ばすと、画面の上書き値と収支表の合計が食い違ったまま残る)
+ *   2. 再計算をいつ走らせるかの指定を、握りつぶさずユースケースに渡すこと
+ *      (上書きだけ保存して再計算を飛ばすと、画面の上書き値と収支表の合計が食い違ったまま残るので、
+ *       後回しにするのは反映待ちとして件数に出る収支表の画面からだけ)
  *   3. 数値でない値を黙って0にしないこと (空文字やnullは「未入力」であって「0」ではない)
  * の3点。上書き可能な項目かどうかの判定は tests/domain/vehiclePlOverride.test.ts 側で検証済み。
  */
@@ -60,6 +62,8 @@ vi.mock("../../src/usecase/steps/saveVehiclePlOverride", () => ({
   ClearVehiclePlOverrideUseCase: class {
     execute = clearExecuteMock;
   },
+  // 競合はルートが型で判別して409に振り分ける。ここでも同じ型として使えるよう一緒に差し替える。
+  VehiclePlOverrideConflictError: class extends Error {},
 }));
 
 // 再計算まわりは実体を触らせない (D1が無い環境でルートを組み立てられるようにするため)。
@@ -205,6 +209,35 @@ describe("POST /api/vehicle-pl/override の値の受け取り", () => {
     const res = await post({ ...validBody, values: { profit: 1 } });
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ error: "上書きできない項目です: profit" });
+  });
+
+  /**
+   * 収支表の画面から続けて直すときは、保存だけ済ませて再計算は溜める。
+   * ここを既定(即時再計算)のまま送ってしまうと1件ごとに月まるごとの再計算が走るので、
+   * 指定がそのままユースケースに届くことを固定する。
+   */
+  it("再計算の後回し指定をそのままユースケースに渡す", async () => {
+    await post({ ...validBody, deferRecalculation: true });
+    expect(saveExecuteMock.mock.calls[0][0].deferRecalculation).toBe(true);
+  });
+
+  /**
+   * 「まだ直しが無い」と思って開いた画面からの保存は expectedUpdatedAt: null で来る。
+   * 未指定(検査しない)と null(まだ無いはず)は意味が違うので、潰さずに渡す。
+   */
+  it("開いた時点の最終更新時刻は null と未指定を区別して渡す", async () => {
+    await post({ ...validBody, expectedUpdatedAt: null });
+    expect(saveExecuteMock.mock.calls[0][0]).toHaveProperty("expectedUpdatedAt", null);
+
+    await post(validBody);
+    expect(saveExecuteMock.mock.calls[1][0]).not.toHaveProperty("expectedUpdatedAt");
+  });
+
+  it("他の人が先に直していた場合は409として知らせる", async () => {
+    saveExecuteMock.mockRejectedValue(new VehiclePlOverrideConflictError("他の人が先に直しました"));
+    const res = await post(validBody);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ conflict: true });
   });
 });
 
