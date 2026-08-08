@@ -16,6 +16,7 @@ import { EmptyState } from "../../_components/EmptyState";
 import { ConfirmMonthlyPlUseCase } from "../../../src/usecase/steps/confirmMonthlyPl";
 import { GridTable } from "./GridTable";
 import { D1VehiclePlOverrideRepository } from "../../../src/infrastructure/db/D1VehiclePlOverrideRepository";
+import { D1PlIssueAckRepository } from "../../../src/infrastructure/db/D1PlIssueAckRepository";
 import { ExcelReconcileList } from "./ExcelReconcileList";
 import { ConfirmBar } from "./ConfirmBar";
 
@@ -45,6 +46,7 @@ export default async function GridPage({
     plRepo,
     flagRepo,
     new D1VehiclePlOverrideRepository(db),
+    new D1PlIssueAckRepository(db),
   ).execute(yearMonth, reconciliation);
 
   return (
@@ -88,7 +90,21 @@ export default async function GridPage({
         />
       ) : (
         <>
-          <GridTable rows={grid.rows} yearMonth={yearMonth} review={grid.review} />
+          <GridTable
+            rows={grid.rows}
+            yearMonth={yearMonth}
+            review={grid.review}
+            // 確定済みの月を直せてしまうと、再計算で確定が自動的に外れる既存の仕組みと衝突し、
+            // 確定したはずの月が黙って未確定に戻る。直すには先に確定を取り消してもらう。
+            canEdit={checkAccess(session, "input") && !confirmation.isConfirmed}
+            lockedReason={
+              confirmation.isConfirmed
+                ? "この月は確定済みです。数字を直すには、上の「確定を取り消す」を押してください。"
+                : checkAccess(session, "input")
+                  ? null
+                  : "閲覧のみの権限のため、数字を直したり確認済みにしたりはできません。"
+            }
+          />
           <ExcelReconcileList result={reconciliation} />
         </>
       )}
