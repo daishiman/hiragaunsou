@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../../src/infrastructure/auth/accessControl";
+import { AccessDenied } from "../../../_components/AccessDenied";
 import { createDb } from "../../../../src/infrastructure/db/client";
 import { D1VehiclePlRepository } from "../../../../src/infrastructure/db/D1VehiclePlRepository";
 import { D1DeficitFactorAnalysisRepository } from "../../../../src/infrastructure/db/D1DeficitFactorAnalysisRepository";
@@ -45,7 +46,10 @@ export default async function VehicleDetailPage({
 }) {
   const session = await getServerSession();
   if (!session) redirect("/sign-in");
-  if (!checkAccess(session, "view")) redirect("/");
+  // 権限が無い人を黙ってホームへ戻すと、押した本人にはリンクが壊れたようにしか見えない。
+  if (!checkAccess(session, "view")) {
+    return <AccessDenied screenName="車両1台の明細" permission="view" />;
+  }
 
   const { vehicleNo: rawVehicleNo } = await params;
   const vehicleNo = decodeURIComponent(rawVehicleNo);

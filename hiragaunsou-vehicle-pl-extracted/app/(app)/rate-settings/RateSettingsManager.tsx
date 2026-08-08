@@ -8,6 +8,7 @@ import {
   type RateValueKind,
 } from "../../../src/domain/rules/rateMasterCatalog";
 import type { RateMasterEntry } from "../../../src/infrastructure/db/D1MasterRepository";
+import { Disclosure } from "../../_components/Disclosure";
 
 const KIND_UNIT: Record<RateValueKind, string> = {
   rate: "%",
@@ -152,10 +153,13 @@ export function RateSettingsManager({
               const applied = monthly?.value ?? common?.value ?? resolved[camelKey(def.key)];
               return (
                 <tr key={def.key} className="border-b border-line align-top last:border-0">
+                  {/*
+                    項目の説明とキー名は、率を1つ直すたびに読むものではない。
+                    表に常時並べると16項目ぶんの説明文が画面を埋めるので、下の折りたたみへ移した
+                    (文章はそのまま。消していない)。
+                  */}
                   <td className="px-3 py-2">
                     <p className="font-semibold text-ink">{def.label}</p>
-                    <p className="mt-0.5 text-[11px] text-ink-muted">{def.description}</p>
-                    <p className="mt-0.5 font-mono text-[10px] text-ink-muted">{def.key}</p>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right">
                     <span className="font-mono text-sm font-bold text-ink">
@@ -189,10 +193,23 @@ export function RateSettingsManager({
         </table>
       </div>
 
-      <p className="text-[11px] text-ink-muted">
-        月別値があれば全期間共通値より優先されます。「未設定(既定値)」はコード側の保険値で動いている状態で、
-        既定値を変えると黙って挙動が変わります。運用で使う値は明示的に設定してください。
-      </p>
+      <Disclosure summary="各項目の意味と、月別値・共通値の使い分けを見る">
+        <p>
+          月別値があれば全期間共通値より優先されます。「未設定(既定値)」はコード側の保険値で動いている状態で、
+          既定値を変えると黙って挙動が変わります。運用で使う値は明示的に設定してください。
+        </p>
+        <dl className="mt-3 space-y-2">
+          {RATE_MASTER_CATALOG.map((def) => (
+            <div key={def.key}>
+              <dt className="font-semibold text-ink">{def.label}</dt>
+              <dd className="mt-0.5">
+                {def.description}
+                <span className="ml-1.5 font-mono text-[10px]">{def.key}</span>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </Disclosure>
     </div>
   );
 }

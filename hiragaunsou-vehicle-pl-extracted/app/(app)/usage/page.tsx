@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../src/infrastructure/auth/accessControl";
+import { AccessDenied } from "../../_components/AccessDenied";
 import { createDb } from "../../../src/infrastructure/db/client";
 import { D1UsageLogRepository } from "../../../src/infrastructure/db/D1UsageLogRepository";
 import { summarizeUsage, DEFAULT_USAGE_PRICING, type UsagePricing } from "../../../src/usecase/steps/summarizeUsage";
@@ -23,7 +24,10 @@ function readPricing(env: { ANTHROPIC_PRICE_IN_USD_PER_M?: string; ANTHROPIC_PRI
 export default async function UsagePage() {
   const session = await getServerSession();
   if (!session) redirect("/sign-in");
-  if (!checkAccess(session, "view")) redirect("/");
+  // 権限が無い人を黙ってホームへ戻すと、押した本人にはリンクが壊れたようにしか見えない。
+  if (!checkAccess(session, "view")) {
+    return <AccessDenied screenName="利用状況" permission="view" />;
+  }
 
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);

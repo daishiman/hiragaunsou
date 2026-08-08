@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { ImportBatchSummary } from "../../../../src/usecase/steps/manageImportBatches";
 import type { AuditLogRecord } from "../../../../src/domain/repositories/AuditLogRepository";
 import type { FileImportLogEntry } from "../../../../src/infrastructure/db/D1FileImportLogRepository";
+import { ConfirmDialog } from "../../../_components/ConfirmDialog";
 
 const SOURCE_TYPE_LABELS: Record<string, string> = {
   vehicle_operation: "車両別運行実績表",
@@ -48,6 +49,9 @@ export function ImportBatchesManager({
   const [fileLog, setFileLog] = useState(initialFileLog);
   const [fileLogBusy, setFileLogBusy] = useState<string | null>(null);
   const [rowState, setRowState] = useState<Record<string, RowState>>({});
+  /** 確認待ちの対象。何を消すのかを画面に出してから確定させる。 */
+  const [pendingBatch, setPendingBatch] = useState<ImportBatchSummary | null>(null);
+  const [pendingForget, setPendingForget] = useState<FileImportLogEntry | null>(null);
   const [yearMonthFilter, setYearMonthFilter] = useState("");
   const [sourceTypeFilter, setSourceTypeFilter] = useState("");
 
@@ -67,14 +71,7 @@ export function ImportBatchesManager({
   );
 
   async function deleteBatch(batch: ImportBatchSummary) {
-    const label = `${batch.yearMonth} / ${SOURCE_TYPE_LABELS[batch.sourceType] ?? batch.sourceType} / ${batch.fileName}(${batch.rowCount}行)`;
-    if (
-      !window.confirm(
-        `以下の取込データを削除します。取り消せません。よろしいですか?\n\n${label}`,
-      )
-    ) {
-      return;
-    }
+    setPendingBatch(null);
     setRowState((prev) => ({ ...prev, [batch.id]: { status: "deleting" } }));
     try {
       const res = await fetch(`/api/admin/import-batches?id=${encodeURIComponent(batch.id)}`, {
@@ -119,14 +116,7 @@ export function ImportBatchesManager({
    * 同じファイルをもう一度取り込めるようになる。
    */
   async function forgetFile(entry: FileImportLogEntry) {
-    if (
-      !window.confirm(
-        `「${entry.fileName}」を取り込み済みの記録から外します。\n` +
-          "取り込んだデータ自体は消えません。同じファイルをもう一度取り込めるようになります。",
-      )
-    ) {
-      return;
-    }
+    setPendingForget(null);
     setFileLogBusy(entry.id);
     try {
       const res = await fetch(`/api/admin/import-batches?logId=${encodeURIComponent(entry.id)}`, {
@@ -209,7 +199,7 @@ export function ImportBatchesManager({
                       <button
                         type="button"
                         disabled={state.status === "deleting"}
-                        onClick={() => void deleteBatch(b)}
+                        onClick={() => setPendingBatch(b)}
                         className="pressable rounded-md border border-caution-border bg-caution-soft px-3 py-1 text-xs font-semibold text-danger disabled:opacity-50"
                       >
                         {state.status === "deleting" ? "削除中…" : "削除"}
@@ -271,7 +261,7 @@ export function ImportBatchesManager({
                       <button
                         type="button"
                         disabled={fileLogBusy === f.id}
-                        onClick={() => void forgetFile(f)}
+                        onClick={() => setPendingForget(f)}
                         className="pressable rounded-md border border-line bg-subtle px-3 py-1 text-xs font-semibold text-ink disabled:opacity-50"
                       >
                         {fileLogBusy === f.id ? "処理中…" : "記録から外す"}
@@ -308,6 +298,41 @@ export function ImportBatchesManager({
           <p className="mt-3 text-xs text-ink-muted">削除履歴はありません。</p>
         )}
       </section>
+
+      <ConfirmDialog
+        open={pendingBatch !== null}
+        title="以下の取込データを削除します。取り消せません。よろしいですか?"
+        confirmLabel="削除する"
+        onCancel={() => setPendingBatch(null)}
+        onConfirm={() => {
+          if (pendingBatch) void deleteBatch(pendingBatch);
+        }}
+      >
+        {pendingBatch ? (
+          <p className="font-semibold text-ink">
+            {pendingBatch.yearMonth} /{" "}
+            {SOURCE_TYPE_LABELS[pendingBatch.sourceType] ?? pendingBatch.sourceType} /{" "}
+            {pendingBatch.fileName}({pendingBatch.rowCount}行)
+          </p>
+        ) : null}
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={pendingForget !== null}
+        title={
+          pendingForget
+            ? `「${pendingForget.fileName}」を取り込み済みの記録から外します。`
+            : "取り込み済みの記録から外します。"
+        }
+        confirmLabel="記録から外す"
+        tone="caution"
+        onCancel={() => setPendingForget(null)}
+        onConfirm={() => {
+          if (pendingForget) void forgetFile(pendingForget);
+        }}
+      >
+        <p>取り込んだデータ自体は消えません。同じファイルをもう一度取り込めるようになります。</p>
+      </ConfirmDialog>
     </div>
   );
 }

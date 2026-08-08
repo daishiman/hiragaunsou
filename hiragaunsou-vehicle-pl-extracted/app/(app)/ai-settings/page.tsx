@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../src/infrastructure/auth/accessControl";
+import { AccessDenied } from "../../_components/AccessDenied";
 import { createDb } from "../../../src/infrastructure/db/client";
 import { D1AiProviderCredentialRepository } from "../../../src/infrastructure/db/D1AiProviderCredentialRepository";
 import { ListAiProviderCredentialsUseCase } from "../../../src/usecase/steps/manageAiProviderCredentials";
@@ -16,7 +17,10 @@ import { AiSettingsManager } from "./AiSettingsManager";
 export default async function AiSettingsPage() {
   const session = await getServerSession();
   if (!session) redirect("/sign-in");
-  if (!checkAccess(session, "manage_api_keys")) redirect("/");
+  // 権限が無い人を黙ってホームへ戻すと、押した本人にはリンクが壊れたようにしか見えない。
+  if (!checkAccess(session, "manage_api_keys")) {
+    return <AccessDenied screenName="AI設定" permission="manage_api_keys" />;
+  }
 
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);

@@ -7,6 +7,7 @@ import {
   D1DriverMasterRepository,
   D1VehicleMasterRepository,
 } from "../../../../src/infrastructure/db/D1MasterRepository";
+import { AccessDenied } from "../../../_components/AccessDenied";
 import { PageHead } from "../../../_components/PageHead";
 import { SourceDataNote } from "../../../_components/SourceDataNote";
 import { defaultImportYearMonth, isYearMonth } from "../../../_lib/yearMonth";
@@ -26,7 +27,10 @@ export default async function AdminDriverMasterPage({
 }) {
   const session = await getServerSession();
   if (!session) redirect("/sign-in");
-  if (!checkAccess(session, "manage_imports")) redirect("/");
+  // 権限が無い人を黙ってホームへ戻すと、押した本人にはリンクが壊れたようにしか見えない。
+  if (!checkAccess(session, "manage_imports")) {
+    return <AccessDenied screenName="運転者マスタ管理" permission="manage_imports" />;
+  }
 
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);
@@ -45,11 +49,14 @@ export default async function AdminDriverMasterPage({
       <PageHead
         kind="tool"
         title="運転者マスタ管理"
-        lead="社員Noと車番の対応表です。ここが空だと、給与を取り込んでも収支表の人件費は0のままになります。人事異動があった月に更新してください。"
-      />
-      <div className="mb-6">
-        <SourceDataNote sourceFile="★車両別収支計算用2026年5月.xlsx">
-          <p>
+        lead="社員Noと車番の対応表です。"
+        help={
+          <SourceDataNote sourceFile="★車両別収支計算用2026年5月.xlsx">
+            <p>
+              ここが空だと、給与を取り込んでも収支表の人件費は0のままになります。
+              人事異動があった月に更新してください。
+            </p>
+            <p>
             収支表シート(「5月収支表」など)にある「コード」(社員No)・「運転者名」・「車番」の3列が元データです。
             この3列があるExcelなら、ファイル名が違っても・シート名が違っても読み取れます。
             車両マスタと同じファイルを、同じ手順で選べます。
@@ -70,8 +77,9 @@ export default async function AdminDriverMasterPage({
             この対応表は月ごとの実績ではなく人事の状態なので、どの月のシートから読んでも同じ結果になります。
             以前のように社員No・氏名・車番の3列をCSVに書き出して取り込むこともできます。
           </p>
-        </SourceDataNote>
-      </div>
+          </SourceDataNote>
+        }
+      />
       <DriverMasterManager
         initialDrivers={drivers}
         vehicleNos={vehicles.map((v) => v.vehicleNo)}

@@ -21,12 +21,19 @@ export function PageHead({
   title,
   lead,
   action,
+  help,
   showHomeLink,
 }: {
   kind: NavGroup["kind"];
   title: string;
   lead?: string;
   action?: React.ReactNode;
+  /**
+   * タイトルの横に出す「?」(HelpDrawer)。
+   * この画面を初めて開いた人向けの長い説明は、本文に置かずここへ入れる。
+   * 画面に残るのは ? の1文字だけになり、初期表示は操作に必要なものだけになる。
+   */
+  help?: React.ReactNode;
   showHomeLink?: boolean;
 }) {
   return (
@@ -46,7 +53,10 @@ export function PageHead({
           >
             {KIND_LABELS[kind]}
           </span>
-          <h1 className="mt-2 text-xl font-bold text-ink">{title}</h1>
+          <div className="mt-2 flex items-center gap-2">
+            <h1 className="text-xl font-bold text-ink">{title}</h1>
+            {help}
+          </div>
           {lead && <p className="mt-1 max-w-2xl text-sm text-ink-muted">{lead}</p>}
         </div>
       </div>

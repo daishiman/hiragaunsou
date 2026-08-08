@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../src/infrastructure/auth/accessControl";
+import { AccessDenied } from "../../_components/AccessDenied";
 import { createDb } from "../../../src/infrastructure/db/client";
 import { D1VehiclePlRepository } from "../../../src/infrastructure/db/D1VehiclePlRepository";
 import { D1RateMasterRepository } from "../../../src/infrastructure/db/D1MasterRepository";
@@ -129,7 +130,10 @@ export default async function DeficitPage({
 }) {
   const session = await getServerSession();
   if (!session) redirect("/sign-in");
-  if (!checkAccess(session, "view")) redirect("/");
+  // 権限が無い人を黙ってホームへ戻すと、押した本人にはリンクが壊れたようにしか見えない。
+  if (!checkAccess(session, "view")) {
+    return <AccessDenied screenName="赤字の理由" permission="view" />;
+  }
 
   const { ym } = await searchParams;
   const yearMonth = ym || currentYearMonth();

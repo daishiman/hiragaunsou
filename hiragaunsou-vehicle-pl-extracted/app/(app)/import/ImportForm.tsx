@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { IMPORT_SOURCES, type ImportSourceType } from "../../../src/domain/rules/importSources";
+import { Disclosure } from "../../_components/Disclosure";
+import { StepRail } from "../../_components/StepRail";
 import type { FileImportVerdict } from "../../../src/domain/rules/fileImportCheck";
 import { ImportCheckPanel } from "../../_components/ImportCheckPanel";
 import { selectableYearMonths } from "../../_lib/yearMonth";
@@ -339,11 +341,27 @@ export function ImportForm({
         <p className="text-sm font-semibold text-brand-deep">
           {doneCount} / {IMPORT_SOURCES.length} 完了
         </p>
-        <p className="w-full text-xs leading-5 text-ink-muted">
-          ファイルを選ぶと中身を読んで何年何月分かを確認します。ここで選んだ月と違っていたときや、
-          中身に日付が無い帳票のときは、取り込む前にお尋ねします。
-        </p>
+        {/*
+          取込のときに何が起きるかの説明。毎月同じ文章を読む必要は無いので、
+          文章はそのままに、知りたい人だけが開く折りたたみへ移した。
+        */}
+        <div className="w-full">
+          <Disclosure tone="inline" summary="ファイルを選ぶと何が起きますか?">
+            ファイルを選ぶと中身を読んで何年何月分かを確認します。ここで選んだ月と違っていたときや、
+            中身に日付が無い帳票のときは、取り込む前にお尋ねします。
+          </Disclosure>
+        </div>
       </section>
+
+      {/* どの帳票まで進んだかを、手入力画面と同じステップ札で示す */}
+      <StepRail
+        steps={IMPORT_SOURCES.map((s) => ({ label: s.label, badge: s.step }))}
+        currentIndex={
+          nextIncompleteSource
+            ? IMPORT_SOURCES.findIndex((s) => s.sourceType === nextIncompleteSource.sourceType)
+            : IMPORT_SOURCES.length
+        }
+      />
 
       <p className="text-xs font-semibold text-ink-muted">
         {nextIncompleteSource

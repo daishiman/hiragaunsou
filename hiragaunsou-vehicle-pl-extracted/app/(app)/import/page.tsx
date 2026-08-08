@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../src/infrastructure/auth/accessControl";
+import { AccessDenied } from "../../_components/AccessDenied";
 import { createDb } from "../../../src/infrastructure/db/client";
 import { D1ImportBatchRepository } from "../../../src/infrastructure/db/D1ImportBatchRepository";
 import { IMPORT_SOURCES } from "../../../src/domain/rules/importSources";
@@ -21,7 +22,10 @@ export default async function ImportPage({
 }) {
   const session = await getServerSession();
   if (!session) redirect("/sign-in");
-  if (!checkAccess(session, "input")) redirect("/");
+  // 権限が無い人を黙ってホームへ戻すと、押した本人にはリンクが壊れたようにしか見えない。
+  if (!checkAccess(session, "input")) {
+    return <AccessDenied screenName="データ取込" permission="input" />;
+  }
 
   const { ym, step } = await searchParams;
   const yearMonth = isYearMonth(ym) ? ym : defaultImportYearMonth();

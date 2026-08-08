@@ -123,3 +123,23 @@ describe("KIND_LABELS", () => {
     });
   });
 });
+
+/**
+ * 依頼者が決めた2点。どちらも「押せるのに開けない」「実装済みなのに辿れない」という
+ * 見えない不具合になりやすいので、サイドバーの並びとして固定しておく。
+ */
+describe("補助ツールの構成(2026-08-09 の決定)", () => {
+  it("ToDoボードはサイドバーの補助ツールから辿れる", () => {
+    expect(kindOf("/todo")).toBe("tool");
+    const items = visibleNavGroups("input_staff").flatMap((g) => g.items);
+    expect(items.some((i) => i.href === "/todo")).toBe(true);
+  });
+
+  it("率マスタ設定は管理者だけに出す(1つ書き換えると全車両・全月が動くため)", () => {
+    const forInput = visibleNavGroups("input_staff").flatMap((g) => g.items);
+    expect(forInput.some((i) => i.href === "/rate-settings")).toBe(false);
+
+    const forAdmin = visibleNavGroups("admin").flatMap((g) => g.items);
+    expect(forAdmin.some((i) => i.href === "/rate-settings")).toBe(true);
+  });
+});

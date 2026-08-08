@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { HelpDrawer } from "../../../_components/HelpDrawer";
 import {
   OVERRIDABLE_FIELDS,
   OVERRIDABLE_FIELD_META,
@@ -115,7 +116,20 @@ export function VehiclePlOverrideEditor({
   return (
     <section className="mt-5 rounded-xl border border-line bg-white p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-bold text-ink">この車両だけ数字を直す</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-bold text-ink">この車両だけ数字を直す</h2>
+          {/*
+            使い方の説明は、直すと決めた人だけが読めばよい。常時出すと、数字を見に来ただけの人にも
+            毎回3行が挟まる。文章はそのままに「?」の中へ移した。
+          */}
+          <HelpDrawer title="この車両だけ数字を直す" label="この機能について">
+            <p>
+              請求側の事情でCSVの値と実態がずれる月に使います。直せるのは計算の入口の値だけで、
+              損益・経費計・各小計は必ずここから計算し直されます。
+              左の列はいま収支表に載っている値です(上書き済みの項目はその結果が出ます)。
+            </p>
+          </HelpDrawer>
+        </div>
         {saved ? (
           <span className="rounded-full border border-caution-border bg-caution-soft px-2.5 py-0.5 text-[11px] font-semibold text-ink">
             上書きあり
@@ -130,12 +144,6 @@ export function VehiclePlOverrideEditor({
           </button>
         )}
       </div>
-      <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-        請求側の事情でCSVの値と実態がずれる月に使います。直せるのは計算の入口の値だけで、
-        損益・経費計・各小計は必ずここから計算し直されます。
-        左の列はいま収支表に載っている値です(上書き済みの項目はその結果が出ます)。
-      </p>
-
       {saved ? (
         <p className="mt-2 rounded-md border border-line bg-subtle px-3 py-2 text-[11px] leading-relaxed text-ink">
           <span className="font-semibold">理由:</span> {saved.reason}

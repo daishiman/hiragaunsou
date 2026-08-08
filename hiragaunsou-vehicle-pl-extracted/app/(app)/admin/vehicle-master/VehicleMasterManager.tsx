@@ -14,8 +14,17 @@ import {
 } from "../../../../src/infrastructure/parsers/importSource";
 import type { FileImportVerdict } from "../../../../src/domain/rules/fileImportCheck";
 import { AlertPanel } from "../../../_components/AlertPanel";
+import { Disclosure } from "../../../_components/Disclosure";
 import { ImportCheckPanel } from "../../../_components/ImportCheckPanel";
+import { StepRail } from "../../../_components/StepRail";
 import { yen } from "../../../_lib/format";
+
+/** 取込の3手順。手入力画面と同じ札を出し、いまどこにいるかを一目で分かるようにする。 */
+const IMPORT_STEPS = [
+  { label: "ファイルを選ぶ", badge: 1 },
+  { label: "内容を確認する", badge: 2 },
+  { label: "取り込む", badge: 3 },
+] as const;
 
 const COST_CATEGORY_LABELS: Record<string, string> = {
   "6.5t": "6.5t",
@@ -255,15 +264,10 @@ export function VehicleMasterManager({
 
   return (
     <div className="space-y-6">
+      <StepRail steps={IMPORT_STEPS} currentIndex={done ? 2 : check || preview ? 1 : 0} />
+
       <section className="rounded-xl border border-line bg-white p-5">
         <h2 className="text-sm font-bold text-ink">ファイルを取り込む</h2>
-        <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-          社内Excel「★車両別収支計算用」をそのまま選んでください({yearMonth}
-          の収支表シートから車番・車種名・所属・保険・税・リース費・割賦費を読み取ります)。
-          CSVに書き出す必要はありません。CSVを選ぶ場合は、その9列を書き出したものにしてください。
-          車種名から原価カテゴリ(修繕費・タイヤ費の標準単価)を自動判定します。
-          ファイル名は変わっても構いません。中身を読んで判定します。
-        </p>
         <input
           ref={fileInputRef}
           type="file"
@@ -275,6 +279,17 @@ export function VehicleMasterManager({
           }}
           className="mt-3 block w-full text-xs text-ink file:mr-3 file:rounded-md file:border file:border-line file:bg-subtle file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-ink"
         />
+        {/*
+          どのファイルを選べばよいかの案内。ボタンより上に置くとボタンを画面外へ押し出すため、
+          文章はそのままにボタン直下の折りたたみへ移した。
+        */}
+        <Disclosure tone="inline" summary="どのファイルを選べばよいですか?">
+          社内Excel「★車両別収支計算用」をそのまま選んでください({yearMonth}
+          の収支表シートから車番・車種名・所属・保険・税・リース費・割賦費を読み取ります)。
+          CSVに書き出す必要はありません。CSVを選ぶ場合は、その9列を書き出したものにしてください。
+          車種名から原価カテゴリ(修繕費・タイヤ費の標準単価)を自動判定します。
+          ファイル名は変わっても構いません。中身を読んで判定します。
+        </Disclosure>
         {busy && !preview ? (
           <p className="mt-3 text-xs text-ink-muted">ファイルを読み取っています…</p>
         ) : null}

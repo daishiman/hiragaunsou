@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { HelpDrawer } from "./HelpDrawer";
 
 /**
  * マスタ系画面(車両マスタ管理・運転者マスタ管理・率マスタ設定)の「この画面の数字はどこから来るか」欄。
@@ -13,6 +14,11 @@ import type { ReactNode } from "react";
  * (判定に使う列は docs/product/data-flow-map.md §6)。
  * そのため画面に書くファイル名は「目印としての例」であり、この名前でなければ取り込めない、
  * という意味には読めない書き方にする。
+ *
+ * この説明は毎月読み返すものではなく、初めて使う人が1回読めば足りるものだった。
+ * それを常時全文で出していたため、3画面とも初期表示が1,000字を超え、
+ * 実際に押すべきファイル選択のボタンが画面のずっと下に押し出されていた。
+ * 文章は1文字も減らさず、出す場所だけをタイトル横の「?」の中へ移している。
  */
 export function SourceDataNote({
   sourceFile,
@@ -23,9 +29,8 @@ export function SourceDataNote({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-line bg-white p-5">
-      <h2 className="text-sm font-bold text-ink">この画面の数字の出どころ</h2>
-      <div className="mt-1 space-y-2 text-xs leading-relaxed text-ink-muted">
+    <HelpDrawer title="この画面の数字の出どころ" label="この画面の数字の出どころ">
+      <div className="space-y-2">
         {sourceFile ? (
           <p>
             元のファイル(名前の例): <span className="font-bold text-ink">{sourceFile}</span>
@@ -41,6 +46,6 @@ export function SourceDataNote({
           読み取れない・数字が合わないときは、画面をそのままスクリーンショットでご連絡ください。
         </p>
       </div>
-    </section>
+    </HelpDrawer>
   );
 }

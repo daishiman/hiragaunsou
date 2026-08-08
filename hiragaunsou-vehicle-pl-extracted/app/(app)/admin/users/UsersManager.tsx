@@ -7,6 +7,7 @@ import type {
   InvitationAuthMethod,
 } from "../../../../src/domain/repositories/InvitationRepository";
 import type { Role } from "../../../../src/domain/rules/permissions";
+import { ConfirmDialog } from "../../../_components/ConfirmDialog";
 
 const ROLE_LABELS: Record<Role, string> = {
   admin: "管理者",
@@ -38,6 +39,8 @@ export function UsersManager({
 }) {
   const [users, setUsers] = useState(initialUsers);
   const [rowState, setRowState] = useState<Record<string, RowState>>({});
+  /** 削除の確認待ちユーザー。誰を消すのかを名前で見せてから確定させる。 */
+  const [pendingDelete, setPendingDelete] = useState<UserSummary | null>(null);
 
   const [invitations, setInvitations] = useState(
     initialInvitations.filter((inv) => !inv.revoked && !inv.acceptedAt),
@@ -76,7 +79,7 @@ export function UsersManager({
   }
 
   async function deleteUser(userId: string) {
-    if (!window.confirm("このユーザーを削除します。よろしいですか?(取り消せません)")) return;
+    setPendingDelete(null);
     setRowState((prev) => ({ ...prev, [userId]: { status: "saving" } }));
     try {
       const res = await fetch(`/api/admin/users?userId=${encodeURIComponent(userId)}`, {
@@ -249,7 +252,7 @@ export function UsersManager({
                         <button
                           type="button"
                           disabled={saving || isSelf}
-                          onClick={() => void deleteUser(u.id)}
+                          onClick={() => setPendingDelete(u)}
                           className="pressable rounded-md border border-line px-3 py-1 text-xs font-semibold text-ink-muted disabled:opacity-50"
                         >
                           削除
@@ -407,6 +410,22 @@ export function UsersManager({
           <p className="mt-3 text-xs text-ink-muted">招待中(未サインイン)のユーザーはいません。</p>
         )}
       </section>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="このユーザーを削除します。よろしいですか?(取り消せません)"
+        confirmLabel="削除する"
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          if (pendingDelete) void deleteUser(pendingDelete.id);
+        }}
+      >
+        {pendingDelete ? (
+          <p>
+            {pendingDelete.name || pendingDelete.email}({pendingDelete.email})
+          </p>
+        ) : null}
+      </ConfirmDialog>
     </div>
   );
 }

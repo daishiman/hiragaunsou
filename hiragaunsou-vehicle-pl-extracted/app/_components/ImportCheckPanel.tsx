@@ -40,6 +40,18 @@ export function ImportCheckPanel({
   busy?: boolean;
 }) {
   const heading = verdict.issues[0]?.title ?? "取り込む内容の確認";
+  /*
+    年月が読めなかったときの本文は、判定根拠(basis)を先頭に含んだ文になっている。
+    その下でもう一度 basis を出すため、まったく同じ一文が2回並んでいた。
+    根拠は「なぜそう判定したか」として最後にまとめて出す方が読みやすいので、
+    本文側の重複した先頭だけを落とす。判定ロジックには触れず、表示の重複を消すだけ。
+  */
+  function bodyWithoutBasis(body: string): string {
+    if (verdict.basis && body.startsWith(verdict.basis)) {
+      return body.slice(verdict.basis.length);
+    }
+    return body;
+  }
 
   return (
     <div className="mt-4 rounded-lg border border-caution-border bg-caution-soft p-4" role="status">
@@ -51,7 +63,7 @@ export function ImportCheckPanel({
       {verdict.issues.map((issue, index) => (
         <div key={issue.kind} className="mt-2">
           {index > 0 ? <p className="text-sm font-bold text-ink">{issue.title}</p> : null}
-          <p className="text-xs leading-5 text-ink">{issue.body}</p>
+          <p className="text-xs leading-5 text-ink">{bodyWithoutBasis(issue.body)}</p>
           {issue.link ? (
             <Link
               href={issue.link.href}
@@ -64,7 +76,9 @@ export function ImportCheckPanel({
       ))}
 
       {/* 何を根拠にそう判定したかを必ず添える。判定の当たり外れを人が確かめられるようにする。 */}
-      {verdict.basis ? <p className="mt-2 text-xs leading-5 text-ink-muted">{verdict.basis}</p> : null}
+      {verdict.basis ? (
+        <p className="mt-2 text-xs leading-5 text-ink-muted">{verdict.basis}</p>
+      ) : null}
 
       {verdict.needsYearMonthChoice ? (
         <label className="mt-3 flex items-center gap-2 text-sm font-semibold text-ink">

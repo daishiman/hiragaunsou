@@ -7,6 +7,7 @@ import {
   type AiProviderCredentialSummary,
 } from "../../../src/domain/repositories/AiProviderCredentialRepository";
 import { MODEL_CATALOG, defaultModelId } from "../../../src/domain/rules/aiModelCatalog";
+import { ConfirmDialog } from "../../_components/ConfirmDialog";
 
 const PROVIDER_LABELS: Record<AiProvider, string> = {
   anthropic: "Anthropic (Claude)",
@@ -42,6 +43,8 @@ export function AiSettingsManager({
   const [model, setModel] = useState(defaultModelId("anthropic") ?? "");
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
   const [deletingProvider, setDeletingProvider] = useState<AiProvider | null>(null);
+  /** 削除の確認待ちプロバイダ。どのキーを消すのかを画面に出してから確定させる。 */
+  const [pendingDelete, setPendingDelete] = useState<AiProvider | null>(null);
 
   const existing = credentials.find((c) => c.provider === provider);
 
@@ -87,9 +90,7 @@ export function AiSettingsManager({
   }
 
   async function handleDelete(target: AiProvider) {
-    if (!window.confirm(`${PROVIDER_LABELS[target]}のAPIキーを削除します。よろしいですか?`)) {
-      return;
-    }
+    setPendingDelete(null);
     setDeletingProvider(target);
     try {
       const res = await fetch(`/api/ai-provider-credentials?provider=${target}`, {
@@ -218,7 +219,7 @@ export function AiSettingsManager({
                 </div>
                 <button
                   type="button"
-                  onClick={() => handleDelete(c.provider)}
+                  onClick={() => setPendingDelete(c.provider)}
                   disabled={deletingProvider === c.provider}
                   className="pressable rounded-md border border-caution-border bg-caution-soft px-3 py-1.5 text-xs font-semibold text-danger disabled:opacity-50"
                 >
@@ -229,6 +230,20 @@ export function AiSettingsManager({
           </div>
         )}
       </section>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title={
+          pendingDelete
+            ? `${PROVIDER_LABELS[pendingDelete]}のAPIキーを削除します。よろしいですか?`
+            : "APIキーを削除します。よろしいですか?"
+        }
+        confirmLabel="削除する"
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          if (pendingDelete) void handleDelete(pendingDelete);
+        }}
+      />
     </div>
   );
 }

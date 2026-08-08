@@ -6,6 +6,7 @@ import { checkAccess } from "../../../src/infrastructure/auth/accessControl";
 import { createDb } from "../../../src/infrastructure/db/client";
 import { D1RateMasterRepository } from "../../../src/infrastructure/db/D1MasterRepository";
 import { currentYearMonth, selectableYearMonths } from "../../_lib/yearMonth";
+import { AccessDenied } from "../../_components/AccessDenied";
 import { PageHead } from "../../_components/PageHead";
 import { SourceDataNote } from "../../_components/SourceDataNote";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
@@ -25,7 +26,14 @@ export default async function RateSettingsPage({
 }) {
   const session = await getServerSession();
   if (!session) redirect("/sign-in");
-  if (!checkAccess(session, "edit_master")) redirect("/");
+  /*
+    率・単価は1つ書き換えるだけで全車両・全月の収支表が動く。入力担当が毎月触る値ではないため、
+    依頼者の判断で管理者だけが開ける画面にした(権限は manage_imports = 管理者のみ を借りる)。
+    黙ってホームへ戻さず、開けない理由と誰に頼めばよいかを出す。
+  */
+  if (!checkAccess(session, "manage_imports")) {
+    return <AccessDenied screenName="率マスタ設定" permission="manage_imports" />;
+  }
 
   const { ym } = await searchParams;
   const yearMonth = ym || currentYearMonth();
@@ -43,35 +51,39 @@ export default async function RateSettingsPage({
       <PageHead
         kind="tool"
         title="率マスタ設定"
-        lead="一般管理費率や組合割引率など、収支表の計算に使う率・単価を設定します。保存すると対象月の収支表を作り直します。"
+        lead="収支表の計算に使う率・単価を設定します。"
+        help={
+          <SourceDataNote>
+            <p>
+              一般管理費率や組合割引率など、収支表の計算に使う率・単価を設定します。
+              保存すると対象月の収支表を作り直します。
+            </p>
+            <p>
+              この画面の率・単価だけは、ファイルの取込ではなくここでの手入力で決まります。
+              社内Excel「★車両別収支計算用」の計算式に埋め込まれている率にあたるもので、
+              改定があったときにここを書き換えます(保存すると対象月の収支表を作り直します)。
+            </p>
+            <p>
+              車番・保険・税は
+              <Link href="/admin/vehicle-master" className="underline">
+                車両マスタ管理
+              </Link>
+              、社員Noと車番の対応は
+              <Link href="/admin/driver-master" className="underline">
+                運転者マスタ管理
+              </Link>
+              で、同じ社内Excel(名前の例:「★車両別収支計算用2026年5月.xlsx」)から取り込みます。
+            </p>
+            <p>
+              どの数字がどのファイルから来るかの全体像は
+              <Link href="/logic" className="underline">
+                データ設計・自動化方針
+              </Link>
+              にまとめています。
+            </p>
+          </SourceDataNote>
+        }
       />
-      <div className="mb-6">
-        <SourceDataNote>
-          <p>
-            この画面の率・単価だけは、ファイルの取込ではなくここでの手入力で決まります。
-            社内Excel「★車両別収支計算用」の計算式に埋め込まれている率にあたるもので、
-            改定があったときにここを書き換えます(保存すると対象月の収支表を作り直します)。
-          </p>
-          <p>
-            車番・保険・税は
-            <Link href="/admin/vehicle-master" className="underline">
-              車両マスタ管理
-            </Link>
-            、社員Noと車番の対応は
-            <Link href="/admin/driver-master" className="underline">
-              運転者マスタ管理
-            </Link>
-            で、同じ社内Excel(名前の例:「★車両別収支計算用2026年5月.xlsx」)から取り込みます。
-          </p>
-          <p>
-            どの数字がどのファイルから来るかの全体像は
-            <Link href="/logic" className="underline">
-              データ設計・自動化方針
-            </Link>
-            にまとめています。
-          </p>
-        </SourceDataNote>
-      </div>
       <div className="mb-4">
         <YearMonthSelect
           basePath="/rate-settings"

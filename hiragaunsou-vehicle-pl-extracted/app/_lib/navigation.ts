@@ -119,6 +119,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     label: "補助ツール",
     kind: "tool",
     items: [
+      // 実装済みなのにサイドバーから辿れず、URLを知っている人しか開けない状態だった。
+      { href: "/todo", label: "ToDoボード", desc: "未入力・要確認の一覧", permission: "view" },
       { href: "/usage", label: "利用状況", desc: "AI利用の概算費用を確認する", permission: "view" },
       {
         href: "/ai-settings",
@@ -143,7 +145,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         href: "/rate-settings",
         label: "率マスタ設定",
         desc: "一般管理費率・組合割引率・賞与年額など、全車両に効く率と単価を設定する",
-        permission: "edit_master",
+        // 1つ書き換えると全車両・全月の収支表が動く値なので、依頼者の判断で管理者だけに絞った。
+        permission: "manage_imports",
       },
       {
         href: "/admin/vehicle-master",

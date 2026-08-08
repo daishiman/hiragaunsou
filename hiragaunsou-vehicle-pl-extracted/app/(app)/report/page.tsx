@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../src/infrastructure/auth/accessControl";
+import { AccessDenied } from "../../_components/AccessDenied";
 import { PageHead } from "../../_components/PageHead";
 import { ReportGenerator } from "./ReportGenerator";
 
@@ -8,7 +9,10 @@ import { ReportGenerator } from "./ReportGenerator";
 export default async function ReportPage() {
   const session = await getServerSession();
   if (!session) redirect("/sign-in");
-  if (!checkAccess(session, "report_settings")) redirect("/");
+  // 権限が無い人を黙ってホームへ戻すと、押した本人にはリンクが壊れたようにしか見えない。
+  if (!checkAccess(session, "report_settings")) {
+    return <AccessDenied screenName="AI要因分析" permission="report_settings" />;
+  }
 
   return (
     <div className="max-w-3xl">

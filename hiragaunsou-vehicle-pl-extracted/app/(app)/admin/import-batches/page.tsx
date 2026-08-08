@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../../src/infrastructure/auth/accessControl";
+import { AccessDenied } from "../../../_components/AccessDenied";
 import { createDb } from "../../../../src/infrastructure/db/client";
 import { D1ImportBatchRepository } from "../../../../src/infrastructure/db/D1ImportBatchRepository";
 import { D1AuditLogRepository } from "../../../../src/infrastructure/db/D1AuditLogRepository";
@@ -21,7 +22,10 @@ import { ImportBatchesManager } from "./ImportBatchesManager";
 export default async function AdminImportBatchesPage() {
   const session = await getServerSession();
   if (!session) redirect("/sign-in");
-  if (!checkAccess(session, "manage_imports")) redirect("/");
+  // 権限が無い人を黙ってホームへ戻すと、押した本人にはリンクが壊れたようにしか見えない。
+  if (!checkAccess(session, "manage_imports")) {
+    return <AccessDenied screenName="取込データ管理" permission="manage_imports" />;
+  }
 
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);
