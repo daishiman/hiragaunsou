@@ -38,6 +38,38 @@ export async function createTestUser(spec: TestUserSpec): Promise<void> {
   }
 }
 
+/**
+ * マスタ取込のE2Eが残す行を消す(テスト専用)。
+ *
+ * 対象を車番・社員Noで絞るのは、開発者がローカルで作った収支表やマスタを巻き込まないため。
+ * 監査ログは user への外部キーを持つので、テストユーザーを消す前にここで消しておかないと
+ * 後片付けが FOREIGN KEY constraint failed で落ちる。
+ */
+export async function clearMasterImportTestData(spec: {
+  actorEmail: string;
+  vehicleNos: readonly string[];
+  employeeCodes: readonly string[];
+}): Promise<void> {
+  const { env, dispose } = await getLocalEnv();
+  try {
+    await env.DB.prepare(
+      "DELETE FROM admin_audit_log WHERE actor_id IN (SELECT id FROM user WHERE email = ?)",
+    )
+      .bind(spec.actorEmail)
+      .run();
+    const codes = spec.employeeCodes.map(() => "?").join(",");
+    await env.DB.prepare(`DELETE FROM driver_master WHERE employee_code IN (${codes})`)
+      .bind(...spec.employeeCodes)
+      .run();
+    const nos = spec.vehicleNos.map(() => "?").join(",");
+    await env.DB.prepare(`DELETE FROM vehicle_master WHERE vehicle_no IN (${nos})`)
+      .bind(...spec.vehicleNos)
+      .run();
+  } finally {
+    await dispose();
+  }
+}
+
 /** テストユーザーを削除する(session/accountはuser.idへのonDelete cascadeで一緒に消える)。 */
 export async function deleteTestUserByEmail(email: string): Promise<void> {
   const { env, dispose } = await getLocalEnv();

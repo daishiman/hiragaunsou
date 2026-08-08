@@ -57,10 +57,63 @@ export interface MonthlyPlWorkbookFixtureOptions {
    * 実データの収支表では未入力の「メンテ(委託)」「車両リース費」がこの形で保存される。
    */
   emptyFields?: readonly VehiclePlField[];
+  /**
+   * 車両行を差し替える。省略時は既定の2行(諸口候補の車番10・傭車の車番88888)。
+   * 指定しなかった列は0で埋まる。トラクタとトレーラの並び順など、行の並びに
+   * 意味があるケースを再現するテストで使う。
+   */
+  vehicleRows?: readonly Partial<Record<VehiclePlField, string | number>>[];
+  /**
+   * 見出し行より上に置く帳票見出し (例: "令和8年5月車両別収支表")。
+   * パーサはシート名よりこの和暦を優先して年月を判定するため、年度ブックを再現するテストで使う。
+   */
+  heading?: string;
 }
 
 /** テスト用の最小xlsx。車番10は諸口・重複候補、88888は傭車として使う。 */
 export function buildMonthlyPlWorkbookFixture(options: MonthlyPlWorkbookFixtureOptions = {}): Uint8Array {
+  return buildWorkbookZip([{ name: options.sheetName ?? "5月収支表", xml: buildSheetXml(options) }]);
+}
+
+/**
+ * 年度ブック(12か月分のシートを持つ1ファイル)を再現する。
+ * 「対象年月のシートが無い」ケースは1シートのブックでは作れないため、この形が要る。
+ */
+export function buildAnnualWorkbookFixture(
+  sheets: readonly MonthlyPlWorkbookFixtureOptions[],
+): Uint8Array {
+  return buildWorkbookZip(
+    sheets.map((options, index) => ({
+      name: options.sheetName ?? `シート${index + 1}`,
+      xml: buildSheetXml(options),
+    })),
+  );
+}
+
+function buildWorkbookZip(sheets: readonly { name: string; xml: string }[]): Uint8Array {
+  const workbook = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+      <sheets>${sheets
+        .map((sheet, i) => `<sheet name="${escapeXml(sheet.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`)
+        .join("")}</sheets>
+    </workbook>`;
+  const relationships = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+      ${sheets
+        .map(
+          (_, i) =>
+            `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`,
+        )
+        .join("")}
+    </Relationships>`;
+  return zipSync({
+    "xl/workbook.xml": strToU8(workbook),
+    "xl/_rels/workbook.xml.rels": strToU8(relationships),
+    ...Object.fromEntries(sheets.map((sheet, i) => [`xl/worksheets/sheet${i + 1}.xml`, strToU8(sheet.xml)])),
+  });
+}
+
+function buildSheetXml(options: MonthlyPlWorkbookFixtureOptions = {}): string {
   const omit = new Set(options.omitFields ?? []);
   const fields = (options.fieldOrder ?? VEHICLE_PL_FIELDS).filter((field) => !omit.has(field));
 
@@ -96,23 +149,21 @@ export function buildMonthlyPlWorkbookFixture(options: MonthlyPlWorkbookFixtureO
     return 0;
   });
 
-  const aggregateRow = options.omitAggregateRow ? "" : rowXml(6, ["合計"]);
-  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+  const bodyRows = options.vehicleRows
+    ? options.vehicleRows.map((row) =>
+        fields.map((field): string | number | null => row[field] ?? 0),
+      )
+    : [first, chartered];
+
+  // 見出し行を3行目に置く既定の並びを保つため、車両行は4行目から続けて出力する。
+  const firstBodyRowNumber = 4;
+  const body = bodyRows.map((values, index) => rowXml(firstBodyRowNumber + index, values)).join("");
+  const aggregateRow = options.omitAggregateRow
+    ? ""
+    : rowXml(firstBodyRowNumber + bodyRows.length, ["合計"]);
+  const headingRow = options.heading ? rowXml(1, [options.heading]) : "";
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-      <sheetData>${rowXml(3, headers)}${rowXml(4, first)}${rowXml(5, chartered)}${aggregateRow}</sheetData>
+      <sheetData>${headingRow}${rowXml(3, headers)}${body}${aggregateRow}</sheetData>
     </worksheet>`;
-  const sheetName = options.sheetName ?? "5月収支表";
-  const workbook = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-    <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-      <sheets><sheet name="${escapeXml(sheetName)}" sheetId="1" r:id="rId1"/></sheets>
-    </workbook>`;
-  const relationships = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-    <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-      <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-    </Relationships>`;
-  return zipSync({
-    "xl/workbook.xml": strToU8(workbook),
-    "xl/_rels/workbook.xml.rels": strToU8(relationships),
-    "xl/worksheets/sheet1.xml": strToU8(sheet),
-  });
 }

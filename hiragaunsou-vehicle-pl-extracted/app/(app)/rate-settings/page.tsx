@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../src/infrastructure/auth/session";
@@ -6,6 +7,7 @@ import { createDb } from "../../../src/infrastructure/db/client";
 import { D1RateMasterRepository } from "../../../src/infrastructure/db/D1MasterRepository";
 import { currentYearMonth, selectableYearMonths } from "../../_lib/yearMonth";
 import { PageHead } from "../../_components/PageHead";
+import { SourceDataNote } from "../../_components/SourceDataNote";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
 import { RateSettingsManager } from "./RateSettingsManager";
 
@@ -43,6 +45,26 @@ export default async function RateSettingsPage({
         title="率マスタ設定"
         lead="一般管理費率や組合割引率など、収支表の計算に使う率・単価を設定します。保存すると対象月の収支表を作り直します。"
       />
+      <div className="mb-6">
+        <SourceDataNote>
+          <p>
+            この画面の率・単価だけは、ファイルの取込ではなくここでの手入力で決まります。
+            社内Excel「★車両別収支計算用」の計算式に埋め込まれている率にあたるもので、
+            改定があったときにここを書き換えます(保存すると対象月の収支表を作り直します)。
+          </p>
+          <p>
+            車番・保険・税は
+            <Link href="/admin/vehicle-master" className="underline">
+              車両マスタ管理
+            </Link>
+            、社員Noと車番の対応は
+            <Link href="/admin/driver-master" className="underline">
+              運転者マスタ管理
+            </Link>
+            で、同じ社内Excelから取り込みます。
+          </p>
+        </SourceDataNote>
+      </div>
       <div className="mb-4">
         <YearMonthSelect
           basePath="/rate-settings"

@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { parseDriverMasterCsv } from "../../src/infrastructure/parsers/driverMasterParser";
+import Encoding from "encoding-japanese";
+import {
+  parseDriverMasterCsv,
+  parseDriverMasterFile,
+} from "../../src/infrastructure/parsers/driverMasterParser";
+import {
+  buildAnnualWorkbookFixture,
+  buildMonthlyPlWorkbookFixture,
+} from "../fixtures/monthlyPlWorkbook";
 
 const HEADER = "社員No,氏名,車番";
 
@@ -51,7 +59,7 @@ describe("parseDriverMasterCsv", () => {
     expect(errors[0]).toEqual({
       rowNumber: 3,
       employeeCode: "1001",
-      reason: "社員コードが2行目と重複しています",
+      reason: "社員Noが2行目と重複しています(同じ社員Noを2つの車番に割り当てられません)",
     });
   });
 
@@ -71,5 +79,128 @@ describe("parseDriverMasterCsv", () => {
 
   it("必須列が欠けたCSVは、何が足りないか分かる形で失敗する", () => {
     expect(() => parseDriverMasterCsv("社員No,氏名\n1001,山田太郎")).toThrow(/運転者マスタ/);
+  });
+});
+
+describe("parseDriverMasterFile (Excel)", () => {
+  const HEADING = "令和8年5月車両別収支表";
+
+  it("社内Excelの収支シートの「コード」「運転者名」「車番」から運転者マスタを取り込める", () => {
+    const xlsx = buildMonthlyPlWorkbookFixture({
+      heading: HEADING,
+      vehicleRows: [
+        { no: 24, code: "0093", driver: "浅沼　秀敏", type: "大型" },
+        { no: 300, code: "1002", driver: "鈴木一郎", type: "大型" },
+      ],
+    });
+
+    const { valid, errors, source } = parseDriverMasterFile(xlsx, "2026-05");
+
+    expect(errors).toEqual([]);
+    expect(valid).toEqual([
+      { employeeCode: "93", driverName: "浅沼　秀敏", vehicleNo: "24" },
+      { employeeCode: "1002", driverName: "鈴木一郎", vehicleNo: "300" },
+    ]);
+    expect(source).toMatchObject({ kind: "excel", sheetYearMonth: "2026-05" });
+  });
+
+  /** けん引の組は車番が1セルにまとまっている。運転者が乗るのは自走するトラクタ側。 */
+  it("車番が「129 1113」のようにまとまっている行は、先頭のトラクタに割り当てる", () => {
+    const xlsx = buildMonthlyPlWorkbookFixture({
+      heading: HEADING,
+      vehicleRows: [{ no: "129　　1113", code: "500", driver: "田中三郎", type: "セミトレ" }],
+    });
+
+    expect(parseDriverMasterFile(xlsx, "2026-05").valid).toEqual([
+      { employeeCode: "500", driverName: "田中三郎", vehicleNo: "129" },
+    ]);
+  });
+
+  it("2人乗務(コード・運転者名が同じ区切りで複数)は1人ずつの行に分ける", () => {
+    const xlsx = buildMonthlyPlWorkbookFixture({
+      heading: HEADING,
+      vehicleRows: [{ no: 24, code: "93/94", driver: "浅沼　秀敏/佐藤　一郎", type: "大型" }],
+    });
+
+    expect(parseDriverMasterFile(xlsx, "2026-05").valid).toEqual([
+      { employeeCode: "93", driverName: "浅沼　秀敏", vehicleNo: "24" },
+      { employeeCode: "94", driverName: "佐藤　一郎", vehicleNo: "24" },
+    ]);
+  });
+
+  it("社員Noと運転者名の人数が合わない行は、勝手に組まず理由付きで弾く", () => {
+    const xlsx = buildMonthlyPlWorkbookFixture({
+      heading: HEADING,
+      vehicleRows: [{ no: 24, code: "93/94", driver: "浅沼　秀敏", type: "大型" }],
+    });
+
+    const { valid, errors } = parseDriverMasterFile(xlsx, "2026-05");
+    expect(valid).toEqual([]);
+    expect(errors[0]?.reason).toContain("数が合いません");
+  });
+
+  it("運転者名はあるのに社員Noが空欄の行は、車番と氏名を添えて指摘する", () => {
+    const xlsx = buildMonthlyPlWorkbookFixture({
+      heading: HEADING,
+      vehicleRows: [{ no: 24, code: "", driver: "山田太郎", type: "大型" }],
+    });
+
+    const { errors } = parseDriverMasterFile(xlsx, "2026-05");
+    expect(errors[0]?.reason).toContain("車番24の運転者「山田太郎」に社員Noが入っていません");
+  });
+
+  /** 傭車(88888)・諸口は自社の運転者ではないので、社員Noが無くても指摘しない。 */
+  it("傭車・諸口の行は指摘せず読み飛ばす", () => {
+    const xlsx = buildMonthlyPlWorkbookFixture({
+      heading: HEADING,
+      vehicleRows: [
+        { no: 88888, code: "", driver: "傭車", type: "大型" },
+        { no: 10, code: "", driver: "諸口", type: "大型" },
+      ],
+    });
+
+    expect(parseDriverMasterFile(xlsx, "2026-05")).toMatchObject({ valid: [], errors: [] });
+  });
+
+  /**
+   * 社員Noと車番の対応は月ごとの実績ではなく人事の状態なので、対象年月のシートが
+   * 無くてもいちばん新しい月で代用する。ここで失敗させていたため、8月に既定の対象月(6月)で
+   * 5月までのブックを選ぶと必ず 422 になり、画面は0名のままだった。
+   */
+  it("対象年月のシートが無いときは、いちばん新しい月のシートで代用して取り込む", () => {
+    const xlsx = buildAnnualWorkbookFixture([
+      {
+        sheetName: "4月収支表",
+        heading: "令和8年4月車両別収支表",
+        vehicleRows: [{ no: 24, code: "93", driver: "浅沼　秀敏", type: "大型" }],
+      },
+      {
+        sheetName: "5月収支表",
+        heading: "令和8年5月車両別収支表",
+        vehicleRows: [{ no: 300, code: "1002", driver: "鈴木一郎", type: "大型" }],
+      },
+    ]);
+
+    const { valid, source } = parseDriverMasterFile(xlsx, "2026-06");
+
+    expect(valid).toEqual([{ employeeCode: "1002", driverName: "鈴木一郎", vehicleNo: "300" }]);
+    expect(source).toMatchObject({
+      kind: "excel",
+      sheetName: "5月収支表",
+      sheetYearMonth: "2026-05",
+      fallbackFromYearMonth: "2026-06",
+    });
+  });
+
+  it("CSV(cp932)はこれまでどおり同じ入口で取り込める(拡張子ではなく中身で振り分ける)", () => {
+    const csv = Uint8Array.from(
+      Encoding.convert(Encoding.stringToCode(`${HEADER}\n1001,山田太郎,24`), {
+        to: "SJIS",
+        from: "UNICODE",
+      }),
+    );
+    expect(parseDriverMasterFile(csv).valid).toEqual([
+      { employeeCode: "1001", driverName: "山田太郎", vehicleNo: "24" },
+    ]);
   });
 });

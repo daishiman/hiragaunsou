@@ -1,12 +1,18 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { VehicleMasterRecord } from "../../../../src/domain/repositories/MasterRepository";
 import type {
   VehicleMasterImportRow,
   VehicleMasterImportRowError,
 } from "../../../../src/infrastructure/parsers/vehicleMasterParser";
+import {
+  describeImportSource,
+  type ImportSourceInfo,
+} from "../../../../src/infrastructure/parsers/importSource";
+import { AlertPanel } from "../../../_components/AlertPanel";
 import { yen } from "../../../_lib/format";
 
 const COST_CATEGORY_LABELS: Record<string, string> = {
@@ -49,7 +55,15 @@ interface Preview {
   fileName: string;
   valid: VehicleMasterImportRow[];
   errors: VehicleMasterImportRowError[];
+  source?: ImportSourceInfo;
 }
+
+/**
+ * 「対象月のシートが無かったので別の月で代用した」ときに続けて出す一文。
+ * 運転者マスタは人事の対応、車両マスタは車両ごとの決まった金額と、理由が違う。
+ */
+const FALLBACK_NOTE =
+  "保険・税・リース料は月ごとの実績ではなく車両ごとの決まった金額なので、この月から読んでも同じ値が入ります。";
 
 export function VehicleMasterManager({
   initialVehicles,
@@ -113,13 +127,20 @@ export function VehicleMasterManager({
     try {
       const form = new FormData();
       form.append("file", file);
+      // 年度ブック(12か月分のシート)を渡されたとき、どの月のシートを見るかの手掛かり。
+      form.append("yearMonth", yearMonth);
       const res = await fetch("/api/admin/vehicle-master", { method: "POST", body: form });
       const data = (await res.json().catch(() => null)) as (Preview & { error?: string }) | null;
       if (!res.ok || !data) {
-        setError(data?.error ?? "CSVの読み込みに失敗しました");
+        setError(data?.error ?? "ファイルの読み込みに失敗しました");
         return;
       }
-      setPreview({ fileName: data.fileName, valid: data.valid, errors: data.errors });
+      setPreview({
+        fileName: data.fileName,
+        valid: data.valid,
+        errors: data.errors,
+        source: data.source,
+      });
     } catch {
       setError("通信エラーが発生しました");
     } finally {
@@ -135,16 +156,23 @@ export function VehicleMasterManager({
       const res = await fetch("/api/admin/vehicle-master/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ records: preview.valid }),
+        body: JSON.stringify({ records: preview.valid, yearMonth }),
       });
       const data = (await res.json().catch(() => null)) as
-        | { inserted?: number; updated?: number; error?: string }
+        | { inserted?: number; updated?: number; recalculated?: boolean; error?: string }
         | null;
       if (!res.ok || !data) {
         setError(data?.error ?? "取込に失敗しました");
         return;
       }
-      setDone(`車両マスタを更新しました(新規${data.inserted ?? 0}件・更新${data.updated ?? 0}件)`);
+      const towed = towedCount > 0 ? `・けん引先${towedCount}組` : "";
+      setDone(
+        `${(data.inserted ?? 0) + (data.updated ?? 0)}台を登録しました` +
+          `(新規${data.inserted ?? 0}台・更新${data.updated ?? 0}台${towed})。` +
+          (data.recalculated
+            ? `${yearMonth}の収支表も作り直しました。`
+            : `${yearMonth}の収支表はまだ作り直していません(データ取込が済んでから収支表を作成してください)。`),
+      );
       setPreview(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
 
@@ -163,20 +191,31 @@ export function VehicleMasterManager({
 
   const newCount = preview?.valid.filter((r) => !existingNos.has(r.vehicleNo)).length ?? 0;
   const updateCount = (preview?.valid.length ?? 0) - newCount;
+  /** Excelの行の並びから復元できたけん引の組数。人が見て確かめられるよう件数を出す。 */
+  const towedCount = preview?.valid.filter((r) => r.towedByVehicleNo).length ?? 0;
+  const sourceText = describeImportSource(preview?.source, { fallbackNote: FALLBACK_NOTE });
+  /**
+   * けん引先が決まっていないトレーラ。放っておくと収支表に「売上ゼロ・費用だけの赤字行」として
+   * 並び続けるが、一覧を最後まで見ないと気づけない。件数を上に出して気づけるようにする。
+   */
+  const trailersWithoutTractor = vehicles.filter(
+    (v) => v.costCategory === "trailer" && !v.towedByVehicleNo,
+  );
 
   return (
     <div className="space-y-6">
       <section className="rounded-xl border border-line bg-white p-5">
-        <h2 className="text-sm font-bold text-ink">CSVを取り込む</h2>
+        <h2 className="text-sm font-bold text-ink">ファイルを取り込む</h2>
         <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-          社内Excel「車両別収支計算用」の収支表シートから、車番・車種名・所属・自賠責保険・任意保険・
-          自動車税・自動車重量税・車両リース費・車両割賦支払費の9列を書き出したCSVを選んでください。
+          社内Excel「★車両別収支計算用」をそのまま選んでください({yearMonth}
+          の収支表シートから車番・車種名・所属・保険・税・リース費・割賦費を読み取ります)。
+          CSVに書き出す必要はありません。CSVを選ぶ場合は、その9列を書き出したものにしてください。
           車種名から原価カテゴリ(修繕費・タイヤ費の標準単価)を自動判定します。
         </p>
         <input
           ref={fileInputRef}
           type="file"
-          accept=".csv,text/csv"
+          accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           disabled={busy}
           onChange={(e) => {
             const file = e.target.files?.[0];
@@ -184,8 +223,35 @@ export function VehicleMasterManager({
           }}
           className="mt-3 block w-full text-xs text-ink file:mr-3 file:rounded-md file:border file:border-line file:bg-subtle file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-ink"
         />
-        {error ? <p className="mt-2 text-xs text-danger">{error}</p> : null}
-        {done ? <p className="mt-2 text-xs font-semibold text-brand-deep">{done}</p> : null}
+        {busy && !preview ? (
+          <p className="mt-3 text-xs text-ink-muted">ファイルを読み取っています…</p>
+        ) : null}
+
+        {error ? (
+          <div className="mt-3">
+            <AlertPanel tone="danger" title="取り込めませんでした">
+              <p>{error}</p>
+              <p className="mt-1">
+                直したファイルをもう一度選んでください。原因が分からないときは、この画面のまま
+                スクリーンショットを送ってください。
+              </p>
+            </AlertPanel>
+          </div>
+        ) : null}
+
+        {done ? (
+          <div className="mt-3">
+            <AlertPanel tone="success" title={done}>
+              <p>
+                続けて
+                <Link href={`/admin/driver-master?ym=${yearMonth}`} className="underline">
+                  運転者マスタ管理
+                </Link>
+                で社員Noと車番の対応も登録すると、収支表に人件費が乗ります。
+              </p>
+            </AlertPanel>
+          </div>
+        ) : null}
       </section>
 
       {preview ? (
@@ -193,23 +259,40 @@ export function VehicleMasterManager({
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-sm font-bold text-ink">取込内容の確認({preview.fileName})</h2>
             <p className="num text-xs text-ink-muted">
-              新規{newCount}件・更新{updateCount}件
-              {preview.errors.length > 0 ? ` / エラー${preview.errors.length}件` : ""}
+              新規{newCount}台・更新{updateCount}台
+              {preview.errors.length > 0 ? ` / 取り込めない行${preview.errors.length}件` : ""}
             </p>
           </div>
+          {sourceText ? (
+            <p className="mt-1 text-xs leading-relaxed text-ink-muted">{sourceText}</p>
+          ) : null}
+          <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+            この取込は、いま登録されている車両を消しません。同じ車番は内容を上書きし、
+            初めての車番は追加します。一覧から消したい車両があるときはご連絡ください。
+          </p>
+
+          {towedCount > 0 ? (
+            <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+              Excelの行の並び(トラクタの直下に被けん引車)から、けん引先を{towedCount}
+              組復元しました。下の「けん引先」列で組み合わせを確かめてから取り込んでください
+              (違っていれば取込後に一覧で選び直せます)。
+            </p>
+          ) : null}
 
           {preview.errors.length > 0 ? (
-            <div className="mt-3 rounded-md border border-caution-border bg-caution-soft px-3 py-2">
-              <p className="text-xs font-semibold text-ink">
-                以下の行は取り込めません(CSVの車種名を直してから入れ直してください)
-              </p>
-              <ul className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-ink">
-                {preview.errors.map((e) => (
-                  <li key={`${e.rowNumber}-${e.vehicleNo}`}>
-                    {e.rowNumber}行目 車番{e.vehicleNo}: {e.reason}
-                  </li>
-                ))}
-              </ul>
+            <div className="mt-3">
+              <AlertPanel
+                tone="caution"
+                title={`次の${preview.errors.length}件は取り込めません(元のExcel・CSVを直してから入れ直してください)`}
+              >
+                <ul className="space-y-1">
+                  {preview.errors.map((e) => (
+                    <li key={`${e.rowNumber}-${e.vehicleNo}`}>
+                      {e.rowNumber}行目 車番{e.vehicleNo}: {e.reason}
+                    </li>
+                  ))}
+                </ul>
+              </AlertPanel>
             </div>
           ) : null}
 
@@ -221,6 +304,7 @@ export function VehicleMasterManager({
                   <th className="py-2 pr-3">車番</th>
                   <th className="py-2 pr-3">車種名</th>
                   <th className="py-2 pr-3">原価区分</th>
+                  <th className="py-2 pr-3">けん引先</th>
                   <th className="py-2 pr-3">所属</th>
                   <th className="py-2 pr-3">自賠責</th>
                   <th className="py-2 pr-3">任意保険</th>
@@ -244,6 +328,9 @@ export function VehicleMasterManager({
                     <td className="py-2 pr-3 text-ink-muted">{r.vehicleType}</td>
                     <td className="py-2 pr-3 text-ink-muted">
                       {COST_CATEGORY_LABELS[r.costCategory] ?? r.costCategory}
+                    </td>
+                    <td className="num py-2 pr-3 text-ink-muted">
+                      {r.towedByVehicleNo ? `→ ${r.towedByVehicleNo}` : "—"}
                     </td>
                     <td className="py-2 pr-3 text-ink-muted">{r.depot}</td>
                     <td className="num py-2 pr-3 text-ink-muted">{yen(r.insCompulsory)}</td>
@@ -277,7 +364,46 @@ export function VehicleMasterManager({
           けん引先を選ぶとその行に合算され、車番は「129/1113」のようにまとめて表示されます
           (収支表は{yearMonth}分を作り直します)。
         </p>
-        <div className="mt-3 overflow-x-auto">
+
+        {vehicles.length === 0 ? (
+          <div className="mt-3">
+            <AlertPanel tone="caution" title="まだ1台も登録されていません">
+              <p>
+                このままだと、収支表は保険・税・リース料が0のまま(実際より黒字に見える状態)になります。
+                上の「ファイルを取り込む」で社内Excel「★車両別収支計算用」を選んでください。
+              </p>
+              <p className="mt-1.5">
+                車両を登録したら、
+                <Link href={`/admin/driver-master?ym=${yearMonth}`} className="underline">
+                  運転者マスタ管理
+                </Link>
+                →
+                <Link href={`/import?ym=${yearMonth}`} className="underline">
+                  データ取込
+                </Link>
+                の順に進むと収支表ができます。
+              </p>
+            </AlertPanel>
+          </div>
+        ) : null}
+
+        {trailersWithoutTractor.length > 0 ? (
+          <div className="mt-3">
+            <AlertPanel
+              tone="caution"
+              title={`けん引先が決まっていないトレーラが${trailersWithoutTractor.length}台あります`}
+            >
+              <p>
+                車番
+                {trailersWithoutTractor.map((v) => v.vehicleNo).join("・")}
+                。このままだと収支表に「売上ゼロ・費用だけの赤字行」として並びます。
+                下の一覧の「けん引先」欄で、引くトラクタを選んでください。
+              </p>
+            </AlertPanel>
+          </div>
+        ) : null}
+
+        <div className={`mt-3 overflow-x-auto ${vehicles.length === 0 ? "hidden" : ""}`}>
           <table className="min-w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left text-xs text-ink-muted">
@@ -330,13 +456,6 @@ export function VehicleMasterManager({
                   <td className="num py-2 text-ink-muted">{yen(v.installment)}</td>
                 </tr>
               ))}
-              {vehicles.length === 0 ? (
-                <tr>
-                  <td colSpan={11} className="py-4 text-center text-xs text-ink-muted">
-                    車両マスタが登録されていません。CSVを取り込んでください。
-                  </td>
-                </tr>
-              ) : null}
             </tbody>
           </table>
         </div>
