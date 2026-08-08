@@ -4,6 +4,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   ManualEntryStepper,
+  parsePastedRows,
   parseSumExpression,
   type PrefillValues,
 } from "../../app/(app)/manual-entry/ManualEntryStepper";
@@ -125,11 +126,11 @@ describe("ManualEntryStepper", () => {
     const pendingButton = await screen.findByRole("button", { name: "計算しています…" });
     expect(pendingButton).toBeDisabled();
 
-    resolvePost({ ok: true, json: async () => ({}) } as Response);
+    resolvePost({ ok: true, json: async () => ({ vehicleCount: 2 }) } as Response);
 
     await waitFor(() => {
       expect(
-        screen.getByText("収支表を作り直しました。月次収支表に反映されています。"),
+        screen.getByText("収支表を作り直しました(2台)。月次収支表に反映されています。"),
       ).toBeInTheDocument();
     });
     expect(screen.getByRole("link", { name: /次へ: 収支表のチェックに進む/ })).toHaveAttribute(
@@ -165,5 +166,161 @@ describe("ManualEntryStepper", () => {
     await user.click(screen.getByRole("button", { name: "ここまでを保存" }));
 
     expect(await screen.findByText("保存できませんでした(サーバーエラー)")).toBeInTheDocument();
+  });
+
+  // 「高速料金の表に1行も出ない」という報告の再発防止。
+  // 原因は検索ではなく車両マスタが0件だったこと。0件のときに理由と次の一手が出ることを固定する。
+  it("車両が0台のときは高速料金の表に理由と次の一手を出し、保存・確定を押せなくする", async () => {
+    const user = userEvent.setup();
+    render(
+      <ManualEntryStepper
+        yearMonth="2026-05"
+        vehicles={[]}
+        prefill={prefill}
+        payrollStatus={null}
+        operatedVehicleCount={73}
+        canManageVehicleMaster
+      />,
+    );
+
+    expect(screen.getByText("この月に入力できる車両がありません")).toBeInTheDocument();
+    expect(screen.getByText(/この月の運行実績には73台の車番が記録されています/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ここまでを保存" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: /高速料金/ }));
+    expect(screen.getByText("入力できる車両がまだありません")).toBeInTheDocument();
+    // 上部のバナーと表の中の空状態、どちらからでも登録画面へ行ける
+    for (const link of screen.getAllByRole("link", { name: "車両マスタの登録へ" })) {
+      expect(link).toHaveAttribute("href", "/admin/vehicle-master");
+    }
+  });
+
+  it("全角の車番でも検索でき、一致しないときは検索語つきの説明と解除ボタンを出す", async () => {
+    const user = userEvent.setup();
+    render(
+      <ManualEntryStepper
+        yearMonth="2026-05"
+        vehicles={vehicles}
+        prefill={prefill}
+        payrollStatus={null}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /高速料金/ }));
+    const search = screen.getByPlaceholderText("車番・運転者で検索");
+
+    // 全角「２４」でも24番がヒットする(NFKC正規化)
+    await user.type(search, "２４");
+    expect(await screen.findByLabelText("24番の通行料金")).toBeInTheDocument();
+    expect(screen.queryByLabelText("300番の通行料金")).not.toBeInTheDocument();
+
+    // 一致0件のときは「マスタが空」ではなく「検索に一致しない」と書き分ける
+    await user.clear(search);
+    await user.type(search, "999");
+    expect(await screen.findByText("「999」に一致する車両がありません")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "絞り込みを解除して全車両を表示" }));
+    expect(await screen.findByLabelText("300番の通行料金")).toBeInTheDocument();
+  });
+
+  it("ステップを移ると検索の絞り込みを解除する(前のステップの検索語で次の表が空に見えるのを防ぐ)", async () => {
+    const user = userEvent.setup();
+    render(
+      <ManualEntryStepper
+        yearMonth="2026-05"
+        vehicles={vehicles}
+        prefill={prefill}
+        payrollStatus={null}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /高速料金/ }));
+    await user.type(screen.getByPlaceholderText("車番・運転者で検索"), "24");
+    expect(screen.queryByLabelText("300番の通行料金")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /燃料費/ }));
+    expect(screen.getByPlaceholderText("車番・運転者で検索")).toHaveValue("");
+    expect(await screen.findByLabelText("300番の外部給油代")).toBeInTheDocument();
+  });
+
+  it("確定しても収支表が0行だったときは成功として見せない", async () => {
+    const user = userEvent.setup();
+    global.fetch = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      if (!init) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ manualInputs: [], kirinTargetVehicleNos: [] }),
+        } as Response);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ vehicleCount: 0 }) } as Response);
+    });
+
+    render(
+      <ManualEntryStepper
+        yearMonth="2026-05"
+        vehicles={vehicles}
+        prefill={prefill}
+        payrollStatus={null}
+      />,
+    );
+
+    for (let i = 0; i < 5; i++) {
+      await user.click(screen.getByRole("button", { name: "次へ" }));
+    }
+    await user.click(screen.getByRole("button", { name: "収支表を作り直す" }));
+
+    expect(await screen.findByText("収支表は1行も作られませんでした")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /次へ: 収支表のチェックに進む/ })).not.toBeInTheDocument();
+  });
+
+  it("保存したキリンの金額を読み戻し、片方だけ直しても0で消えないようにする", async () => {
+    global.fetch = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
+      if (!init) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            manualInputs: [],
+            kirinTargetVehicleNos: ["24", "300"],
+            kirin: { transportSupport: 120000, managementSupport: 80000 },
+          }),
+        } as Response);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ vehicleCount: 2 }) } as Response);
+    });
+
+    render(
+      <ManualEntryStepper
+        yearMonth="2026-05"
+        vehicles={vehicles}
+        prefill={prefill}
+        payrollStatus={null}
+      />,
+    );
+
+    const inputs = await screen.findByDisplayValue("120000");
+    expect(inputs).toBeInTheDocument();
+    expect(screen.getByDisplayValue("80000")).toBeInTheDocument();
+    // (120000+80000)/2台
+    expect(await screen.findByText("100,000")).toBeInTheDocument();
+  });
+});
+
+describe("parsePastedRows", () => {
+  it("タブ区切り・空白区切りのどちらでも車番と金額に分ける", () => {
+    expect(parsePastedRows("24\t1200\t3\n300\t900")).toEqual([
+      { vehicleNo: "24", values: ["1200", "3"] },
+      { vehicleNo: "300", values: ["900"] },
+    ]);
+    expect(parsePastedRows("24 1200")).toEqual([{ vehicleNo: "24", values: ["1200"] }]);
+  });
+
+  it("金額の桁区切りカンマでは分割しない(1,200 を 1 と 200 にしない)", () => {
+    expect(parsePastedRows("24\t1,200")).toEqual([{ vehicleNo: "24", values: ["1,200"] }]);
+  });
+
+  it("空行と金額のない行は捨てる", () => {
+    expect(parsePastedRows("\n24\t1200\n\n300\n")).toEqual([
+      { vehicleNo: "24", values: ["1200"] },
+    ]);
   });
 });

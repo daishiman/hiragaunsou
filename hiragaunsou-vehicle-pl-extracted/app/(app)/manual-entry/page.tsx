@@ -65,6 +65,14 @@ export default async function ManualEntryPage({
     return record;
   };
 
+  // 車両マスタが空だと入力欄が1行も出せない。そのとき「今月どれだけの車両が動いていたか」を
+  // 添えられるよう、運行実績に出てきた車番の数だけ数える(0台のときにしか読まないので通常は負荷ゼロ)。
+  let operatedVehicleCount = 0;
+  if (vehicles.length === 0) {
+    const opRows = await importBatchRepo.findRawRows(yearMonth, "vehicle_operation");
+    operatedVehicleCount = new Set(opRows.map((r) => r.naturalKey).filter(Boolean)).size;
+  }
+
   const prefill: PrefillValues = {
     repairActual: pick("repair"),
     fuelOut: pick("fuelOut"),
@@ -78,7 +86,8 @@ export default async function ManualEntryPage({
   };
 
   return (
-    <div className="max-w-2xl">
+    // 1台1行に燃料4項目・経費4項目を並べるため、他の入力画面より広く取る
+    <div className="max-w-5xl">
       <PageHead
         kind="ops"
         title="手入力(業務フロー STEP2・3・5・6)"
@@ -103,6 +112,8 @@ export default async function ManualEntryPage({
         payrollStatus={payrollBatch}
         payrollDetail={payrollDetail}
         initialWorkflowStep={step ?? null}
+        operatedVehicleCount={operatedVehicleCount}
+        canManageVehicleMaster={checkAccess(session, "manage_imports")}
       />
     </div>
   );
