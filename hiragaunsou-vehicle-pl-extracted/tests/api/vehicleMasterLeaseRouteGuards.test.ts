@@ -37,7 +37,10 @@ vi.mock("../../src/infrastructure/db/client", () => ({
   createDb: vi.fn(() => ({})),
 }));
 
-const { updateLeaseInstallmentMock } = vi.hoisted(() => ({ updateLeaseInstallmentMock: vi.fn() }));
+const { updateLeaseInstallmentMock, getRateMock } = vi.hoisted(() => ({
+  updateLeaseInstallmentMock: vi.fn(),
+  getRateMock: vi.fn(async (_key: string, _yearMonth: string, fallback: number) => fallback),
+}));
 vi.mock("../../src/infrastructure/db/D1MasterRepository", () => ({
   D1VehicleMasterRepository: class {
     updateLeaseInstallment = updateLeaseInstallmentMock;
@@ -48,6 +51,7 @@ vi.mock("../../src/infrastructure/db/D1MasterRepository", () => ({
   },
   D1RateMasterRepository: class {
     getRates = vi.fn(async () => ({}));
+    getRate = getRateMock;
   },
 }));
 
@@ -57,6 +61,11 @@ vi.mock("../../src/infrastructure/db/D1ImportBatchRepository", () => ({
   },
 }));
 
+vi.mock("../../src/infrastructure/db/D1VehiclePlOverrideRepository", () => ({
+  D1VehiclePlOverrideRepository: class {
+    findByYearMonth = async () => [];
+  },
+}));
 vi.mock("../../src/infrastructure/db/D1VehiclePlRepository", () => ({
   D1VehiclePlRepository: class {
     upsertMany = vi.fn();
@@ -75,6 +84,10 @@ vi.mock("../../src/infrastructure/db/D1CleansingDecisionRepository", () => ({
   D1CleansingDecisionRepository: class {
     findByYearMonth = findDecisionsMock;
   },
+  D1AppSettingRepository: class {
+    get = vi.fn(async () => null);
+  },
+  APP_SETTING_KEYS: { kirinTargetVehicleNos: "kirin_target_vehicle_nos" },
 }));
 
 const { finalizeExecuteMock } = vi.hoisted(() => ({ finalizeExecuteMock: vi.fn() }));
@@ -218,6 +231,9 @@ describe("POST /api/vehicle-master/lease の正常系", () => {
       yearMonth: "2026-05",
       manualInputs: [{ yearMonth: "2026-05", field: "insVoluntary" }],
       cleansingDecisions: [{ rowKey: "S-100-1", decision: "delete" }],
+      // キリンの受取額が0なら配賦も無い。金額があるときに引き継がれることは次のテストで見る。
+      kirinAllocations: [],
+      overrides: [],
     });
 
     expect((await res.json()) as unknown).toEqual({
@@ -225,6 +241,32 @@ describe("POST /api/vehicle-master/lease の正常系", () => {
       vehicleNo: "4242",
       vehicleCount: 24,
     });
+  });
+
+  /**
+   * かつてこのAPIは再計算の材料を自前で集めており、キリンの配賦だけを渡し忘れていた。
+   * その結果「リース料を1台直すと、24番・300番へのキリン協力金の配賦が全部消える」という
+   * 一見無関係な副作用が出ていた(しかも受取額はどこにも保存されておらず、手入力画面で
+   * 入れ直すまで戻らなかった)。材料集めを再計算ユースケースへ寄せたことの回帰テスト。
+   */
+  it("リース料の更新でも、保存済みのキリン受取額から配賦を作り直して引き継ぐ", async () => {
+    findManualInputsMock.mockResolvedValue([]);
+    findDecisionsMock.mockResolvedValue([]);
+    getRateMock.mockImplementation(async (key: string) =>
+      key === "kirin_transport_support" ? 300000 : key === "kirin_management_support" ? 200000 : 0,
+    );
+
+    const res = await postLease({ yearMonth: "2026-05", vehicleNo: "4242", lease: 120000 });
+
+    expect(res.status).toBe(200);
+    expect(finalizeExecuteMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kirinAllocations: [
+          { vehicleNo: "24", amount: 250000 },
+          { vehicleNo: "300", amount: 250000 },
+        ],
+      }),
+    );
   });
 
   it("マスタ更新に失敗したら500で例外のメッセージを返し、再計算は走らせない", async () => {

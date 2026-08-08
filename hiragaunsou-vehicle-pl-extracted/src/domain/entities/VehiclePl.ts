@@ -73,6 +73,12 @@ export const STANDARD_COST_RATES: Record<
   semiTrailer: { repairPerKm: 7.6, tirePerKm: 3.3 },
   unic: { repairPerKm: 3.8, tirePerKm: 1.7 },
   medium: { repairPerKm: 3.8, tirePerKm: 1.7 },
+  /**
+   * トレーラ(被けん引車)。自走しないので走行距離が付かず、修理・タイヤの標準原価も
+   * トラクタ側の走行距離で計上される。ここを medium にフォールバックさせると、
+   * 統合時にトレーラ分の km が 0 でも単価表だけが二重に効く余地を残すため 0 で固定する。
+   */
+  trailer: { repairPerKm: 0, tirePerKm: 0 },
 };
 
 /** 傭車として自動除外する車番 (機械的判定してよいと要件定義で明記) */

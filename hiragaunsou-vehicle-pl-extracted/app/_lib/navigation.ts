@@ -140,9 +140,21 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         permission: "manage_imports",
       },
       {
+        href: "/rate-settings",
+        label: "率マスタ設定",
+        desc: "一般管理費率・組合割引率・賞与年額など、全車両に効く率と単価を設定する",
+        permission: "edit_master",
+      },
+      {
         href: "/admin/vehicle-master",
         label: "車両マスタ管理",
-        desc: "収支表取込で自動更新される車両マスタを、必要に応じてCSVで手動補正する",
+        desc: "車番・車種・保険・税・リース料をCSVで登録する(収支表の固定費の土台)",
+        permission: "manage_imports",
+      },
+      {
+        href: "/admin/driver-master",
+        label: "運転者マスタ管理",
+        desc: "社員Noと車番の対応をCSVで登録する(給与を車両へ紐づける土台)",
         permission: "manage_imports",
       },
     ],

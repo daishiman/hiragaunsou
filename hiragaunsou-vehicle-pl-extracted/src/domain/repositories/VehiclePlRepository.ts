@@ -7,6 +7,13 @@ import type { VehiclePlCalculated } from "../rules/vehiclePlCalculation";
 export interface VehiclePlRepository {
   /** year_month + vehicle_no で一意に upsert する */
   upsertMany(yearMonth: string, rows: VehiclePlCalculated[]): Promise<void>;
+  /**
+   * その月の収支表から指定車両の行を消す。
+   *
+   * upsertMany は書くだけで消さないため、これが無いと「今月は載せない」と決めた車両の
+   * 行が前回の確定結果のまま残り、合計だけが合わなくなる。
+   */
+  removeVehicles(yearMonth: string, vehicleNos: readonly string[]): Promise<void>;
   findByYearMonth(yearMonth: string): Promise<VehiclePlCalculated[]>;
   findByVehicleNo(vehicleNo: string): Promise<VehiclePlCalculated[]>;
   /**

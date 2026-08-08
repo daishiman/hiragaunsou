@@ -21,6 +21,11 @@ describe("mapVehicleTypeToCostCategory", () => {
     expect(mapVehicleTypeToCostCategory("ユニック車")).toBe("unic");
     expect(mapVehicleTypeToCostCategory("6.5tダンプ")).toBe("6.5t");
     expect(mapVehicleTypeToCostCategory("中型")).toBe("medium");
+    // 「被けん引車」はトレーラ本体。「トレーラ」を含む文字列より先に判定される必要がある
+    // (semiTrailer に倒れると、自走しない車両に走行距離連動の標準原価が付く)。
+    expect(mapVehicleTypeToCostCategory("被けん引車")).toBe("trailer");
+    expect(mapVehicleTypeToCostCategory("被牽引車")).toBe("trailer");
+    expect(mapVehicleTypeToCostCategory("台車")).toBe("trailer");
     expect(mapVehicleTypeToCostCategory("4tアルミバン")).toBe("medium");
   });
 

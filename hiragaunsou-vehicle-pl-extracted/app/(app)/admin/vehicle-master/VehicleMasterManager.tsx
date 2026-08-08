@@ -15,7 +15,35 @@ const COST_CATEGORY_LABELS: Record<string, string> = {
   semiTrailer: "セミトレーラ",
   unic: "ユニック",
   medium: "中型",
+  trailer: "被けん引車(トレーラ)",
 };
+
+/**
+ * けん引先に選べる車両。
+ *
+ * 除くのは「自分自身」と「他のトレーラ」だけにする。所属(depot)では絞らない。
+ * 実データの5組はすべて本社だが、絞ってしまうと営業所をまたぐ組み合わせが出たときに
+ * 登録手段そのものが無くなる。対応表は元データのどのCSVにも無く、この画面が唯一の
+ * 入口なので、ここで塞ぐと復旧できない。
+ *
+ * 代わりに並び順で探しやすくする。同じ所属を先に出し、その中は車番順にする。
+ * 車番は "2" "129" "1113" のような文字列なので、単純な文字列比較だと "1113" が "2" より
+ * 前に来る。numeric 比較で人が読む順に揃える。
+ */
+function tractorCandidates(
+  vehicles: readonly VehicleMasterRecord[],
+  trailer: VehicleMasterRecord,
+): VehicleMasterRecord[] {
+  return vehicles
+    .filter((v) => v.vehicleNo !== trailer.vehicleNo && v.costCategory !== "trailer")
+    .sort((a, b) => {
+      const sameDepot = (v: VehicleMasterRecord) => (v.depot === trailer.depot ? 0 : 1);
+      return (
+        sameDepot(a) - sameDepot(b) ||
+        a.vehicleNo.localeCompare(b.vehicleNo, "ja", { numeric: true })
+      );
+    });
+}
 
 interface Preview {
   fileName: string;
@@ -23,7 +51,14 @@ interface Preview {
   errors: VehicleMasterImportRowError[];
 }
 
-export function VehicleMasterManager({ initialVehicles }: { initialVehicles: VehicleMasterRecord[] }) {
+export function VehicleMasterManager({
+  initialVehicles,
+  yearMonth,
+}: {
+  initialVehicles: VehicleMasterRecord[];
+  /** けん引先を変えたら収支表を作り直すので、どの月の表を直すのかが要る。 */
+  yearMonth: string;
+}) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [vehicles, setVehicles] = useState(initialVehicles);
@@ -33,6 +68,42 @@ export function VehicleMasterManager({ initialVehicles }: { initialVehicles: Veh
   const [done, setDone] = useState<string | null>(null);
 
   const existingNos = useMemo(() => new Set(vehicles.map((v) => v.vehicleNo)), [vehicles]);
+  const [towedBusy, setTowedBusy] = useState<string | null>(null);
+
+  /**
+   * トレーラのけん引先を設定・解除する。車両マスタを直したら収支表も作り直すので、
+   * 表と土台がずれた状態は残らない (再計算はAPI側が受け持つ)。
+   */
+  async function saveTowedBy(vehicleNo: string, towedByVehicleNo: string | null) {
+    setTowedBusy(vehicleNo);
+    setError(null);
+    setDone(null);
+    try {
+      const res = await fetch("/api/vehicle-master/towed-by", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ yearMonth, vehicleNo, towedByVehicleNo }),
+      });
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) {
+        setError(data?.error ?? "けん引先の更新に失敗しました");
+        return;
+      }
+      setVehicles((prev) =>
+        prev.map((v) => (v.vehicleNo === vehicleNo ? { ...v, towedByVehicleNo } : v)),
+      );
+      setDone(
+        towedByVehicleNo
+          ? `車番${vehicleNo}を車番${towedByVehicleNo}の行に合算するようにしました(収支表を作り直しました)`
+          : `車番${vehicleNo}のけん引先を解除しました(収支表を作り直しました)`,
+      );
+      router.refresh();
+    } catch {
+      setError("通信エラーが発生しました");
+    } finally {
+      setTowedBusy(null);
+    }
+  }
 
   async function upload(file: File) {
     setBusy(true);
@@ -200,6 +271,12 @@ export function VehicleMasterManager({ initialVehicles }: { initialVehicles: Veh
 
       <section className="rounded-xl border border-line bg-white p-5">
         <h2 className="text-sm font-bold text-ink">現在の車両マスタ({vehicles.length}台)</h2>
+        <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+          トレーラ(被けん引車)は運賃も運転者も付かないのに保険・税・リース料だけが付くため、
+          けん引先を決めないと「売上ゼロ・費用だけの赤字行」として収支表に並びます。
+          けん引先を選ぶとその行に合算され、車番は「129/1113」のようにまとめて表示されます
+          (収支表は{yearMonth}分を作り直します)。
+        </p>
         <div className="mt-3 overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
@@ -207,6 +284,7 @@ export function VehicleMasterManager({ initialVehicles }: { initialVehicles: Veh
                 <th className="py-2 pr-3">車番</th>
                 <th className="py-2 pr-3">車種名</th>
                 <th className="py-2 pr-3">原価区分</th>
+                <th className="py-2 pr-3">けん引先</th>
                 <th className="py-2 pr-3">所属</th>
                 <th className="py-2 pr-3">自賠責</th>
                 <th className="py-2 pr-3">任意保険</th>
@@ -224,6 +302,25 @@ export function VehicleMasterManager({ initialVehicles }: { initialVehicles: Veh
                   <td className="py-2 pr-3 text-ink-muted">
                     {COST_CATEGORY_LABELS[v.costCategory] ?? v.costCategory}
                   </td>
+                  <td className="py-2 pr-3">
+                    {v.costCategory === "trailer" ? (
+                      <select
+                        value={v.towedByVehicleNo ?? ""}
+                        disabled={towedBusy !== null}
+                        onChange={(e) => void saveTowedBy(v.vehicleNo, e.target.value || null)}
+                        className="num rounded-md border border-line px-2 py-1 text-xs disabled:opacity-50"
+                      >
+                        <option value="">単独で表に出す</option>
+                        {tractorCandidates(vehicles, v).map((t) => (
+                          <option key={t.vehicleNo} value={t.vehicleNo}>
+                            {t.vehicleNo}({t.vehicleType})
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-[11px] text-ink-muted">—</span>
+                    )}
+                  </td>
                   <td className="py-2 pr-3 text-ink-muted">{v.depot}</td>
                   <td className="num py-2 pr-3 text-ink-muted">{yen(v.insCompulsory)}</td>
                   <td className="num py-2 pr-3 text-ink-muted">{yen(v.insVoluntary)}</td>
@@ -235,7 +332,7 @@ export function VehicleMasterManager({ initialVehicles }: { initialVehicles: Veh
               ))}
               {vehicles.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-4 text-center text-xs text-ink-muted">
+                  <td colSpan={11} className="py-4 text-center text-xs text-ink-muted">
                     車両マスタが登録されていません。CSVを取り込んでください。
                   </td>
                 </tr>

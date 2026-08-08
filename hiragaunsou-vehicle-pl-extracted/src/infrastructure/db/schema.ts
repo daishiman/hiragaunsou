@@ -82,7 +82,13 @@ export const vehicleMaster = sqliteTable("vehicle_master", {
   vehicleType: text("vehicle_type").notNull(),
   depot: text("depot").notNull().default(""),
   regDate: text("reg_date"),
-  costCategory: text("cost_category").notNull().default("medium"), // 6.5t/large/semiTrailer/unic/medium
+  costCategory: text("cost_category").notNull().default("medium"), // 6.5t/large/semiTrailer/unic/medium/trailer
+  /**
+   * トレーラ(被けん引車)が、どのトラクタにけん引されるか。トレーラ行だけが持つ。
+   * この対応表は元データのどのCSVにも無く、現行Excelの行ラベル(「129/1113」)だけが
+   * 持っている情報なので、人が登録する場所としてマスタに置く。
+   */
+  towedByVehicleNo: text("towed_by_vehicle_no"),
   insCompulsory: real("ins_compulsory").notNull().default(0),
   insVoluntary: real("ins_voluntary").notNull().default(0),
   taxAuto: real("tax_auto").notNull().default(0),
@@ -129,6 +135,12 @@ export const vehiclePl = sqliteTable(
     id: text("id").primaryKey(),
     yearMonth: text("year_month").notNull(),
     vehicleNo: text("vehicle_no").notNull(),
+    /**
+     * この行が吸収したトレーラの車番 (カンマ区切り。無ければ空文字)。
+     * 車番はトラクタのままにしてある。合成キーにすると運行実績・給与・手入力・上書きが
+     * 全てトラクタの車番でキーされている紐づけが切れるため、表示ラベルはここから組み立てる。
+     */
+    towedVehicleNos: text("towed_vehicle_nos").notNull().default(""),
     type: text("type").notNull().default(""),
     depot: text("depot").notNull().default(""),
     reg: text("reg"),
@@ -315,6 +327,36 @@ export const manualVehicleInput = sqliteTable(
 );
 
 /**
+ * 車両単位の最終上書き (STEP7の確定後に、請求側の事情で人が直す値)。
+ *
+ * valuesJson に入るのは OVERRIDABLE_FIELDS(計算の入口の値)だけ。損益や小計は入らない。
+ * 列を増やさず JSON にしているのは、上書き対象が運用の中で増減するのに対して
+ * 「何を上書きできるか」の定義は domain/rules/vehiclePlOverride.ts の1箇所に置きたいため。
+ * 読み出し時に isOverridableField で濾すので、古い定義が残っていても下流には流れない。
+ */
+export const vehiclePlOverride = sqliteTable(
+  "vehicle_pl_override",
+  {
+    id: text("id").primaryKey(),
+    yearMonth: text("year_month").notNull(),
+    vehicleNo: text("vehicle_no").notNull(),
+    /** その月の収支表からこの車両を外す (車番303の「今月は載せない」扱い) */
+    excluded: integer("excluded", { mode: "boolean" }).notNull().default(false),
+    valuesJson: text("values_json").notNull().default("{}"),
+    /** なぜ直したか。空を許すと後から誰も判断を追えなくなるため notNull */
+    reason: text("reason").notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedBy: text("updated_by").references(() => user.id),
+  },
+  (table) => [
+    uniqueIndex("vehicle_pl_override_ym_no_idx").on(table.yearMonth, table.vehicleNo),
+    index("vehicle_pl_override_ym_idx").on(table.yearMonth),
+  ],
+);
+
+/**
  * 業務フロー STEP2「データ整形(傭車・2重計上・諸口の処理)」で人が下した判断の履歴。
  *
  * 判定ルール(車番88888=傭車 / 888・10・5000番=2重計上疑い / 運転者「諸口」)はシステムが持ち、
@@ -442,6 +484,11 @@ export const deficitFactorAnalysis = sqliteTable(
     summary: text("summary").notNull(),
     factorsJson: text("factors_json").notNull(),
     model: text("model").notNull(),
+    /**
+     * 分析した時点の損益(円)。現在の損益と突き合わせてキャッシュの陳腐化を判定する。
+     * この列より前に作られたレコードは NULL で、判定不能=再分析対象として扱う。
+     */
+    profitAtAnalysis: real("profit_at_analysis"),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),

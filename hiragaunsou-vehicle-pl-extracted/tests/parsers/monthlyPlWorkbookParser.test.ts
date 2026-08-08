@@ -24,6 +24,34 @@ describe("parseMonthlyPlWorkbook", () => {
     });
   });
 
+  it("書式だけの空セルがあっても、隣の列の値を吸い込まず本来の列に入る", () => {
+    // Excelは未入力セルを `<c r="AB4" s="18"/>` の自己終了タグで保存する。
+    // 実データの収支表では「メンテ(委託)」「車両リース費」がこの形で、
+    // 閉じタグ必須の正規表現だと隣のセル(※修繕費計・車両割賦支払費)の値を
+    // 空セル側が飲み込み、本来の列が0に化けていた。
+    const result = parseMonthlyPlWorkbook(
+      buildMonthlyPlWorkbookFixture({ emptyFields: ["mainte", "lease"] }),
+    );
+
+    expect(result.rows[0]).toMatchObject({
+      no: "10",
+      mainte: 0,
+      repairTotal: 33000, // 空セルの右隣。0に潰れてはいけない
+      lease: 0,
+      installment: 154498, // 空セルの右隣。0に潰れてはいけない
+    });
+  });
+
+  it("空セルが連続しても、その先の列がまるごと欠落しない", () => {
+    // 実データの車番17は「コード」「運転者名」が2連続の空セルで、
+    // その右の「運行回数」がパース結果から消えていた。
+    const result = parseMonthlyPlWorkbook(
+      buildMonthlyPlWorkbookFixture({ emptyFields: ["code", "driver"] }),
+    );
+
+    expect(result.rows[0]).toMatchObject({ no: "10", code: null, driver: null, trips: 12 });
+  });
+
   it("収支表がないExcelは、誤ったデータとして明示的に拒否する", () => {
     const emptyWorkbook = new Uint8Array([0x50, 0x4b, 0x03, 0x04]);
     expect(() => parseMonthlyPlWorkbook(emptyWorkbook)).toThrow("xlsx形式");
@@ -80,6 +108,43 @@ describe("parseMonthlyPlWorkbook", () => {
     expect(result.sheetName).toBe("5月収支表");
     expect(result.rows.length).toBeGreaterThan(100);
     expect(result.rows.some((row) => row.no === "1")).toBe(true);
+  });
+
+  /**
+   * 行数と車番だけを見るテストでは、列の中身が隣とすり替わっていても素通りしてしまう。
+   * (実際、空セルの自己終了タグを読み飛ばして「修繕費計」が0になり、その額が「メンテ費」に
+   * 化けていたが、それまでの受入テストは全部通っていた)
+   * 収支表は内訳と小計が式で結ばれているため、取り込んだ値そのものでその式を検算すれば、
+   * 列がずれた瞬間に破綻する。ここが値の破損に対する最後の網になる。
+   */
+  sharedIt("実ブックの全車両で、内訳と小計の関係が崩れていない", () => {
+    const { rows } = parseMonthlyPlWorkbook(readFileSync(sharedWorkbook));
+    const broken: string[] = [];
+
+    for (const row of rows) {
+      const check = (label: string, actual: number, expected: number) => {
+        // Excelの保存値は小数を含む(燃料費等)ため、円未満の丸め差は許容する。
+        if (Math.abs(actual - expected) > 1) {
+          broken.push(`車番${row.no} ${label}: ${actual} ≠ ${expected}`);
+        }
+      };
+      check("運送収入", row.sales, row.fare + row.fee);
+      check("運行費計", row.tollNet, row.toll - row.tollDisc);
+      check("燃料費計", row.fuelTotal, row.fuelIn + row.fuelOut + row.adblue);
+      check("修繕費計", row.repairTotal, row.repair + row.tire + row.equip + row.mainte);
+      check("人件費計", row.laborTotal, row.salary + row.bonus + row.welfare);
+      check("保険料計", row.insTotal, row.insCompulsory + row.insVoluntary);
+      check("賦課税計", row.taxTotal, row.taxAuto + row.taxWeight);
+      check("運送費計", row.transportTotal, row.lease + row.installment);
+      check("固定費", row.fixed, row.insTotal + row.taxTotal + row.transportTotal);
+      check("経費計", row.expense, row.fixed + row.variable);
+      check("損益", row.profit, row.sales - row.expense);
+    }
+
+    // 車番1100(被けん引車)は元ブック側で運賃73,620が入ったまま「運送収入」の式が入っておらず、
+    // その売上が収支のどこにも乗っていない。取込側で埋めると元帳票と数字が変わってしまうため、
+    // パーサは元ブックのとおり読む。ここに列挙が増えたら元データ側の記入漏れを疑う。
+    expect(broken).toEqual(["車番1100 運送収入: 0 ≠ 73620"]);
   });
 
   const annualWorkbook = resolve(process.cwd(), "data/運送収支表 2025-2026 5月更新.xlsx");

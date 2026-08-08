@@ -6,6 +6,7 @@ import { createDb } from "../../../src/infrastructure/db/client";
 import { D1VehiclePlRepository } from "../../../src/infrastructure/db/D1VehiclePlRepository";
 import { D1DeficitFactorAnalysisRepository } from "../../../src/infrastructure/db/D1DeficitFactorAnalysisRepository";
 import { D1UsageLogRepository } from "../../../src/infrastructure/db/D1UsageLogRepository";
+import { D1RateMasterRepository } from "../../../src/infrastructure/db/D1MasterRepository";
 import { resolveAnthropicCredential } from "../../../src/infrastructure/ai/resolveAnthropicCredential";
 import { ClaudeDeficitFactorAnalysisClient } from "../../../src/infrastructure/ai/ClaudeDeficitFactorAnalysisClient";
 import { GenerateDeficitFactorAnalysisUseCase } from "../../../src/usecase/steps/generateDeficitFactorAnalysis";
@@ -82,6 +83,7 @@ export async function POST(request: Request) {
     new D1DeficitFactorAnalysisRepository(db),
     new ClaudeDeficitFactorAnalysisClient({ apiKey: credential.apiKey, model: credential.model }),
     usageLogRepo,
+    new D1RateMasterRepository(db),
   );
 
   try {

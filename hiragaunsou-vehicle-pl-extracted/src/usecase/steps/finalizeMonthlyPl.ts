@@ -11,11 +11,15 @@ import type {
 } from "../../domain/repositories/MasterRepository";
 import type { CleansingDecisionRecord } from "../../domain/repositories/CleansingDecisionRepository";
 import { applyCleansingDecisions } from "./getCleansingQueue";
+import { applyVehiclePlOverride, type VehiclePlOverride } from "../../domain/rules/vehiclePlOverride";
+import { mergeTowedVehicles } from "../../domain/rules/towedVehicle";
 import type { DriverMasterRecord } from "../../domain/repositories/MasterRepository";
 
 /** 車両1台分の給与集計(社員コード→運転者マスタ→車両の連鎖の結果)。 */
 export interface VehiclePayrollAggregate {
   vehicleNo: string;
+  /** 社員コード。2人乗務等で複数名いる場合は driverName と同じ順で "/" 区切り */
+  employeeCode: string;
   /** 2人乗務等で複数名いる場合は "/" 区切り */
   driverName: string;
   /** 総支給額(複数名の場合は合算) */
@@ -47,6 +51,7 @@ export function aggregatePayrollByVehicle(
     const payroll = payrollByEmployee.get(driver.employeeCode);
     const existing = result.get(driver.vehicleNo) ?? {
       vehicleNo: driver.vehicleNo,
+      employeeCode: "",
       driverName: "",
       salary: 0,
       welfare: 0,
@@ -54,6 +59,9 @@ export function aggregatePayrollByVehicle(
     };
     result.set(driver.vehicleNo, {
       vehicleNo: driver.vehicleNo,
+      employeeCode: existing.employeeCode
+        ? `${existing.employeeCode}/${driver.employeeCode}`
+        : driver.employeeCode,
       driverName: existing.driverName ? `${existing.driverName}/${driver.driverName}` : driver.driverName,
       salary: existing.salary + (payroll?.totalPay ?? 0),
       welfare: existing.welfare + (payroll?.socialInsuranceTotal ?? 0),
@@ -109,6 +117,12 @@ export interface FinalizeMonthlyPlInput {
    * 元データは書き換えず、集計の直前にここで重ねる。
    */
   cleansingDecisions?: readonly CleansingDecisionRecord[];
+  /**
+   * STEP7: 車両単位の最終上書き (請求側の事情でCSV由来の値を人が直したもの)。
+   * 計算の入口の値だけを差し替え、下流は calculateVehiclePl が作り直す。
+   * excluded の車両はその月の収支表に載せない。
+   */
+  overrides?: readonly VehiclePlOverride[];
 }
 
 export interface FinalizeMonthlyPlResult {
@@ -175,7 +189,42 @@ export class FinalizeMonthlyPlUseCase {
       kirinByVehicle.set(a.vehicleNo, (kirinByVehicle.get(a.vehicleNo) ?? 0) + a.amount);
     }
 
-    const rows: VehiclePlCalculated[] = vehicles.map((vehicle) => {
+    // STEP7: 車両単位の最終上書き。excluded の車両は行ごと落とすため、計算の前に分けておく。
+    const overrideByVehicle = new Map<string, VehiclePlOverride>();
+    for (const o of input.overrides ?? []) {
+      overrideByVehicle.set(o.vehicleNo, o);
+    }
+
+    // STEP7: トレーラ(被けん引車)はけん引するトラクタの行に合算し、単独では出さない。
+    // 除外された(excluded)トラクタにぶら下がるトレーラは行き場が無いので、一緒に消える。
+    const activeVehicles = vehicles.filter(
+      (vehicle) => !overrideByVehicle.get(vehicle.vehicleNo)?.excluded,
+    );
+    // 「けん引先が車両マスタに居ない」と「けん引先を人が今月だけ外した」は別物として扱う。
+    // 前者は車番の打ち間違いや廃車で、黙って消すと台数だけが合わなくなるので独立行で残す。
+    // 後者は「今月は動いていない」という判断なので、ぶら下がるトレーラも一緒に落とす
+    // (残すと、まさに解消したかった「売上ゼロ・費用だけの赤字行」が戻ってくる)。
+    const knownTractorNos = new Set(
+      vehicles.filter((v) => !v.towedByVehicleNo).map((v) => v.vehicleNo),
+    );
+    const trailersByTractor = new Map<string, string[]>();
+    const droppedWithTractor: string[] = [];
+    for (const v of activeVehicles) {
+      if (!v.towedByVehicleNo || !knownTractorNos.has(v.towedByVehicleNo)) continue;
+      if (overrideByVehicle.get(v.towedByVehicleNo)?.excluded) {
+        droppedWithTractor.push(v.vehicleNo);
+        continue;
+      }
+      const list = trailersByTractor.get(v.towedByVehicleNo) ?? [];
+      list.push(v.vehicleNo);
+      trailersByTractor.set(v.towedByVehicleNo, list);
+    }
+    const mergedIntoTractor = new Set([
+      ...[...trailersByTractor.values()].flat(),
+      ...droppedWithTractor,
+    ]);
+
+    const toPlInput = (vehicle: (typeof activeVehicles)[number]): VehiclePlInput => {
       const op = opByVehicle.get(vehicle.vehicleNo);
       const sales = salesAgg.get(vehicle.vehicleNo);
       const driver = driversByVehicle.get(vehicle.vehicleNo);
@@ -191,7 +240,9 @@ export class FinalizeMonthlyPlUseCase {
         type: vehicle.vehicleType,
         depot: vehicle.depot,
         reg: vehicle.regDate,
-        code: null,
+        // 社員コードは運転者マスタから来る。ここを null で埋めていたため、
+        // 出力CSVの「社員コード」列が全行空になり、給与の突合先を人が辿れなくなっていた。
+        code: driver?.employeeCode || null,
         driver: driver?.driverName ?? null,
         trips: op?.tripCount ?? 0,
         slips: sales?.slipCount ?? 0,
@@ -223,9 +274,38 @@ export class FinalizeMonthlyPlUseCase {
         standardCostRate,
       };
 
-      return calculateVehiclePl(plInput, rates);
-    });
+      // 上書きは計算の入口にだけ重ねる。損益・経費計・各小計はここから必ず作り直されるので、
+      // 「損益 = 運送収入 - 経費計」は上書き後も成立する。
+      return applyVehiclePlOverride(plInput, overrideByVehicle.get(vehicle.vehicleNo));
+    };
 
+    const inputByVehicle = new Map<string, VehiclePlInput>(
+      activeVehicles.map((v) => [v.vehicleNo, toPlInput(v)]),
+    );
+
+    // トレーラの合算も calculateVehiclePl の手前で済ませる。下流を足し合わせると
+    // 一般管理費が合算前の運送収入に対する額の和になり、率との関係が崩れる。
+    const rows: VehiclePlCalculated[] = activeVehicles
+      .filter((vehicle) => !mergedIntoTractor.has(vehicle.vehicleNo))
+      .map((vehicle) => {
+        const trailers = (trailersByTractor.get(vehicle.vehicleNo) ?? [])
+          .map((no) => inputByVehicle.get(no))
+          .filter((v): v is VehiclePlInput => v !== undefined);
+        return calculateVehiclePl(
+          mergeTowedVehicles(inputByVehicle.get(vehicle.vehicleNo)!, trailers),
+          rates,
+        );
+      });
+
+    // 「今月は載せない」に切り替えた車両は、前回の確定で書いた行が残っている。
+    // upsertMany は書くだけで消さないので、除外分は明示的に落とす。
+    // 除外した車両に加え、トラクタに吸収されたトレーラの行も落とす。
+    // 対応を登録した月から車番の行が消えるので、前回の確定結果が残ると二重計上になる。
+    const excludedVehicleNos = [
+      ...(input.overrides ?? []).filter((o) => o.excluded).map((o) => o.vehicleNo),
+      ...mergedIntoTractor,
+    ];
+    await this.vehiclePlRepo.removeVehicles(input.yearMonth, excludedVehicleNos);
     await this.vehiclePlRepo.upsertMany(input.yearMonth, rows);
 
     return { yearMonth: input.yearMonth, vehicleCount: rows.length, rows };

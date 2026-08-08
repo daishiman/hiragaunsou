@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { calculateVehiclePl, type VehiclePlInput } from "../../src/domain/rules/vehiclePlCalculation";
+import {
+  calculateVehiclePl,
+  DEFAULT_RATE_SETTINGS,
+  type VehiclePlInput,
+} from "../../src/domain/rules/vehiclePlCalculation";
 import { isCharteredVehicle } from "../../src/domain/rules/charteredVehicle";
 
 function baseInput(overrides: Partial<VehiclePlInput> = {}): VehiclePlInput {
@@ -52,10 +56,8 @@ describe("calculateVehiclePl", () => {
 
   it("割引率はレート設定から変更可能 (ハードコード禁止)", () => {
     const r = calculateVehiclePl(baseInput({ toll: 100000 }), {
+      ...DEFAULT_RATES(),
       tollDiscountRate: 0.5,
-      adminFeeRate: 0.169,
-      bonusAnnual: 400000,
-      tankPricePerLiter: 0,
     });
     expect(r.tollDisc).toBe(50000);
     expect(r.tollNet).toBe(50000);
@@ -133,9 +135,11 @@ describe("calculateVehiclePl", () => {
     expect(r.transportTotal).toBe(30000);
   });
 
-  it("一般管理費 = 運送収入 × 設定レート(デフォルト16.9%)、ハードコードせずレートを変更できる", () => {
+  it("一般管理費 = 運送収入 × 設定レート、ハードコードせずレートを変更できる", () => {
     const r1 = calculateVehiclePl(baseInput({ fare: 1000000, fee: 0 }));
-    expect(r1.adminFee).toBeCloseTo(1000000 * 0.169, 2);
+    // 率の具体値ではなく「設定レートが掛かる」という関係を検証する。
+    // 実運用値は rate_master 側 (現行 0.1748) で決まり、ここの既定値とは別物。
+    expect(r1.adminFee).toBeCloseTo(1000000 * DEFAULT_RATE_SETTINGS.adminFeeRate, 2);
 
     const r2 = calculateVehiclePl(baseInput({ fare: 1000000, fee: 0 }), {
       ...DEFAULT_RATES(),
@@ -178,11 +182,11 @@ describe("isCharteredVehicle", () => {
   });
 });
 
+/**
+ * 既定レート。値を直接書かず DEFAULT_RATE_SETTINGS を参照する。
+ * ここに数値を書くと、既定値を変えたときにテストだけが古い値を検証し続け、
+ * 実装とテストが別々の真実を持つ状態になる (一般管理費率で実際に起きた)。
+ */
 function DEFAULT_RATES() {
-  return {
-    tollDiscountRate: 0.356,
-    adminFeeRate: 0.169,
-    bonusAnnual: 400000,
-    tankPricePerLiter: 0,
-  };
+  return { ...DEFAULT_RATE_SETTINGS };
 }

@@ -11,9 +11,13 @@ import {
 } from "../../../../src/infrastructure/db/D1MasterRepository";
 import { D1VehiclePlRepository } from "../../../../src/infrastructure/db/D1VehiclePlRepository";
 import { D1ManualInputRepository } from "../../../../src/infrastructure/db/D1ManualInputRepository";
-import { D1CleansingDecisionRepository } from "../../../../src/infrastructure/db/D1CleansingDecisionRepository";
+import {
+  D1AppSettingRepository,
+  D1CleansingDecisionRepository,
+} from "../../../../src/infrastructure/db/D1CleansingDecisionRepository";
 import { FinalizeMonthlyPlUseCase } from "../../../../src/usecase/steps/finalizeMonthlyPl";
-import { CLEANSING_SOURCE_TYPE } from "../../../../src/usecase/steps/getCleansingQueue";
+import { RecalculateMonthlyPlUseCase } from "../../../../src/usecase/steps/recalculateMonthlyPl";
+import { D1VehiclePlOverrideRepository } from "../../../../src/infrastructure/db/D1VehiclePlOverrideRepository";
 import { isSameOriginRequest } from "../../../_lib/assertSameOrigin";
 
 /** 金額として受け付けられる値に整える (負値・非数は0にする) */
@@ -60,20 +64,24 @@ export async function POST(request: Request) {
       toAmount(body.installment),
     );
 
-    // マスタを直したら収支表を作り直す (直した値が反映されていない表を残さない)
-    const manualInputRepo = new D1ManualInputRepository(db);
-    const [manualInputs, cleansingDecisions] = await Promise.all([
-      manualInputRepo.findByYearMonth(body.yearMonth),
-      new D1CleansingDecisionRepository(db).findByYearMonth(body.yearMonth, CLEANSING_SOURCE_TYPE),
-    ]);
-
-    const result = await new FinalizeMonthlyPlUseCase(
-      new D1ImportBatchRepository(db),
-      vehicleMasterRepo,
-      new D1DriverMasterRepository(db),
-      new D1RateMasterRepository(db),
-      new D1VehiclePlRepository(db),
-    ).execute({ yearMonth: body.yearMonth, manualInputs, cleansingDecisions });
+    // マスタを直したら収支表を作り直す (直した値が反映されていない表を残さない)。
+    // 再計算の材料集めは RecalculateMonthlyPlUseCase に任せる。ここで自前に集めていたときは
+    // キリン配賦を渡し忘れており、リース料を1台直すだけで24番・300番への配賦が消えていた。
+    const rateMasterRepo = new D1RateMasterRepository(db);
+    const result = await new RecalculateMonthlyPlUseCase(
+      new D1ManualInputRepository(db),
+      new D1CleansingDecisionRepository(db),
+      new D1AppSettingRepository(db),
+      rateMasterRepo,
+      new D1VehiclePlOverrideRepository(db),
+      new FinalizeMonthlyPlUseCase(
+        new D1ImportBatchRepository(db),
+        vehicleMasterRepo,
+        new D1DriverMasterRepository(db),
+        rateMasterRepo,
+        new D1VehiclePlRepository(db),
+      ),
+    ).execute({ yearMonth: body.yearMonth });
 
     return NextResponse.json({
       yearMonth: body.yearMonth,

@@ -14,27 +14,18 @@ import { D1VehiclePlRepository } from "../../../src/infrastructure/db/D1VehicleP
 import { D1ManualInputRepository } from "../../../src/infrastructure/db/D1ManualInputRepository";
 import { FinalizeMonthlyPlUseCase } from "../../../src/usecase/steps/finalizeMonthlyPl";
 import { buildManualInputs, type RawManualVehicleInput } from "../../../src/usecase/steps/buildManualInputs";
-import {
-  allocateKirinSupport,
-  DEFAULT_KIRIN_TARGET_VEHICLES,
-} from "../../../src/domain/rules/kirinAllocation";
+import { DEFAULT_KIRIN_TARGET_VEHICLES } from "../../../src/domain/rules/kirinAllocation";
 import {
   APP_SETTING_KEYS,
   D1AppSettingRepository,
   D1CleansingDecisionRepository,
 } from "../../../src/infrastructure/db/D1CleansingDecisionRepository";
-import { CLEANSING_SOURCE_TYPE } from "../../../src/usecase/steps/getCleansingQueue";
+import {
+  RecalculateMonthlyPlUseCase,
+  parseVehicleNoList,
+} from "../../../src/usecase/steps/recalculateMonthlyPl";
+import { D1VehiclePlOverrideRepository } from "../../../src/infrastructure/db/D1VehiclePlOverrideRepository";
 import { isSameOriginRequest } from "../../_lib/assertSameOrigin";
-
-/** "24,300" のような設定値を車番の配列にする。空なら null を返して既定値へ委ねる。 */
-function parseVehicleNoList(raw: string | null | undefined): string[] | null {
-  if (!raw) return null;
-  const list = raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s) => s !== "");
-  return list.length > 0 ? list : null;
-}
 
 /**
  * 入力途中の値を読み戻す (STEP3/5/6 は請求書の到着タイミングが違うため、
@@ -127,18 +118,24 @@ export async function POST(request: Request) {
       session!.id,
     );
   }
-  const kirinTargets =
-    requestedTargets ??
-    parseVehicleNoList(await appSettingRepo.get(APP_SETTING_KEYS.kirinTargetVehicleNos)) ??
-    [...DEFAULT_KIRIN_TARGET_VEHICLES];
-
-  const kirinAllocations = body.kirin
-    ? allocateKirinSupport({
-        transportSupport: body.kirin.transportSupport ?? 0,
-        managementSupport: body.kirin.managementSupport ?? 0,
-        targetVehicleNos: kirinTargets,
-      })
-    : [];
+  // 受取額そのものを保存する。以前は配賦結果をこのリクエストの中だけで組み立てていたため、
+  // 他の画面(リース料の更新など)から収支表を作り直すと配賦が復元できず消えていた。
+  if (body.kirin) {
+    await Promise.all([
+      rateMasterRepo.setRate(
+        RATE_KEYS.kirinTransportSupport,
+        body.yearMonth,
+        Math.max(0, body.kirin.transportSupport ?? 0),
+        session!.id,
+      ),
+      rateMasterRepo.setRate(
+        RATE_KEYS.kirinManagementSupport,
+        body.yearMonth,
+        Math.max(0, body.kirin.managementSupport ?? 0),
+        session!.id,
+      ),
+    ]);
+  }
 
   try {
     // 入力は先に保存する。確定に失敗しても入力が消えないようにするため。
@@ -165,26 +162,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ yearMonth: body.yearMonth, saved: manualInputs.length });
     }
 
-    const useCase = new FinalizeMonthlyPlUseCase(
-      new D1ImportBatchRepository(db),
-      new D1VehicleMasterRepository(db),
-      new D1DriverMasterRepository(db),
+    // 材料集めは RecalculateMonthlyPlUseCase に任せる。保存済みの全車両分の手入力・
+    // STEP2の整形判断・キリン配賦をDBから読み直すので、今回の画面で触っていない
+    // 車両の入力や、他の画面で入れた値が落ちることがない。
+    const result = await new RecalculateMonthlyPlUseCase(
+      manualInputRepo,
+      new D1CleansingDecisionRepository(db),
+      appSettingRepo,
       rateMasterRepo,
-      new D1VehiclePlRepository(db),
-    );
-
-    // 保存済みの全車両分を渡す(今回の画面で触っていない車両の入力を消さないため)
-    // STEP2で下したデータ整形の判断も併せて渡し、除外・車番付け替えを反映した状態で確定する。
-    const [saved, cleansingDecisions] = await Promise.all([
-      manualInputRepo.findByYearMonth(body.yearMonth),
-      new D1CleansingDecisionRepository(db).findByYearMonth(body.yearMonth, CLEANSING_SOURCE_TYPE),
-    ]);
-    const result = await useCase.execute({
-      yearMonth: body.yearMonth,
-      manualInputs: saved,
-      kirinAllocations,
-      cleansingDecisions,
-    });
+      new D1VehiclePlOverrideRepository(db),
+      new FinalizeMonthlyPlUseCase(
+        new D1ImportBatchRepository(db),
+        new D1VehicleMasterRepository(db),
+        new D1DriverMasterRepository(db),
+        rateMasterRepo,
+        new D1VehiclePlRepository(db),
+      ),
+    ).execute({ yearMonth: body.yearMonth });
     return NextResponse.json({
       yearMonth: result.yearMonth,
       vehicleCount: result.vehicleCount,

@@ -92,6 +92,34 @@
       "when": 1785889051439,
       "tag": "0012_add_admin_audit_log",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1785889051440,
+      "tag": "0013_add_vehicle_pl_override",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1785889051441,
+      "tag": "0014_add_towed_vehicle",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1785889051442,
+      "tag": "0015_seed_rate_master",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1785889051443,
+      "tag": "0016_add_deficit_analysis_profit_snapshot",
+      "breakpoints": true
     }
   ]
 }

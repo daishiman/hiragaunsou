@@ -52,6 +52,21 @@ const HOURS_PER_DAY = 24;
 /** 金額の突合許容差。Excelの浮動小数・表示丸めを吸収する。 */
 const YEN_TOLERANCE = 1;
 
+/**
+ * 正解Excelとの不一致件数の上限 (2026-08-08 実測 151件)。
+ *
+ * 突合結果を目視レポートに出すだけで誰も検証していなかったため、一般管理費率が
+ * 0.169 のまま (実運用は 0.1748) でもこのテストは緑のままだった。件数を固定して
+ * 初めて突合が品質の計器になる。
+ *
+ * 現在の内訳。すべて率とは無関係な既知差で、率が狂うとここに 362件 上乗せされる:
+ *   稼働時間26 / 稼働Km26 / 運行回数25 / 燃費24 … 運行実績CSVと集計単位の既知差
+ *   運送収入6 / 一般管理費6 / 変動費9 / 経費計9 / 損益9 … 上記の運送収入差に連動
+ *   運賃5 / 賞与3 / 人件費計3 … Excel側の手作業修正
+ * 減った分には追随してよい (この値を下げる方向の更新は歓迎)。
+ */
+const MAX_MISMATCH_ITEMS = 151;
+
 describe.skipIf(!hasRealData)("業務フロー STEP1〜8 実データ通し検証 (2026-05)", () => {
   // describe.skipIf はテストの実行だけを飛ばし、コールバック本体は収集時に必ず評価される。
   // ここで readFileSync すると実データの無い環境 (CI) で suite ごと ENOENT で落ちるため、
@@ -134,6 +149,8 @@ describe.skipIf(!hasRealData)("業務フロー STEP1〜8 実データ通し検�
     const report = reconcile(actual, expectedByNo);
     console.log(report.text);
 
+    // 突合結果を出すだけでなく判定する。件数が増えたら計算のどこかが劣化している。
+    expect(report.mismatches.length).toBeLessThanOrEqual(MAX_MISMATCH_ITEMS);
 
     // 収支表に載る全車両分の行が生成されること
     expect(actual.length).toBe(expectedRows.length);
@@ -239,21 +256,68 @@ describe.skipIf(!hasRealData)("業務フロー STEP1〜8 実データ通し検�
     return result.rows;
   }
 
+  /** 正解Excelが実際に使っている一般管理費率。運送収入と一般管理費から逆算する。 */
+  function excelAdminFeeRate(): number {
+    const adminRow = expectedRows.find((r) => r.sales > 0 && r.adminFee > 0)!;
+    return +(adminRow.adminFee / adminRow.sales).toFixed(6);
+  }
+
   /** 正解Excelから逆算したレート (ハードコードせずデータから derive する) */
   function excelDerivedRates(): RateMasterRepository {
     const tankRow = expectedRows.find((r) => r.fuelInQty > 0 && r.fuelIn > 0)!;
-    const adminRow = expectedRows.find((r) => r.sales > 0 && r.adminFee > 0)!;
     const bonusRow = expectedRows.find((r) => r.bonus > 0)!;
     return {
       getRates: async () => ({
         tollDiscountRate: 0.356,
-        adminFeeRate: +(adminRow.adminFee / adminRow.sales).toFixed(6),
+        adminFeeRate: excelAdminFeeRate(),
         bonusAnnual: bonusRow.bonus * 12,
         tankPricePerLiter: +(tankRow.fuelIn / tankRow.fuelInQty).toFixed(4),
       }),
       getDeficitThresholds: async () => DEFAULT_DEFICIT_THRESHOLDS,
       setRate: async () => {},
     };
+  }
+
+  /**
+   * レート設定の齟齬検出。
+   *
+   * 上の突合はレートを正解Excelから逆算して使うため、システムが本番で使う率が
+   * 何であっても常に一致してしまう。実際これが理由で、一般管理費率が実運用 17.48% に
+   * 対しシステム側 16.9% という齟齬が検出されないまま残っていた。
+   * 「Excelが使っている率」と「システムが使う率」を突き合わせるのはここの責任。
+   */
+  it("正解Excelの一般管理費率と、システムが本番で使う率が一致する", () => {
+    const excelRate = excelAdminFeeRate();
+    const seededRate = seededAdminFeeRate();
+
+    // 比較先を DEFAULT_RATE_SETTINGS ではなくシードSQLにしているのは、既定値が
+    // 「マスタに行が無いときの保険」であって本番の実効値ではないため。
+    // 保険値と突き合わせても、本番で実際に使われる率が正しいことの保証にならない。
+    expect(
+      seededRate,
+      `正解Excelの一般管理費率 ${excelRate} と、rate_master にシードした率 ${seededRate} が食い違っています。\n` +
+        "Excel側で率が改定されたのなら migrations に新しいシードを追加してください " +
+        "(0015 を書き換えると適用済み環境に反映されません)。\n" +
+        "Excel側の事故を疑うなら、その月の一般管理費列が運送収入×率になっているかを先に確認してください " +
+        "(2025年9月は8月からの値貼り付けが更新漏れになっていた実績があります)。",
+    ).toBeCloseTo(excelRate, 6);
+  });
+
+  /**
+   * rate_master に投入されている一般管理費率。本番の実効値そのもの。
+   * 定数として持つと「シードSQLとテストの両方を直す」必要が生まれ、片方だけ直した
+   * 瞬間に齟齬が生まれる。齟齬を検出するためのテストが齟齬の発生源になっては意味がない。
+   */
+  function seededAdminFeeRate(): number {
+    const sql = readFileSync("migrations/0015_seed_rate_master.sql", "utf8");
+    const matched = /'admin_fee_rate',\s*NULL,\s*([0-9.]+)/.exec(sql);
+    if (!matched) {
+      throw new Error(
+        "migrations/0015_seed_rate_master.sql から admin_fee_rate のシード値を読めませんでした。" +
+          "シードの書き方を変えたなら、この抽出も合わせて直してください。",
+      );
+    }
+    return Number(matched[1]);
   }
 });
 
@@ -262,6 +326,10 @@ function stubPlRepo(store: Record<string, VehiclePlCalculated[]>): VehiclePlRepo
   return {
     upsertMany: async (ym, rows) => {
       store[ym] = rows;
+    },
+    removeVehicles: async (ym, vehicleNos) => {
+      const drop = new Set(vehicleNos);
+      store[ym] = (store[ym] ?? []).filter((r) => !drop.has(r.no));
     },
     findByYearMonth: async (ym) => store[ym] ?? [],
     findByVehicleNo: async (no) => Object.values(store).flat().filter((r) => r.no === no),

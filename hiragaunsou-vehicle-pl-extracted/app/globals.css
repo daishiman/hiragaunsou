@@ -18,6 +18,9 @@
   --subtle: #f5f6f8;
 
   --danger: #d93025;
+  /* 収支表で「このままでは確定できない」セルの面。文字(ink)を載せるので薄く保つ。 */
+  --danger-soft: #fdecea;
+  --danger-border: #e59a93;
   --caution-soft: #fdf6e3;
   --caution-border: #e6c96a;
 
@@ -36,6 +39,8 @@
   --color-line: var(--line);
   --color-subtle: var(--subtle);
   --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-border: var(--danger-border);
   --color-caution-soft: var(--caution-soft);
   --color-caution-border: var(--caution-border);
 }

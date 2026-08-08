@@ -47,16 +47,20 @@ function stubRateMasterRepo(): RateMasterRepository {
 
 function stubVehiclePlRepo() {
   const calls: { yearMonth: string; rows: unknown[] }[] = [];
+  const removed: { yearMonth: string; vehicleNos: string[] }[] = [];
   const repo: VehiclePlRepository = {
     upsertMany: async (yearMonth, rows) => {
       calls.push({ yearMonth, rows });
+    },
+    removeVehicles: async (yearMonth, vehicleNos) => {
+      removed.push({ yearMonth, vehicleNos: [...vehicleNos] });
     },
     findByYearMonth: async () => [],
     findByVehicleNo: async () => [],
     findByYearMonths: async () => new Map(),
     countByYearMonth: async () => 0,
   };
-  return { repo, calls };
+  return { repo, calls, removed };
 }
 
 function baseVehicle(overrides: Partial<VehicleMasterRecord> = {}): VehicleMasterRecord {
@@ -254,5 +258,173 @@ describe("FinalizeMonthlyPlUseCase", () => {
     const result = await useCase.execute({ yearMonth: "2026-05", manualInputs: [] });
     expect(result.rows[0]?.bonus).toBe(0);
     expect(result.rows[0]?.laborTotal).toBe(0);
+  });
+
+  /**
+   * 車番10の運賃 1,050,000 → 900,000 のような、請求側の事情による手直し。
+   * 上書きは計算の入口にだけ効き、売上・経費計・損益はそこから作り直される。
+   */
+  it("車両単位の上書きは計算の入口に重ね、下流は必ず計算し直す", async () => {
+    const importBatchRepo = stubImportBatchRepo({
+      vehicle_operation: [],
+      sales_monitor: [
+        {
+          naturalKey: "10",
+          raw: {
+            vehicleCode: "10",
+            driverName: "山田",
+            fare: 1050000,
+            toll: 0,
+            ancillaryFee: 0,
+            isChartered: false,
+            needsReview: false,
+            reviewReason: null,
+          },
+        },
+      ],
+      payroll: [],
+    });
+    const useCase = new FinalizeMonthlyPlUseCase(
+      importBatchRepo,
+      stubVehicleMasterRepo([baseVehicle({ vehicleNo: "10" })]),
+      stubDriverMasterRepo([]),
+      stubRateMasterRepo(),
+      stubVehiclePlRepo().repo,
+    );
+
+    const result = await useCase.execute({
+      yearMonth: "2026-05",
+      manualInputs: [],
+      overrides: [
+        {
+          vehicleNo: "10",
+          excluded: false,
+          values: { fare: 900000 },
+          reason: "請求側で15万円減額",
+        },
+      ],
+    });
+
+    const row = result.rows[0];
+    expect(row?.fare).toBe(900000);
+    expect(row?.sales).toBe(900000);
+    // 一般管理費は売上連動。入口を直せば下流もそのぶん動く
+    expect(row?.adminFee).toBeCloseTo(900000 * DEFAULT_RATE_SETTINGS.adminFeeRate);
+    expect(row?.profit).toBeCloseTo((row?.sales ?? 0) - (row?.expense ?? 0));
+  });
+
+  /**
+   * 車番303の「その月は表に載せない」扱い。
+   * upsertMany は書くだけで消さないため、前回の確定で書いた行を明示的に落とす必要がある。
+   */
+  it("除外指定した車両は行を作らず、前回書いた行も収支表から消す", async () => {
+    const importBatchRepo = stubImportBatchRepo({ vehicle_operation: [], sales_monitor: [], payroll: [] });
+    const { repo: vehiclePlRepo, calls, removed } = stubVehiclePlRepo();
+    const useCase = new FinalizeMonthlyPlUseCase(
+      importBatchRepo,
+      stubVehicleMasterRepo([baseVehicle({ vehicleNo: "10" }), baseVehicle({ vehicleNo: "303" })]),
+      stubDriverMasterRepo([]),
+      stubRateMasterRepo(),
+      vehiclePlRepo,
+    );
+
+    const result = await useCase.execute({
+      yearMonth: "2026-05",
+      manualInputs: [],
+      overrides: [
+        { vehicleNo: "303", excluded: true, values: {}, reason: "5月は稼働なし" },
+      ],
+    });
+
+    expect(result.rows.map((r) => r.no)).toEqual(["10"]);
+    expect(removed).toEqual([{ yearMonth: "2026-05", vehicleNos: ["303"] }]);
+    expect(calls[0]?.rows).toHaveLength(1);
+  });
+
+  /**
+   * トレーラ(被けん引車)は運賃も運転者も付かないのに保険・税・リース料だけが付く。
+   * けん引先を登録していない状態だと「売上ゼロ・費用だけの赤字行」が収支表に並ぶ。
+   */
+  it("トレーラの固定費をトラクタの行に合算し、トレーラ単独の行は出さない", async () => {
+    const importBatchRepo = stubImportBatchRepo({
+      vehicle_operation: [],
+      sales_monitor: [],
+      payroll: [],
+    });
+    const { repo, calls, removed } = stubVehiclePlRepo();
+
+    const result = await new FinalizeMonthlyPlUseCase(
+      importBatchRepo,
+      stubVehicleMasterRepo([
+        baseVehicle({ vehicleNo: "129", vehicleType: "セミトレ", costCategory: "semiTrailer", lease: 30000 }),
+        baseVehicle({
+          vehicleNo: "1113",
+          vehicleType: "被けん引車",
+          costCategory: "trailer",
+          towedByVehicleNo: "129",
+          insCompulsory: 900,
+          insVoluntary: 0,
+          taxAuto: 5000,
+          taxWeight: 0,
+          lease: 12000,
+        }),
+      ]),
+      stubDriverMasterRepo([]),
+      stubRateMasterRepo(),
+      repo,
+    ).execute({ yearMonth: "2026-05", manualInputs: [] });
+
+    expect(result.rows.map((r) => r.no)).toEqual(["129"]);
+    const row = result.rows[0]!;
+    expect(row.lease).toBe(30000 + 12000);
+    expect(row.insCompulsory).toBe(1000 + 900);
+    expect(row.taxAuto).toBe(500 + 5000);
+    expect(row.towedVehicleNos).toEqual(["1113"]);
+    expect(calls[0]?.rows).toHaveLength(1);
+    // 対応を登録する前の月に書いた 1113 の行が残ると二重計上になるので消す
+    expect(removed[0]?.vehicleNos).toContain("1113");
+  });
+
+  /**
+   * けん引先の車番を打ち間違えた・トラクタが廃車になった場合に行が黙って消えると、
+   * 台数だけが合わなくなって原因を追えない。行き場が無いトレーラは独立した行で残す。
+   */
+  it("けん引先が車両マスタに居ないトレーラは、単独の行として残す", async () => {
+    const { repo } = stubVehiclePlRepo();
+
+    const result = await new FinalizeMonthlyPlUseCase(
+      stubImportBatchRepo({ vehicle_operation: [], sales_monitor: [], payroll: [] }),
+      stubVehicleMasterRepo([
+        baseVehicle({ vehicleNo: "1113", costCategory: "trailer", towedByVehicleNo: "999" }),
+      ]),
+      stubDriverMasterRepo([]),
+      stubRateMasterRepo(),
+      repo,
+    ).execute({ yearMonth: "2026-05", manualInputs: [] });
+
+    expect(result.rows.map((r) => r.no)).toEqual(["1113"]);
+  });
+
+  it("けん引するトラクタを収支表から外すと、ぶら下がるトレーラも一緒に消える", async () => {
+    const { repo } = stubVehiclePlRepo();
+
+    const result = await new FinalizeMonthlyPlUseCase(
+      stubImportBatchRepo({ vehicle_operation: [], sales_monitor: [], payroll: [] }),
+      stubVehicleMasterRepo([
+        baseVehicle({ vehicleNo: "129", costCategory: "semiTrailer" }),
+        baseVehicle({ vehicleNo: "1113", costCategory: "trailer", towedByVehicleNo: "129" }),
+      ]),
+      stubDriverMasterRepo([]),
+      stubRateMasterRepo(),
+      repo,
+    ).execute({
+      yearMonth: "2026-05",
+      manualInputs: [],
+      overrides: [
+        { vehicleNo: "129", excluded: true, values: {}, reason: "5月は稼働なし" },
+      ],
+    });
+
+    expect(result.rows).toEqual([]);
   });
 });

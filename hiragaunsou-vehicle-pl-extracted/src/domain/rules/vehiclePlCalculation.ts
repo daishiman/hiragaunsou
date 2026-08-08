@@ -1,7 +1,10 @@
 /**
  * 車両別収支表の計算ロジック (docs/manifest.md 項目説明シート準拠)。
  * 設定可能なレート類 (一般管理費率・組合割引率・賞与年額等) は引数の RateSettings として渡し、
- * ハードコードしない (要件定義「一般管理費 = 運送収入 × 16.9%…ハードコード禁止」に対応)。
+ * ハードコードしない (要件定義 2.2「率マスタから自動」に対応)。
+ *
+ * 値の正は rate_master であり、下の DEFAULT_RATE_SETTINGS ではない。
+ * 既定値はマスタに行が無いときの保険であって、業務上の決定値ではない。
  *
  * Domain層: フレームワーク非依存。D1・fetch等の外部依存を import しない。
  */
@@ -9,7 +12,10 @@
 export interface RateSettings {
   /** 高速組合割引率。デフォルト 0.356 */
   tollDiscountRate: number;
-  /** 一般管理費率 (3期平均)。デフォルト 0.169 */
+  /**
+   * 一般管理費率。直近3期の一般管理費÷売上の平均として期ごとに改定される。
+   * 現行運用値は 0.1748 (rate_master にシード済み。migrations/0015 に根拠)。
+   */
   adminFeeRate: number;
   /** 賞与年額(円)。デフォルト 400000 円。月額は /12 */
   bonusAnnual: number;
@@ -17,6 +23,14 @@ export interface RateSettings {
   tankPricePerLiter: number;
 }
 
+/**
+ * rate_master に行が無いときだけ使われる保険値。ここを業務上の正だと思って書き換えないこと。
+ *
+ * adminFeeRate の 0.169 は現行Excelの「項目説明」シートに残っていた旧記述の値で、
+ * 実際の運用は 2026年8月時点で 0.1748。「3期平均」という算出方法が同じまま、
+ * 適用する期が進んで結果の率が変わったもの。値を変えたいときはここではなく
+ * rate_master を更新する (migrations/0015 に実測根拠と経緯)。
+ */
 export const DEFAULT_RATE_SETTINGS: RateSettings = {
   tollDiscountRate: 0.356,
   adminFeeRate: 0.169,
@@ -86,10 +100,28 @@ export interface VehiclePlInput {
    * 省略時は1人として扱う (運転者マスタ未整備の車両で賞与が消えないようにする)。
    */
   driverCount?: number | null;
+  /**
+   * 賞与の月額そのもの。null/undefined のときだけ (bonusAnnual/12)×driverCount で計算する。
+   *
+   * 現行Excelには年額を12で割り切れない月に1円単位で丸めた行がある(車番7219: 25,001 → 25,000)。
+   * 賞与を「計算結果」としてしか持たないと、この1円が毎月人手で直され続けることになる。
+   * ここは計算の入口なので、上書きしても laborTotal 以下は必ず作り直される。
+   */
+  bonusMonthly?: number | null;
+  /**
+   * この車両がけん引するトレーラの車番。mergeTowedVehicles が合算のあとに載せる。
+   * 計算には使わないが、収支表の車番ラベルまで運ぶ必要があるので入力に持たせる。
+   */
+  towedVehicleNos?: readonly string[];
 }
 
 export interface VehiclePlCalculated {
   no: string;
+  /**
+   * この行が吸収したトレーラ(被けん引車)の車番。計算には一切使わず、収支表の車番ラベルを
+   * 「129/1113」と組み立てるためだけに運ぶ (合算は mergeTowedVehicles が入口で済ませている)。
+   */
+  towedVehicleNos?: readonly string[];
   type: string;
   depot: string;
   reg: string | null;
@@ -178,7 +210,7 @@ export function calculateVehiclePl(
     input.repairActual + tire + input.equip + input.mainte,
   );
 
-  const bonus = round2((rates.bonusAnnual / 12) * (input.driverCount ?? 1));
+  const bonus = round2(input.bonusMonthly ?? (rates.bonusAnnual / 12) * (input.driverCount ?? 1));
   const laborTotal = round2(input.salary + bonus + input.welfare);
 
   const insTotal = round2(input.insCompulsory + input.insVoluntary);
@@ -199,6 +231,7 @@ export function calculateVehiclePl(
 
   return {
     no: input.no,
+    towedVehicleNos: input.towedVehicleNos,
     type: input.type,
     depot: input.depot,
     reg: input.reg,

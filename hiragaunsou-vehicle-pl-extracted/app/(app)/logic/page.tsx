@@ -1,12 +1,21 @@
 import { Fragment } from "react";
 import { redirect } from "next/navigation";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../src/infrastructure/auth/session";
+import { createDb } from "../../../src/infrastructure/db/client";
+import { D1RateMasterRepository } from "../../../src/infrastructure/db/D1MasterRepository";
+import type { RateSettings } from "../../../src/domain/rules/vehiclePlCalculation";
+import { currentYearMonth } from "../../_lib/yearMonth";
 import { PageHead } from "../../_components/PageHead";
 
 /**
  * S10 データ設計・自動化方針 (モック view-logic.js に対応)。
  * 「どの数字がどこから来て、どう決まるか」を発注者と合意するための画面。
  * 内容は仕様の合意事項そのものなのでDBではなくコードで保持する(変更履歴はgitに残る)。
+ *
+ * ただし率そのものは合意事項ではなく運用値なので、文言に埋め込まず rate_master から描く。
+ * ここに「16.9%」と直書きされていたせいで、実運用が 17.48% に改定されたあとも
+ * この画面だけが古い率を発注者に見せ続けていた。
  */
 
 type MapStatus = "fixed" | "hypo" | "agree";
@@ -23,8 +32,26 @@ const LAYER_HEAD: Record<1 | 2 | 3, string> = {
   3: "層③ 原票読取 — CSV/Excel/PDFから取得し、例外だけ確認する",
 };
 
-const MAP: readonly { item: string; layer: 1 | 2 | 3; src: string; how: string; status: MapStatus }[] =
-  [
+interface MapRow {
+  item: string;
+  layer: 1 | 2 | 3;
+  src: string;
+  how: string;
+  status: MapStatus;
+}
+
+/** 0.1748 → "17.48%"。末尾の余分な0は落とす (17.5% を "17.50%" と書かない) */
+function percent(rate: number): string {
+  return `${Number((rate * 100).toFixed(4))}%`;
+}
+
+/** 400000 → "40万円"。1万円未満の端数が出たら円表記に落とす */
+function manYen(yen: number): string {
+  return yen % 10000 === 0 ? `${yen / 10000}万円` : `${yen.toLocaleString("ja-JP")}円`;
+}
+
+function buildMap(rates: RateSettings): readonly MapRow[] {
+  return [
     {
       item: "運行回数・稼働時間・稼働Km・燃費(分母)",
       layer: 1,
@@ -37,11 +64,17 @@ const MAP: readonly { item: string; layer: 1 | 2 | 3; src: string; how: string; 
     {
       item: "高速割引料",
       layer: 2,
-      src: "道路使用料 × 割引率0.356",
+      src: `道路使用料 × 割引率${rates.tollDiscountRate}`,
       how: "率マスタから自動計算(率は設定画面で変更可)",
       status: "fixed",
     },
-    { item: "賞与", layer: 2, src: "規程(年40万円÷12)", how: "運転者が紐づけば自動", status: "fixed" },
+    {
+      item: "賞与",
+      layer: 2,
+      src: `規程(年${manYen(rates.bonusAnnual)}÷12)`,
+      how: "運転者が紐づけば自動",
+      status: "fixed",
+    },
     {
       item: "福利厚生費",
       layer: 2,
@@ -73,7 +106,7 @@ const MAP: readonly { item: string; layer: 1 | 2 | 3; src: string; how: string; 
     {
       item: "一般管理費",
       layer: 2,
-      src: "売上 × 16.9%(3期平均)",
+      src: `売上 × ${percent(rates.adminFeeRate)}(3期平均)`,
       how: "率マスタから自動(当面現行踏襲)",
       status: "agree",
     },
@@ -112,7 +145,8 @@ const MAP: readonly { item: string; layer: 1 | 2 | 3; src: string; how: string; 
       how: "車番・金額をOCR/CSV取込。標準原価とは別フィールドで保持",
       status: "agree",
     },
-  ] as const;
+  ];
+}
 
 const QUESTIONS: readonly (readonly [string, string])[] = [
   ["車楽のデータ出力手段(CSV/API/画面のみ)", "層①の接続方式が確定"],
@@ -145,20 +179,27 @@ const STEP_FLOW = [
   },
 ] as const;
 
-const FLOW_TREE: readonly { depth: number; text: string }[] = [
-  { depth: 0, text: "月次シート作成(自動)" },
-  { depth: 1, text: "車両マスタ → 保険・税・リース・配賦単価が全車に即時セット" },
-  { depth: 2, text: "[運転者名] 確定 → 賞与(規程)・給与枠(前月参照)がセット" },
-  { depth: 2, text: "[稼働Km] 流入 → 車検・タイヤ標準原価/燃費を自動計算" },
-  { depth: 2, text: "[売上] 流入 → 一般管理費(×16.9%)を自動計算" },
-  { depth: 2, text: "[道路使用料] 流入 → 高速割引(×0.356) → 運行費計" },
-  { depth: 3, text: "上流の確定ごとに → 損益・利益率・全社集計・対前年を即時再計算" },
-  { depth: 4, text: "再計算のたびに → 異常検知 → 異常値チェックにカード生成" },
-];
+function buildFlowTree(rates: RateSettings): readonly { depth: number; text: string }[] {
+  return [
+    { depth: 0, text: "月次シート作成(自動)" },
+    { depth: 1, text: "車両マスタ → 保険・税・リース・配賦単価が全車に即時セット" },
+    { depth: 2, text: "[運転者名] 確定 → 賞与(規程)・給与枠(前月参照)がセット" },
+    { depth: 2, text: "[稼働Km] 流入 → 車検・タイヤ標準原価/燃費を自動計算" },
+    { depth: 2, text: `[売上] 流入 → 一般管理費(×${percent(rates.adminFeeRate)})を自動計算` },
+    { depth: 2, text: `[道路使用料] 流入 → 高速割引(×${rates.tollDiscountRate}) → 運行費計` },
+    { depth: 3, text: "上流の確定ごとに → 損益・利益率・全社集計・対前年を即時再計算" },
+    { depth: 4, text: "再計算のたびに → 異常検知 → 異常値チェックにカード生成" },
+  ];
+}
 
 export default async function LogicPage() {
   const session = await getServerSession();
   if (!session) redirect("/sign-in");
+
+  const { env } = await getCloudflareContext({ async: true });
+  const rates = await new D1RateMasterRepository(createDb(env.DB)).getRates(currentYearMonth());
+  const MAP = buildMap(rates);
+  const FLOW_TREE = buildFlowTree(rates);
 
   const pendingCount = MAP.filter((r) => r.status !== "fixed").length;
 

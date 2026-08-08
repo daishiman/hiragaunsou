@@ -62,6 +62,17 @@ vi.mock("../../src/infrastructure/db/D1VehiclePlRepository", () => ({
   },
 }));
 
+// 赤字3分類の閾値は rate_master から取る (既定値を黙って使わない)。
+vi.mock("../../src/infrastructure/db/D1MasterRepository", () => ({
+  D1RateMasterRepository: class {
+    getDeficitThresholds = vi.fn(async () => ({
+      idleSales: 300000,
+      repairSpike: 300000,
+      breakEvenKmPrice: 177,
+    }));
+  },
+}));
+
 function postAnalysis() {
   return import("../../app/api/deficit-analysis/route").then(({ POST }) =>
     POST(

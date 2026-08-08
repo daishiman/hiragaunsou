@@ -1,5 +1,12 @@
 .DS_Store
 .wrangler/
 
-hiragaunsou-vehicle-pl-extracted/data/
+# 実データ(個人情報・取引情報)。末尾スラッシュを付けないのは、data がディレクトリではなく
+# シンボリックリンクの場合にマッチしなくなり、git status に顔を出してしまうため。
+hiragaunsou-vehicle-pl-extracted/data
 
+node_modules/
+
+# ロックファイルは package-lock.json が正 (CI/CDが npm ci を使う)。
+# pnpm でローカル作業しても、解決結果が2系統に分かれないよう追跡しない。
+hiragaunsou-vehicle-pl-extracted/pnpm-lock.yaml

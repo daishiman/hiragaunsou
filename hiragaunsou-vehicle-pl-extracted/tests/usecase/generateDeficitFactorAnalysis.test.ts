@@ -12,6 +12,7 @@ import type {
   DeficitFactorAnalysisInput,
 } from "../../src/domain/services/DeficitFactorAnalysisAiPort";
 import { calculateVehiclePl, type VehiclePlInput } from "../../src/domain/rules/vehiclePlCalculation";
+import { stubRateMasterRepo } from "../fixtures/stubRepositories";
 
 function baseInput(overrides: Partial<VehiclePlInput> = {}): VehiclePlInput {
   return {
@@ -109,7 +110,13 @@ describe("GenerateDeficitFactorAnalysisUseCase", () => {
       },
     };
 
-    const useCase = new GenerateDeficitFactorAnalysisUseCase(vehiclePlRepo, analysisRepo, aiPort, usageLogRepo);
+    const useCase = new GenerateDeficitFactorAnalysisUseCase(
+      vehiclePlRepo,
+      analysisRepo,
+      aiPort,
+      usageLogRepo,
+      stubRateMasterRepo(),
+    );
     const result = await useCase.execute({ yearMonth: "2026-05", requestedBy: "user-1" });
 
     expect(analyze).toHaveBeenCalledTimes(1);
@@ -126,12 +133,21 @@ describe("GenerateDeficitFactorAnalysisUseCase", () => {
     expect(recorded[0]?.recordedBy).toBe("user-1");
   });
 
-  it("既に分析済みの車両はAIを再度呼び出さない", async () => {
+  it("既に分析済みで損益も変わっていない車両はAIを再度呼び出さない", async () => {
     const deficitRow = calculateVehiclePl(baseInput({ no: "2", fare: 50000 }));
     const vehiclePlRepo = stubVehiclePlRepo([deficitRow]);
     const analysisRepo = fakeAnalysisRepo();
     await analysisRepo.upsertMany(
-      [{ vehicleNo: "2", yearMonth: "2026-05", summary: "既存の分析", factors: [], model: "claude-haiku-4-5" }],
+      [
+        {
+          vehicleNo: "2",
+          yearMonth: "2026-05",
+          summary: "既存の分析",
+          factors: [],
+          model: "claude-haiku-4-5",
+          profitAtAnalysis: deficitRow.profit,
+        },
+      ],
       null,
     );
 
@@ -139,12 +155,122 @@ describe("GenerateDeficitFactorAnalysisUseCase", () => {
     const aiPort: DeficitFactorAnalysisAiPort = { analyze };
     const usageLogRepo: UsageLogRepository = { record: vi.fn() };
 
-    const useCase = new GenerateDeficitFactorAnalysisUseCase(vehiclePlRepo, analysisRepo, aiPort, usageLogRepo);
+    const useCase = new GenerateDeficitFactorAnalysisUseCase(
+      vehiclePlRepo,
+      analysisRepo,
+      aiPort,
+      usageLogRepo,
+      stubRateMasterRepo(),
+    );
     const result = await useCase.execute({ yearMonth: "2026-05", requestedBy: null });
 
     expect(analyze).not.toHaveBeenCalled();
     expect(result.analyzedCount).toBe(0);
     expect(result.results).toHaveLength(1);
     expect(result.results[0]?.summary).toBe("既存の分析");
+  });
+
+  /**
+   * 率マスタの改定や手入力の修正で損益が動いたときの回帰。
+   * 分析文は損益を根拠に書かれているので、根拠が変わったのに文が残るのは誤情報になる。
+   */
+  it("分析済みでも損益が動いた車両は分析し直す", async () => {
+    const deficitRow = calculateVehiclePl(baseInput({ no: "2", fare: 50000 }));
+    const vehiclePlRepo = stubVehiclePlRepo([deficitRow]);
+    const analysisRepo = fakeAnalysisRepo();
+    await analysisRepo.upsertMany(
+      [
+        {
+          vehicleNo: "2",
+          yearMonth: "2026-05",
+          summary: "率が古かった頃の分析",
+          factors: [],
+          model: "claude-haiku-4-5",
+          // 一般管理費率が上がる前の損益。現在値より赤字が浅い。
+          profitAtAnalysis: deficitRow.profit + 50000,
+        },
+      ],
+      null,
+    );
+
+    const analyze = vi.fn(async (_input: DeficitFactorAnalysisInput) => ({
+      results: [{ vehicleNo: "2", summary: "新しい分析", factors: [] }],
+      usage: { model: "claude-haiku-4-5", inputTokens: 100, outputTokens: 50 },
+    }));
+    const aiPort: DeficitFactorAnalysisAiPort = { analyze };
+    const usageLogRepo: UsageLogRepository = { record: vi.fn() };
+
+    const useCase = new GenerateDeficitFactorAnalysisUseCase(
+      vehiclePlRepo,
+      analysisRepo,
+      aiPort,
+      usageLogRepo,
+      stubRateMasterRepo(),
+    );
+    const result = await useCase.execute({ yearMonth: "2026-05", requestedBy: null });
+
+    expect(analyze).toHaveBeenCalledTimes(1);
+    expect(result.analyzedCount).toBe(1);
+    expect(result.results[0]?.summary).toBe("新しい分析");
+    // 次回の判定材料として現在の損益が保存されていること
+    expect(result.results[0]?.profitAtAnalysis).toBeCloseTo(deficitRow.profit, 2);
+  });
+
+  /** 列を追加する前に作られたレコードは陳腐化を判定できないので、信用せず分析し直す。 */
+  it("分析時の損益が記録されていない古いレコードは分析し直す", async () => {
+    const deficitRow = calculateVehiclePl(baseInput({ no: "2", fare: 50000 }));
+    const analysisRepo = fakeAnalysisRepo();
+    analysisRepo.rows.set("2026-05:2", {
+      vehicleNo: "2",
+      yearMonth: "2026-05",
+      summary: "列追加前の分析",
+      factors: [],
+      model: "claude-haiku-4-5",
+      profitAtAnalysis: null,
+      updatedAt: 0,
+    });
+
+    const analyze = vi.fn(async (_input: DeficitFactorAnalysisInput) => ({
+      results: [{ vehicleNo: "2", summary: "新しい分析", factors: [] }],
+      usage: { model: "claude-haiku-4-5", inputTokens: 100, outputTokens: 50 },
+    }));
+
+    const useCase = new GenerateDeficitFactorAnalysisUseCase(
+      stubVehiclePlRepo([deficitRow]),
+      analysisRepo,
+      { analyze },
+      { record: vi.fn() },
+      stubRateMasterRepo(),
+    );
+    const result = await useCase.execute({ yearMonth: "2026-05", requestedBy: null });
+
+    expect(analyze).toHaveBeenCalledTimes(1);
+    expect(result.analyzedCount).toBe(1);
+  });
+
+  /**
+   * P3-10 の回帰。閾値引数を省くと DEFAULT_DEFICIT_THRESHOLDS が黙って使われ、
+   * 「閾値は rate_master から差し替える」という設計が呼び出し側だけで無効になる。
+   */
+  it("赤字3分類の閾値を rate_master から取る", async () => {
+    // 売上10万円の赤字車。既定の idleSales=30万なら「遊休型」だが、
+    // マスタで5万円に下げれば「単価・効率型」に変わる。
+    const deficitRow = calculateVehiclePl(baseInput({ no: "2", fare: 100000 }));
+
+    const analyze = vi.fn(async (_input: DeficitFactorAnalysisInput) => ({
+      results: [{ vehicleNo: "2", summary: "分析", factors: [] }],
+      usage: { model: "claude-haiku-4-5", inputTokens: 100, outputTokens: 50 },
+    }));
+
+    const useCase = new GenerateDeficitFactorAnalysisUseCase(
+      stubVehiclePlRepo([deficitRow]),
+      fakeAnalysisRepo(),
+      { analyze },
+      { record: vi.fn() },
+      stubRateMasterRepo({ idleSales: 50000 }),
+    );
+    await useCase.execute({ yearMonth: "2026-05", requestedBy: null });
+
+    expect(analyze.mock.calls[0]?.[0].targets[0]?.ruleCategory).toBe("price");
   });
 });

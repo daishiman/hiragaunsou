@@ -1,6 +1,7 @@
 import { assertRequiredHeaders, parseCsv, toRecords } from "./csvUtils";
 import { decodeCp932 } from "./encoding";
 import { parseJapaneseAmount, normalizeKey } from "./numberUtils";
+import { TRAILER_VEHICLE_TYPE_PATTERN } from "../../domain/rules/towedVehicle";
 
 /** 列順が変わっても取り込めるよう、名前で検証する必須列。 */
 const REQUIRED_HEADERS = [
@@ -22,6 +23,11 @@ export interface VehicleMasterImportRow {
   depot: string;
   /** STANDARD_COST_RATES のキー (6.5t/large/semiTrailer/unic/medium) */
   costCategory: string;
+  /**
+   * けん引するトラクタの車番 (「被けん引車」の行だけ)。CSVに「けん引車番」列が無い、
+   * または空のときは undefined にして、画面で登録済みの対応を上書きしない。
+   */
+  towedByVehicleNo?: string | null;
   insCompulsory: number;
   insVoluntary: number;
   taxAuto: number;
@@ -50,6 +56,10 @@ export interface VehicleMasterImportRowError {
  * medium へ黙って倒さずエラー行として弾く (原価単価が倍近く違い、収支が静かに狂うため)。
  */
 export const COST_CATEGORY_RULES: readonly { costCategory: string; pattern: RegExp }[] = [
+  // 「被けん引車」はトレーラ本体。自走しないので走行距離が付かず、けん引するトラクタの
+  // 行に合算される。semiTrailer(トラクタ側)より先に置かないと「トレーラ」で拾われてしまう。
+  // 判定そのものは domain の isTrailerVehicleType と同じ規則を使う (二重定義にしない)。
+  { costCategory: "trailer", pattern: TRAILER_VEHICLE_TYPE_PATTERN },
   { costCategory: "semiTrailer", pattern: /セミトレ|トレーラ|トレラ|牽引|トラクタ/ },
   { costCategory: "unic", pattern: /ユニック|クレーン/ },
   { costCategory: "6.5t", pattern: /6\.5/ },
@@ -114,9 +124,14 @@ export function parseVehicleMasterCsv(input: string | ArrayBuffer | Uint8Array):
       return;
     }
 
+    // 「けん引車番」は任意列。現行の書き出しには無く、対応表はExcelの行ラベル
+    // (「129/1113」)にしか無いので、列が用意できたときだけ取り込む。
+    const towedBy = normalizeKey(r["けん引車番"] ?? "");
+
     valid.push({
       vehicleNo,
       vehicleType,
+      towedByVehicleNo: towedBy === "" ? undefined : towedBy,
       depot: (r["所属"] ?? "").trim(),
       costCategory,
       insCompulsory: parseJapaneseAmount(r["自賠責保険"]),
