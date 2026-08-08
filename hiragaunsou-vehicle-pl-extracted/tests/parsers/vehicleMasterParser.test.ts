@@ -4,8 +4,10 @@ import { resolve } from "node:path";
 import {
   mapVehicleTypeToCostCategory,
   parseVehicleMasterCsv,
+  parseVehicleMasterFile,
 } from "../../src/infrastructure/parsers/vehicleMasterParser";
 import { decodeCp932 } from "../../src/infrastructure/parsers/encoding";
+import { buildMonthlyPlWorkbookFixture } from "../fixtures/monthlyPlWorkbook";
 
 const fixture = readFileSync(resolve(__dirname, "../fixtures/vehicle_master_sample.csv"));
 
@@ -19,6 +21,9 @@ describe("mapVehicleTypeToCostCategory", () => {
     expect(mapVehicleTypeToCostCategory("セミトレ")).toBe("semiTrailer");
     expect(mapVehicleTypeToCostCategory("トレーラ")).toBe("semiTrailer");
     expect(mapVehicleTypeToCostCategory("ユニック車")).toBe("unic");
+    // 実データの表記。「3ｔU」= 3tユニック (「10ｔW」= ウイングと同じ書き方)
+    expect(mapVehicleTypeToCostCategory("3ｔU")).toBe("unic");
+    expect(mapVehicleTypeToCostCategory("10ｔﾕﾆｯｸ")).toBe("unic");
     expect(mapVehicleTypeToCostCategory("6.5tダンプ")).toBe("6.5t");
     expect(mapVehicleTypeToCostCategory("中型")).toBe("medium");
     // 「被けん引車」はトレーラ本体。「トレーラ」を含む文字列より先に判定される必要がある
@@ -36,6 +41,26 @@ describe("mapVehicleTypeToCostCategory", () => {
 
   it("大型セミトレーラはセミトレーラ側に寄せる(ルールの評価順)", () => {
     expect(mapVehicleTypeToCostCategory("大型セミトレーラ")).toBe("semiTrailer");
+  });
+
+  it("実データ(★車両別収支計算用2026年5月)の車種名10種をすべて判定できる", () => {
+    // 末尾1文字の車体表記(W=ウイング, U=ユニック)を取り違えないことも併せて押さえる。
+    const REAL_VEHICLE_TYPES: Record<string, string> = {
+      "4ｔW": "medium",
+      "10ｔ平": "large",
+      "10ｔW": "large",
+      "3ｔU": "unic",
+      "3ｔ平": "medium",
+      "4ｔ平": "medium",
+      "10ｔﾁｯﾌﾟ": "large",
+      "８ｔ平": "large",
+      セミトレ: "semiTrailer",
+      被けん引車: "trailer",
+    };
+
+    for (const [vehicleType, expected] of Object.entries(REAL_VEHICLE_TYPES)) {
+      expect(mapVehicleTypeToCostCategory(vehicleType), vehicleType).toBe(expected);
+    }
   });
 
   it("判定できない車種名・空文字はnullを返す(mediumへ黙って倒さない)", () => {
@@ -118,5 +143,101 @@ describe("parseVehicleMasterCsv", () => {
     const { valid, errors } = parseVehicleMasterCsv(csv);
     expect(valid.map((r) => r.vehicleNo)).toEqual(["1111", "3333"]);
     expect(errors.map((e) => e.rowNumber)).toEqual([3]);
+  });
+});
+
+describe("parseVehicleMasterFile", () => {
+  /** 実データ(★車両別収支計算用)の並び: 一般車のあとにトラクタとトレーラが交互に並ぶ。 */
+  const REAL_ORDER = [
+    { no: 1111, type: "10ｔW", depot: "本社", insCompulsory: 2365, insVoluntary: 12580, taxAuto: 5675, taxWeight: 5834, lease: 227062, installment: 0 },
+    { no: 129, type: "セミトレ", depot: "本社", insCompulsory: 2452, insVoluntary: 13460, taxAuto: 8216, taxWeight: 9966 },
+    { no: 1113, type: "被けん引車", depot: "" },
+    { no: 2, type: "セミトレ", depot: "本社", insCompulsory: 2452, insVoluntary: 13460, taxAuto: 8216, taxWeight: 9966 },
+    { no: 1100, type: "被けん引車", depot: "" },
+  ] as const;
+
+  it("Excel(.xlsx)をそのまま渡しても、収支表シートから車両マスタを取り込める", () => {
+    const xlsx = buildMonthlyPlWorkbookFixture({ vehicleRows: [...REAL_ORDER] });
+
+    const { valid, errors } = parseVehicleMasterFile(xlsx);
+
+    expect(errors).toHaveLength(0);
+    expect(valid.map((r) => r.vehicleNo)).toEqual(["1111", "129", "1113", "2", "1100"]);
+    expect(valid[0]).toMatchObject({
+      vehicleType: "10ｔW",
+      depot: "本社",
+      costCategory: "large",
+      insCompulsory: 2365,
+      insVoluntary: 12580,
+      taxAuto: 5675,
+      taxWeight: 5834,
+      lease: 227062,
+      installment: 0,
+    });
+  });
+
+  it("被けん引車の直前のセミトレーラをけん引先として復元する(対応表が元データに列として無いため)", () => {
+    const xlsx = buildMonthlyPlWorkbookFixture({ vehicleRows: [...REAL_ORDER] });
+
+    const { valid } = parseVehicleMasterFile(xlsx);
+    const towedBy = Object.fromEntries(valid.map((r) => [r.vehicleNo, r.towedByVehicleNo]));
+
+    expect(towedBy["1113"]).toBe("129");
+    expect(towedBy["1100"]).toBe("2");
+    // トラクタ・一般車には値を入れない(画面のけん引先セレクトはトレーラ行だけに出る)
+    expect(towedBy["129"]).toBeUndefined();
+    expect(towedBy["1111"]).toBeUndefined();
+  });
+
+  it("並びから確信が持てないトレーラは undefined のままにして、手選択に委ねる", () => {
+    const xlsx = buildMonthlyPlWorkbookFixture({
+      vehicleRows: [
+        // 先頭がトレーラ: 直前の行が無い
+        { no: 900, type: "被けん引車" },
+        { no: 129, type: "セミトレ", depot: "本社" },
+        { no: 1113, type: "被けん引車" },
+        // 1台のトラクタに2台目が続く: 129 は既に 1113 に割り当て済み
+        { no: 901, type: "被けん引車" },
+        // 直前が一般車(large): トラクタではないのでけん引できない
+        { no: 1111, type: "10ｔW", depot: "本社" },
+        { no: 902, type: "被けん引車" },
+      ],
+    });
+
+    const { valid } = parseVehicleMasterFile(xlsx);
+    const towedBy = Object.fromEntries(valid.map((r) => [r.vehicleNo, r.towedByVehicleNo]));
+
+    expect(towedBy["1113"]).toBe("129");
+    expect(towedBy["900"]).toBeUndefined();
+    expect(towedBy["901"]).toBeUndefined();
+    expect(towedBy["902"]).toBeUndefined();
+  });
+
+  it("対象年月はシートの選択に使う(月次収支表の取込と同じ判断に委ねる)", () => {
+    const xlsx = buildMonthlyPlWorkbookFixture({
+      sheetName: "5月収支表",
+      vehicleRows: [{ no: 1111, type: "10ｔW", depot: "本社", lease: 227062 }],
+    });
+
+    // 収支表シートが1つしかないブックは、対象年月に関わらずそのシートを使う。
+    // 年度ブック(12シート)で対象年月のシートが無い場合に例外になることは
+    // monthlyPlWorkbookParser 側で担保している。
+    expect(parseVehicleMasterFile(xlsx, "2026-05").valid).toHaveLength(1);
+    expect(parseVehicleMasterFile(xlsx, "2026-09").valid).toHaveLength(1);
+  });
+
+  it("CSVはこれまでどおり同じ入口で取り込める(拡張子ではなく中身で振り分ける)", () => {
+    const { valid, errors } = parseVehicleMasterFile(new Uint8Array(fixture));
+
+    expect(errors).toHaveLength(1);
+    expect(valid[0]).toMatchObject({ vehicleNo: "1111", costCategory: "large" });
+  });
+
+  it("収支表シートではないxlsxは、CSVとして文字化けさせず原因の分かる例外にする", () => {
+    const notPl = buildMonthlyPlWorkbookFixture({ omitFields: ["profit"] });
+
+    expect(() => parseVehicleMasterFile(notPl)).toThrow(/収支表シートを検出できませんでした/);
+    // ZIPの中身がエラーメッセージに漏れないこと(以前は "PK…[Content_Types].xml" が出ていた)
+    expect(() => parseVehicleMasterFile(notPl)).not.toThrow(/Content_Types/);
   });
 });

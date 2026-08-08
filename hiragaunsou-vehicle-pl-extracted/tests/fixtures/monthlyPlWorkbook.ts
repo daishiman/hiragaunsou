@@ -57,6 +57,12 @@ export interface MonthlyPlWorkbookFixtureOptions {
    * 実データの収支表では未入力の「メンテ(委託)」「車両リース費」がこの形で保存される。
    */
   emptyFields?: readonly VehiclePlField[];
+  /**
+   * 車両行を差し替える。省略時は既定の2行(諸口候補の車番10・傭車の車番88888)。
+   * 指定しなかった列は0で埋まる。トラクタとトレーラの並び順など、行の並びに
+   * 意味があるケースを再現するテストで使う。
+   */
+  vehicleRows?: readonly Partial<Record<VehiclePlField, string | number>>[];
 }
 
 /** テスト用の最小xlsx。車番10は諸口・重複候補、88888は傭車として使う。 */
@@ -96,10 +102,21 @@ export function buildMonthlyPlWorkbookFixture(options: MonthlyPlWorkbookFixtureO
     return 0;
   });
 
-  const aggregateRow = options.omitAggregateRow ? "" : rowXml(6, ["合計"]);
+  const bodyRows = options.vehicleRows
+    ? options.vehicleRows.map((row) =>
+        fields.map((field): string | number | null => row[field] ?? 0),
+      )
+    : [first, chartered];
+
+  // 見出し行を3行目に置く既定の並びを保つため、車両行は4行目から続けて出力する。
+  const firstBodyRowNumber = 4;
+  const body = bodyRows.map((values, index) => rowXml(firstBodyRowNumber + index, values)).join("");
+  const aggregateRow = options.omitAggregateRow
+    ? ""
+    : rowXml(firstBodyRowNumber + bodyRows.length, ["合計"]);
   const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-      <sheetData>${rowXml(3, headers)}${rowXml(4, first)}${rowXml(5, chartered)}${aggregateRow}</sheetData>
+      <sheetData>${rowXml(3, headers)}${body}${aggregateRow}</sheetData>
     </worksheet>`;
   const sheetName = options.sheetName ?? "5月収支表";
   const workbook = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
