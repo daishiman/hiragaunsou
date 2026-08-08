@@ -20,6 +20,8 @@ function useCase(opts: {
   cleansingDecisions?: Parameters<typeof stubCleansingDecisionRepo>[0];
   /** STEP8 の確定操作が済んでいるか */
   confirmed?: boolean;
+  /** rate_master に入っているキリンの協力金の合計 */
+  kirinAmount?: number;
 }) {
   const rows = Array.from({ length: opts.vehicleCount ?? 0 }, (_, i) =>
     plRow({ no: String(i + 1) }),
@@ -30,6 +32,7 @@ function useCase(opts: {
     stubVehiclePlRepo({ [YM]: rows }, opts.confirmed ? [YM] : []),
     stubReviewFlagRepo(opts.openFlags ?? []),
     stubCleansingDecisionRepo(opts.cleansingDecisions ?? []),
+    async () => opts.kirinAmount ?? 0,
   );
 }
 
@@ -150,5 +153,34 @@ describe("GetWorkflowProgressUseCase", () => {
     expect(result.nextStep).toBeNull();
     expect(result.isComplete).toBe(true);
     expect(result.doneCount).toBe(8);
+  });
+
+  it("キリンの協力金は保存先(rate_master)の金額で入力済みと判定する", async () => {
+    // 手入力画面は miscOther に書き込まないため、miscOther を見ている限り
+    // いくら入力しても STEP2 が「キリンの配賦がまだです」のままだった。
+    const withoutKirin = await useCase({
+      batches: ALL_IMPORTED,
+      vehicleCount: 1,
+      manualInputs: [manualInput("1", {})],
+    }).execute(YM);
+    expect(withoutKirin.steps.find((s) => s.step.id === 2)?.status).toBe("partial");
+
+    const withKirin = await useCase({
+      batches: ALL_IMPORTED,
+      vehicleCount: 1,
+      manualInputs: [manualInput("1", {})],
+      kirinAmount: 500_000,
+    }).execute(YM);
+    expect(withKirin.steps.find((s) => s.step.id === 2)?.status).toBe("done");
+  });
+
+  it("備品費・メンテ費だけが残っていてもSTEP5を入力済みと数えない", async () => {
+    // 入力欄を廃止した項目の古い値で、修繕費もタイヤ代も未入力の車両が「済」に見えてしまうのを防ぐ。
+    const result = await useCase({
+      batches: ALL_IMPORTED,
+      vehicleCount: 1,
+      manualInputs: [manualInput("1", { equip: 3000, mainte: 2000 })],
+    }).execute(YM);
+    expect(result.steps.find((s) => s.step.id === 5)?.status).toBe("todo");
   });
 });

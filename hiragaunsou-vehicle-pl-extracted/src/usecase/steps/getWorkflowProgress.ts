@@ -51,9 +51,13 @@ function hasFuelInput(r: ManualInputRecord): boolean {
   return r.fuelInQty > 0 || r.fuelOut > 0 || r.fuelOutQty > 0 || r.adblue > 0;
 }
 
-/** その車両にSTEP5(修繕費・タイヤ・備品・メンテ)の入力があるか */
+/**
+ * その車両にSTEP5(修繕費・タイヤ)の入力があるか。
+ * 備品費・メンテ費は業務フローに対応する手順が無く手入力画面から外したため、
+ * 過去に入った値が残っているだけで「入力済み」と数えないよう判定から除く。
+ */
 function hasExpenseInput(r: ManualInputRecord): boolean {
-  return r.repairActual > 0 || (r.tireActual ?? 0) > 0 || r.equip > 0 || r.mainte > 0;
+  return r.repairActual > 0 || (r.tireActual ?? 0) > 0;
 }
 
 /** その車両にSTEP6(高速料金)の入力があるか */
@@ -73,6 +77,12 @@ export class GetWorkflowProgressUseCase {
     private readonly vehiclePlRepo: VehiclePlRepository,
     private readonly reviewFlagRepo: ReviewFlagRepository,
     private readonly cleansingDecisionRepo: CleansingDecisionRepository,
+    /**
+     * キリンの協力金は rate_master に保存される。
+     * 以前は manual_vehicle_input の miscOther を見ていたが、手入力画面はこの列に書かないため
+     * 入力しても STEP2 が永久に「未完了」のままだった。金額の保存先そのものを見る。
+     */
+    private readonly kirinAmountLoader?: (yearMonth: string) => Promise<number>,
   ) {}
 
   async execute(yearMonth: string): Promise<WorkflowProgressResult> {
@@ -86,6 +96,7 @@ export class GetWorkflowProgressUseCase {
       cleansingFlagged,
       cleansingDecided,
       confirmation,
+      kirinAmount,
     ] = await Promise.all([
       this.importBatchRepo.findLatestBatch(yearMonth, "vehicle_operation"),
       this.importBatchRepo.findLatestBatch(yearMonth, "sales_monitor"),
@@ -96,6 +107,7 @@ export class GetWorkflowProgressUseCase {
       this.importBatchRepo.countRawRowsWithFlags(yearMonth, CLEANSING_SOURCE_TYPE),
       this.cleansingDecisionRepo.countByYearMonth(yearMonth, CLEANSING_SOURCE_TYPE),
       this.vehiclePlRepo.getConfirmation(yearMonth),
+      this.kirinAmountLoader ? this.kirinAmountLoader(yearMonth) : Promise.resolve(0),
     ]);
 
     // STEP2は「取込」だけでなく「傭車・2重計上・諸口の整理」「キリン配賦」まで終えて完了。
@@ -107,7 +119,7 @@ export class GetWorkflowProgressUseCase {
     const fuelEntered = manualInputs.filter(hasFuelInput).length;
     const expenseEntered = manualInputs.filter(hasExpenseInput).length;
     const tollEntered = manualInputs.filter(hasTollInput).length;
-    const kirinEntered = manualInputs.some((r) => r.miscOther > 0);
+    const kirinEntered = kirinAmount > 0 || manualInputs.some((r) => r.miscOther > 0);
     const isMonthConfirmed = confirmation.total > 0 && confirmation.confirmed >= confirmation.total;
 
     const statusById: Record<WorkflowStepId, { status: WorkflowStepStatus; detail: string }> = {
