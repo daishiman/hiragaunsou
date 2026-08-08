@@ -349,10 +349,56 @@ export const vehiclePlOverride = sqliteTable(
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
     updatedBy: text("updated_by").references(() => user.id),
+    /**
+     * この直しを収支表へ反映(再計算)した時刻。NULL は「まだ反映していない」。
+     *
+     * 収支表の画面では指摘を何件も続けて直すため、1件ごとに月まるごとの再計算を走らせると
+     * 待ち時間が積み上がる。保存と反映を切り離す代わりに、未反映であることをここに残して
+     * 「反映待ちN件」を画面が示せるようにする(反映漏れを人の記憶に頼らせない)。
+     */
+    appliedAt: integer("applied_at", { mode: "timestamp_ms" }),
   },
   (table) => [
     uniqueIndex("vehicle_pl_override_ym_no_idx").on(table.yearMonth, table.vehicleNo),
     index("vehicle_pl_override_ym_idx").on(table.yearMonth),
+  ],
+);
+
+/**
+ * 収支表の指摘に対して人が下した「このままでよい」の記録。
+ *
+ * 指摘(VehiclePlIssue)はDBに持たず、収支表と各マスタから表示のたびに導出される。
+ * そのため確認済みの印は指摘そのものではなく、指摘を指す4つ組
+ * (年月・車番・列・指摘の種類)をキーにして別に保持する。
+ *
+ * 年月をキーに含めているので、翌月に同じ指摘が出たときは必ずもう一度表示される。
+ * 「先月OKだった」は「今月もOK」の根拠にならない(金額が変われば判断も変わる)ため。
+ */
+export const plIssueAck = sqliteTable(
+  "pl_issue_ack",
+  {
+    id: text("id").primaryKey(),
+    yearMonth: text("year_month").notNull(),
+    vehicleNo: text("vehicle_no").notNull(),
+    /** 指摘が付いている列 (VehiclePlField) */
+    field: text("field").notNull(),
+    /** 指摘の種類 (ReviewIssueCode) */
+    code: text("code").notNull(),
+    /** 補足メモ (任意)。なぜそのままでよいのかを一言残せるようにする */
+    note: text("note"),
+    ackedAt: integer("acked_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    ackedBy: text("acked_by").references(() => user.id),
+  },
+  (table) => [
+    uniqueIndex("pl_issue_ack_key_idx").on(
+      table.yearMonth,
+      table.vehicleNo,
+      table.field,
+      table.code,
+    ),
+    index("pl_issue_ack_ym_idx").on(table.yearMonth),
   ],
 );
 

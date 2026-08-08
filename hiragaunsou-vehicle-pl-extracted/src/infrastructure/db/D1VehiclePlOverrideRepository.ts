@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, count, eq, isNull, lte } from "drizzle-orm";
 import type { Db } from "./client";
 import { vehiclePlOverride } from "./schema";
 import { user } from "./auth-schema";
@@ -20,28 +20,57 @@ import {
 export class D1VehiclePlOverrideRepository implements VehiclePlOverrideRepository {
   constructor(private readonly db: Db) {}
 
-  async findByYearMonth(yearMonth: string): Promise<VehiclePlOverrideRecord[]> {
-    const rows = await this.db
+  private select() {
+    return this.db
       .select({
         vehicleNo: vehiclePlOverride.vehicleNo,
         excluded: vehiclePlOverride.excluded,
         valuesJson: vehiclePlOverride.valuesJson,
         reason: vehiclePlOverride.reason,
         updatedAt: vehiclePlOverride.updatedAt,
+        appliedAt: vehiclePlOverride.appliedAt,
         updatedByName: user.name,
       })
       .from(vehiclePlOverride)
-      .leftJoin(user, eq(vehiclePlOverride.updatedBy, user.id))
-      .where(eq(vehiclePlOverride.yearMonth, yearMonth));
+      .leftJoin(user, eq(vehiclePlOverride.updatedBy, user.id));
+  }
 
-    return rows.map((r) => ({
+  private toRecord(r: {
+    vehicleNo: string;
+    excluded: boolean;
+    valuesJson: string;
+    reason: string;
+    updatedAt: Date;
+    appliedAt: Date | null;
+    updatedByName: string | null;
+  }): VehiclePlOverrideRecord {
+    return {
       vehicleNo: r.vehicleNo,
       excluded: r.excluded,
       values: parseOverrideValues(r.valuesJson),
       reason: r.reason,
       updatedAt: r.updatedAt,
       updatedByName: r.updatedByName ?? null,
-    }));
+      appliedAt: r.appliedAt,
+    };
+  }
+
+  async findByYearMonth(yearMonth: string): Promise<VehiclePlOverrideRecord[]> {
+    const rows = await this.select().where(eq(vehiclePlOverride.yearMonth, yearMonth));
+    return rows.map((r) => this.toRecord(r));
+  }
+
+  async findOne(yearMonth: string, vehicleNo: string): Promise<VehiclePlOverrideRecord | null> {
+    const rows = await this.select()
+      .where(
+        and(
+          eq(vehiclePlOverride.yearMonth, yearMonth),
+          eq(vehiclePlOverride.vehicleNo, vehicleNo),
+        ),
+      )
+      .limit(1);
+    const row = rows[0];
+    return row ? this.toRecord(row) : null;
   }
 
   async save(
@@ -62,6 +91,9 @@ export class D1VehiclePlOverrideRepository implements VehiclePlOverrideRepositor
         reason: override.reason,
         updatedAt: now,
         updatedBy,
+        // 保存しただけでは収支表の数字は変わらない。反映済みの印を必ず外し、
+        // 「反映待ち」として画面に出るようにする。
+        appliedAt: null,
       })
       .onConflictDoUpdate({
         target: [vehiclePlOverride.yearMonth, vehiclePlOverride.vehicleNo],
@@ -71,8 +103,31 @@ export class D1VehiclePlOverrideRepository implements VehiclePlOverrideRepositor
           reason: override.reason,
           updatedAt: now,
           updatedBy,
+          appliedAt: null,
         },
       });
+  }
+
+  async countPending(yearMonth: string): Promise<number> {
+    const rows = await this.db
+      .select({ count: count() })
+      .from(vehiclePlOverride)
+      .where(
+        and(eq(vehiclePlOverride.yearMonth, yearMonth), isNull(vehiclePlOverride.appliedAt)),
+      );
+    return rows[0]?.count ?? 0;
+  }
+
+  async markApplied(yearMonth: string, asOf: Date): Promise<void> {
+    await this.db
+      .update(vehiclePlOverride)
+      .set({ appliedAt: asOf })
+      .where(
+        and(
+          eq(vehiclePlOverride.yearMonth, yearMonth),
+          lte(vehiclePlOverride.updatedAt, asOf),
+        ),
+      );
   }
 
   async remove(yearMonth: string, vehicleNo: string): Promise<void> {

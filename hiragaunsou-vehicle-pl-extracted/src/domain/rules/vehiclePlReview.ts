@@ -29,18 +29,26 @@ import {
  */
 export type ReviewSeverity = "blocking" | "warning" | "info";
 
-export type ReviewIssueCode =
-  | "sales_unlinked"
-  | "payroll_unlinked"
-  | "fuel_missing"
-  | "vehicle_master_missing"
-  | "nempi_out_of_range"
-  | "toll_discount_exceeds"
-  | "deficit"
-  | "excel_mismatch"
-  | "anomaly"
-  | "overridden"
-  | "trailer_unlinked";
+export const REVIEW_ISSUE_CODES = [
+  "sales_unlinked",
+  "payroll_unlinked",
+  "fuel_missing",
+  "vehicle_master_missing",
+  "nempi_out_of_range",
+  "toll_discount_exceeds",
+  "deficit",
+  "excel_mismatch",
+  "anomaly",
+  "overridden",
+  "trailer_unlinked",
+] as const;
+
+export type ReviewIssueCode = (typeof REVIEW_ISSUE_CODES)[number];
+
+/** 知らない指摘の種類を弾く (APIから任意の文字列が流れ込んでも保存させない)。 */
+export function isReviewIssueCode(code: string): code is ReviewIssueCode {
+  return (REVIEW_ISSUE_CODES as readonly string[]).includes(code);
+}
 
 export interface IssueComparison {
   /** 比較の相手が何か (「運行回数」「例月中央値」「Excelの値」など) */

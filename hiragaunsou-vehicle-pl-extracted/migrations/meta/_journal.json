@@ -120,6 +120,13 @@
       "when": 1785889051443,
       "tag": "0016_add_deficit_analysis_profit_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1785889051444,
+      "tag": "0017_add_pl_issue_ack_and_override_applied_at",
+      "breakpoints": true
     }
   ]
 }
