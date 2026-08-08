@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import Encoding from "encoding-japanese";
 import { detectYearMonth } from "../../src/infrastructure/parsers/detectYearMonth";
-import { buildMonthlyPlWorkbookFixture } from "../fixtures/monthlyPlWorkbook";
+import {
+  buildAnnualWorkbookFixture,
+  buildMonthlyPlWorkbookFixture,
+} from "../fixtures/monthlyPlWorkbook";
 
 /**
  * 「このファイルは何年何月分か」を**中身だけ**から判定できるか。
@@ -108,5 +111,44 @@ describe("detectYearMonth", () => {
     const result = detectYearMonth(new ArrayBuffer(0));
     expect(result.yearMonth).toBeNull();
     expect(result.basis).toContain("選んでください");
+  });
+
+  it("見出しだけで明細が無いCSVは判定できない", () => {
+    const result = detectYearMonth(csv("車両コード,計上日,受取運賃"));
+    expect(result.yearMonth).toBeNull();
+    expect(result.basis).toContain("選んでください");
+  });
+
+  it("月として成立しない値は日付とみなさない", () => {
+    // 「2026/13/01」のような値を月として受け取ると、ありえない月に取り込んでしまう。
+    const result = detectYearMonth(
+      csv(["伝票番号,計上日", "1,2026/13/01", "2,2026/00/05", "3,2026/99/09"].join("\r\n")),
+    );
+    expect(result.yearMonth).toBeNull();
+  });
+
+  it("優先リストに無い名前の日付列でも、中身が日付なら根拠にする", () => {
+    const result = detectYearMonth(
+      csv(["伝票番号,受付年月日", "1,2026/03/02", "2,2026/03/20"].join("\r\n")),
+    );
+    expect(result.yearMonth).toBe("2026-03");
+    expect(result.basis).toContain("受付年月日");
+  });
+
+  it("見出しが空の日付列は「N列目」と呼んで根拠を示す", () => {
+    const result = detectYearMonth(csv([",", "2026/02/01,100", "2026/02/09,200"].join("\r\n")));
+    expect(result.yearMonth).toBe("2026-02");
+    expect(result.basis).toContain("1列目");
+  });
+
+  it("複数月の収支表シートが入ったExcelは、いちばん新しい月を初期値にして候補を示す", () => {
+    const workbook = buildAnnualWorkbookFixture([
+      { sheetName: "4月収支表", heading: "令和8年4月車両別収支表" },
+      { sheetName: "5月収支表", heading: "令和8年5月車両別収支表" },
+    ]);
+    const result = detectYearMonth(toArrayBuffer(workbook));
+    expect(result.yearMonth).toBe("2026-05");
+    expect(result.candidates).toEqual(["2026-05", "2026-04"]);
+    expect(result.basis).toContain("選び直して");
   });
 });
