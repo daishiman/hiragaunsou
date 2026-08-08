@@ -24,12 +24,43 @@ export interface SaveVehiclePlOverrideInput {
   reason: string;
   actorId: string;
   actorName: string;
+  /**
+   * 収支表への反映(再計算)を後回しにする。
+   *
+   * 収支表の画面では指摘を続けて直すため、1件ごとに月まるごとの再計算を走らせると
+   * 待ち時間が積み上がる。true のときは保存だけを行い、再計算は「まとめて反映」に任せる。
+   * 未反映であることはリポジトリが記録するので、反映漏れは件数として画面に出る。
+   */
+  deferRecalculation?: boolean;
+  /**
+   * 編集を開いた時点で画面が見ていた、この車両の直しの最終更新時刻 (ミリ秒)。
+   * 上書きは年月×車番で1レコードなので、別の列を直していても書き換え先は同じになる。
+   * 食い違ったら保存せず、先に直した人の内容を消させない。
+   * undefined のときは検査しない (画面を経由しない呼び出しとの互換のため)。
+   */
+  expectedUpdatedAt?: number | null;
 }
 
 export interface SaveVehiclePlOverrideResult {
   yearMonth: string;
   vehicleNo: string;
-  vehicleCount: number;
+  /** 再計算した場合の車両数。後回しにしたときは null */
+  vehicleCount: number | null;
+  /** 収支表に反映していない直しの件数 */
+  pendingCount: number;
+  /**
+   * 保存後のこの車両の直しの最終更新時刻 (ミリ秒)。取り消した場合は null。
+   * 画面はこれを次の保存でそのまま送り返し、続けて直しても競合と誤判定されないようにする。
+   */
+  updatedAt: number | null;
+}
+
+/** 他の人が先に同じ車両を直していた。画面は「開き直してください」を出す。 */
+export class VehiclePlOverrideConflictError extends Error {
+  constructor() {
+    super("他の人が先にこの車両を直しました。画面を開き直してから、もう一度直してください");
+    this.name = "VehiclePlOverrideConflictError";
+  }
 }
 
 /** 上書きの中身を人が読める1行にする (監査ログの summary 用)。 */
@@ -81,6 +112,14 @@ export class SaveVehiclePlOverrideUseCase {
       throw new Error("上書きする項目が1つもありません(取り消す場合は取消を使ってください)");
     }
 
+    if (input.expectedUpdatedAt !== undefined) {
+      const current = await this.overrideRepo.findOne(input.yearMonth, input.vehicleNo);
+      const currentUpdatedAt = current ? current.updatedAt.getTime() : null;
+      if (currentUpdatedAt !== input.expectedUpdatedAt) {
+        throw new VehiclePlOverrideConflictError();
+      }
+    }
+
     const override: VehiclePlOverride = {
       vehicleNo: input.vehicleNo,
       excluded: input.excluded,
@@ -89,8 +128,18 @@ export class SaveVehiclePlOverrideUseCase {
     };
 
     await this.overrideRepo.save(input.yearMonth, override, input.actorId);
-    // 保存と再計算を分けると「保存したのに表が変わらない」が起きる。必ず続けて作り直す。
-    const result = await this.recalculator.execute({ yearMonth: input.yearMonth });
+    // 保存しただけでは収支表の数字は変わらない(収支表は毎回まるごと作り直されるため)。
+    // 既定では続けて作り直し、「保存したのに表が変わらない」を起こさない。
+    // 後回しにできるのは、未反映の件数が画面に出て反映漏れに気づける場合だけ。
+    // 反映済みの印は「再計算を始めた時刻」で付ける。終わった時刻で付けると、
+    // 再計算の最中に別の人が保存した直しまで反映済みになり、静かに古い数字が残る。
+    const startedAt = new Date();
+    const result = input.deferRecalculation
+      ? null
+      : await this.recalculator.execute({ yearMonth: input.yearMonth });
+    if (result) {
+      await this.overrideRepo.markApplied(input.yearMonth, startedAt);
+    }
 
     await this.auditLog.record({
       actorId: input.actorId,
@@ -103,7 +152,11 @@ export class SaveVehiclePlOverrideUseCase {
     return {
       yearMonth: input.yearMonth,
       vehicleNo: input.vehicleNo,
-      vehicleCount: result.vehicleCount,
+      vehicleCount: result?.vehicleCount ?? null,
+      pendingCount: await this.overrideRepo.countPending(input.yearMonth),
+      updatedAt:
+        (await this.overrideRepo.findOne(input.yearMonth, input.vehicleNo))?.updatedAt.getTime() ??
+        null,
     };
   }
 }
@@ -125,7 +178,11 @@ export class ClearVehiclePlOverrideUseCase {
 
   async execute(input: ClearVehiclePlOverrideInput): Promise<SaveVehiclePlOverrideResult> {
     await this.overrideRepo.remove(input.yearMonth, input.vehicleNo);
+    // 取り消しは元に戻す操作なので、結果をその場で見せる。ここでの再計算は
+    // 他に溜まっている未反映の直しもまとめて反映することになるため、印を併せて付ける。
+    const startedAt = new Date();
     const result = await this.recalculator.execute({ yearMonth: input.yearMonth });
+    await this.overrideRepo.markApplied(input.yearMonth, startedAt);
 
     await this.auditLog.record({
       actorId: input.actorId,
@@ -139,6 +196,8 @@ export class ClearVehiclePlOverrideUseCase {
       yearMonth: input.yearMonth,
       vehicleNo: input.vehicleNo,
       vehicleCount: result.vehicleCount,
+      pendingCount: await this.overrideRepo.countPending(input.yearMonth),
+      updatedAt: null,
     };
   }
 }

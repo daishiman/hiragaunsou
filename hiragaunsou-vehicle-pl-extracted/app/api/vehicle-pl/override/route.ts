@@ -3,51 +3,15 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../../src/infrastructure/auth/accessControl";
 import { createDb } from "../../../../src/infrastructure/db/client";
-import { D1ImportBatchRepository } from "../../../../src/infrastructure/db/D1ImportBatchRepository";
-import {
-  D1DriverMasterRepository,
-  D1RateMasterRepository,
-  D1VehicleMasterRepository,
-} from "../../../../src/infrastructure/db/D1MasterRepository";
-import { D1VehiclePlRepository } from "../../../../src/infrastructure/db/D1VehiclePlRepository";
-import { D1ManualInputRepository } from "../../../../src/infrastructure/db/D1ManualInputRepository";
 import { D1VehiclePlOverrideRepository } from "../../../../src/infrastructure/db/D1VehiclePlOverrideRepository";
 import { D1AuditLogRepository } from "../../../../src/infrastructure/db/D1AuditLogRepository";
 import {
-  D1AppSettingRepository,
-  D1CleansingDecisionRepository,
-} from "../../../../src/infrastructure/db/D1CleansingDecisionRepository";
-import { FinalizeMonthlyPlUseCase } from "../../../../src/usecase/steps/finalizeMonthlyPl";
-import { RecalculateMonthlyPlUseCase } from "../../../../src/usecase/steps/recalculateMonthlyPl";
-import {
   ClearVehiclePlOverrideUseCase,
   SaveVehiclePlOverrideUseCase,
+  VehiclePlOverrideConflictError,
 } from "../../../../src/usecase/steps/saveVehiclePlOverride";
-import type { Db } from "../../../../src/infrastructure/db/client";
+import { monthlyPlRecalculator as recalculator } from "../../../_lib/monthlyPlRecalculator";
 import { isSameOriginRequest } from "../../../_lib/assertSameOrigin";
-
-/**
- * 再計算の材料集めは RecalculateMonthlyPlUseCase に閉じ込めてある。
- * ここで自前に集めるとキリン配賦や整形判断を渡し忘れ、上書きを1件保存しただけで
- * 別の車両の値が消える。年月しか渡さない形を保つこと。
- */
-function recalculator(db: Db) {
-  const rateMasterRepo = new D1RateMasterRepository(db);
-  return new RecalculateMonthlyPlUseCase(
-    new D1ManualInputRepository(db),
-    new D1CleansingDecisionRepository(db),
-    new D1AppSettingRepository(db),
-    rateMasterRepo,
-    new D1VehiclePlOverrideRepository(db),
-    new FinalizeMonthlyPlUseCase(
-      new D1ImportBatchRepository(db),
-      new D1VehicleMasterRepository(db),
-      new D1DriverMasterRepository(db),
-      rateMasterRepo,
-      new D1VehiclePlRepository(db),
-    ),
-  );
-}
 
 /** その月の上書き一覧 (収支表の画面で「人が直した行」を示すために使う)。 */
 export async function GET(request: Request) {
@@ -86,6 +50,10 @@ export async function POST(request: Request) {
     excluded?: boolean;
     values?: Record<string, unknown>;
     reason?: string;
+    /** 収支表への反映(再計算)を後回しにする。収支表の画面から続けて直すときに使う */
+    deferRecalculation?: boolean;
+    /** 画面が見ていたこの車両の直しの最終更新時刻。省略時は競合を検査しない */
+    expectedUpdatedAt?: number | null;
   } | null;
 
   if (!body?.yearMonth || !body.vehicleNo) {
@@ -115,9 +83,20 @@ export async function POST(request: Request) {
       reason: body.reason ?? "",
       actorId: session!.id,
       actorName: session!.name,
+      deferRecalculation: body.deferRecalculation === true,
+      // undefined と null を区別する。null は「まだ直しが無いはず」という主張で、
+      // 省略 (undefined) は「競合を見なくてよい」なので、まとめて既定値にできない。
+      ...("expectedUpdatedAt" in (body as object)
+        ? { expectedUpdatedAt: body.expectedUpdatedAt ?? null }
+        : {}),
     });
     return NextResponse.json(result);
   } catch (e) {
+    // 競合は入力の誤りではなく、先に直した人がいるという状態。画面が
+    // 「開き直してください」と出せるよう、他のエラーと区別できる形で返す。
+    if (e instanceof VehiclePlOverrideConflictError) {
+      return NextResponse.json({ error: e.message, conflict: true }, { status: 409 });
+    }
     const message = e instanceof Error ? e.message : "上書きの保存に失敗しました";
     return NextResponse.json({ error: message }, { status: 400 });
   }
