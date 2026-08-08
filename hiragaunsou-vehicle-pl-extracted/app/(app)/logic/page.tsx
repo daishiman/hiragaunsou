@@ -6,6 +6,7 @@ import { createDb } from "../../../src/infrastructure/db/client";
 import { D1RateMasterRepository } from "../../../src/infrastructure/db/D1MasterRepository";
 import type { RateSettings } from "../../../src/domain/rules/vehiclePlCalculation";
 import { currentYearMonth } from "../../_lib/yearMonth";
+import { Disclosure } from "../../_components/Disclosure";
 import { PageHead } from "../../_components/PageHead";
 
 /**
@@ -270,7 +271,13 @@ export default async function LogicPage() {
         lead="各項目がどこから来て、どう決まるかの一覧"
       />
 
-      <section className="grid gap-3 lg:grid-cols-3">
+      {/*
+        この画面は「どの数字がどこから来るか」の合意文書で、文章量が多い。
+        最初に出すのは見出しだけにして、読みたい章を押したときにその章だけ開く形にした
+        (見出しの並びがそのまま目次になる)。文章は1つも減らしていない。
+      */}
+      <Disclosure summary="全体の考え方(3つの層)">
+        <div className="grid gap-3 lg:grid-cols-3">
         {STEP_FLOW.map((s) => (
           <div key={s.num} className="rounded-xl border border-line bg-white p-5">
             <p className="text-[11px] font-semibold text-brand-deep">{s.num}</p>
@@ -278,14 +285,12 @@ export default async function LogicPage() {
             <p className="mt-1 text-xs text-ink-muted">{s.desc}</p>
           </div>
         ))}
-      </section>
-
-      <section className="mt-5 rounded-xl border border-line bg-white">
-        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line px-5 py-3">
-          <h2 className="text-sm font-bold text-ink">元になるファイルと、その役割</h2>
-          <p className="text-xs text-ink-muted">列単位の対応は docs/product/data-flow-map.md</p>
         </div>
-        <div className="overflow-x-auto">
+      </Disclosure>
+
+      <Disclosure summary="元になるファイルと、その役割">
+        <p className="text-xs text-ink-muted">列単位の対応は docs/product/data-flow-map.md</p>
+        <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-max border-collapse text-xs">
             <thead>
               <tr className="border-b border-line bg-subtle text-ink-muted">
@@ -313,7 +318,7 @@ export default async function LogicPage() {
             </tbody>
           </table>
         </div>
-        <div className="mx-5 my-4 space-y-2 rounded-md border border-caution-border bg-caution-soft px-3 py-2 text-xs leading-relaxed text-ink">
+        <div className="mt-4 space-y-2 rounded-md border border-caution-border bg-caution-soft px-3 py-2 text-xs leading-relaxed text-ink">
           <p>
             <strong>「運送収支表」は入力ではなく、このシステムが作る成果物です。</strong>
             業務フローのSTEP8で、出来上がった収支表を貼り付ける先にあたります。
@@ -331,15 +336,11 @@ export default async function LogicPage() {
             取込のときに何年何月分かを画面で選んでいただきます。
           </p>
         </div>
-      </section>
+      </Disclosure>
 
-      <section className="mt-5 rounded-xl border border-line bg-white">
-        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line px-5 py-3">
-          <h2 className="text-sm font-bold text-ink">項目別の接続マップ</h2>
-          <p className="text-xs text-ink-muted">
-            {MAP.length}項目中 {pendingCount}項目がヒアリングで確定待ち
-          </p>
-        </div>
+      <Disclosure
+        summary={`項目別の接続マップ(${MAP.length}項目中 ${pendingCount}項目がヒアリングで確定待ち)`}
+      >
         <div className="overflow-x-auto">
           <table className="w-full min-w-max border-collapse text-xs">
             <thead>
@@ -377,15 +378,15 @@ export default async function LogicPage() {
             </tbody>
           </table>
         </div>
-        <div className="mx-5 my-4 rounded-md border border-caution-border bg-caution-soft px-3 py-2 text-xs leading-relaxed text-ink">
+        <div className="mt-4 rounded-md border border-caution-border bg-caution-soft px-3 py-2 text-xs leading-relaxed text-ink">
           原則: <strong>集計・損益などの下流の値は手入力できない構造</strong>
           にします(Excelで起きた年間集計への転記漏れを仕組みごと根絶)。
         </div>
-        <details className="border-t border-line">
-          <summary className="cursor-pointer px-5 py-3 text-xs font-semibold text-brand-deep">
+        <details className="mt-3">
+          <summary className="cursor-pointer text-xs font-semibold text-brand-deep">
             連鎖反映の流れ(入力が決まると何が決まるか)
           </summary>
-          <div className="px-5 pb-5">
+          <div className="mt-2">
             {FLOW_TREE.map((n) => (
               <div
                 key={n.text}
@@ -397,20 +398,15 @@ export default async function LogicPage() {
             ))}
           </div>
         </details>
-      </section>
+      </Disclosure>
 
-      <section className="mt-5 rounded-xl border border-line bg-white">
-        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line px-5 py-3">
-          <h2 className="text-sm font-bold text-ink">
-            ヒアリングで確定させること({QUESTIONS.length}件)
-          </h2>
-          <p className="text-xs text-ink-muted">この画面を見ながら一緒に確認します</p>
-        </div>
-        <ul>
+      <Disclosure summary={`ヒアリングで確定させること(${QUESTIONS.length}件)`}>
+        <p className="text-xs text-ink-muted">この画面を見ながら一緒に確認します</p>
+        <ul className="mt-2">
           {QUESTIONS.map(([q, effect], i) => (
             <li
               key={q}
-              className="flex items-start gap-3 border-b border-line px-5 py-3 text-xs last:border-b-0"
+              className="flex items-start gap-3 border-b border-line py-2.5 text-xs last:border-b-0"
             >
               <span className="num shrink-0 font-bold text-ink-muted">
                 {String(i + 1).padStart(2, "0")}
@@ -423,7 +419,7 @@ export default async function LogicPage() {
             </li>
           ))}
         </ul>
-      </section>
+      </Disclosure>
     </>
   );
 }

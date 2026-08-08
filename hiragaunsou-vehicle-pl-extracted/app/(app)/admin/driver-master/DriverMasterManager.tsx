@@ -14,7 +14,19 @@ import {
 } from "../../../../src/infrastructure/parsers/importSource";
 import type { FileImportVerdict } from "../../../../src/domain/rules/fileImportCheck";
 import { AlertPanel } from "../../../_components/AlertPanel";
+import { Disclosure } from "../../../_components/Disclosure";
 import { ImportCheckPanel } from "../../../_components/ImportCheckPanel";
+import { StepRail } from "../../../_components/StepRail";
+
+/**
+ * 取込の3段階。手入力画面と同じ「札で現在地を出す」作りに揃える。
+ * 押して跳べる札にはしない — ファイルを選ぶ前に「取り込む」へは進めないため。
+ */
+const IMPORT_STEPS = [
+  { label: "ファイルを選ぶ", badge: 1 },
+  { label: "内容を確認する", badge: 2 },
+  { label: "取り込む", badge: 3 },
+] as const;
 
 interface Preview {
   fileName: string;
@@ -191,15 +203,10 @@ export function DriverMasterManager({
 
   return (
     <div className="space-y-6">
+      <StepRail steps={IMPORT_STEPS} currentIndex={done ? 2 : preview ? 1 : 0} />
+
       <section className="rounded-xl border border-line bg-white p-5">
         <h2 className="text-sm font-bold text-ink">ファイルを取り込む</h2>
-        <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-          社内Excel「★車両別収支計算用」をそのまま選んでください({yearMonth}
-          の収支表シートの「コード」「運転者名」「車番」から読み取ります)。
-          CSVに書き出す必要はありません。CSVを選ぶ場合は、社員No・氏名・車番の3列を書き出したものにしてください。
-          車番が空の方(内勤・退職等)も登録できます。給与が乗らないだけで、エラーにはなりません。
-          ファイル名は変わっても構いません。中身を読んで判定します。
-        </p>
         <input
           ref={fileInputRef}
           type="file"
@@ -211,6 +218,17 @@ export function DriverMasterManager({
           }}
           className="mt-3 block w-full text-xs text-ink file:mr-3 file:rounded-md file:border file:border-line file:bg-subtle file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-ink"
         />
+        {/*
+          どのファイルを選べばよいかの案内は、ボタンより上に置くと毎回読み飛ばされたうえ
+          ボタンを画面の下へ押し出していた。文章はそのままに、ボタンの直下の折りたたみへ移す。
+        */}
+        <Disclosure tone="inline" summary="どのファイルを選べばよいですか?">
+          社内Excel「★車両別収支計算用」をそのまま選んでください({yearMonth}
+          の収支表シートの「コード」「運転者名」「車番」から読み取ります)。
+          CSVに書き出す必要はありません。CSVを選ぶ場合は、社員No・氏名・車番の3列を書き出したものにしてください。
+          車番が空の方(内勤・退職等)も登録できます。給与が乗らないだけで、エラーにはなりません。
+          ファイル名は変わっても構いません。中身を読んで判定します。
+        </Disclosure>
         {busy && !preview ? (
           <p className="mt-3 text-xs text-ink-muted">ファイルを読み取っています…</p>
         ) : null}

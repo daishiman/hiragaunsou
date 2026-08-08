@@ -25,6 +25,18 @@ import {
 } from "../../../src/domain/rules/rateMasterCatalog";
 import { isSameOriginRequest } from "../../_lib/assertSameOrigin";
 
+/**
+ * 率マスタを触れる権限。
+ *
+ * 率は1つ書き換えると全車両・全月の数字が動くため、依頼者の判断で管理者だけに絞っている。
+ * 画面(app/(app)/rate-settings/page.tsx)だけを塞いでも、入力担当は edit_master を持つので
+ * APIを直接叩けば書き換えられてしまう。画面と裏側で同じ権限を使い、片方だけ緩い状態を作らない。
+ *
+ * 読み取り(GET)も同じ権限にする。この endpoint を呼ぶのは率マスタ設定の画面だけで、
+ * 他の画面が使う率はサーバー側でリポジトリから直接読んでいるため、絞っても影響が無い。
+ */
+const RATE_MASTER_PERMISSION = "manage_imports" as const;
+
 /** "2026-05" 形式か */
 function isYearMonth(value: unknown): value is string {
   return typeof value === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
@@ -40,7 +52,7 @@ function isYearMonth(value: unknown): value is string {
  */
 export async function GET(request: Request) {
   const session = await getServerSession();
-  if (!checkAccess(session, "edit_master")) {
+  if (!checkAccess(session, RATE_MASTER_PERMISSION)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -74,7 +86,7 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   const session = await getServerSession();
-  if (!checkAccess(session, "edit_master")) {
+  if (!checkAccess(session, RATE_MASTER_PERMISSION)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

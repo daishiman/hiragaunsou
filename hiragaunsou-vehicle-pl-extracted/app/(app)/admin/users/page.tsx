@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../../src/infrastructure/auth/accessControl";
+import { AccessDenied } from "../../../_components/AccessDenied";
 import { createDb } from "../../../../src/infrastructure/db/client";
 import { D1UserRepository } from "../../../../src/infrastructure/db/D1UserRepository";
 import { D1InvitationRepository } from "../../../../src/infrastructure/db/D1InvitationRepository";
@@ -17,7 +18,10 @@ import { UsersManager } from "./UsersManager";
 export default async function AdminUsersPage() {
   const session = await getServerSession();
   if (!session) redirect("/sign-in");
-  if (!checkAccess(session, "manage_users")) redirect("/");
+  // 権限が無い人を黙ってホームへ戻すと、押した本人にはリンクが壊れたようにしか見えない。
+  if (!checkAccess(session, "manage_users")) {
+    return <AccessDenied screenName="ユーザー管理" permission="manage_users" />;
+  }
 
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);

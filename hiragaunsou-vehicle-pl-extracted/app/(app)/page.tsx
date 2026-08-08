@@ -17,9 +17,9 @@ import { currentYearMonth, defaultImportYearMonth } from "../_lib/yearMonth";
 import { yearMonthLabel, man, num, kmPriceLabel, pct } from "../_lib/format";
 import { withYm } from "../_lib/withYm";
 import { PageHead } from "../_components/PageHead";
-import { WorkflowStepCard } from "../_components/WorkflowStepCard";
 import { EmptyState } from "../_components/EmptyState";
 import { StatTile } from "../_components/StatTile";
+import { Disclosure } from "../_components/Disclosure";
 
 /**
  * ホーム。
@@ -165,7 +165,14 @@ export default async function HomePage() {
               <br className="hidden sm:block" />
               STEP {next.step.id}「{next.step.title}」から始めましょう
             </p>
-            <p className="mt-2 text-sm leading-relaxed text-ink-muted">{next.step.summary}</p>
+            {/*
+              見出しとボタンだけで「次に何を押すか」は伝わる。ステップの中身の説明まで常時出すと
+              押す前に読む文章が増えるので、折りたたみへ移す(文章はそのまま)。
+              進み具合(detail)は数字なので出したままにする。
+            */}
+            <Disclosure tone="inline" summary="このステップで何をしますか?">
+              {next.step.summary}
+            </Disclosure>
             <p className="num mt-2 text-xs text-ink-muted">{next.detail}</p>
             <Link
               href={withYm(next.step.href, yearMonth)}
@@ -188,33 +195,9 @@ export default async function HomePage() {
         )}
       </section>
 
-      {/*
-        全体の手順。段階的開示: いま取り組むステップだけを大きなカードで見せ、
-        完了済み・まだ先のステップは小さく畳んだ行にする(詳細はクリックで参照できる)。
-        全8ステップの存在自体は消さない — 残り件数は常に見える。
-      */}
-      <section className="mt-5">
-        <div className="flex items-baseline justify-between gap-2">
-          <h2 className="text-sm font-bold text-ink">作成手順(全8ステップ)</h2>
-          <p className="num text-xs text-ink-muted">残り {progress.totalCount - progress.doneCount}件</p>
-        </div>
-        <ol className="mt-3 grid gap-2">
-          {progress.steps.map((s) => (
-            <li key={s.step.id}>
-              <WorkflowStepCard
-                progress={s}
-                isNext={next?.step.id === s.step.id}
-                yearMonth={yearMonth}
-              />
-            </li>
-          ))}
-        </ol>
-      </section>
-
       {/* ダッシュボードは最上段のサマリに導線があるので、ここでは他の閲覧系画面だけを並べる */}
-      <section className="mt-5 rounded-xl border border-line bg-white p-5">
-        <h2 className="text-sm font-bold text-ink">もっと詳しく見る</h2>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <Disclosure summary="もっと詳しく見る">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {[
             { href: "/grid", label: "月次収支表", desc: "車両別の内訳を確認する" },
             { href: "/annual", label: "年間集計・対前年", desc: "13ヶ月の推移と前年比" },
@@ -230,7 +213,7 @@ export default async function HomePage() {
             </Link>
           ))}
         </div>
-      </section>
+      </Disclosure>
     </>
   );
 }

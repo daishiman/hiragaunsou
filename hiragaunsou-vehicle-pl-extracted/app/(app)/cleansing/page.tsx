@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../src/infrastructure/auth/accessControl";
+import { AccessDenied } from "../../_components/AccessDenied";
 import { createDb } from "../../../src/infrastructure/db/client";
 import { D1ImportBatchRepository } from "../../../src/infrastructure/db/D1ImportBatchRepository";
 import { D1CleansingDecisionRepository } from "../../../src/infrastructure/db/D1CleansingDecisionRepository";
@@ -27,7 +28,10 @@ export default async function CleansingPage({
 }) {
   const session = await getServerSession();
   if (!session) redirect("/sign-in");
-  if (!checkAccess(session, "view")) redirect("/");
+  // 権限が無い人を黙ってホームへ戻すと、押した本人にはリンクが壊れたようにしか見えない。
+  if (!checkAccess(session, "view")) {
+    return <AccessDenied screenName="データ整形" permission="view" />;
+  }
 
   const { ym } = await searchParams;
   const yearMonth = ym || currentYearMonth();

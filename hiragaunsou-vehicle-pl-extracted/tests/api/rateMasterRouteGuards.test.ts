@@ -145,6 +145,18 @@ describe("POST /api/rate-master のガード", () => {
     expect(res.status).toBe(403);
     expect(setRateMock).not.toHaveBeenCalled();
   });
+
+  /*
+    率は1つ書き換えると全車両・全月の数字が動くため、2026-08-09 に管理者だけに絞った。
+    入力担当はマスタ編集(edit_master)を持っているので、画面だけ塞いでも
+    APIを直接叩けば書き換えられてしまう。画面と裏側が同じ権限であることをここで固定する。
+  */
+  it("入力担当ロールは率を変えられないので401(画面を塞いだだけでは足りない)", async () => {
+    sessionRef.current = { id: "u", email: "e@x.jp", name: "入力担当", role: "input_staff" };
+    const res = await postRate(validBody);
+    expect(res.status).toBe(401);
+    expect(setRateMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("POST /api/rate-master の入力検証", () => {
@@ -206,6 +218,16 @@ describe("POST /api/rate-master の保存と再計算", () => {
 describe("GET /api/rate-master", () => {
   it("閲覧のみのロールには返さない(率は編集権限者の情報)", async () => {
     sessionRef.current = { id: "u", email: "e@x.jp", name: "社長", role: "executive" };
+    const res = await getRates("http://test/api/rate-master?ym=2026-05");
+    expect(res.status).toBe(401);
+  });
+
+  /*
+    読み取りも管理者だけにする(2026-08-09)。この endpoint を呼ぶのは率マスタ設定の画面だけで、
+    他の画面が使う率はサーバー側でリポジトリから直接読んでいるため、絞っても表示は壊れない。
+  */
+  it("入力担当ロールにも返さない(率マスタ設定は管理者だけの画面)", async () => {
+    sessionRef.current = { id: "u", email: "e@x.jp", name: "入力担当", role: "input_staff" };
     const res = await getRates("http://test/api/rate-master?ym=2026-05");
     expect(res.status).toBe(401);
   });
