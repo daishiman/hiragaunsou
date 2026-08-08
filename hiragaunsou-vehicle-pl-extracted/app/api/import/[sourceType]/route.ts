@@ -4,6 +4,8 @@ import { getServerSession } from "../../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../../src/infrastructure/auth/accessControl";
 import { createDb } from "../../../../src/infrastructure/db/client";
 import { D1ImportBatchRepository } from "../../../../src/infrastructure/db/D1ImportBatchRepository";
+import { D1FileImportLogRepository } from "../../../../src/infrastructure/db/D1FileImportLogRepository";
+import { computeContentHash } from "../../../../src/infrastructure/parsers/contentHash";
 import { R2FileStorageRepository } from "../../../../src/infrastructure/storage/R2FileStorageRepository";
 import { ImportVehicleOperationUseCase } from "../../../../src/usecase/steps/importVehicleOperation";
 import { ImportSalesMonitorUseCase } from "../../../../src/usecase/steps/importSalesMonitor";
@@ -160,25 +162,42 @@ export async function POST(request: Request, { params }: { params: Promise<{ sou
         superseded.map((batch) => batch.id),
       );
     }
-    if (resolvedSourceType === "vehicle_operation") {
-      const result = await new ImportVehicleOperationUseCase(fileStorage, importBatchRepo).execute(input);
-      return NextResponse.json({ sourceType: resolvedSourceType, ...result });
+    // 帳票ごとに戻り値の形が違うので、記録と応答で共通に読める形に受ける。
+    const result: { totalRows?: number } & object =
+      resolvedSourceType === "vehicle_operation"
+        ? await new ImportVehicleOperationUseCase(fileStorage, importBatchRepo).execute(input)
+        : resolvedSourceType === "sales_monitor"
+          ? await new ImportSalesMonitorUseCase(fileStorage, importBatchRepo).execute(input)
+          : resolvedSourceType === "payroll"
+            ? await new ImportPayrollUseCase(fileStorage, importBatchRepo).execute(input)
+            : // 完成済みExcelは答え合わせの相手として保管するだけ。収支表はCSVと手入力から作る。
+              // ここに車両マスタや手入力への書き込みを足すと、CSVが1本も通っていなくても表が
+              // 完成してしまう(実際に本番の2026年5月データがそうなっていた)ので足さないこと。
+              await new ImportMonthlyPlWorkbookUseCase(fileStorage, importBatchRepo).execute({
+                ...input,
+                importedByName: session!.name,
+              });
+
+    // 取込の記録を残す。次に同じファイルが選ばれたときの照合に使う
+    // (docs/product/file-import-common-spec.md §5)。
+    // 記録に失敗しても取込自体は成功しているので、画面には失敗を出さない。
+    try {
+      const sentHash = form.get("contentHash");
+      await new D1FileImportLogRepository(db).record({
+        screen: "import",
+        sourceType: resolvedSourceType,
+        yearMonth,
+        fileName: file.name,
+        contentHash:
+          typeof sentHash === "string" && sentHash !== "" ? sentHash : await computeContentHash(content),
+        rowCount: typeof result.totalRows === "number" ? result.totalRows : 0,
+        importedBy: session!.id,
+        importedByName: session!.name,
+      });
+    } catch (e) {
+      console.error("file import log failed", { fileName: file.name, error: e });
     }
-    if (resolvedSourceType === "sales_monitor") {
-      const result = await new ImportSalesMonitorUseCase(fileStorage, importBatchRepo).execute(input);
-      return NextResponse.json({ sourceType: resolvedSourceType, ...result });
-    }
-    if (resolvedSourceType === "payroll") {
-      const result = await new ImportPayrollUseCase(fileStorage, importBatchRepo).execute(input);
-      return NextResponse.json({ sourceType: resolvedSourceType, ...result });
-    }
-    // 完成済みExcelは答え合わせの相手として保管するだけ。収支表はCSVと手入力から作る。
-    // ここに車両マスタや手入力への書き込みを足すと、CSVが1本も通っていなくても表が
-    // 完成してしまう(実際に本番の2026年5月データがそうなっていた)ので足さないこと。
-    const result = await new ImportMonthlyPlWorkbookUseCase(fileStorage, importBatchRepo).execute({
-      ...input,
-      importedByName: session!.name,
-    });
+
     return NextResponse.json({ sourceType: resolvedSourceType, ...result });
   } catch (e) {
     console.error("import failed", { sourceType: resolvedSourceType, fileName: file.name, error: e });

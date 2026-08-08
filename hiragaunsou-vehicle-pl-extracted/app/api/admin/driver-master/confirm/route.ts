@@ -11,6 +11,7 @@ import { D1AuditLogRepository } from "../../../../../src/infrastructure/db/D1Aud
 import { ConfirmImportDriverMasterUseCase } from "../../../../../src/usecase/steps/importDriverMaster";
 import type { DriverMasterUpsertInput } from "../../../../../src/domain/repositories/MasterRepository";
 import { isSameOriginRequest } from "../../../../_lib/assertSameOrigin";
+import { recordFileImport } from "../../../../_lib/recordFileImport";
 
 /**
  * プレビュー結果はブラウザを経由して戻ってくるため、確定側でも形を検証し直す。
@@ -39,7 +40,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = (await request.json().catch(() => null)) as { records?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as {
+    records?: unknown;
+    fileName?: unknown;
+    contentHash?: unknown;
+  } | null;
   if (!Array.isArray(body?.records)) {
     return NextResponse.json({ error: "recordsが必要です" }, { status: 400 });
   }
@@ -62,6 +67,13 @@ export async function POST(request: Request) {
       actorId: session!.id,
       actorName: session!.name,
       records: records as DriverMasterUpsertInput[],
+    });
+    await recordFileImport(db, {
+      screen: "driver_master",
+      fileName: body.fileName,
+      contentHash: body.contentHash,
+      rowCount: records.length,
+      session: session!,
     });
     return NextResponse.json(result);
   } catch (e) {

@@ -4,7 +4,7 @@ import { parseDurationToHours } from "./timeUtils";
 import { parseJapaneseAmount, normalizeKey } from "./numberUtils";
 
 /** 列順が変わっても取り込めるよう、名前で検証する必須列。 */
-const REQUIRED_HEADERS = [
+export const REQUIRED_HEADERS = [
   "車両番号",
   "車両名称",
   "所属名称",

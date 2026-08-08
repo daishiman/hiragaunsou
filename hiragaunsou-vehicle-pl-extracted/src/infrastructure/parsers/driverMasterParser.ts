@@ -14,7 +14,7 @@ import type { ImportSourceInfo } from "./importSource";
  * 列順が変わっても取り込めるよう、名前で検証する。氏名は給与集計表と同じく
  * 全角スペース入りの「氏　名」で出力されることがあるため両方を受ける。
  */
-const REQUIRED_HEADERS = ["社員No", ["氏　名", "氏名"], "車番"] as const;
+export const REQUIRED_HEADERS = ["社員No", ["氏　名", "氏名"], "車番"] as const;
 
 export interface DriverMasterImportRow {
   employeeCode: string;

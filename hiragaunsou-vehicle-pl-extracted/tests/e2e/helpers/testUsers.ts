@@ -68,9 +68,16 @@ export async function clearMasterImportTestData(spec: {
   actorEmail: string;
   vehicleNos: readonly string[];
   employeeCodes: readonly string[];
+  fileNames?: readonly string[];
 }): Promise<void> {
   const { env, dispose } = await getLocalEnv();
   try {
+    // 取込の記録が残っていると、次の実行で「取り込み済みです」と出て1件目のテストが通らない。
+    for (const fileName of spec.fileNames ?? []) {
+      await withBusyRetry(() =>
+        env.DB.prepare("DELETE FROM file_import_log WHERE file_name = ?").bind(fileName).run(),
+      );
+    }
     await withBusyRetry(() =>
       env.DB.prepare(
         "DELETE FROM admin_audit_log WHERE actor_id IN (SELECT id FROM user WHERE email = ?)",

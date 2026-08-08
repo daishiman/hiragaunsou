@@ -12,7 +12,9 @@ import {
   describeImportSource,
   type ImportSourceInfo,
 } from "../../../../src/infrastructure/parsers/importSource";
+import type { FileImportVerdict } from "../../../../src/domain/rules/fileImportCheck";
 import { AlertPanel } from "../../../_components/AlertPanel";
+import { ImportCheckPanel } from "../../../_components/ImportCheckPanel";
 import { yen } from "../../../_lib/format";
 
 const COST_CATEGORY_LABELS: Record<string, string> = {
@@ -58,6 +60,12 @@ interface Preview {
   source?: ImportSourceInfo;
 }
 
+/** 取込前の確認。中身の判定に問題があったときだけ出す。 */
+interface CheckState {
+  file: File;
+  verdict: FileImportVerdict;
+}
+
 /**
  * 「対象月のシートが無かったので別の月で代用した」ときに続けて出す一文。
  * 運転者マスタは人事の対応、車両マスタは車両ごとの決まった金額と、理由が違う。
@@ -80,6 +88,9 @@ export function VehicleMasterManager({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [check, setCheck] = useState<CheckState | null>(null);
+  /** 取込の記録に残す中身の指紋。次に同じファイルを選んだときの照合に使う。 */
+  const [contentHash, setContentHash] = useState<string | null>(null);
 
   const existingNos = useMemo(() => new Set(vehicles.map((v) => v.vehicleNo)), [vehicles]);
   const [towedBusy, setTowedBusy] = useState<string | null>(null);
@@ -119,11 +130,45 @@ export function VehicleMasterManager({
     }
   }
 
+  /**
+   * ファイルを選んだ直後の下読み。名前ではなく中身から「何のファイルか」「必要な列が揃っているか」
+   * 「前に取り込んでいないか」を確かめ、問題があれば取込を止めて確認を取る。
+   * 全画面共通のルール(docs/product/file-import-common-spec.md)に従う。
+   */
+  async function inspectThenUpload(file: File) {
+    setBusy(true);
+    setError(null);
+    setDone(null);
+    setPreview(null);
+    setCheck(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("screen", "vehicle_master");
+      const res = await fetch("/api/import/detect", { method: "POST", body: form });
+      const data = (await res.json().catch(() => null)) as
+        | { contentHash?: string; verdict?: FileImportVerdict }
+        | null;
+      if (res.ok && data?.verdict) {
+        setContentHash(data.contentHash ?? null);
+        if (data.verdict.status !== "ok") {
+          setCheck({ file, verdict: data.verdict });
+          setBusy(false);
+          return;
+        }
+      }
+    } catch {
+      // 下読みに失敗しても取込自体は続けられる。中身の不備は取込側が理由つきで返す。
+    }
+    await upload(file);
+  }
+
   async function upload(file: File) {
     setBusy(true);
     setError(null);
     setDone(null);
     setPreview(null);
+    setCheck(null);
     try {
       const form = new FormData();
       form.append("file", file);
@@ -156,7 +201,13 @@ export function VehicleMasterManager({
       const res = await fetch("/api/admin/vehicle-master/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ records: preview.valid, yearMonth }),
+        body: JSON.stringify({
+          records: preview.valid,
+          yearMonth,
+          // 取込の記録に残す情報。次に同じファイルを選んだときの照合に使う。
+          fileName: preview.fileName,
+          contentHash,
+        }),
       });
       const data = (await res.json().catch(() => null)) as
         | { inserted?: number; updated?: number; recalculated?: boolean; error?: string }
@@ -211,6 +262,7 @@ export function VehicleMasterManager({
           の収支表シートから車番・車種名・所属・保険・税・リース費・割賦費を読み取ります)。
           CSVに書き出す必要はありません。CSVを選ぶ場合は、その9列を書き出したものにしてください。
           車種名から原価カテゴリ(修繕費・タイヤ費の標準単価)を自動判定します。
+          ファイル名は変わっても構いません。中身を読んで判定します。
         </p>
         <input
           ref={fileInputRef}
@@ -219,12 +271,27 @@ export function VehicleMasterManager({
           disabled={busy}
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) void upload(file);
+            if (file) void inspectThenUpload(file);
           }}
           className="mt-3 block w-full text-xs text-ink file:mr-3 file:rounded-md file:border file:border-line file:bg-subtle file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-ink"
         />
         {busy && !preview ? (
           <p className="mt-3 text-xs text-ink-muted">ファイルを読み取っています…</p>
+        ) : null}
+
+        {check ? (
+          <ImportCheckPanel
+            fileName={check.file.name}
+            verdict={check.verdict}
+            yearMonth={yearMonth}
+            onYearMonthChange={() => undefined}
+            onConfirm={() => void upload(check.file)}
+            onCancel={() => {
+              setCheck(null);
+              if (fileInputRef.current) fileInputRef.current.value = "";
+            }}
+            busy={busy}
+          />
         ) : null}
 
         {error ? (

@@ -40,6 +40,12 @@ function buildSourceWorkbook(): Buffer {
   );
 }
 
+/**
+ * 3つのテストで同じバイト列を使う(作り直すとZIPの内容が変わり「中身が同じ」の判定がぶれる)。
+ * 実運用でもExcelを保存し直せば中身は別物になるので、同一ファイルの再選択はこの形で再現する。
+ */
+const SOURCE_WORKBOOK = buildSourceWorkbook();
+
 test.describe("マスタ管理: 社内Excelをそのまま取り込む", () => {
   const email = "e2e-master@senpai-lab.com";
   const password = "TestPassw0rd!Master";
@@ -49,6 +55,7 @@ test.describe("マスタ管理: 社内Excelをそのまま取り込む", () => {
     actorEmail: email,
     vehicleNos: ["24", "300"],
     employeeCodes: ["93", "1002"],
+    fileNames: [EXCEL_NAME],
   };
 
   test.beforeAll(async ({ baseURL }) => {
@@ -74,7 +81,7 @@ test.describe("マスタ管理: 社内Excelをそのまま取り込む", () => {
     await page.setInputFiles('input[type="file"]', {
       name: EXCEL_NAME,
       mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      buffer: buildSourceWorkbook(),
+      buffer: SOURCE_WORKBOOK,
     });
 
     await expect(page.getByRole("heading", { name: /取込内容の確認/ })).toBeVisible();
@@ -93,7 +100,7 @@ test.describe("マスタ管理: 社内Excelをそのまま取り込む", () => {
     await page.setInputFiles('input[type="file"]', {
       name: EXCEL_NAME,
       mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      buffer: buildSourceWorkbook(),
+      buffer: SOURCE_WORKBOOK,
     });
 
     await expect(page.getByRole("heading", { name: /取込内容の確認/ })).toBeVisible();
@@ -103,5 +110,31 @@ test.describe("マスタ管理: 社内Excelをそのまま取り込む", () => {
     await expect(page.getByText(/名を登録しました/)).toBeVisible();
     await expect(page.getByRole("heading", { name: /現在の運転者マスタ\(\d+名/ })).toBeVisible();
     await expect(page.getByRole("cell", { name: "鈴木一郎", exact: true })).toBeVisible();
+  });
+
+  /**
+   * 上の2件で同じExcelを別々の画面に取り込んでいる。これを「重複」と言わないこと
+   * (画面をまたいだ照合はしない)と、同じ画面で2度目に選んだときは必ず確認が出ることを
+   * まとめて固定する。仕様は docs/product/file-import-common-spec.md §3-5。
+   */
+  test("同じ画面に同じファイルを選び直すと、取込前に取り込み済みだと知らせる", async ({ page }) => {
+    await page.goto("/admin/vehicle-master");
+    await page.setInputFiles('input[type="file"]', {
+      name: EXCEL_NAME,
+      mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      buffer: SOURCE_WORKBOOK,
+    });
+
+    await expect(page.getByText(/に取り込み済みです/)).toBeVisible();
+    // 確認を挟むだけで、勝手に取り込みも中止もしない。
+    await expect(page.getByRole("heading", { name: /取込内容の確認/ })).toHaveCount(0);
+
+    await page.getByRole("button", { name: "それでも取り込む" }).click();
+    await expect(page.getByRole("heading", { name: /取込内容の確認/ })).toBeVisible();
+
+    // 取り込み済みの根拠は既存の「取込データ管理」から見えて、外せること。
+    await page.goto("/admin/import-batches");
+    await expect(page.getByRole("heading", { name: /取り込んだファイルの記録/ })).toBeVisible();
+    await expect(page.getByRole("cell", { name: EXCEL_NAME }).first()).toBeVisible();
   });
 });

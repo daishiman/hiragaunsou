@@ -11,6 +11,10 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { ImportForm } from "../../app/(app)/import/ImportForm";
+import {
+  evaluateFileImport,
+  type DuplicateFinding,
+} from "../../src/domain/rules/fileImportCheck";
 
 /** 対象帳票の見出しから、その帳票専用のファイル選択inputを取り出す */
 function fileInputFor(headingName: string): HTMLInputElement {
@@ -22,12 +26,44 @@ function fileInputFor(headingName: string): HTMLInputElement {
   return input as HTMLInputElement;
 }
 
-/** 取込前の下読み(POST /api/import/detect)の応答 */
-function detectResponse(yearMonth: string | null, basis: string): Response {
+/**
+ * 取込前の下読み(POST /api/import/detect)の応答。
+ * 判定結果の文言と「止める/通す」はサーバーと同じ純関数で作り、画面側の分岐だけを試す。
+ */
+function detectResponse(
+  yearMonth: string | null,
+  basis: string,
+  options: {
+    expectedYearMonth?: string;
+    detectedSourceType?: string;
+    duplicate?: DuplicateFinding | null;
+  } = {},
+): Response {
+  const candidates = yearMonth ? [yearMonth] : [];
+  const verdict = evaluateFileImport({
+    screen: "import",
+    acceptedSourceTypes: ["vehicle_operation"],
+    expectedLabel: "車両別運行実績表",
+    detectedSourceType: options.detectedSourceType ?? "vehicle_operation",
+    expectedYearMonth: options.expectedYearMonth ?? "2026-05",
+    detectedYearMonth: yearMonth,
+    yearMonthBasis: basis,
+    yearMonthCandidates: candidates,
+    missingColumns: [],
+    rowCount: 10,
+    duplicate: options.duplicate ?? null,
+  });
   return {
     ok: true,
     status: 200,
-    json: async () => ({ yearMonth, basis, candidates: yearMonth ? [yearMonth] : [] }),
+    json: async () => ({
+      sourceType: options.detectedSourceType ?? "vehicle_operation",
+      contentHash: "abc123",
+      yearMonth,
+      basis,
+      candidates,
+      verdict,
+    }),
   } as Response;
 }
 
@@ -187,6 +223,46 @@ describe("ImportForm", () => {
       await screen.findByText(/operation\.csv: 2026年5月分として取り込みました/),
     ).toBeInTheDocument();
     expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("前に取り込んだファイルと中身が同じなら、取込前に知らせて確認を取る", async () => {
+    const user = userEvent.setup();
+    (global.fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(
+        detectResponse("2026-05", "「計上日」の日付10件のうち10件が2026年5月でした。", {
+          duplicate: {
+            match: "sameContentSameName",
+            fileName: "operation.csv",
+            importedAt: Date.now(),
+            rowCount: 10,
+            yearMonth: "2026-05",
+          },
+        }),
+      )
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ vehicleCount: 12 }),
+      } as Response);
+
+    render(<ImportForm yearMonth="2026-05" imported={{}} />);
+
+    await user.upload(
+      fileInputFor("車両別運行実績表"),
+      new File(["a,b,c"], "operation.csv", { type: "text/csv" }),
+    );
+
+    // 二重取込は黙って通さず、いつ取り込んだかを添えて確認する
+    expect(
+      await screen.findByText(/に取り込み済みです/),
+    ).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole("button", { name: "それでも取り込む" }));
+
+    expect(
+      await screen.findByText(/operation\.csv: 2026年5月分として取り込みました/),
+    ).toBeInTheDocument();
   });
 
   it("サーバーに接続できない場合は通信エラーメッセージを表示し、一覧は更新しない", async () => {

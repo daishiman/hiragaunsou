@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { IMPORT_SOURCES, type ImportSourceType } from "../../../src/domain/rules/importSources";
+import type { FileImportVerdict } from "../../../src/domain/rules/fileImportCheck";
+import { ImportCheckPanel } from "../../_components/ImportCheckPanel";
 import { selectableYearMonths } from "../../_lib/yearMonth";
 
 type Batch = { fileName: string; rowCount: number; importedAt: number };
@@ -18,14 +20,21 @@ type Conflict = {
   superseded: Batch[];
 };
 
-/** ファイルの中身から読み取った「何年何月分か」。yearMonth が null なら中身に年月が無い。 */
-type Detection = { yearMonth: string | null; basis: string; candidates: string[] };
+/** 下読み(/api/import/detect)の応答。判定結果と、その判定に使った中身の指紋。 */
+type Detection = {
+  yearMonth: string | null;
+  basis: string;
+  candidates: string[];
+  contentHash?: string;
+  verdict?: FileImportVerdict;
+};
 
-/** 年月を確定してから取り込むための確認。中身から一意に決まらなかったときに出す。 */
-type YearMonthConfirm = {
+/** 取込前の確認。中身の判定に問題があったときだけ出す(問題なしならそのまま取り込む)。 */
+type CheckState = {
   sourceType: ImportSourceType;
   file: File;
-  detection: Detection;
+  verdict: FileImportVerdict;
+  contentHash: string | null;
   chosen: string;
 };
 
@@ -87,7 +96,7 @@ export function ImportForm({
   const [phase, setPhase] = useState<"inspecting" | "uploading">("uploading");
   const [results, setResults] = useState<Partial<Record<ImportSourceType, Result>>>({});
   const [conflict, setConflict] = useState<Conflict | null>(null);
-  const [yearMonthConfirm, setYearMonthConfirm] = useState<YearMonthConfirm | null>(null);
+  const [check, setCheck] = useState<CheckState | null>(null);
 
   const doneCount = IMPORT_SOURCES.filter((source) => (imported[source.sourceType] ?? []).length > 0).length;
 
@@ -104,15 +113,18 @@ export function ImportForm({
     explicitFocusSourceType ?? nextIncompleteSource?.sourceType ?? lastSource.sourceType;
 
   /**
-   * ファイルを選んだ直後の下読み。ファイル名ではなく中身から「何年何月分か」を聞きに行く。
-   * 中身の年月が画面で選んでいる対象年月と一致したときだけ、確認を挟まずそのまま取り込む。
-   * それ以外(年月が書かれていない帳票・別の月だったファイル)は必ず利用者に年月を確定させる。
+   * ファイルを選んだ直後の下読み。ファイル名ではなく中身から
+   * 「何の帳票か」「何年何月分か」「必要な列が揃っているか」「前に取り込んでいないか」を聞きに行く。
+   *
+   * 問題が無ければ確認を挟まずそのまま取り込む(毎月何度も通る操作に摩擦を足すと、
+   * 本当に止めたいときの確認まで読み飛ばされる)。問題があれば必ず止めて利用者に確定させる。
+   * 判定と文言のルールは docs/product/file-import-common-spec.md。
    */
   async function inspectThenUpload(sourceType: ImportSourceType, file: File) {
     setPhase("inspecting");
     setPending(sourceType);
     setConflict(null);
-    setYearMonthConfirm(null);
+    setCheck(null);
     setResults((prev) => ({ ...prev, [sourceType]: undefined }));
 
     let detection: Detection = {
@@ -123,6 +135,9 @@ export function ImportForm({
     try {
       const form = new FormData();
       form.append("file", file);
+      form.append("screen", "import");
+      form.append("expectedSourceType", sourceType);
+      form.append("expectedYearMonth", yearMonth);
       const res = await fetch("/api/import/detect", { method: "POST", body: form });
       if (res.ok) detection = (await res.json()) as Detection;
     } catch {
@@ -130,15 +145,43 @@ export function ImportForm({
     }
     setPending(null);
 
-    if (detection.yearMonth === yearMonth) {
-      void upload(sourceType, file, yearMonth, false, false, detection.basis);
+    const verdict = detection.verdict;
+    if (verdict && verdict.status === "ok") {
+      void upload(sourceType, file, yearMonth, false, false, detection.basis, detection.contentHash);
       return;
     }
-    setYearMonthConfirm({
+    if (verdict) {
+      setCheck({
+        sourceType,
+        file,
+        verdict,
+        contentHash: detection.contentHash ?? null,
+        chosen: verdict.suggestedYearMonth ?? yearMonth,
+      });
+      return;
+    }
+    // 下読み自体に到達できなかったとき。年月だけは必ず人に確定させる。
+    setCheck({
       sourceType,
       file,
-      detection,
-      chosen: detection.yearMonth ?? yearMonth,
+      contentHash: null,
+      verdict: {
+        summary: "中身を確認できませんでした",
+        basis: detection.basis,
+        status: "confirm",
+        issues: [
+          {
+            kind: "yearMonthUnknown",
+            title: "この取込は何年何月分ですか?",
+            body: "ファイルの中身を確認できませんでした。取り込む年月を選んでください。",
+            link: null,
+          },
+        ],
+        confirmLabel: "この内容で取り込む",
+        needsYearMonthChoice: true,
+        suggestedYearMonth: yearMonth,
+      },
+      chosen: yearMonth,
     });
   }
 
@@ -149,16 +192,19 @@ export function ImportForm({
     replace: boolean,
     confirmYearMonth = false,
     basis?: string,
+    contentHash?: string | null,
   ) {
     setPhase("uploading");
     setPending(sourceType);
     setConflict(null);
-    setYearMonthConfirm(null);
+    setCheck(null);
     const form = new FormData();
     form.append("file", file);
     form.append("yearMonth", targetYearMonth);
     if (replace) form.append("replace", "true");
     if (confirmYearMonth) form.append("confirmYearMonth", "true");
+    // 取込の記録に残す中身の指紋。次に同じファイルを選んだときの照合に使う。
+    if (contentHash) form.append("contentHash", contentHash);
 
     try {
       // サーバーに全く到達できなかった場合(オフライン・DNS失敗等)と、サーバーが
@@ -202,13 +248,25 @@ export function ImportForm({
           matchedRows: number;
           dominantCount: number;
         };
-        setYearMonthConfirm({
+        setCheck({
           sourceType,
           file,
-          detection: {
-            yearMonth: m.detectedYearMonth,
+          contentHash: contentHash ?? null,
+          verdict: {
+            summary: `「${IMPORT_SOURCES.find((s) => s.sourceType === sourceType)?.label ?? "この帳票"}」 / ${describeYearMonth(m.detectedYearMonth)}分`,
             basis: `日付を読み取れた${m.matchedRows}件のうち${m.dominantCount}件が${describeYearMonth(m.detectedYearMonth)}でした。`,
-            candidates: [m.detectedYearMonth],
+            status: "confirm",
+            issues: [
+              {
+                kind: "yearMonthMismatch",
+                title: "この取込は何年何月分ですか?",
+                body: `選ばれたファイルは${describeYearMonth(m.detectedYearMonth)}分ですが、いま作成中なのは${describeYearMonth(targetYearMonth)}分です。どちらの月として取り込むか選んでください。`,
+                link: null,
+              },
+            ],
+            confirmLabel: `${describeYearMonth(m.detectedYearMonth)}分として取り込む`,
+            needsYearMonthChoice: true,
+            suggestedYearMonth: m.detectedYearMonth,
           },
           chosen: m.detectedYearMonth,
         });
@@ -268,7 +326,7 @@ export function ImportForm({
             onChange={(e) => {
               setResults({});
               setConflict(null);
-              setYearMonthConfirm(null);
+              setCheck(null);
               router.replace(`/import?ym=${e.target.value}`);
             }}
             className="rounded-md border border-line bg-white px-2 py-1 text-sm font-normal text-ink"
@@ -303,7 +361,7 @@ export function ImportForm({
         const result = results[source.sourceType];
         const isPending = pending === source.sourceType;
         const isConflicting = conflict?.sourceType === source.sourceType;
-        const isConfirmingYearMonth = yearMonthConfirm?.sourceType === source.sourceType;
+        const isChecking = check?.sourceType === source.sourceType;
         // ホームの特定STEPカードから来たときは、その帳票だけを主役にして他を畳む。
         // フォーカス無し(サイドバー「データ取込」から直接来た)ときは全部を並列に見せる。
         const isFocused = !focusSourceType || source.sourceType === focusSourceType;
@@ -349,63 +407,25 @@ export function ImportForm({
               </Link>
             ) : null}
 
-            {isConfirmingYearMonth ? (
-              <div className="mt-4 rounded-lg border border-caution-border bg-caution-soft p-4">
-                <p className="text-sm font-bold text-ink">この取込は何年何月分ですか?</p>
-                <p className="mt-1 text-xs leading-5 text-ink-muted">
-                  {yearMonthConfirm.file.name}
-                </p>
-                <p className="mt-2 text-xs leading-5 text-ink">{yearMonthConfirm.detection.basis}</p>
-                {yearMonthConfirm.detection.yearMonth &&
-                yearMonthConfirm.detection.yearMonth !== yearMonth ? (
-                  <p className="mt-2 text-xs leading-5 text-ink">
-                    いま画面で選んでいる対象年月は
-                    <strong>{describeYearMonth(yearMonth)}</strong>
-                    です。別の月のファイルを取り違えていないか確認してください。
-                  </p>
-                ) : null}
-                <label className="mt-3 flex items-center gap-2 text-sm font-semibold text-ink">
-                  取り込む年月
-                  <select
-                    value={yearMonthConfirm.chosen}
-                    onChange={(e) =>
-                      setYearMonthConfirm({ ...yearMonthConfirm, chosen: e.target.value })
-                    }
-                    className="rounded-md border border-line bg-white px-2 py-1 text-sm font-normal text-ink"
-                  >
-                    {selectableYearMonths(25).map((ym) => (
-                      <option key={ym} value={ym}>
-                        {describeYearMonth(ym)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void upload(
-                        yearMonthConfirm.sourceType,
-                        yearMonthConfirm.file,
-                        yearMonthConfirm.chosen,
-                        false,
-                        true,
-                        yearMonthConfirm.detection.basis,
-                      )
-                    }
-                    className="rounded-md bg-brand-deep px-4 py-2 text-sm font-semibold text-white"
-                  >
-                    {describeYearMonth(yearMonthConfirm.chosen)}分として取り込む
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setYearMonthConfirm(null)}
-                    className="rounded-md border border-line px-4 py-2 text-sm font-semibold text-ink"
-                  >
-                    キャンセル
-                  </button>
-                </div>
-              </div>
+            {isChecking ? (
+              <ImportCheckPanel
+                fileName={check.file.name}
+                verdict={check.verdict}
+                yearMonth={check.chosen}
+                onYearMonthChange={(ym) => setCheck({ ...check, chosen: ym })}
+                onConfirm={() =>
+                  void upload(
+                    check.sourceType,
+                    check.file,
+                    check.chosen,
+                    false,
+                    true,
+                    check.verdict.basis,
+                    check.contentHash,
+                  )
+                }
+                onCancel={() => setCheck(null)}
+              />
             ) : null}
 
             {isConflicting ? (
@@ -451,7 +471,7 @@ export function ImportForm({
                   </button>
                 </div>
               </div>
-            ) : isConfirmingYearMonth ? null : (
+            ) : isChecking ? null : (
               <input
                 type="file"
                 accept={source.accept}
@@ -470,7 +490,7 @@ export function ImportForm({
                 {phase === "inspecting" ? "ファイルの中身を確認しています…" : "取り込んでいます…"}
               </p>
             ) : null}
-            {result && !isConflicting && !isConfirmingYearMonth ? (
+            {result && !isConflicting && !isChecking ? (
               <div className="mt-2">
                 <p className={`text-xs leading-5 ${result.ok ? "text-ink-muted" : "text-danger"}`}>
                   {result.fileName}: {result.message}

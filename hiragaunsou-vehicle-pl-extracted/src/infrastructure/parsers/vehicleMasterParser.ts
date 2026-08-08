@@ -6,7 +6,7 @@ import type { ImportSourceInfo } from "./importSource";
 import { TRAILER_VEHICLE_TYPE_PATTERN } from "../../domain/rules/towedVehicle";
 
 /** 列順が変わっても取り込めるよう、名前で検証する必須列。 */
-const REQUIRED_HEADERS = [
+export const REQUIRED_HEADERS = [
   "車番",
   "車種名",
   "所属",

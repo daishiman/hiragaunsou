@@ -4,7 +4,7 @@ import { parseJapaneseAmount, normalizeKey } from "./numberUtils";
 import { CHARTERED_VEHICLE_NO } from "../../domain/entities/VehiclePl";
 
 /** 列順が変わっても取り込めるよう、名前で検証する必須列。 */
-const REQUIRED_HEADERS = [
+export const REQUIRED_HEADERS = [
   "車両コード",
   "運転者名",
   "受取運賃",

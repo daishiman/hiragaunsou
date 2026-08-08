@@ -5,6 +5,7 @@ import { checkAccess } from "../../../../src/infrastructure/auth/accessControl";
 import { createDb } from "../../../../src/infrastructure/db/client";
 import { D1ImportBatchRepository } from "../../../../src/infrastructure/db/D1ImportBatchRepository";
 import { D1AuditLogRepository } from "../../../../src/infrastructure/db/D1AuditLogRepository";
+import { D1FileImportLogRepository } from "../../../../src/infrastructure/db/D1FileImportLogRepository";
 import {
   ListImportBatchDeletionLogUseCase,
   ListImportBatchesUseCase,
@@ -26,6 +27,8 @@ export default async function AdminImportBatchesPage() {
   const db = createDb(env.DB);
   const batches = await new ListImportBatchesUseCase(new D1ImportBatchRepository(db)).execute();
   const deletionLog = await new ListImportBatchDeletionLogUseCase(new D1AuditLogRepository(db)).execute();
+  // 取り込んだファイルの記録 (マスタ取込も含む)。同じファイルを二重に取り込まないための照合に使う。
+  const fileLog = await new D1FileImportLogRepository(db).listAll();
 
   return (
     <div className="max-w-5xl">
@@ -34,7 +37,11 @@ export default async function AdminImportBatchesPage() {
         title="取込データ管理"
         lead="全期間・全帳票種別の取込バッチを確認し、誤って取り込まれたデータを削除します。削除は取り消せません。"
       />
-      <ImportBatchesManager initialBatches={batches} initialDeletionLog={deletionLog} />
+      <ImportBatchesManager
+        initialBatches={batches}
+        initialDeletionLog={deletionLog}
+        initialFileLog={fileLog}
+      />
     </div>
   );
 }

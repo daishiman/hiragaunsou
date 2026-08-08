@@ -12,13 +12,22 @@ import {
   describeImportSource,
   type ImportSourceInfo,
 } from "../../../../src/infrastructure/parsers/importSource";
+import type { FileImportVerdict } from "../../../../src/domain/rules/fileImportCheck";
 import { AlertPanel } from "../../../_components/AlertPanel";
+import { ImportCheckPanel } from "../../../_components/ImportCheckPanel";
 
 interface Preview {
   fileName: string;
   valid: DriverMasterImportRow[];
   errors: DriverMasterImportRowError[];
   source?: ImportSourceInfo;
+}
+
+/** 取込前の確認。中身の判定に問題があったときだけ出す。 */
+interface CheckState {
+  file: File;
+  verdict: FileImportVerdict;
+  contentHash: string | null;
 }
 
 interface SkippedRow {
@@ -57,10 +66,47 @@ export function DriverMasterManager({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [check, setCheck] = useState<CheckState | null>(null);
+  /** 取込の記録に残す中身の指紋。次に同じファイルを選んだときの照合に使う。 */
+  const [contentHash, setContentHash] = useState<string | null>(null);
 
   const existingCodes = useMemo(() => new Set(drivers.map((d) => d.employeeCode)), [drivers]);
   const knownVehicleNos = useMemo(() => new Set(vehicleNos), [vehicleNos]);
   const unassigned = drivers.filter((d) => !d.vehicleNo).length;
+
+  /**
+   * ファイルを選んだ直後の下読み。名前ではなく中身から「何のファイルか」「必要な列が揃っているか」
+   * 「前に取り込んでいないか」を確かめ、問題があれば取込を止めて確認を取る。
+   * 全画面共通のルール(docs/product/file-import-common-spec.md)に従う。
+   */
+  async function inspectThenUpload(file: File) {
+    setBusy(true);
+    setError(null);
+    setDone(null);
+    setPreview(null);
+    setSkipped([]);
+    setCheck(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("screen", "driver_master");
+      const res = await fetch("/api/import/detect", { method: "POST", body: form });
+      const data = (await res.json().catch(() => null)) as
+        | { contentHash?: string; verdict?: FileImportVerdict }
+        | null;
+      if (res.ok && data?.verdict) {
+        setContentHash(data.contentHash ?? null);
+        if (data.verdict.status !== "ok") {
+          setCheck({ file, verdict: data.verdict, contentHash: data.contentHash ?? null });
+          setBusy(false);
+          return;
+        }
+      }
+    } catch {
+      // 下読みに失敗しても取込自体は続けられる。中身の不備は取込側が理由つきで返す。
+    }
+    await upload(file);
+  }
 
   async function upload(file: File) {
     setBusy(true);
@@ -68,6 +114,7 @@ export function DriverMasterManager({
     setDone(null);
     setPreview(null);
     setSkipped([]);
+    setCheck(null);
     try {
       const form = new FormData();
       form.append("file", file);
@@ -100,7 +147,12 @@ export function DriverMasterManager({
       const res = await fetch("/api/admin/driver-master/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ records: preview.valid }),
+        body: JSON.stringify({
+          records: preview.valid,
+          // 取込の記録に残す情報。次に同じファイルを選んだときの照合に使う。
+          fileName: preview.fileName,
+          contentHash,
+        }),
       });
       const data = (await res.json().catch(() => null)) as
         | { inserted?: number; updated?: number; skipped?: SkippedRow[]; error?: string }
@@ -146,6 +198,7 @@ export function DriverMasterManager({
           の収支表シートの「コード」「運転者名」「車番」から読み取ります)。
           CSVに書き出す必要はありません。CSVを選ぶ場合は、社員No・氏名・車番の3列を書き出したものにしてください。
           車番が空の方(内勤・退職等)も登録できます。給与が乗らないだけで、エラーにはなりません。
+          ファイル名は変わっても構いません。中身を読んで判定します。
         </p>
         <input
           ref={fileInputRef}
@@ -154,12 +207,27 @@ export function DriverMasterManager({
           disabled={busy}
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) void upload(file);
+            if (file) void inspectThenUpload(file);
           }}
           className="mt-3 block w-full text-xs text-ink file:mr-3 file:rounded-md file:border file:border-line file:bg-subtle file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-ink"
         />
         {busy && !preview ? (
           <p className="mt-3 text-xs text-ink-muted">ファイルを読み取っています…</p>
+        ) : null}
+
+        {check ? (
+          <ImportCheckPanel
+            fileName={check.file.name}
+            verdict={check.verdict}
+            yearMonth={yearMonth}
+            onYearMonthChange={() => undefined}
+            onConfirm={() => void upload(check.file)}
+            onCancel={() => {
+              setCheck(null);
+              if (fileInputRef.current) fileInputRef.current.value = "";
+            }}
+            busy={busy}
+          />
         ) : null}
 
         {error ? (

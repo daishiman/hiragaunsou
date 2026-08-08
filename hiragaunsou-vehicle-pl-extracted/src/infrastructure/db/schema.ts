@@ -76,6 +76,43 @@ export const adminAuditLog = sqliteTable("admin_audit_log", {
     .notNull(),
 });
 
+/**
+ * ファイル取込の記録 (どの画面から・何を・いつ取り込んだか)。
+ *
+ * csv_import_batch は月次帳票の取込だけを持ち、マスタ取込は記録が残らなかった。
+ * 「同じファイルをもう一度取り込もうとしている」を検知するには、画面を問わず
+ * 中身の指紋(content_hash)を残す必要があるため、取込の入口すべてで1件書く。
+ * 仕様は docs/product/file-import-common-spec.md。
+ */
+export const fileImportLog = sqliteTable(
+  "file_import_log",
+  {
+    id: text("id").primaryKey(),
+    /** import / vehicle_master / driver_master */
+    screen: text("screen").notNull(),
+    sourceType: text("source_type").notNull(),
+    /** 月に紐づかない取込(マスタ)は null */
+    yearMonth: text("year_month"),
+    /** 参考情報。判定には使わない(名前は毎月変わる) */
+    fileName: text("file_name").notNull(),
+    /** 中身のSHA-256。同一ファイルの判定はこれだけで行う */
+    contentHash: text("content_hash").notNull(),
+    rowCount: integer("row_count").notNull().default(0),
+    importedAt: integer("imported_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    /** 利用者を消しても記録は残す(消えると二重取込の照合が効かなくなる)。誰が入れたかは名前で残る。 */
+    importedBy: text("imported_by").references(() => user.id, { onDelete: "set null" }),
+    importedByName: text("imported_by_name").notNull().default(""),
+  },
+  // 重複判定は「中身が同じか」「同じ名前が過去にあるか」の2軸を引く。
+  (table) => [
+    index("file_import_log_hash_idx").on(table.contentHash),
+    index("file_import_log_screen_idx").on(table.screen, table.importedAt),
+    index("file_import_log_name_idx").on(table.fileName),
+  ],
+);
+
 /** 車両マスタ (保険・税・リース・配賦単価等、連鎖確定の土台) */
 export const vehicleMaster = sqliteTable("vehicle_master", {
   vehicleNo: text("vehicle_no").primaryKey(),
