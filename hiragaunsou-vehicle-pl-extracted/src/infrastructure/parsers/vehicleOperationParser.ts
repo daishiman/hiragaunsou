@@ -28,6 +28,11 @@ export interface VehicleOperationRecord {
   tripCount: number;
   operatingHours: number;
   totalDistanceKm: number;
+  /**
+   * デジタコの総給油量。取り込んではいるが、収支表の計算には一切使っていない
+   * (燃料の量は「インタンク給油量 + 外部給油量」で出している)。
+   * 外部給油を含むかどうかを業務側に確認中: docs/product/業務確認事項.md 質問1。
+   */
   totalFuelQtyLiter: number;
   fuelEconomy: number;
   /** 傭車(車番88888相当)を機械的に自動除外してよいためのフラグ */
