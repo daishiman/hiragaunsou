@@ -12,8 +12,10 @@ import {
   type OverridableField,
 } from "../../../src/domain/rules/vehiclePlOverride";
 import { heaviestSeverity, type ReviewSeverity } from "../../../src/domain/rules/vehiclePlReview";
+import { SEVERITY_MEANING } from "../../../src/domain/rules/plIssueGuidance";
 import { FIELD_LABELS, isNumericField } from "../../_lib/fieldLabels";
 import { kmPriceLabel, num, pct, yen } from "../../_lib/format";
+import { ReviewWizard, buildReviewQueue, type ReviewItem } from "./ReviewWizard";
 
 /** 重さごとの見え方。面の色だけで区別せず、凡例の語と1対1で対応させる。 */
 const SEVERITY_STYLE: Record<ReviewSeverity, { cell: string; chip: string; label: string }> = {
@@ -224,6 +226,8 @@ export function GridTable({
   review,
   canEdit,
   lockedReason,
+  header,
+  footer,
 }: {
   rows: GridRow[];
   yearMonth: string;
@@ -232,6 +236,14 @@ export function GridTable({
   canEdit: boolean;
   /** 直せない場合の理由。画面にそのまま出す */
   lockedReason: string | null;
+  /**
+   * 表の上下に置く帯 (確定・CSV書き出し・Excel突合)。
+   * 集中モード中は出さないので、この画面の持ち物としてここで受け取る。
+   * 1件ずつ確認しているときに「確定する」「書き出す」が並んでいると、
+   * いま押すべきボタンがどれか分からなくなる。
+   */
+  header?: React.ReactNode;
+  footer?: React.ReactNode;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"summary" | "full">("summary");
@@ -261,6 +273,15 @@ export function GridTable({
   // 表を取り直したら重ねていた内容は不要になる (サーバ側の表に入っている)。
   // ここで捨てないと、反映後も古い「反映待ち」の印が残り続ける。
   // 描画中に捨てるのは、捨てる前の状態を一度描いてちらつかせないため。
+  /**
+   * 確認モード (1件ずつのご案内)。
+   * 表を先に見せると「色の付いたセルをダブルクリックする」という前提知識が要る。
+   * 何も知らない人はこちらから入り、覚えた人だけが表で直接直す (設計メモ T5 §5.3)。
+   */
+  const [reviewing, setReviewing] = useState(false);
+  /** 確認モードに入った時点の指摘の並び。作業中に順番が動かないよう固定する。 */
+  const [queue, setQueue] = useState<ReviewItem[]>([]);
+
   const [shownRows, setShownRows] = useState(rows);
   if (shownRows !== rows) {
     setShownRows(rows);
@@ -268,6 +289,8 @@ export function GridTable({
     setAcks({});
     setUndo(null);
     setPendingCount(review.pendingOverrides);
+    // 表を取り直したら固定していた並びは古くなる。確認モードからは一度表に戻す。
+    setReviewing(false);
   }
 
   const depots = useMemo(
@@ -524,10 +547,9 @@ export function GridTable({
       error?: string;
       ackedByName?: string | null;
     } | null;
-    if (!res.ok) {
-      setNotice(data?.error ?? "確認済みにできませんでした");
-      return;
-    }
+    // 呼び出し側 (確認モード) が失敗を検知して先へ進めないようにする必要があるため、
+    // ここで握りつぶさずに投げる。表側は catch して通知欄に出す。
+    if (!res.ok) throw new Error(data?.error ?? "確認済みにできませんでした");
     setAcks((prev) => ({
       ...prev,
       [issue.key]: { acknowledged, ackedByName: data?.ackedByName ?? null },
@@ -555,6 +577,7 @@ export function GridTable({
       setNotice(
         `直し${data?.appliedCount ?? 0}件を反映して、${data?.vehicleCount ?? 0}台分の収支表を作り直しました。`,
       );
+      setReviewing(false);
       router.refresh();
     } catch {
       setNotice("通信エラーが発生しました");
@@ -563,8 +586,54 @@ export function GridTable({
     }
   }
 
+  const openIssueCount = progress.blocking + progress.warning + progress.info;
+
+  if (reviewing) {
+    return (
+      <>
+        {notice ? (
+          <div className="mb-3 rounded-lg border border-brand-soft bg-brand-mist px-4 py-2 text-xs text-brand-deep">
+            {notice}
+          </div>
+        ) : null}
+        <ReviewWizard
+          yearMonth={yearMonth}
+          items={queue}
+          canEdit={canEdit}
+          pendingCount={pendingCount}
+          applying={applying}
+          vehicleCount={rows.length}
+          onSave={(row, field, value, reason) => saveEdit(row, field, value, reason)}
+          onAck={(issue, acknowledged) => toggleAck(issue, acknowledged)}
+          onApply={() => void applyPending()}
+          onExit={() => setReviewing(false)}
+        />
+      </>
+    );
+  }
+
   return (
     <>
+      {header}
+
+      <OpeningGuide
+        openIssueCount={openIssueCount}
+        blocking={progress.blocking}
+        warning={progress.warning}
+        info={progress.info}
+        cleanVehicles={progress.cleanVehicles}
+        vehicleCount={rows.length}
+        pendingCount={pendingCount}
+        canEdit={canEdit}
+        applying={applying}
+        lockedReason={lockedReason}
+        onStart={() => {
+          setQueue(buildReviewQueue(rows.map((row) => ({ ...row, issues: issuesOf(row) }))));
+          setReviewing(true);
+        }}
+        onApply={() => void applyPending()}
+      />
+
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="inline-flex rounded-md border border-line bg-white p-0.5" role="group">
           {(["summary", "full"] as const).map((m) => (
@@ -648,14 +717,10 @@ export function GridTable({
         onApply={() => void applyPending()}
       />
 
-      {lockedReason ? (
-        <p className="mb-3 rounded-lg border border-line bg-subtle px-4 py-2 text-xs text-ink">
-          {lockedReason}
-        </p>
-      ) : (
+      {lockedReason ? null : (
         <p className="mb-3 text-xs text-ink-muted">
-          色の付いたセルをダブルクリック(またはEnter・F2)すると、その場で数字を直せます。
-          直した値はすぐ保存され、収支表への反映はまとめて1回だけ行います。
+          操作に慣れている方向け: 色の付いたセルをダブルクリック(またはEnter・F2)すると、
+          この表の上で直接数字を直せます。直した値はすぐ保存され、収支表への反映はまとめて1回だけ行います。
         </p>
       )}
 
@@ -880,7 +945,11 @@ export function GridTable({
               canEdit={canEdit}
               editable={canEdit && isEditableField(opened!.field as ColumnKey)}
               onEdit={() => startEdit(openedRow, opened!.field as EditableColumn)}
-              onToggleAck={(issue, acknowledged) => void toggleAck(issue, acknowledged)}
+              onToggleAck={(issue, acknowledged) => {
+                void toggleAck(issue, acknowledged).catch((e: unknown) =>
+                  setNotice(e instanceof Error ? e.message : "確認済みにできませんでした"),
+                );
+              }}
               onClose={() => setOpened(null)}
             />
           ) : (
@@ -889,7 +958,120 @@ export function GridTable({
               車番を押すと、その車両の経費内訳・12ヶ月推移・実力損益を確認できます。
             </p>
           )}
+
+      {footer}
     </>
+  );
+}
+
+/**
+ * 画面を開いた人が最初に読む1文と、最初に押すボタン。
+ *
+ * 「30件だけ確認してください」とだけ書いてあっても、何をどこから始めればよいかは分からない。
+ * ここは「いま何件あるか」「まず何を押すか」の2つだけを大きく置き、
+ * 3区分の意味は語の隣に書き添える (別画面のヘルプに逃がすと誰も読まない)。
+ */
+function OpeningGuide({
+  openIssueCount,
+  blocking,
+  warning,
+  info,
+  cleanVehicles,
+  vehicleCount,
+  pendingCount,
+  canEdit,
+  applying,
+  lockedReason,
+  onStart,
+  onApply,
+}: {
+  openIssueCount: number;
+  blocking: number;
+  warning: number;
+  info: number;
+  cleanVehicles: number;
+  vehicleCount: number;
+  pendingCount: number;
+  canEdit: boolean;
+  applying: boolean;
+  lockedReason: string | null;
+  onStart: () => void;
+  onApply: () => void;
+}) {
+  const counts: { severity: ReviewSeverity; count: number }[] = [
+    { severity: "blocking", count: blocking },
+    { severity: "warning", count: warning },
+    { severity: "info", count: info },
+  ];
+
+  return (
+    <section className="mb-4 rounded-xl border border-line bg-white px-5 py-4">
+      {openIssueCount > 0 ? (
+        <>
+          <h2 className="text-xl font-bold text-ink">
+            <span className="num">{openIssueCount}件</span>の確認が必要です。
+          </h2>
+          <p className="mt-1 text-sm text-ink-muted">
+            1件ずつ順番にご案内します。{vehicleCount}台のうち {cleanVehicles}台は指摘なしなので、
+            見ていただくのはこの{openIssueCount}件だけです。
+          </p>
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={onStart}
+              className="pressable mt-3 rounded-md bg-accent px-6 py-3 text-base font-semibold text-white hover:bg-accent-deep"
+            >
+              確認をはじめる
+            </button>
+          ) : null}
+        </>
+      ) : pendingCount > 0 ? (
+        <>
+          <h2 className="text-xl font-bold text-ink">準備が整いました。</h2>
+          <p className="mt-1 text-sm text-ink-muted">
+            確認はすべて終わっています。直した数字 {pendingCount}件 を収支表に入れてください。
+          </p>
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={onApply}
+              disabled={applying}
+              className="pressable mt-3 rounded-md bg-accent px-6 py-3 text-base font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+            >
+              {applying ? "反映しています…" : "収支表に反映する"}
+            </button>
+          ) : null}
+        </>
+      ) : (
+        <>
+          <h2 className="text-xl font-bold text-ink">確認が必要な箇所はありません。</h2>
+          <p className="mt-1 text-sm text-ink-muted">
+            {vehicleCount}台すべて、このまま確定していただけます。
+          </p>
+        </>
+      )}
+
+      {openIssueCount > 0 ? (
+        <ul className="mt-4 flex flex-wrap gap-x-6 gap-y-1.5 border-t border-line pt-3">
+          {counts.map(({ severity, count }) => (
+            <li key={severity} className="flex items-baseline gap-2 text-xs">
+              <span
+                className={`rounded-full border px-2 py-0.5 font-semibold ${SEVERITY_STYLE[severity].chip}`}
+              >
+                {SEVERITY_STYLE[severity].label} {count}
+              </span>
+              <span className="text-ink-muted">{SEVERITY_MEANING[severity]}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {lockedReason ? (
+        <p className="mt-3 rounded-lg border border-line bg-subtle px-4 py-2 text-xs text-ink">
+          {lockedReason}
+        </p>
+      ) : null}
+    </section>
   );
 }
 

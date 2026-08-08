@@ -22,6 +22,11 @@ import {
   type ReviewedIssue,
 } from "../../domain/rules/plIssueAck";
 import type { OverridableField } from "../../domain/rules/vehiclePlOverride";
+import {
+  EDIT_TARGET_FIELD,
+  type ValueBenchmark,
+} from "../../domain/rules/plIssueGuidance";
+import { monthLabel, trailingYearMonths } from "../../domain/rules/fiscalPeriod";
 import type { ExcelReconcileResult } from "../../domain/rules/excelReconciliation";
 import type { VehiclePlRepository } from "../../domain/repositories/VehiclePlRepository";
 import type { ReviewFlagRepository } from "../../domain/repositories/VehiclePlRepository";
@@ -61,6 +66,14 @@ export interface GridRow {
   severity: ReviewSeverity | null;
   /** 人が直した値。無ければ null */
   override: GridOverride | null;
+  /**
+   * 指摘の付いた項目ごとの「ふつうはこのくらい」。
+   *
+   * 仕様を知らない人が値の妥当性を判断するには、比べる相手が要る。
+   * 表の他の行を目で追わせる代わりに、同じ車種の中央値と先月の値をここに書き写す。
+   * 指摘の無い項目には作らない (106行×全列だと送る量が増えるだけで使われない)。
+   */
+  benchmarks: Record<string, ValueBenchmark>;
 }
 
 export interface GridReviewSummary {
@@ -84,6 +97,85 @@ export interface GridResponse {
   review: GridReviewSummary;
 }
 
+/** 数字として比較できる値だけを取り出す (文字列の列・空欄・0は中央値の材料にしない)。 */
+function sampleOf(row: Record<string, unknown>, field: string): number | null {
+  const value = Number(row[field]);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return value;
+}
+
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const upper = sorted[mid] as number;
+  return sorted.length % 2 === 1 ? upper : ((sorted[mid - 1] as number) + upper) / 2;
+}
+
+/**
+ * 「ふつうはこのくらい」を作る。
+ *
+ * 同じ車種で比べるのが本筋 (大型と小型では走行距離も給与も桁が違う) だが、
+ * 車種の台数が少ないと中央値が1台の値に引きずられる。3台に満たない場合だけ
+ * 全車両に広げ、どちらで出したかをラベルに書いて画面に出す (何と比べたのか隠さない)。
+ */
+const MIN_SAMPLES_PER_TYPE = 3;
+
+function buildBenchmarkLookup(
+  plRows: readonly (Record<string, unknown> & { vehicleNo: string })[],
+  previousRows: readonly Record<string, unknown>[],
+  previousLabel: string,
+) {
+  const byType = new Map<string, (Record<string, unknown> & { vehicleNo: string })[]>();
+  for (const row of plRows) {
+    const type = String(row.type ?? "");
+    const list = byType.get(type) ?? [];
+    list.push(row);
+    byType.set(type, list);
+  }
+  const previousByVehicle = new Map(
+    previousRows.map((row) => [String(row.no ?? row.vehicleNo ?? ""), row]),
+  );
+  const cache = new Map<string, number | null>();
+
+  return (row: Record<string, unknown> & { vehicleNo: string }, field: string): ValueBenchmark => {
+    const type = String(row.type ?? "");
+    const cacheKey = `${type}::${field}`;
+    let typical = cache.get(cacheKey);
+    let typicalLabel = type === "" ? "全車両の中央値" : `${type}の中央値`;
+    if (typical === undefined) {
+      const sameType = (byType.get(type) ?? [])
+        .map((r) => sampleOf(r, field))
+        .filter((v): v is number => v !== null);
+      typical = median(sameType);
+      if (sameType.length < MIN_SAMPLES_PER_TYPE) typical = null;
+      cache.set(cacheKey, typical);
+    }
+    if (typical === null) {
+      const allKey = `*::${field}`;
+      let all = cache.get(allKey);
+      if (all === undefined) {
+        all = median(
+          plRows.map((r) => sampleOf(r, field)).filter((v): v is number => v !== null),
+        );
+        cache.set(allKey, all);
+      }
+      typical = all;
+      typicalLabel = "全車両の中央値";
+    }
+
+    const prevRow = previousByVehicle.get(row.vehicleNo);
+    const previous = prevRow ? Number(prevRow[field]) : NaN;
+
+    return {
+      typical,
+      typicalLabel: typical === null ? "" : typicalLabel,
+      previous: Number.isFinite(previous) ? previous : null,
+      previousLabel: Number.isFinite(previous) ? previousLabel : "",
+    };
+  };
+}
+
 export function buildGridResponse(
   yearMonth: string,
   plRows: Array<Record<string, unknown> & { vehicleNo: string }>,
@@ -91,6 +183,8 @@ export function buildGridResponse(
   reconciliation?: Pick<ExcelReconcileResult, "vehicles">,
   overrides: readonly VehiclePlOverrideRecord[] = [],
   acks: readonly PlIssueAckRecord[] = [],
+  /** 先月の収支表。「先月はこうだった」を出すためだけに使う (無くても表は作れる)。 */
+  previousRows: readonly Record<string, unknown>[] = [],
 ): GridResponse {
   const flagsByVehicle = new Map<string, Set<string>>();
   for (const flag of anomalyFlags) {
@@ -136,6 +230,12 @@ export function buildGridResponse(
   }
 
   const overrideByVehicle = new Map(overrides.map((o) => [o.vehicleNo, o]));
+  const previousYearMonth = trailingYearMonths(yearMonth, 2)[0] ?? yearMonth;
+  const benchmarkOf = buildBenchmarkLookup(
+    plRows,
+    previousRows,
+    `先月(${monthLabel(previousYearMonth)})`,
+  );
 
   const rows: GridRow[] = plRows.map((row) => {
     const values = {} as Record<VehiclePlField, number | string | null>;
@@ -153,12 +253,26 @@ export function buildGridResponse(
 
     const override = overrideByVehicle.get(row.vehicleNo);
 
+    const benchmarks: Record<string, ValueBenchmark> = {};
+    for (const issue of issues) {
+      // 指摘の項目と、その指摘を直す入口の項目 (運送収入→運賃 など) の両方に用意する。
+      // 入口側の「ふつうはこのくらい」が無いと、入力欄に例も判定も出せない。
+      for (const field of [issue.field, EDIT_TARGET_FIELD[issue.code]]) {
+        if (field === undefined || benchmarks[field]) continue;
+        const benchmark = benchmarkOf(row, field);
+        // 中央値も先月の値も無い項目は、書き写しても判断材料にならない。
+        if (benchmark.typical === null && benchmark.previous === null) continue;
+        benchmarks[field] = benchmark;
+      }
+    }
+
     return {
       vehicleNo: row.vehicleNo,
       vehicleNoLabel,
       values,
       highlightedFields: Array.from(flagsByVehicle.get(row.vehicleNo) ?? []),
       issues,
+      benchmarks,
       severity: heaviestSeverity(openIssues(issues)),
       override: override
         ? {
@@ -207,6 +321,12 @@ export class GetMonthlyGridUseCase {
     reconciliation?: Pick<ExcelReconcileResult, "vehicles">,
   ): Promise<GridResponse> {
     const plRows = await this.vehiclePlRepo.findByYearMonth(yearMonth);
+    // 「先月はこうだった」を確認画面に出すためだけの読み込み。取れなくても表は成立するので、
+    // 失敗しても表全体を落とさない (先月の収支表がまだ無い月が必ず存在する)。
+    const previousRows = await this.vehiclePlRepo
+      .findByYearMonth(trailingYearMonths(yearMonth, 2)[0] ?? yearMonth)
+      .then((rows) => rows.map((row) => ({ ...row }) as Record<string, unknown>))
+      .catch(() => [] as Record<string, unknown>[]);
     const overrides = (await this.overrideRepo?.findByYearMonth(yearMonth)) ?? [];
     const acks = (await this.ackRepo?.findByYearMonth(yearMonth)) ?? [];
     const openFlags = await this.reviewFlagRepo.findOpenByYearMonth(yearMonth);
@@ -227,6 +347,7 @@ export class GetMonthlyGridUseCase {
       reconciliation,
       overrides,
       acks,
+      previousRows,
     );
   }
 }
