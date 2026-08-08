@@ -199,6 +199,12 @@ export function calculateVehiclePl(
   const tollNet = round2(toll - tollDisc);
 
   const fuelIn = round2(input.fuelInQty * rates.tankPricePerLiter);
+  /*
+    【業務側に未確認の前提】docs/product/業務確認事項.md 質問1
+    インタンク給油量には外部給油分が「含まれない」前提で足している。
+    もし含まれるなら、ここで外部給油量が二重に乗り、燃費(nempi)が実際より悪く出る。
+    なお、デジタコの総給油量(vehicleOperationParser.totalFuelQtyLiter)はこの計算に使っていない。
+  */
   const fuelQty = round2(input.fuelInQty + input.fuelOutQty);
   const nempi = fuelQty > 0 ? round2(input.km / fuelQty) : 0;
   const fuelTotal = round2(fuelIn + input.fuelOut + input.adblue);
@@ -206,6 +212,12 @@ export function calculateVehiclePl(
   const repairStandard = round2(input.km * input.standardCostRate.repairPerKm);
   // STEP5: タイヤ請求書からの実費があればそれを正とし、無ければ km×単価の標準原価を使う。
   const tire = round2(input.tireActual ?? input.km * input.standardCostRate.tirePerKm);
+  /*
+    【業務側に未確認の前提】docs/product/業務確認事項.md 質問2
+    修繕費の空欄は「その月は修繕が無かった(0円)」として扱う。入れ忘れとは区別していない。
+    区別できるのは手入力画面まで(確定前に未入力の台数を出している)で、
+    ここから先は0円と入れ忘れが同じ数字になる。
+  */
   const repairTotal = round2(
     input.repairActual + tire + input.equip + input.mainte,
   );
@@ -215,6 +227,11 @@ export function calculateVehiclePl(
 
   const insTotal = round2(input.insCompulsory + input.insVoluntary);
   const taxTotal = round2(input.taxAuto + input.taxWeight);
+  /*
+    【業務側に未確認の前提】docs/product/業務確認事項.md 質問3
+    その他諸経費は、旧Excel(月次収支表)から取り込んだ値を毎月持ち回すだけで、
+    このアプリに入力欄を作っていない。「人が毎月入れる数字」なら入力欄が要る。
+  */
   const miscTotal = round2(input.miscOther);
   const transportTotal = round2(input.lease + input.installment);
 

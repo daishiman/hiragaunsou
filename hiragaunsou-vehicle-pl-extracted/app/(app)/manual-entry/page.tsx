@@ -10,8 +10,10 @@ import {
 } from "../../../src/infrastructure/db/D1MasterRepository";
 import { D1VehiclePlRepository } from "../../../src/infrastructure/db/D1VehiclePlRepository";
 import { D1ImportBatchRepository } from "../../../src/infrastructure/db/D1ImportBatchRepository";
+import { D1ReviewFlagRepository } from "../../../src/infrastructure/db/D1ReviewFlagRepository";
 import { D1DriverMasterRepository } from "../../../src/infrastructure/db/D1MasterRepository";
 import { GetPayrollDetailByVehicleUseCase } from "../../../src/usecase/steps/getPayrollDetailByVehicle";
+import { ConfirmMonthlyPlUseCase } from "../../../src/usecase/steps/confirmMonthlyPl";
 import { STANDARD_COST_RATES } from "../../../src/domain/entities/VehiclePl";
 import { currentYearMonth, monthsBefore, selectableYearMonths } from "../../_lib/yearMonth";
 import { PageHead } from "../../_components/PageHead";
@@ -42,20 +44,34 @@ export default async function ManualEntryPage({
   // 前月のインタンク単価。tank_price はマイグレーションで初期値を入れていないため、
   // 新しい月は必ず0から始まる。0のまま確定すると全車の軽油代が0円になるので、
   // 「前月はいくらだったか」を画面に出してワンタップで入れられるようにする。
-  const [vehicles, existingRows, rates, payrollBatch, drivers, payrollDetail, prevTankPrice] =
-    await Promise.all([
-      vehicleMasterRepo.findAllActive(),
-      vehiclePlRepo.findByYearMonth(yearMonth),
-      rateMasterRepo.getRates(yearMonth),
-      importBatchRepo.findLatestBatch(yearMonth, "payroll"),
-      driverMasterRepo.findAll(),
-      new GetPayrollDetailByVehicleUseCase(
-        importBatchRepo,
-        vehicleMasterRepo,
-        driverMasterRepo,
-      ).execute(yearMonth),
-      rateMasterRepo.getRate(RATE_KEYS.tankPricePerLiter, monthsBefore(yearMonth, 1), 0),
-    ]);
+  const previousYearMonth = monthsBefore(yearMonth, 1);
+  const [
+    vehicles,
+    existingRows,
+    rates,
+    payrollBatch,
+    drivers,
+    payrollDetail,
+    prevTankPrice,
+    previousRows,
+    confirmation,
+  ] = await Promise.all([
+    vehicleMasterRepo.findAllActive(),
+    vehiclePlRepo.findByYearMonth(yearMonth),
+    rateMasterRepo.getRates(yearMonth),
+    importBatchRepo.findLatestBatch(yearMonth, "payroll"),
+    driverMasterRepo.findAll(),
+    new GetPayrollDetailByVehicleUseCase(
+      importBatchRepo,
+      vehicleMasterRepo,
+      driverMasterRepo,
+    ).execute(yearMonth),
+    rateMasterRepo.getRate(RATE_KEYS.tankPricePerLiter, previousYearMonth, 0),
+    // 前月の実績。「先月の値を入れる」と、空欄のセルに出す「先月 ◯◯」のヒントに使う。
+    vehiclePlRepo.findByYearMonth(previousYearMonth),
+    // 確定済みの月に保存すると確定が解除される。黙って解除しないよう、画面に出して確認を挟む。
+    new ConfirmMonthlyPlUseCase(vehiclePlRepo, new D1ReviewFlagRepository(db)).status(yearMonth),
+  ]);
 
   // 運転者マスタは車番と1:1ではない(2人乗務等)ため、同じ車番の運転者名は"/"区切りでまとめる。
   const driverNameByVehicle = new Map<string, string>();
@@ -102,6 +118,30 @@ export default async function ManualEntryPage({
     ),
   };
 
+  /*
+    前月の値。請求書から書き写す欄(燃料4項目・修繕費)にだけ用意する。
+    タイヤ代・通行料金は「今月の走行距離 × 単価」「今月の売上モニタリスト」から自動計算した値を
+    既にセルに出しており、そちらのほうが今月の実態に近い。先月の値を並べると
+    どちらを信じるかの判断が1つ増えるだけなので出さない。
+  */
+  const prevByVehicle = new Map(previousRows.map((r) => [r.no, r]));
+  const prevPick = (field: "repair" | "fuelOut" | "fuelOutQty" | "fuelInQty" | "adblue") => {
+    const record: Record<string, number> = {};
+    for (const v of vehicles) {
+      const value = prevByVehicle.get(v.vehicleNo)?.[field] ?? 0;
+      // 0は「先月も入っていなかった」なので、コピー元としては無いものとして扱う。
+      if (value !== 0) record[v.vehicleNo] = value;
+    }
+    return record;
+  };
+  const previousMonthValues = {
+    fuelInQty: prevPick("fuelInQty"),
+    fuelOutQty: prevPick("fuelOutQty"),
+    fuelOut: prevPick("fuelOut"),
+    adblue: prevPick("adblue"),
+    repairActual: prevPick("repair"),
+  };
+
   const prefill: PrefillValues = {
     repairActual: pick("repair"),
     fuelOut: pick("fuelOut"),
@@ -144,6 +184,9 @@ export default async function ManualEntryPage({
         autoValues={autoValues}
         tollDiscountRate={rates.tollDiscountRate}
         prevTankPricePerLiter={prevTankPrice}
+        previousYearMonth={previousYearMonth}
+        previousMonthValues={previousMonthValues}
+        isConfirmed={confirmation.isConfirmed}
         operatedVehicleCount={operatedVehicleCount}
         canManageVehicleMaster={checkAccess(session, "manage_imports")}
       />

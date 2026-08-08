@@ -386,6 +386,10 @@ export const plIssueAck = sqliteTable(
     code: text("code").notNull(),
     /** 補足メモ (任意)。なぜそのままでよいのかを一言残せるようにする */
     note: text("note"),
+    /** 人が下した判断。'ok' = 問題なし / 'later' = あとで見る (後回し) */
+    status: text("status").notNull().default("ok"),
+    /** 判断したときの値。翌月に引き継ぐかどうか (値が大きく変わっていないか) の判定に使う */
+    valueAtAck: real("value_at_ack"),
     ackedAt: integer("acked_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
@@ -399,6 +403,7 @@ export const plIssueAck = sqliteTable(
       table.code,
     ),
     index("pl_issue_ack_ym_idx").on(table.yearMonth),
+    index("pl_issue_ack_status_idx").on(table.yearMonth, table.status),
   ],
 );
 

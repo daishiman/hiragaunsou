@@ -238,6 +238,64 @@ function initialIndexFromWorkflowStep(step: string | null | undefined): number {
 
 type EntryFilter = "all" | "filled" | "unfilled";
 
+/**
+ * 前月の実績。空欄のセルのヒントと「先月の値を入れる」に使う。
+ * 用意するのは請求書から書き写す欄だけ(タイヤ代・通行料金は今月の自動計算値のほうが実態に近い)。
+ */
+export type PreviousMonthValues = Partial<Record<FieldKey, Record<string, number>>>;
+
+/** 先月からコピーしたセルの覚え書き。`項目:車番` の形で持ち、本人が触ったら外す。 */
+function copiedKey(field: FieldKey, vehicleNo: string): string {
+  return `${field}:${vehicleNo}`;
+}
+
+function draftStorageKey(yearMonth: string): string {
+  return `hiragaunsou:manual-entry:${yearMonth}:v1`;
+}
+
+/** 下書きの中身。保存した時刻を必ず持つ(「いつ時点の下書きか」が言えない下書きは復元できない) */
+interface EntryDraft {
+  savedAt: number;
+  values: FieldValues;
+  tankPrice: number;
+  tankPriceCarried: boolean;
+  kirinTransport: string;
+  kirinManagement: string;
+  kirinTargets: string;
+  copied: string[];
+}
+
+function loadDraft(yearMonth: string): EntryDraft | null {
+  try {
+    const raw = window.localStorage.getItem(draftStorageKey(yearMonth));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<EntryDraft>;
+    if (typeof parsed?.savedAt !== "number" || typeof parsed.values !== "object") return null;
+    return {
+      savedAt: parsed.savedAt,
+      values: { ...emptyFieldValues(), ...parsed.values },
+      tankPrice: typeof parsed.tankPrice === "number" ? parsed.tankPrice : 0,
+      tankPriceCarried: parsed.tankPriceCarried === true,
+      kirinTransport: parsed.kirinTransport ?? "",
+      kirinManagement: parsed.kirinManagement ?? "",
+      kirinTargets: parsed.kirinTargets ?? "",
+      copied: Array.isArray(parsed.copied) ? parsed.copied : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** 「8月8日 10:15 時点」。日付だけだと同じ日に何度も開いたとき、どの下書きか分からない。 */
+function draftStamp(ms: number): string {
+  return new Date(ms).toLocaleString("ja-JP", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export function ManualEntryStepper({
   yearMonth,
   vehicles,
@@ -248,6 +306,9 @@ export function ManualEntryStepper({
   autoValues = { tireActual: {}, tollActual: {} },
   tollDiscountRate = 0,
   prevTankPricePerLiter = 0,
+  previousYearMonth = "",
+  previousMonthValues = {},
+  isConfirmed = false,
   operatedVehicleCount = 0,
   canManageVehicleMaster = false,
 }: {
@@ -261,8 +322,14 @@ export function ManualEntryStepper({
   autoValues?: { tireActual: Record<string, number>; tollActual: Record<string, number> };
   /** 割引額の空欄に使う組合割引率。通行料金の入力に反応して割引額の自動値を出す */
   tollDiscountRate?: number;
-  /** 前月のインタンク単価。今月が未設定(0)のときにワンタップで引き継げるようにする */
+  /** 前月のインタンク単価。今月が未設定(0)のときは、これを入れた状態で開く(印を付ける) */
   prevTankPricePerLiter?: number;
+  /** 前月の年月ラベル。「先月」だけだとどの月から写したのか後から分からない */
+  previousYearMonth?: string;
+  /** 前月の実績。空欄のヒントと「先月の値を入れる」に使う */
+  previousMonthValues?: PreviousMonthValues;
+  /** この月が確定済みか。確定済みの月で保存すると確定が解除されるため、先に知らせる */
+  isConfirmed?: boolean;
   /** その月の運行実績CSVに出てきた車番の数。車両マスタが空のとき「何台ぶん取りこぼしているか」を示す */
   operatedVehicleCount?: number;
   /** 車両マスタの取込画面へ行ける権限があるか。無い人にリンクだけ出すと行き止まりになる */
@@ -284,7 +351,26 @@ export function ManualEntryStepper({
     mainte: prefill.mainte,
     miscOther: prefill.miscOther,
   });
-  const [tankPrice, setTankPrice] = useState(prefill.tankPricePerLiter);
+  /*
+    インタンク単価は月ごとの設定値で、初期値が入っていない。毎月0から始まると、
+    給油量を全部入力しても軽油代が全車0円になる(数量は入っているので異常値チェックにも掛からない)。
+    今月が未設定なら先月の単価を入れた状態で開く。ただし黙って埋めると実績値と区別が付かないので、
+    本人が確認するまで「先月の値です」の印を外さない (ux-design §5-3 自動でやる・見せる・戻せる)。
+  */
+  const [tankPrice, setTankPrice] = useState(
+    prefill.tankPricePerLiter || (prevTankPricePerLiter > 0 ? prevTankPricePerLiter : 0),
+  );
+  const [tankPriceCarried, setTankPriceCarried] = useState(
+    prefill.tankPricePerLiter === 0 && prevTankPricePerLiter > 0,
+  );
+  /** 先月からコピーしたまま、まだ人が見ていないセル */
+  const [copied, setCopied] = useState<Set<string>>(() => new Set());
+  const [copyResult, setCopyResult] = useState("");
+  const [draftSavedAt, setDraftSavedAt] = useState<number | null>(null);
+  const [draftRestoredAt, setDraftRestoredAt] = useState<number | null>(null);
+  const [serverLoaded, setServerLoaded] = useState(false);
+  /** 確定済みの月で保存を押したとき、「確定が解除されます」を挟むための保留 */
+  const [pendingRelease, setPendingRelease] = useState<"save" | "submit" | null>(null);
   const [kirinTransport, setKirinTransport] = useState("");
   const [kirinManagement, setKirinManagement] = useState("");
   // 配分先の車番は専属契約が変われば変わるので、コード定数ではなく設定として持つ
@@ -334,6 +420,17 @@ export function ManualEntryStepper({
     () => (stepFields.length === 0 ? 0 : vehicles.filter((v) => isEntered(v.vehicleNo)).length),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [vehicles, stepFields, values],
+  );
+
+  /*
+    B-2: 修繕費の空欄は 0円 として確定される (keepsBlank: false)。
+    「今月は修繕なし」と「請求書を入れ忘れた」がどちらも空欄で、表の上では区別が付かない。
+    どちらが正かは業務側の回答待ち (docs/product/業務確認事項.md 質問2) なので、
+    計算は変えず、確定の直前に台数を数えて「0円として確定します」と出すことで区別できるようにする。
+  */
+  const unenteredRepairCount = useMemo(
+    () => vehicles.filter((v) => (values.repairActual[v.vehicleNo] ?? "").trim() === "").length,
+    [vehicles, values],
   );
 
   /** 確認ステップ用。項目ごとに「入力した金額の合計」と「入力した台数」を出す。 */
@@ -431,16 +528,155 @@ export function ManualEntryStepper({
         setRestored(true);
       } catch {
         // 読み戻しに失敗しても入力自体は続けられるので、画面は止めない
+      } finally {
+        /*
+          入力途中の下書きを、保存済みの値の上に重ねる(下書きのほうが新しい編集のため)。
+          先に敷き終わってからでないと、サーバの値で下書きが消される。
+
+          確定済みの月では復元しない。締めたあとの月に古い下書きが復活すると、
+          「確定したはずの月に身に覚えのない数字が入っている」という一番たちの悪い事故になる。
+          復元は黙ってやらず、いつ時点の下書きかを出して破棄もできるようにする (ux-design §4-1)。
+        */
+        if (!aborted) {
+          const draft = isConfirmed ? null : loadDraft(yearMonth);
+          if (draft) {
+            setValues(draft.values);
+            setTankPrice(draft.tankPrice);
+            setTankPriceCarried(draft.tankPriceCarried);
+            setKirinTransport(draft.kirinTransport);
+            setKirinManagement(draft.kirinManagement);
+            if (draft.kirinTargets) setKirinTargets(draft.kirinTargets);
+            setCopied(new Set(draft.copied));
+            setDraftRestoredAt(draft.savedAt);
+            // 下書きがある = 保存していない編集が残っている、なので dirty のまま出す。
+            setDirty(true);
+          }
+          setServerLoaded(true);
+        }
       }
     })();
     return () => {
       aborted = true;
     };
-  }, [yearMonth]);
+  }, [yearMonth, isConfirmed]);
+
+  /** 下書きを消す(保存に成功したとき・本人が破棄したとき) */
+  function clearDraft() {
+    try {
+      window.localStorage.removeItem(draftStorageKey(yearMonth));
+    } catch {
+      // 保存できない環境でも入力自体は続けられる
+    }
+    setDraftSavedAt(null);
+    setDraftRestoredAt(null);
+  }
+
+  /** 下書きを捨てて、保存済みの状態から入力し直す */
+  function discardDraft() {
+    clearDraft();
+    window.location.reload();
+  }
+
+  // 入力のたびに下書きを保存する。打鍵ごとに書くと重いので、手が止まってから書く。
+  useEffect(() => {
+    if (!serverLoaded || isConfirmed || !dirty) return;
+    const timer = window.setTimeout(() => {
+      const draft: EntryDraft = {
+        savedAt: Date.now(),
+        values,
+        tankPrice,
+        tankPriceCarried,
+        kirinTransport,
+        kirinManagement,
+        kirinTargets,
+        copied: Array.from(copied),
+      };
+      try {
+        window.localStorage.setItem(draftStorageKey(yearMonth), JSON.stringify(draft));
+        setDraftSavedAt(draft.savedAt);
+      } catch {
+        // プライベートモード等で保存できなくても入力は続けられる
+      }
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [
+    serverLoaded,
+    isConfirmed,
+    dirty,
+    values,
+    tankPrice,
+    tankPriceCarried,
+    kirinTransport,
+    kirinManagement,
+    kirinTargets,
+    copied,
+    yearMonth,
+  ]);
 
   function setValue(field: FieldKey, vehicleNo: string, raw: string) {
     setValues((prev) => ({ ...prev, [field]: { ...prev[field], [vehicleNo]: raw } }));
+    // 人が触ったセルは、もう「先月の値のまま」ではない。
+    setCopied((prev) => {
+      const key = copiedKey(field, vehicleNo);
+      if (!prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
     markDirty();
+  }
+
+  /**
+   * 先月の値を、いま空欄のセルにだけ入れる。
+   *
+   * 入っている値を上書きしない(今月の請求書から写した数字を先月の値で潰さない)。
+   * 入れたセルには印を付け、取り消せるようにし、確定前にもう一度数える (ux-design §5-3)。
+   */
+  function copyFromPreviousMonth(fields: readonly FieldDef[]) {
+    const applied: FieldValues = emptyFieldValues();
+    const newlyCopied = new Set(copied);
+    let count = 0;
+    for (const field of fields) {
+      const source = previousMonthValues[field.key];
+      if (!source) continue;
+      for (const v of vehicles) {
+        const prevValue = source[v.vehicleNo];
+        if (prevValue === undefined || prevValue === 0) continue;
+        if ((values[field.key][v.vehicleNo] ?? "").trim() !== "") continue;
+        applied[field.key][v.vehicleNo] = String(prevValue);
+        newlyCopied.add(copiedKey(field.key, v.vehicleNo));
+        count += 1;
+      }
+    }
+    if (count === 0) {
+      setCopyResult("空欄のセルに入れられる先月の値がありませんでした");
+      return;
+    }
+    setValues((prev) => {
+      setPasteUndo(prev);
+      const next: FieldValues = emptyFieldValues();
+      for (const key of ALL_FIELD_KEYS) next[key] = { ...prev[key], ...applied[key] };
+      return next;
+    });
+    setCopied(newlyCopied);
+    setCopyResult(`空欄だった${count}件に先月の値を入れました。金額を見直してください`);
+    markDirty();
+  }
+
+  /** そのステップで先月からコピーできる件数(空欄のセルだけ数える) */
+  function copyableCount(fields: readonly FieldDef[]): number {
+    let count = 0;
+    for (const field of fields) {
+      const source = previousMonthValues[field.key];
+      if (!source) continue;
+      for (const v of vehicles) {
+        const prevValue = source[v.vehicleNo];
+        if (prevValue === undefined || prevValue === 0) continue;
+        if ((values[field.key][v.vehicleNo] ?? "").trim() !== "") continue;
+        count += 1;
+      }
+    }
+    return count;
   }
 
   /** 保存していない変更があることを覚えておく。「保存しました」を出しっぱなしにしない。 */
@@ -491,6 +727,21 @@ export function ManualEntryStepper({
     };
   }
 
+  /**
+   * 保存・確定の入口。
+   *
+   * 確定済みの月に保存すると、収支表を作り直す過程で確定が解除される。
+   * いままでは何も出ないまま解除されていたので、ここで1回だけ確認を挟む
+   * (ux-design §3 摩擦の非対称性。確認は1回まで、2回3回に増やさない)。
+   */
+  function requestPost(kind: "save" | "submit") {
+    if (isConfirmed) {
+      setPendingRelease(kind);
+      return;
+    }
+    void post(kind === "save");
+  }
+
   async function post(saveOnly: boolean) {
     const setState = saveOnly ? setSaveState : setSubmitState;
     setState("pending");
@@ -509,6 +760,8 @@ export function ManualEntryStepper({
       }
       if (!saveOnly) setSavedVehicleCount(data.vehicleCount ?? 0);
       setDirty(false);
+      // サーバに入った時点で下書きの役目は終わり。残すと次に開いたとき二重に復元される。
+      clearDraft();
       setState("done");
     } catch {
       setErrorMessage("通信エラーが発生しました");
@@ -576,8 +829,18 @@ export function ManualEntryStepper({
   function undoPaste() {
     if (!pasteUndo) return;
     setValues(pasteUndo);
+    // 戻した結果また空欄になったセルは「先月の値のまま」ではないので、印も消す。
+    setCopied((prev) => {
+      const next = new Set<string>();
+      for (const key of prev) {
+        const [field, vehicleNo] = key.split(":") as [FieldKey, string];
+        if ((pasteUndo[field]?.[vehicleNo] ?? "").trim() !== "") next.add(key);
+      }
+      return next;
+    });
     setPasteUndo(null);
-    setPasteResult("貼り付けを取り消しました");
+    setPasteResult(copyResult ? "" : "貼り付けを取り消しました");
+    setCopyResult(copyResult ? "先月の値を取り消しました" : "");
   }
 
   /**
@@ -674,6 +937,10 @@ export function ManualEntryStepper({
                       const sum = parseSumExpression(raw);
                       const isInvalid = raw.trim() !== "" && sum === null;
                       const auto = raw.trim() === "" ? autoAmount(f.key, v.vehicleNo) : null;
+                      const isCopied = copied.has(copiedKey(f.key, v.vehicleNo));
+                      // 空欄のときだけ先月の値を出す。入力済みのセルに別の数字を並べても迷うだけ。
+                      const prevValue =
+                        raw.trim() === "" ? previousMonthValues[f.key]?.[v.vehicleNo] : undefined;
                       return (
                         <td key={f.key} className="px-3 py-2 text-right">
                           <input
@@ -687,9 +954,23 @@ export function ManualEntryStepper({
                             onChange={(e) => setValue(f.key, v.vehicleNo, e.target.value)}
                             onKeyDown={handleEnterMovesNext}
                             className={`num w-32 rounded-md border px-2 py-1 text-right ${
-                              isInvalid ? "border-danger" : "border-line"
+                              isInvalid
+                                ? "border-danger"
+                                : isCopied
+                                  ? "border-caution-border bg-caution-soft"
+                                  : "border-line"
                             }`}
                           />
+                          {/* 先月の値のままであることを、色だけでなく文字でも出す */}
+                          {isCopied ? (
+                            <p className="mt-0.5 text-[11px] font-semibold text-ink">先月の値</p>
+                          ) : null}
+                          {/* 空欄のセルには先月いくらだったかを出す(思い出させず、見て決められるように) */}
+                          {prevValue !== undefined ? (
+                            <p className="num mt-0.5 text-[11px] text-ink-muted">
+                              先月 {prevValue.toLocaleString("ja-JP")}
+                            </p>
+                          ) : null}
                           {/*
                             桁を1つ間違えても数字だけでは気づけないので、読めた値をカンマ付きで返す。
                             足し算式のときは合計、そうでなければ4桁以上のときだけ(短い数字は冗長)。
@@ -753,6 +1034,39 @@ export function ManualEntryStepper({
         <p className="num text-xs text-ink-muted">
           表示 {filteredVehicles.length}台 / 全 {vehicles.length}台 ・ 入力済み {enteredCount}台
         </p>
+        {/*
+          先月の値をまとめて入れる。空欄のセルにしか入らないので、押し間違えても
+          いま入力した数字は消えない。入れた件数を必ず言い、取り消せる状態にしておく。
+        */}
+        {copyableCount(stepFields) > 0 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => copyFromPreviousMonth(stepFields)}
+              className="pressable rounded-md border border-line px-3 py-1.5 text-xs font-semibold text-ink hover:bg-subtle"
+            >
+              空欄に先月({previousYearMonth})の値を入れる
+              <span className="num ml-1">{copyableCount(stepFields)}件</span>
+            </button>
+            <span className="text-[11px] text-ink-muted">
+              入れた欄には「先月の値」と印が付きます。金額は必ず見直してください
+            </span>
+          </div>
+        ) : null}
+        {copyResult ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-md border border-caution-border bg-caution-soft px-3 py-2 text-xs text-ink">
+            <span>{copyResult}</span>
+            {pasteUndo ? (
+              <button
+                type="button"
+                onClick={undoPaste}
+                className="pressable rounded-md border border-brand bg-white px-3 py-1 font-semibold text-brand-deep hover:bg-brand-soft"
+              >
+                元に戻す
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         {pasteResult ? (
           <div className="flex flex-wrap items-center gap-3 rounded-md border border-line bg-subtle px-3 py-2 text-xs text-ink">
             <span>{pasteResult}</span>
@@ -776,7 +1090,7 @@ export function ManualEntryStepper({
       ref={formRef}
       onSubmit={(e) => {
         e.preventDefault();
-        if (isLast) void post(false);
+        if (isLast) requestPost("submit");
       }}
       className="flex flex-col gap-6"
     >
@@ -857,6 +1171,39 @@ export function ManualEntryStepper({
         <p className="rounded-md border border-line bg-subtle px-4 py-2 text-xs text-ink-muted">
           保存した入力を読み込みました。続きから入力できます。
         </p>
+      ) : null}
+
+      {/*
+        確定済みの月であることは、保存を押す前に見えている必要がある。
+        いままでは保存すると黙って確定が解除されていた (残課題10)。
+      */}
+      {isConfirmed ? (
+        <div className="rounded-md border border-caution-border bg-caution-soft px-4 py-3">
+          <p className="text-sm font-bold text-ink">この月は確定済みです</p>
+          <p className="mt-1 text-xs leading-relaxed text-ink">
+            ここで保存すると収支表を作り直すため、確定が解除されます。直したあとに、
+            もう一度収支表の画面で確定し直してください。入力途中の下書きも、この月では保存しません。
+          </p>
+        </div>
+      ) : null}
+
+      {/*
+        下書きの復元は黙ってやらない。いつ時点の下書きかを出し、破棄できるようにする (ux-design §4-1)。
+      */}
+      {draftRestoredAt !== null ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-line bg-subtle px-4 py-2 text-xs text-ink">
+          <span>
+            <span className="num">{draftStamp(draftRestoredAt)}</span>{" "}
+            時点の入力途中(まだ保存していないもの)を読み込みました。
+          </span>
+          <button
+            type="button"
+            onClick={discardDraft}
+            className="pressable rounded-md border border-brand bg-white px-3 py-1 font-semibold text-brand-deep hover:bg-brand-soft"
+          >
+            下書きを破棄して保存済みの状態に戻す
+          </button>
+        </div>
       ) : null}
 
       <section className="rise-in rounded-xl border border-line bg-white p-5">
@@ -949,11 +1296,14 @@ export function ManualEntryStepper({
                   value={tankPrice}
                   onChange={(e) => {
                     setTankPrice(Number(e.target.value) || 0);
+                    setTankPriceCarried(false);
                     markDirty();
                   }}
                   onKeyDown={handleEnterMovesNext}
                   className={`num w-40 rounded-md border px-3 py-2 text-right text-lg ${
-                    tankPrice === 0 ? "border-caution-border" : "border-line"
+                    tankPrice === 0 || tankPriceCarried
+                      ? "border-caution-border bg-caution-soft"
+                      : "border-line"
                   }`}
                 />
                 <span className="text-[11px] text-ink-muted">
@@ -966,27 +1316,46 @@ export function ManualEntryStepper({
                 しかも数量は入っているので異常値チェックにも掛からない。
                 ここで気づけるようにし、前月の単価をワンタップで引き継げるようにする。
               */}
+              {tankPriceCarried ? (
+                <div className="mt-2 rounded-md border border-caution-border bg-caution-soft px-3 py-2">
+                  <p className="text-xs font-bold text-ink">
+                    先月({previousYearMonth})の単価をそのまま入れています
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-ink">
+                    今月まだ単価を決めていないため、先月の
+                    <span className="num">{prevTankPricePerLiter.toLocaleString("ja-JP")}</span>
+                    円/ℓ を入れた状態にしています。今月の仕入単価を確認してください。
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setTankPriceCarried(false)}
+                    className="pressable mt-2 rounded-md border border-brand bg-white px-3 py-1.5 text-xs font-semibold text-brand-deep hover:bg-brand-soft"
+                  >
+                    確認しました(先月と同じでよい)
+                  </button>
+                </div>
+              ) : null}
               {tankPrice === 0 ? (
                 <div className="mt-2 rounded-md border border-caution-border bg-caution-soft px-3 py-2">
                   <p className="text-xs font-bold text-ink">
                     単価が0のままだと、全車の軽油代が0円になります
                   </p>
-                  {prevTankPricePerLiter > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTankPrice(prevTankPricePerLiter);
-                        markDirty();
-                      }}
-                      className="pressable num mt-2 rounded-md border border-brand bg-white px-3 py-1.5 text-xs font-semibold text-brand-deep hover:bg-brand-soft"
-                    >
-                      先月と同じ {prevTankPricePerLiter.toLocaleString("ja-JP")} 円/ℓ にする
-                    </button>
-                  ) : (
-                    <p className="mt-1 text-xs text-ink">今月の仕入単価を入力してください。</p>
-                  )}
+                  <p className="mt-1 text-xs text-ink">
+                    {prevTankPricePerLiter > 0
+                      ? `先月(${previousYearMonth})は ${prevTankPricePerLiter.toLocaleString("ja-JP")} 円/ℓ でした。今月の仕入単価を入力してください。`
+                      : "先月の単価が記録されていないため、今月の仕入単価を入力してください。"}
+                  </p>
                 </div>
               ) : null}
+              {/*
+                B-2: いまの計算がどちらの前提で動いているかを、その場に書いておく。
+                業務側への確認 (docs/product/業務確認事項.md 質問1) の回答が来るまでは
+                この前提のままなので、暗黙にせず画面に出す。
+              */}
+              <p className="mt-2 text-[11px] leading-relaxed text-ink-muted">
+                いまの計算: 燃料の量は「インタンク給油量 + 外部給油量」で足しています。
+                デジタコの総給油量は取り込んでいますが、この計算には使っていません。
+              </p>
             </div>
             {renderToolbar()}
             {renderFieldTable(FUEL_FIELDS)}
@@ -1153,6 +1522,48 @@ export function ManualEntryStepper({
               <dt className="text-xs text-ink-muted">給与取込</dt>
               <dd className="text-ink">{payrollStatus ? "取込済み" : "未取込"}</dd>
             </dl>
+
+            {/*
+              確定の直前に、人がまだ見ていない数字をもう一度数える。
+              先月の値・0円扱いの空欄は、どちらも「入力した数字」と同じ見た目で表に並ぶので、
+              ここで数え直さないと確認されないまま締まる。
+            */}
+            {tankPriceCarried || copied.size > 0 || unenteredRepairCount > 0 ? (
+              <div className="mt-4 rounded-md border border-caution-border bg-caution-soft px-4 py-3">
+                <p className="text-sm font-bold text-ink">確定の前に見ておいてほしいもの</p>
+                <ul className="mt-1.5 flex list-disc flex-col gap-1 pl-4 text-xs leading-relaxed text-ink">
+                  {tankPriceCarried ? (
+                    <li>
+                      インタンク単価が先月({previousYearMonth})のままです(
+                      <span className="num">{tankPrice.toLocaleString("ja-JP")}</span>円/ℓ)。
+                      今月の仕入単価で合っているか確認してください。
+                    </li>
+                  ) : null}
+                  {copied.size > 0 ? (
+                    <li>
+                      先月の値を入れたまま見直していない欄が{" "}
+                      <span className="num">{copied.size}</span>件 あります(欄に「先月の値」と出ています)。
+                    </li>
+                  ) : null}
+                  {unenteredRepairCount > 0 ? (
+                    <li>
+                      修繕費が未入力の車両が <span className="num">{unenteredRepairCount}</span>台
+                      あります。<strong>0円として確定します。</strong>
+                      請求書が無い(修繕なし)ならそのままで問題ありません。
+                    </li>
+                  ) : null}
+                </ul>
+              </div>
+            ) : null}
+
+            {/*
+              B-2: 入力欄を持たない項目があることを、確定の画面に正直に出す
+              (docs/product/業務確認事項.md 質問3 の回答待ち)。
+            */}
+            <p className="mt-3 text-[11px] leading-relaxed text-ink-muted">
+              「その他諸経費」「備品費」「メンテ費」には入力欄がありません。前に入っていた値を
+              そのまま持ち越して収支表に載せます(この画面では増減しません)。
+            </p>
             {/*
               0台で作り直すと、収支表は1行も書き換わらないまま「成功」だけが返る。
               成功として見せると、前に入っていた古い表がそのまま残っていることに気づけない。
@@ -1182,6 +1593,40 @@ export function ManualEntryStepper({
           </div>
         ) : null}
 
+        {/*
+          確定済みの月に保存しようとしたとき。何が起きるかを書いてから1回だけ確認する。
+          押した時点では何もしていないので、「やめる」でそのまま入力に戻れる。
+        */}
+        {pendingRelease !== null ? (
+          <div className="mt-4 rounded-md border border-caution-border bg-caution-soft px-4 py-3">
+            <p className="text-sm font-bold text-ink">確定を解除して保存しますか?</p>
+            <p className="mt-1 text-xs leading-relaxed text-ink">
+              この月は確定済みです。保存すると収支表を作り直すため、確定は解除されます。
+              直したあとに、収支表の画面でもう一度確定してください。
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const kind = pendingRelease;
+                  setPendingRelease(null);
+                  void post(kind === "save");
+                }}
+                className="pressable rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-deep"
+              >
+                確定を解除して{pendingRelease === "save" ? "保存する" : "収支表を作り直す"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingRelease(null)}
+                className="pressable rounded-md border border-line bg-white px-4 py-2 text-sm text-ink hover:bg-subtle"
+              >
+                やめる
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         {errorMessage ? (
           <div className="mt-3 rounded-md border border-caution-border bg-caution-soft px-4 py-3 text-xs">
             {errorMessage}
@@ -1203,7 +1648,7 @@ export function ManualEntryStepper({
         <button
           type="button"
           disabled={saveState === "pending" || !hasVehicles}
-          onClick={() => void post(true)}
+          onClick={() => requestPost("save")}
           className="pressable rounded-md border border-brand px-4 py-2 text-sm font-semibold text-brand-deep hover:bg-brand-soft disabled:opacity-50"
         >
           {saveState === "pending" ? "保存しています…" : "ここまでを保存"}
@@ -1213,7 +1658,15 @@ export function ManualEntryStepper({
           <span className="text-xs text-ink-muted">保存しました</span>
         ) : null}
         {dirty ? (
-          <span className="text-xs font-semibold text-ink">保存していない入力があります</span>
+          <span className="text-xs font-semibold text-ink">
+            保存していない入力があります
+            {/* 下書きに退避してあることを添える。「消えるかもしれない」と思わせない */}
+            {draftSavedAt !== null ? (
+              <span className="num ml-1 font-normal text-ink-muted">
+                (下書きは {draftStamp(draftSavedAt)} に自動保存)
+              </span>
+            ) : null}
+          </span>
         ) : null}
 
         <div className="ml-auto">
