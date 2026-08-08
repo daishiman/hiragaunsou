@@ -94,6 +94,15 @@ describe("D1DriverMasterRepository", () => {
   });
 });
 
+/**
+ * createTestDb は migrations/ を全部流すので rate_master には 0015 のシード値が入っている。
+ * 「行が無いときに既定値へ落ちるか」を見たいテストは、その前提を自分で作り直す必要がある。
+ * シード値に期待値を合わせてしまうと、フォールバック経路が壊れても気付けなくなる。
+ */
+function clearRateMaster(ctx: ReturnType<typeof createTestDb>): void {
+  ctx.sqlite.exec("DELETE FROM rate_master");
+}
+
 describe("D1RateMasterRepository.getDeficitThresholds", () => {
   let ctx: ReturnType<typeof createTestDb>;
   beforeEach(() => {
@@ -101,11 +110,20 @@ describe("D1RateMasterRepository.getDeficitThresholds", () => {
   });
 
   it("未設定なら既定値(DEFAULT_DEFICIT_THRESHOLDS)にフォールバックする", async () => {
+    clearRateMaster(ctx);
     const repo = new D1RateMasterRepository(ctx.db);
     expect(await repo.getDeficitThresholds("2026-05")).toEqual(DEFAULT_DEFICIT_THRESHOLDS);
   });
 
+  it("シード済みの値をそのまま解決する(既定値ではなくマスタが効く)", async () => {
+    const repo = new D1RateMasterRepository(ctx.db);
+    // 0015 で投入した損益分岐km単価。既定値の170と違う値であることに意味がある
+    // (マスタを見ずに既定値を返す実装に退行したら、ここで落ちる)。
+    expect((await repo.getDeficitThresholds("2026-05")).breakEvenKmPrice).toBe(177);
+  });
+
   it("月指定値があればそれを優先し、無いキーは既定値のまま返す", async () => {
+    clearRateMaster(ctx);
     const repo = new D1RateMasterRepository(ctx.db);
     await repo.setRate(RATE_KEYS.idleSales, "2026-05", 123456, null);
     const thresholds = await repo.getDeficitThresholds("2026-05");
@@ -129,8 +147,14 @@ describe("D1RateMasterRepository.getRates", () => {
   });
 
   it("未設定なら既定値(DEFAULT_RATE_SETTINGS)を返す", async () => {
+    clearRateMaster(ctx);
     const repo = new D1RateMasterRepository(ctx.db);
     expect(await repo.getRates("2026-05")).toEqual(DEFAULT_RATE_SETTINGS);
+  });
+
+  it("シード済みの一般管理費率が既定値より優先される", async () => {
+    const repo = new D1RateMasterRepository(ctx.db);
+    expect((await repo.getRates("2026-05")).adminFeeRate).toBe(0.1748);
   });
 
   it("月指定値が全期間共通値より優先される", async () => {
