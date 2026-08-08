@@ -51,6 +51,7 @@ export default async function AdminDriverMasterPage({
         <SourceDataNote sourceFile="★車両別収支計算用2026年5月.xlsx">
           <p>
             収支表シート(「5月収支表」など)にある「コード」(社員No)・「運転者名」・「車番」の3列が元データです。
+            この3列があるExcelなら、ファイル名が違っても・シート名が違っても読み取れます。
             車両マスタと同じファイルを、同じ手順で選べます。
           </p>
           <p>

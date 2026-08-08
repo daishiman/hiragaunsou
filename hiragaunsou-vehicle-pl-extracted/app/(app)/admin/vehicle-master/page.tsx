@@ -44,6 +44,7 @@ export default async function AdminVehicleMasterPage({
         <SourceDataNote sourceFile="★車両別収支計算用2026年5月.xlsx">
           <p>
             収支表シート(「5月収支表」など)にある「車番」「車種名」「所属」「自賠責」「任意保険」「自動車税」「重量税」「車両リース費」「割賦費」の9列が元データです。
+            この9列があるExcelなら、ファイル名が違っても・シート名が違っても読み取れます。
             運転者マスタと同じファイルを、同じ手順で選べます。
           </p>
           <p>

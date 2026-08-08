@@ -101,6 +101,74 @@ export function parseMonthlyPlWorkbook(
   preferredYearMonth?: string,
   onYearMonthMismatch: YearMonthMismatchPolicy = "throw",
 ): MonthlyPlWorkbookParseResult {
+  const candidates = collectSheetCandidates(input, preferredYearMonth);
+
+  if (candidates.length === 0) {
+    throw new Error("「車番」から「損益」まで51列の収支表シートを検出できませんでした。");
+  }
+
+  if (!preferredYearMonth) return candidates[0]!;
+
+  // 対象年月と一致するシートが見つかった時点で走査を打ち切っているため、末尾が一致シート。
+  const lastCandidate = candidates[candidates.length - 1]!;
+  if (lastCandidate.sheetYearMonth === preferredYearMonth) return lastCandidate;
+
+  // 年度ブックには12か月分のシートが入っている。帳票見出しの「令和N年M月」が正本であり、
+  // 一致するシートが無いまま先頭シートで代用すると、別の月の実績を指定月として保存してしまう
+  // (例: 2026-08 を指定 → シート名だけを見て「8月収支表」= 令和7年8月 を取り込む)。
+  // 見出しから年月を読めたブックでは、必ず突き合わせて一致しなければ失敗させる。
+  const dated = candidates.filter((candidate) => candidate.sheetYearMonth !== null);
+  if (dated.length > 0) {
+    if (onYearMonthMismatch === "useLatest") {
+      return dated.reduce((newest, candidate) =>
+        candidate.sheetYearMonth! > newest.sheetYearMonth! ? candidate : newest,
+      );
+    }
+    const available = dated.map((candidate) => candidate.sheetYearMonth).join(" / ");
+    throw new Error(
+      `このExcelに対象年月 ${preferredYearMonth} のシートがありません。取込可能な年月: ${available}`,
+    );
+  }
+
+  // 見出しに和暦が無いブック(単月の作業用ファイル等)は年を判断できない。
+  // シート名の「○月」で照合し、それも無ければ唯一の候補に限って受け入れる。
+  const month = Number(preferredYearMonth.slice(5, 7));
+  const byName = candidates.find((candidate) =>
+    candidate.sheetName.normalize("NFKC").startsWith(`${month}月`),
+  );
+  if (byName) return byName;
+  if (candidates.length === 1) return candidates[0]!;
+  // マスタ取込は「どの月のシートでも同じ値が入る」ため、判別できなくても止めない。
+  // どのシートを読んだかは呼び出し側が sheetName を画面に出して人に確かめてもらう。
+  if (onYearMonthMismatch === "useLatest") return candidates[0]!;
+  throw new Error(
+    `このExcelのどのシートが対象年月 ${preferredYearMonth} か判別できませんでした。シート名を「${month}月収支表」の形式にしてください。`,
+  );
+}
+
+/**
+ * このブックに入っている収支表シートと、その見出しから読み取れた年月の一覧。
+ *
+ * 取込画面が「このファイルは何年何月分か」をファイル名ではなく中身から提示するために使う。
+ * 年月が読み取れなかったシートは sheetYearMonth が null になり、画面は利用者に年月を選ばせる。
+ */
+export function listMonthlyPlSheets(
+  input: ArrayBuffer | Uint8Array,
+): { sheetName: string; sheetYearMonth: string | null }[] {
+  return collectSheetCandidates(input).map(({ sheetName, sheetYearMonth }) => ({
+    sheetName,
+    sheetYearMonth,
+  }));
+}
+
+/**
+ * 51列の収支表シートを、ブックの先頭から順に集める。
+ * stopAtYearMonth と一致するシートに当たったらそこで打ち切る(末尾が一致シートになる)。
+ */
+function collectSheetCandidates(
+  input: ArrayBuffer | Uint8Array,
+  stopAtYearMonth?: string,
+): MonthlyPlWorkbookParseResult[] {
   const bytes = toUint8Array(input);
   let extractedBytes = 0;
 
@@ -164,51 +232,13 @@ export function parseMonthlyPlWorkbook(
       // 対象年月が一致するシートが見つかった時点で確定してよい。以降のシートを
       // 展開・正規表現パースする必要はない(1シートあたり数百KB〜数MBあり、
       // 無関係シートの解析を続けるだけでCPU時間の大半を消費してしまう)。
-      if (preferredYearMonth && candidate.sheetYearMonth === preferredYearMonth) {
-        return candidate;
+      if (stopAtYearMonth && candidate.sheetYearMonth === stopAtYearMonth) {
+        return candidates;
       }
     }
   }
 
-  if (candidates.length === 0) {
-    throw new Error("「車番」から「損益」まで51列の収支表シートを検出できませんでした。");
-  }
-
-  if (!preferredYearMonth) return candidates[0]!;
-
-  // 年度ブックには12か月分のシートが入っている。帳票見出しの「令和N年M月」が正本であり、
-  // 一致するシートが無いまま先頭シートで代用すると、別の月の実績を指定月として保存してしまう
-  // (例: 2026-08 を指定 → シート名だけを見て「8月収支表」= 令和7年8月 を取り込む)。
-  // 見出しから年月を読めたブックでは、必ず突き合わせて一致しなければ失敗させる。
-  const dated = candidates.filter((candidate) => candidate.sheetYearMonth !== null);
-  if (dated.length > 0) {
-    const matched = dated.find((candidate) => candidate.sheetYearMonth === preferredYearMonth);
-    if (matched) return matched;
-    if (onYearMonthMismatch === "useLatest") {
-      return dated.reduce((newest, candidate) =>
-        candidate.sheetYearMonth! > newest.sheetYearMonth! ? candidate : newest,
-      );
-    }
-    const available = dated.map((candidate) => candidate.sheetYearMonth).join(" / ");
-    throw new Error(
-      `このExcelに対象年月 ${preferredYearMonth} のシートがありません。取込可能な年月: ${available}`,
-    );
-  }
-
-  // 見出しに和暦が無いブック(単月の作業用ファイル等)は年を判断できない。
-  // シート名の「○月」で照合し、それも無ければ唯一の候補に限って受け入れる。
-  const month = Number(preferredYearMonth.slice(5, 7));
-  const byName = candidates.find((candidate) =>
-    candidate.sheetName.normalize("NFKC").startsWith(`${month}月`),
-  );
-  if (byName) return byName;
-  if (candidates.length === 1) return candidates[0]!;
-  // マスタ取込は「どの月のシートでも同じ値が入る」ため、判別できなくても止めない。
-  // どのシートを読んだかは呼び出し側が sheetName を画面に出して人に確かめてもらう。
-  if (onYearMonthMismatch === "useLatest") return candidates[0]!;
-  throw new Error(
-    `このExcelのどのシートが対象年月 ${preferredYearMonth} か判別できませんでした。シート名を「${month}月収支表」の形式にしてください。`,
-  );
+  return candidates;
 }
 
 /**

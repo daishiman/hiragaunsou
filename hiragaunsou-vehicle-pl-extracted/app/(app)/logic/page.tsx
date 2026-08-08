@@ -289,7 +289,7 @@ export default async function LogicPage() {
           <table className="w-full min-w-max border-collapse text-xs">
             <thead>
               <tr className="border-b border-line bg-subtle text-ink-muted">
-                <th className="px-3 py-2 text-left font-medium">ファイル</th>
+                <th className="px-3 py-2 text-left font-medium">ファイル(名前の例)</th>
                 <th className="px-3 py-2 text-left font-medium">役割</th>
                 <th className="px-3 py-2 text-left font-medium">出力元</th>
                 <th className="px-3 py-2 text-left font-medium">何に使うか</th>
@@ -320,8 +320,15 @@ export default async function LogicPage() {
             ここから数字を読む仕様は作りません(完成した表を元に同じ表を作ることになるため)。
           </p>
           <p>
-            ファイル名は毎月・年度ごとに変わる前提で扱います。中身の列(見出しの文字)が同じであれば、
-            別名のファイルでもそのまま取り込めます。ファイル名ではなく列の見出しで見分けています。
+            <strong>ファイル名は変わっても構いません。中身で判定します。</strong>
+            上の表のファイル名は目印としての例です(◯の部分は月や営業所名が入ります)。
+            どの帳票かは列の見出しで見分け、何年何月分かもファイルの中身から判定します。
+          </p>
+          <p>
+            年月の判定は帳票によって根拠が違います。★車両別収支計算用はシート1行目の見出し
+            「令和◯年◯月車両別収支表」、売上モニタリストは「計上日」の日付から判定します。
+            給与集計表と車両別運行実績表は<strong>中身に日付が1つも無い</strong>ため自動では決まらず、
+            取込のときに何年何月分かを画面で選んでいただきます。
           </p>
         </div>
       </section>

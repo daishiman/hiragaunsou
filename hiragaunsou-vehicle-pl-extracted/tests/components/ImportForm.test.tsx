@@ -22,6 +22,15 @@ function fileInputFor(headingName: string): HTMLInputElement {
   return input as HTMLInputElement;
 }
 
+/** 取込前の下読み(POST /api/import/detect)の応答 */
+function detectResponse(yearMonth: string | null, basis: string): Response {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({ yearMonth, basis, candidates: yearMonth ? [yearMonth] : [] }),
+  } as Response;
+}
+
 describe("ImportForm", () => {
   beforeEach(() => {
     refresh.mockClear();
@@ -33,13 +42,15 @@ describe("ImportForm", () => {
     vi.restoreAllMocks();
   });
 
-  it("ファイルを選ぶと取込中表示を経て成功メッセージを出し、router.refreshで一覧へ反映する", async () => {
+  it("中身の年月が対象年月と一致すれば確認を挟まず取り込み、判定根拠を残す", async () => {
     const user = userEvent.setup();
-    let resolveFetch!: (value: Response) => void;
-    const fetchPromise = new Promise<Response>((resolve) => {
-      resolveFetch = resolve;
+    let resolveUpload!: (value: Response) => void;
+    const uploadPromise = new Promise<Response>((resolve) => {
+      resolveUpload = resolve;
     });
-    (global.fetch as ReturnType<typeof vi.fn>).mockReturnValue(fetchPromise);
+    (global.fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(detectResponse("2026-05", "「計上日」の日付10件のうち10件が2026年5月でした。"))
+      .mockReturnValueOnce(uploadPromise);
 
     render(<ImportForm yearMonth="2026-05" imported={{}} />);
 
@@ -49,25 +60,94 @@ describe("ImportForm", () => {
 
     expect(await screen.findByText("取り込んでいます…")).toBeInTheDocument();
 
-    resolveFetch({
+    resolveUpload({
       ok: true,
       status: 200,
       json: async () => ({ vehicleCount: 12, charteredExcluded: 1 }),
     } as Response);
 
     expect(
-      await screen.findByText(/operation\.csv: 車両 12 台 ／ 傭車 1 件を除外/),
+      await screen.findByText(
+        /operation\.csv: 2026年5月分として取り込みました（車両 12 台 ／ 傭車 1 件を除外）/,
+      ),
     ).toBeInTheDocument();
-    expect(global.fetch).toHaveBeenCalledWith(
+    expect(
+      screen.getByText("「計上日」の日付10件のうち10件が2026年5月でした。"),
+    ).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenNthCalledWith(1, "/api/import/detect", expect.anything());
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
       "/api/import/vehicle_operation",
       expect.objectContaining({ method: "POST" }),
     );
     await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
   });
 
+  it("中身に年月が無いファイルは何年何月分かを利用者に選ばせてから取り込む", async () => {
+    const user = userEvent.setup();
+    (global.fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(
+        detectResponse(null, "この帳票には日付が書かれていないため、中身から年月を判定できません。"),
+      )
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ totalRows: 87 }),
+      } as Response);
+
+    render(<ImportForm yearMonth="2026-05" imported={{}} />);
+
+    const input = fileInputFor("車両別運行実績表");
+    const file = new File(["a,b,c"], "operation.csv", { type: "text/csv" });
+    await user.upload(input, file);
+
+    expect(await screen.findByText("この取込は何年何月分ですか?")).toBeInTheDocument();
+    expect(
+      screen.getByText("この帳票には日付が書かれていないため、中身から年月を判定できません。"),
+    ).toBeInTheDocument();
+    // 判定できないときは画面で選んでいる対象年月が初期値になる
+    expect((screen.getByLabelText("取り込む年月") as HTMLSelectElement).value).toBe("2026-05");
+
+    await user.click(screen.getByRole("button", { name: "2026年5月分として取り込む" }));
+
+    expect(
+      await screen.findByText(/operation\.csv: 2026年5月分として取り込みました/),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+  });
+
+  it("中身の年月が対象年月と違うときは、その月を初期値にした確認を出す", async () => {
+    const user = userEvent.setup();
+    (global.fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(
+        detectResponse("2026-04", "「計上日」の日付10件のうち10件が2026年4月でした。"),
+      )
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ totalRows: 5 }),
+      } as Response);
+
+    render(<ImportForm yearMonth="2026-05" imported={{}} />);
+
+    const input = fileInputFor("車両別運行実績表");
+    const file = new File(["a,b,c"], "operation.csv", { type: "text/csv" });
+    await user.upload(input, file);
+
+    expect(await screen.findByText("この取込は何年何月分ですか?")).toBeInTheDocument();
+    expect((screen.getByLabelText("取り込む年月") as HTMLSelectElement).value).toBe("2026-04");
+
+    await user.click(screen.getByRole("button", { name: "2026年4月分として取り込む" }));
+
+    // 見ている月と違う月に取り込んだので、その月の取込状況へ切り替える
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/import?ym=2026-04"));
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
   it("同じ帳票が取込済みのときは入れ直し確認を出し、承認すると置き換えて取込む", async () => {
     const user = userEvent.setup();
     (global.fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(detectResponse("2026-05", "シート「5月収支表」の見出しから2026年5月分と判定しました。"))
       .mockResolvedValueOnce({
         ok: false,
         status: 409,
@@ -98,18 +178,22 @@ describe("ImportForm", () => {
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenNthCalledWith(
-        2,
+        3,
         "/api/import/vehicle_operation",
         expect.objectContaining({ method: "POST" }),
       );
     });
-    expect(await screen.findByText(/operation\.csv: 車両 12 台/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/operation\.csv: 2026年5月分として取り込みました/),
+    ).toBeInTheDocument();
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it("サーバーに接続できない場合は通信エラーメッセージを表示し、一覧は更新しない", async () => {
     const user = userEvent.setup();
-    (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("offline"));
+    (global.fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(detectResponse("2026-05", "シート「5月収支表」の見出しから2026年5月分と判定しました。"))
+      .mockRejectedValueOnce(new Error("offline"));
 
     render(<ImportForm yearMonth="2026-05" imported={{}} />);
 
@@ -123,5 +207,28 @@ describe("ImportForm", () => {
       ),
     ).toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("下読み自体が失敗しても行き止まりにせず、年月を選んで取り込める", async () => {
+    const user = userEvent.setup();
+    (global.fetch as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ totalRows: 3 }),
+      } as Response);
+
+    render(<ImportForm yearMonth="2026-05" imported={{}} />);
+
+    const input = fileInputFor("車両別運行実績表");
+    const file = new File(["a,b,c"], "operation.csv", { type: "text/csv" });
+    await user.upload(input, file);
+
+    expect(await screen.findByText("この取込は何年何月分ですか?")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "2026年5月分として取り込む" }));
+    expect(
+      await screen.findByText(/operation\.csv: 2026年5月分として取り込みました/),
+    ).toBeInTheDocument();
   });
 });
