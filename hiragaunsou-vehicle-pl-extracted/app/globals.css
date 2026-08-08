@@ -84,3 +84,27 @@ body {
     transform: none;
   }
 }
+
+/*
+ * 印刷 (確認結果を紙・PDFで共有する)。
+ * メニュー・ヘッダー・フッターは紙には要らない。紙に残すのは
+ * 「誰がいつ何を判断したか」だけにして、1枚を読むだけで済むようにする。
+ */
+@media print {
+  body {
+    background: #fff;
+  }
+  aside,
+  header,
+  footer,
+  .no-print {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  /* 表や節が途中で改ページされると、判断と判断者が別のページに分かれて読めなくなる */
+  .print-block {
+    break-inside: avoid;
+  }
+}

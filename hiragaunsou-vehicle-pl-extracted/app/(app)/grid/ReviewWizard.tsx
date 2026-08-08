@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { VehiclePlField } from "../../../src/domain/entities/VehiclePl";
 import type { GridRow } from "../../../src/usecase/steps/getMonthlyGrid";
-import type { ReviewedIssue } from "../../../src/domain/rules/plIssueAck";
+import type { PlIssueAckStatus, ReviewedIssue } from "../../../src/domain/rules/plIssueAck";
 import {
   EDIT_TARGET_FIELD,
   EMPTY_BENCHMARK,
@@ -80,8 +80,11 @@ export interface ReviewItem {
   issue: ReviewedIssue;
 }
 
-/** その指摘に対して人が下した結論 */
-type Verdict = "fixed" | "ok" | "skipped";
+/**
+ * その指摘に対して、この確認作業で下した結論。
+ * "later" (あとで見る) もサーバに保存されるので、画面を閉じても残る。
+ */
+type Verdict = "fixed" | "ok" | "later";
 
 /** 入力途中の下書き (誤って閉じても消さないため localStorage に置く) */
 interface Draft {
@@ -89,12 +92,20 @@ interface Draft {
   reason: string;
 }
 
-/** 確認の対象を「重い順・車番順」に並べる。並べ替えの選択肢は作らない(判断を増やさない)。 */
-export function buildReviewQueue(rows: readonly GridRow[]): ReviewItem[] {
+/**
+ * 確認の対象を「重い順・車番順」に並べる。並べ替えの選択肢は作らない(判断を増やさない)。
+ *
+ * @param options.onlyPostponed 「あとで見る」にした分だけを対象にする (後回しからの再開)
+ */
+export function buildReviewQueue(
+  rows: readonly GridRow[],
+  options: { onlyPostponed?: boolean } = {},
+): ReviewItem[] {
   const items: ReviewItem[] = [];
   for (const row of rows) {
     for (const issue of row.issues) {
       if (issue.acknowledged) continue;
+      if (options.onlyPostponed && !issue.postponed) continue;
       items.push({ row, issue });
     }
   }
@@ -139,6 +150,8 @@ export function ReviewWizard({
   vehicleCount,
   onSave,
   onAck,
+  onBulkAck,
+  onBulkUndo,
   onApply,
   onExit,
 }: {
@@ -149,7 +162,10 @@ export function ReviewWizard({
   applying: boolean;
   vehicleCount: number;
   onSave: (row: GridRow, field: EditableColumn, value: number, reason: string) => Promise<void>;
-  onAck: (issue: ReviewedIssue, acknowledged: boolean) => Promise<void>;
+  /** status に null を渡すと判断の取り消し */
+  onAck: (issue: ReviewedIssue, status: PlIssueAckStatus | null) => Promise<void>;
+  onBulkAck: (issues: readonly ReviewedIssue[], reason: string) => Promise<number>;
+  onBulkUndo: (issues: readonly ReviewedIssue[]) => Promise<number>;
   onApply: () => void;
   onExit: () => void;
 }) {
@@ -158,6 +174,10 @@ export function ReviewWizard({
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** まとめてOKの確認画面に出している対象 (押した瞬間には実行しない) */
+  const [bulkTarget, setBulkTarget] = useState<{ label: string; items: ReviewItem[] } | null>(null);
+  /** 直前のまとめてOK (「元に戻す」に使う) */
+  const [lastBulk, setLastBulk] = useState<{ label: string; items: ReviewItem[] } | null>(null);
   // この画面は「確認をはじめる」を押した後にしか現れないので、初期値で localStorage を読める
   // (サーバ側では描画されないため、読み込んだ値と描画結果が食い違うことがない)。
   const [drafts, setDrafts] = useState<Record<string, Draft>>(() => loadDrafts(yearMonth));
@@ -166,8 +186,14 @@ export function ReviewWizard({
   // 下書きの復元は黙ってやらない (ux-design §4-1)。読み込んだことを画面に出し、破棄もできる。
   const restored = restoredCount > 0 && !restoreDismissed;
 
-  const done = Object.values(verdicts).filter((v) => v !== "skipped").length;
-  const skipped = items.filter((item) => verdicts[item.issue.key] === "skipped");
+  const done = Object.values(verdicts).filter((v) => v !== "later").length;
+  // 「あとで見る」は、この作業で押した分と、前回までに後回しにしてある分の両方を数える。
+  // 押した分だけ数えると、後回しを1件も押さずに開き直したときに 0件 と出て見落としになる。
+  const skipped = items.filter(
+    (item) =>
+      verdicts[item.issue.key] === "later" ||
+      (verdicts[item.issue.key] === undefined && item.issue.postponed),
+  );
   const remaining = items.filter((item) => verdicts[item.issue.key] === undefined);
   const finished = remaining.length === 0 || index >= items.length;
   const current = finished ? null : items[index];
@@ -225,12 +251,82 @@ export function ReviewWizard({
     setBusy(true);
     setError(null);
     try {
-      await onAck(item.issue, true);
+      await onAck(item.issue, "ok");
       record(item.issue.key, "ok");
       clearDraft(item.issue.key);
       goNext(index);
     } catch (e) {
       setError(e instanceof Error ? e.message : "確認済みにできませんでした");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * あとで見る (後回し)。
+   *
+   * 画面の中だけで覚えず、サーバに残す。対象年月を切り替えて戻ってきたときや、
+   * 別の人が同じ月を開いたときにも「これは後回しにした」が見えている必要がある。
+   */
+  async function postpone(item: ReviewItem) {
+    setBusy(true);
+    setError(null);
+    try {
+      await onAck(item.issue, "later");
+      record(item.issue.key, "later");
+      goNext(index);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "あとで見るに登録できませんでした");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * 同じ種類の指摘をまとめて「問題なし」にする。
+   *
+   * 実行前に必ず対象と件数を見せ (bulkTarget)、実行後は「元に戻す」を出す (lastBulk)。
+   * 押し間違いで大量にOKしてしまっても、1回の操作で戻せる状態を保つ。
+   */
+  async function runBulk(target: { label: string; items: ReviewItem[] }) {
+    setBusy(true);
+    setError(null);
+    try {
+      await onBulkAck(
+        target.items.map((item) => item.issue),
+        target.label,
+      );
+      setVerdicts((prev) => {
+        const next = { ...prev };
+        for (const item of target.items) next[item.issue.key] = "ok";
+        return next;
+      });
+      setLastBulk(target);
+      setBulkTarget(null);
+      goNext(index - 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "まとめて確認済みにできませんでした");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** 直前のまとめてOKを取り消す。 */
+  async function undoBulk() {
+    if (!lastBulk) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await onBulkUndo(lastBulk.items.map((item) => item.issue));
+      setVerdicts((prev) => {
+        const next = { ...prev };
+        for (const item of lastBulk.items) delete next[item.issue.key];
+        return next;
+      });
+      setLastBulk(null);
+      setIndex(items.indexOf(lastBulk.items[0] as ReviewItem));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "元に戻せませんでした");
     } finally {
       setBusy(false);
     }
@@ -256,7 +352,8 @@ export function ReviewWizard({
     setBusy(true);
     setError(null);
     try {
-      if (verdict === "ok") await onAck(item.issue, false);
+      // 直した値の取り消しは表側の「元に戻す」に任せる。ここで消すのは判断の印だけ。
+      if (verdict === "ok" || verdict === "later") await onAck(item.issue, null);
       setVerdicts((prev) => {
         const next = { ...prev };
         delete next[item.issue.key];
@@ -299,7 +396,39 @@ export function ReviewWizard({
         </p>
       ) : null}
 
-      {current ? (
+      {/* まとめてOKの直後だけ「元に戻す」を出す (自動処理には必ず戻し道を付ける)。 */}
+      {lastBulk ? (
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-brand-soft bg-brand-mist px-4 py-2 text-xs text-brand-deep">
+          <p>
+            {lastBulk.label} {lastBulk.items.length}件 をまとめて「問題なし」にしました。
+          </p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void undoBulk()}
+            className="pressable rounded border border-brand bg-white px-3 py-0.5 font-semibold disabled:opacity-50"
+          >
+            元に戻す
+          </button>
+          <button
+            type="button"
+            onClick={() => setLastBulk(null)}
+            className="rounded px-2 py-0.5 text-ink-muted hover:bg-white"
+          >
+            閉じる
+          </button>
+        </div>
+      ) : null}
+
+      {bulkTarget ? (
+        <BulkConfirm
+          label={bulkTarget.label}
+          items={bulkTarget.items}
+          busy={busy}
+          onCancel={() => setBulkTarget(null)}
+          onConfirm={() => void runBulk(bulkTarget)}
+        />
+      ) : current ? (
         <IssueCard
           key={current.issue.key}
           item={current}
@@ -307,15 +436,29 @@ export function ReviewWizard({
           canEdit={canEdit}
           busy={busy}
           editing={editing}
+          sameCodeCount={
+            items.filter(
+              (item) =>
+                item.issue.code === current.issue.code &&
+                verdicts[item.issue.key] === undefined,
+            ).length
+          }
           draft={drafts[current.issue.key] ?? null}
           onDraftChange={(draft) => saveDrafts({ ...drafts, [current.issue.key]: draft })}
           onStartEdit={() => setEditing(true)}
           onCancelEdit={() => setEditing(false)}
           onAcceptAsIs={() => void acceptAsIs(current)}
-          onSkip={() => {
-            record(current.issue.key, "skipped");
-            goNext(index);
-          }}
+          onBulkOk={() =>
+            setBulkTarget({
+              label: `「${current.issue.title}」と同じ指摘`,
+              items: items.filter(
+                (item) =>
+                  item.issue.code === current.issue.code &&
+                  verdicts[item.issue.key] === undefined,
+              ),
+            })
+          }
+          onSkip={() => void postpone(current)}
           onSaveValue={(field, value, reason) => void saveValue(current, field, value, reason)}
           onPrev={index > 0 ? goPrev : null}
         />
@@ -394,11 +537,13 @@ function IssueCard({
   canEdit,
   busy,
   editing,
+  sameCodeCount,
   draft,
   onDraftChange,
   onStartEdit,
   onCancelEdit,
   onAcceptAsIs,
+  onBulkOk,
   onSkip,
   onSaveValue,
   onPrev,
@@ -408,16 +553,25 @@ function IssueCard({
   canEdit: boolean;
   busy: boolean;
   editing: boolean;
+  /** この指摘と同じ種類で、まだ判断していない件数 (まとめてOKの対象数) */
+  sameCodeCount: number;
   draft: Draft | null;
   onDraftChange: (draft: Draft) => void;
   onStartEdit: () => void;
   onCancelEdit: () => void;
   onAcceptAsIs: () => void;
+  onBulkOk: () => void;
   onSkip: () => void;
   onSaveValue: (field: EditableColumn, value: number, reason: string) => void;
   onPrev: (() => void) | null;
 }) {
   const { row, issue } = item;
+  /**
+   * 先月の判断の案内を閉じたか。
+   * 引き継ぎは判断を自動で付けるものではなく「先月はこうでした」を見せるだけなので、
+   * 解除はこの案内を閉じるだけでよい (閉じれば、ふつうの1件として自分で判断する)。
+   */
+  const [carryOverReleased, setCarryOverReleased] = useState(false);
   const field = issue.field;
   const unit = unitOf(field);
   const benchmark: ValueBenchmark = row.benchmarks[field] ?? EMPTY_BENCHMARK;
@@ -464,6 +618,45 @@ function IssueCard({
           <Meta label="対象年月" value={yearMonthLabel(yearMonth)} />
           <Meta label="項目" value={labelOf(field)} />
         </dl>
+
+        {/* 毎月同じ指摘が出る車両のための案内。黙って隠さず、必ず文で見せる。
+            値が大きく変わっている月には出さない (先月の判断がそのまま通るとは限らないため)。 */}
+        {issue.carriedOver && !carryOverReleased ? (
+          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-brand-soft bg-brand-mist px-4 py-2 text-xs text-brand-deep">
+            <p>
+              先月もOKにした指摘です
+              {issue.carriedOver.previousValue !== null
+                ? `(先月の値 ${num(issue.carriedOver.previousValue, digits)} ${unit})`
+                : ""}
+              {issue.carriedOver.ackedByName
+                ? ` / 判断した人: ${issue.carriedOver.ackedByName}`
+                : ""}
+            </p>
+            {canEdit ? (
+              <button
+                type="button"
+                onClick={onAcceptAsIs}
+                disabled={busy}
+                className="pressable rounded border border-brand bg-white px-3 py-0.5 font-semibold disabled:opacity-50"
+              >
+                先月と同じくOKにする
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setCarryOverReleased(true)}
+              className="rounded px-2 py-0.5 text-ink-muted hover:bg-white"
+            >
+              引き継がない(自分で見る)
+            </button>
+          </div>
+        ) : null}
+
+        {issue.postponed ? (
+          <p className="mt-3 rounded-lg border border-caution-border bg-caution-soft px-4 py-2 text-xs text-ink">
+            これは前に「あとで見る」にした指摘です。
+          </p>
+        ) : null}
       </header>
 
       <div className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -582,6 +775,19 @@ function IssueCard({
             </button>
           ) : null}
 
+          {/* まとめてOKは「要修正」には出さない。要修正は1件ずつ見て直すためのもので、
+              まとめて通せる形にしてしまうと、直すべきものが黙って通る。 */}
+          {canEdit && issue.severity !== "blocking" && sameCodeCount >= 2 ? (
+            <button
+              type="button"
+              onClick={onBulkOk}
+              disabled={busy}
+              className="pressable rounded-md border border-line px-4 py-2.5 text-sm font-semibold text-ink hover:bg-subtle disabled:opacity-50"
+            >
+              同じ指摘 {sameCodeCount}件 をまとめてOK
+            </button>
+          ) : null}
+
           <button
             type="button"
             onClick={onSkip}
@@ -610,6 +816,68 @@ function IssueCard({
         </p>
       ) : null}
     </article>
+  );
+}
+
+/**
+ * まとめてOKの実行前の確認。
+ *
+ * まとめ操作でいちばん怖いのは「何件に効くのか分からないまま押してしまう」ことなので、
+ * 件数と対象の車番を先に全部見せてから実行させる (ux-design §5 一括操作の4点セット)。
+ * 実行ボタンは既定でフォーカスしない。Enter連打でそのまま通らないようにする。
+ */
+function BulkConfirm({
+  label,
+  items,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  label: string;
+  items: readonly ReviewItem[];
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="mt-4 rounded-xl border border-caution-border bg-caution-soft p-5">
+      <h3 className="text-lg font-bold text-ink">
+        {label} <span className="num">{items.length}件</span> をまとめて「問題なし」にします。
+      </h3>
+      <p className="mt-1 text-sm text-ink">
+        この{items.length}件は、内容を1件ずつ見ずに確認済みになります。対象は次の車両です。
+      </p>
+
+      <ul className="mt-3 max-h-56 space-y-1 overflow-y-auto rounded-lg border border-line bg-white px-4 py-3">
+        {items.map((item) => (
+          <li key={item.issue.key} className="flex flex-wrap gap-x-3 text-xs text-ink">
+            <span className="num font-semibold">車番 {item.row.vehicleNoLabel}</span>
+            <span className="text-ink-muted">{labelOf(item.issue.field)}</span>
+            <span className="text-ink-muted">{item.issue.title}</span>
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          className="pressable rounded-md border border-line bg-white px-5 py-2.5 text-sm font-semibold text-ink hover:bg-subtle disabled:opacity-50"
+        >
+          やめる(1件ずつ見る)
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={busy}
+          className="pressable rounded-md border border-brand bg-white px-5 py-2.5 text-sm font-semibold text-brand-deep hover:bg-brand-soft disabled:opacity-50"
+        >
+          {busy ? "処理しています…" : `${items.length}件をまとめてOKにする`}
+        </button>
+        <p className="text-[11px] text-ink-muted">実行した後でも、まとめて元に戻せます。</p>
+      </div>
+    </div>
   );
 }
 

@@ -14,10 +14,13 @@ export function ConfirmBar({
   status,
   yearMonth,
   canConfirm,
+  postponedCount,
 }: {
   status: ConfirmationStatus;
   yearMonth: string;
   canConfirm: boolean;
+  /** 「あとで見る」にしたまま残っている指摘の件数 */
+  postponedCount: number;
 }) {
   const router = useRouter();
   const [state, setState] = useState(status);
@@ -86,6 +89,15 @@ export function ConfirmBar({
           </div>
         )}
       </div>
+
+      {/* 後回しが残っていても確定は止めない (止めると、判断が付かない1件で月末の締めが止まる)。
+          代わりに「何件残っているか」を確定ボタンの真下に必ず出す。 */}
+      {!state.isConfirmed && postponedCount > 0 && (
+        <p className="mt-2 rounded-md border border-caution-border bg-caution-soft px-3 py-2 text-xs text-ink">
+          「あとで見る」にした指摘が {postponedCount}件 残っています。確定はできますが、
+          先に上の「後回しの{postponedCount}件だけ確認する」で見ておくことをおすすめします。
+        </p>
+      )}
 
       {!state.isConfirmed && state.openFlagCount > 0 && (
         <p className="mt-2 rounded-md border border-caution-border bg-caution-soft px-3 py-2 text-xs text-ink">

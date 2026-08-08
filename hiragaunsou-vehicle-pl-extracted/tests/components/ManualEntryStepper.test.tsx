@@ -387,7 +387,7 @@ describe("ManualEntryStepper", () => {
     expect(screen.getByText("自動 17,800")).toBeInTheDocument();
   });
 
-  it("インタンク単価が0のときは警告し、前月の単価をワンタップで引き継げる", async () => {
+  it("インタンク単価が未設定なら前月の単価を入れた状態で開き、先月の値だと分かるように出す", async () => {
     const user = userEvent.setup();
     global.fetch = setupFetchMock() as unknown as typeof fetch;
     render(
@@ -398,14 +398,42 @@ describe("ManualEntryStepper", () => {
         payrollStatus={null}
         initialWorkflowStep="3"
         prevTankPricePerLiter={128}
+        previousYearMonth="2026-04"
+      />,
+    );
+
+    // 0のまま開かない。ただし黙って埋めず「先月の値である」ことを必ず出す。
+    expect(await screen.findByRole("spinbutton")).toHaveValue(128);
+    expect(
+      screen.getByText("先月(2026-04)の単価をそのまま入れています"),
+    ).toBeInTheDocument();
+
+    // 本人が確認したら印は消える (以後は実績値と同じ扱い)。
+    await user.click(screen.getByRole("button", { name: "確認しました(先月と同じでよい)" }));
+    expect(
+      screen.queryByText("先月(2026-04)の単価をそのまま入れています"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("先月の単価も記録が無いときは0のままにして、入力を促す", async () => {
+    global.fetch = setupFetchMock() as unknown as typeof fetch;
+    render(
+      <ManualEntryStepper
+        yearMonth="2026-05"
+        vehicles={vehicles}
+        prefill={{ ...prefill, tankPricePerLiter: 0 }}
+        payrollStatus={null}
+        initialWorkflowStep="3"
+        prevTankPricePerLiter={0}
       />,
     );
 
     expect(
       await screen.findByText("単価が0のままだと、全車の軽油代が0円になります"),
     ).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "先月と同じ 128 円/ℓ にする" }));
-    expect(screen.getByRole("spinbutton")).toHaveValue(128);
+    expect(
+      screen.getByText("先月の単価が記録されていないため、今月の仕入単価を入力してください。"),
+    ).toBeInTheDocument();
   });
 
   it("備品費・メンテ費の入力欄は出さない(業務フローに対応する手順が無いため)", async () => {
@@ -423,6 +451,175 @@ describe("ManualEntryStepper", () => {
     expect(await screen.findByLabelText("24番の修繕費(円)")).toBeInTheDocument();
     expect(screen.queryByLabelText("24番の備品費(円)")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("24番のメンテ費(円)")).not.toBeInTheDocument();
+  });
+});
+
+describe("ManualEntryStepper 前月コピーと下書き", () => {
+  beforeEach(() => {
+    global.fetch = setupFetchMock();
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    window.localStorage.clear();
+  });
+
+  const previousMonthValues = {
+    fuelInQty: { "24": 100, "300": 200 },
+  };
+
+  it("先月の値は空欄のセルにだけ入り、入力済みは上書きせず、元に戻せる", async () => {
+    const user = userEvent.setup();
+    render(
+      <ManualEntryStepper
+        yearMonth="2026-05"
+        vehicles={vehicles}
+        // 24番は今月の請求書から既に書き写した状態。ここが潰れると事故になる。
+        prefill={{ ...prefill, fuelInQty: { "24": 50 } }}
+        payrollStatus={null}
+        initialWorkflowStep="3"
+        previousYearMonth="2026-04"
+        previousMonthValues={previousMonthValues}
+      />,
+    );
+
+    const filled = await screen.findByLabelText("24番のインタンク給油量(ℓ)");
+    const blank = screen.getByLabelText("300番のインタンク給油量(ℓ)");
+    expect(filled).toHaveValue("50");
+    expect(blank).toHaveValue("");
+    // 空欄のセルには先月いくらだったかが出る(思い出させない)
+    expect(screen.getByText("先月 200")).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /空欄に先月\(2026-04\)の値を入れる/ }),
+    );
+
+    expect(blank).toHaveValue("200");
+    expect(filled).toHaveValue("50");
+    expect(
+      screen.getByText("空欄だった1件に先月の値を入れました。金額を見直してください"),
+    ).toBeInTheDocument();
+    // 実績値と見分けが付くよう、確認するまで印が残る
+    expect(screen.getByText("先月の値")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "元に戻す" }));
+    expect(blank).toHaveValue("");
+    expect(screen.getByText("先月の値を取り消しました")).toBeInTheDocument();
+    expect(screen.queryByText("先月の値")).not.toBeInTheDocument();
+  });
+
+  it("コピー元の月に値が無ければコピーのボタンを出さない", async () => {
+    render(
+      <ManualEntryStepper
+        yearMonth="2026-05"
+        vehicles={vehicles}
+        prefill={prefill}
+        payrollStatus={null}
+        initialWorkflowStep="3"
+        previousYearMonth="2026-04"
+        previousMonthValues={{}}
+      />,
+    );
+
+    expect(await screen.findByLabelText("24番のインタンク給油量(ℓ)")).toBeInTheDocument();
+    expect(screen.queryByText(/空欄に先月/)).not.toBeInTheDocument();
+  });
+
+  it("入力途中は下書きに残り、次に開いたときいつ時点かを示して復元する", async () => {
+    const user = userEvent.setup();
+    const { unmount } = render(
+      <ManualEntryStepper
+        yearMonth="2026-05"
+        vehicles={vehicles}
+        prefill={prefill}
+        payrollStatus={null}
+        initialWorkflowStep="3"
+      />,
+    );
+
+    await user.type(await screen.findByLabelText("24番の外部給油代(円)"), "3400");
+    await waitFor(() =>
+      expect(window.localStorage.getItem("hiragaunsou:manual-entry:2026-05:v1")).not.toBeNull(),
+    );
+    unmount();
+
+    render(
+      <ManualEntryStepper
+        yearMonth="2026-05"
+        vehicles={vehicles}
+        prefill={prefill}
+        payrollStatus={null}
+        initialWorkflowStep="3"
+      />,
+    );
+
+    expect(await screen.findByLabelText("24番の外部給油代(円)")).toHaveValue("3400");
+    // 黙って復元しない。いつ時点の下書きかを出し、破棄できるようにする
+    expect(
+      screen.getByText(/時点の入力途中\(まだ保存していないもの\)を読み込みました。/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "下書きを破棄して保存済みの状態に戻す" }),
+    ).toBeInTheDocument();
+  });
+
+  it("確定済みの月では下書きを復元しない", async () => {
+    window.localStorage.setItem(
+      "hiragaunsou:manual-entry:2026-05:v1",
+      JSON.stringify({
+        savedAt: Date.now(),
+        values: { fuelOut: { "24": "3400" } },
+        tankPrice: 130,
+        tankPriceCarried: false,
+        kirinTransport: "",
+        kirinManagement: "",
+        kirinTargets: "",
+        copied: [],
+      }),
+    );
+
+    render(
+      <ManualEntryStepper
+        yearMonth="2026-05"
+        vehicles={vehicles}
+        prefill={prefill}
+        payrollStatus={null}
+        initialWorkflowStep="3"
+        isConfirmed
+      />,
+    );
+
+    expect(await screen.findByLabelText("24番の外部給油代(円)")).toHaveValue("");
+    expect(screen.getByText("この月は確定済みです")).toBeInTheDocument();
+  });
+
+  it("確定済みの月で保存を押すと、確定が外れることを1回だけ確認する", async () => {
+    const user = userEvent.setup();
+    const fetchMock = setupFetchMock();
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(
+      <ManualEntryStepper
+        yearMonth="2026-05"
+        vehicles={vehicles}
+        prefill={prefill}
+        payrollStatus={null}
+        initialWorkflowStep="3"
+        isConfirmed
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "ここまでを保存" }));
+
+    // 押した時点では何もしない(やめれば入力に戻れる)
+    expect(screen.getByText("確定を解除して保存しますか?")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter((c) => c[1]?.method === "POST")).toHaveLength(0);
+
+    await user.click(screen.getByRole("button", { name: "確定を解除して保存する" }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.filter((c) => c[1]?.method === "POST")).toHaveLength(1),
+    );
   });
 });
 

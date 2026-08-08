@@ -156,11 +156,31 @@ describe("POST /api/vehicle-pl/issue-ack", () => {
     expect(res.status).toBe(200);
     expect(ackExecuteMock).toHaveBeenCalledWith({
       ...validKey,
+      status: "ok",
       note: "臨時便のため",
+      value: null,
       actorId: "user-input",
       actorName: "入力担当",
     });
     expect(await res.json()).toMatchObject({ acknowledged: true, ackedByName: "入力担当" });
+  });
+
+  /**
+   * 「あとで見る」は判断の一種として同じ入口を通す。確認済みとは別物なので、
+   * 応答の acknowledged は false のまま postponed が立つ。
+   */
+  it("あとで見る(後回し)も同じ入口で受け付ける", async () => {
+    const res = await ack({ ...validKey, status: "later", value: 900_000 });
+    expect(res.status).toBe(200);
+    expect(ackExecuteMock).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "later", value: 900_000 }),
+    );
+    expect(await res.json()).toMatchObject({ acknowledged: false, postponed: true });
+  });
+
+  it("知らない判断の種類は400として弾く", async () => {
+    expect((await ack({ ...validKey, status: "maybe" })).status).toBe(400);
+    expect(ackExecuteMock).not.toHaveBeenCalled();
   });
 });
 

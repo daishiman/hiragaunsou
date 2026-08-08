@@ -83,6 +83,14 @@ export interface GridReviewSummary {
   info: number;
   /** 確認済みにした指摘の件数 (進捗表示に使う) */
   acknowledged: number;
+  /**
+   * 「あとで見る」にしたまま残っている件数。
+   * 上の blocking / warning / info にも含まれる (確認はまだ終わっていないため)。
+   * 別に数えるのは、後回しが何件あるかを画面から消さないため。
+   */
+  postponed: number;
+  /** 先月も「問題なし」にしていた指摘のうち、今月まだ判断していない件数 */
+  carriedOver: number;
   /** 1件も所見が無い車両の台数 (=そのまま確定してよい台数) */
   cleanVehicles: number;
   /** まだ収支表に反映していない直しの件数 */
@@ -185,6 +193,8 @@ export function buildGridResponse(
   acks: readonly PlIssueAckRecord[] = [],
   /** 先月の収支表。「先月はこうだった」を出すためだけに使う (無くても表は作れる)。 */
   previousRows: readonly Record<string, unknown>[] = [],
+  /** 先月の判断。「先月もOKにした指摘です」を出すために使う (無くても表は作れる)。 */
+  previousAcks: readonly PlIssueAckRecord[] = [],
 ): GridResponse {
   const flagsByVehicle = new Map<string, Set<string>>();
   for (const flag of anomalyFlags) {
@@ -221,7 +231,7 @@ export function buildGridResponse(
   ];
   // 確認済みの印をここで1度だけ重ねる。以降 (行の色・件数・画面) はすべて
   // 「確認済みかどうか」を見て動くので、判定が散らばらないようにする。
-  const reviewedIssues = applyIssueAcks(allIssues, acks);
+  const reviewedIssues = applyIssueAcks(allIssues, acks, previousAcks);
   const issuesByVehicle = new Map<string, ReviewedIssue[]>();
   for (const issue of reviewedIssues) {
     const list = issuesByVehicle.get(issue.vehicleNo) ?? [];
@@ -293,6 +303,8 @@ export function buildGridResponse(
     warning: open.filter((i) => i.severity === "warning").length,
     info: open.filter((i) => i.severity === "info").length,
     acknowledged: reviewedIssues.length - open.length,
+    postponed: open.filter((i) => i.postponed).length,
+    carriedOver: open.filter((i) => i.carriedOver !== null).length,
     cleanVehicles: rows.filter((r) => r.issues.length === 0).length,
     pendingOverrides: overrides.filter((o) => o.appliedAt === null).length,
   };
@@ -321,14 +333,20 @@ export class GetMonthlyGridUseCase {
     reconciliation?: Pick<ExcelReconcileResult, "vehicles">,
   ): Promise<GridResponse> {
     const plRows = await this.vehiclePlRepo.findByYearMonth(yearMonth);
+    const previousYearMonth = trailingYearMonths(yearMonth, 2)[0] ?? yearMonth;
     // 「先月はこうだった」を確認画面に出すためだけの読み込み。取れなくても表は成立するので、
     // 失敗しても表全体を落とさない (先月の収支表がまだ無い月が必ず存在する)。
     const previousRows = await this.vehiclePlRepo
-      .findByYearMonth(trailingYearMonths(yearMonth, 2)[0] ?? yearMonth)
+      .findByYearMonth(previousYearMonth)
       .then((rows) => rows.map((row) => ({ ...row }) as Record<string, unknown>))
       .catch(() => [] as Record<string, unknown>[]);
     const overrides = (await this.overrideRepo?.findByYearMonth(yearMonth)) ?? [];
     const acks = (await this.ackRepo?.findByYearMonth(yearMonth)) ?? [];
+    // 先月の判断。毎月同じ指摘が出る車両で「先月もOKにした指摘です」と案内するために読む。
+    // 先月がまだ無い月は当然あるので、取れなくても表は作る。
+    const previousAcks = previousYearMonth === yearMonth
+      ? []
+      : ((await this.ackRepo?.findByYearMonth(previousYearMonth).catch(() => [])) ?? []);
     const openFlags = await this.reviewFlagRepo.findOpenByYearMonth(yearMonth);
     const anomalyFlags: AnomalyFlag[] = openFlags
       .filter((f) => f.vehicleNo && f.field)
@@ -348,6 +366,7 @@ export class GetMonthlyGridUseCase {
       overrides,
       acks,
       previousRows,
+      previousAcks,
     );
   }
 }

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { VEHICLE_PL_FIELDS, type VehiclePlField } from "../../../src/domain/entities/VehiclePl";
 import type { GridReviewSummary, GridRow } from "../../../src/usecase/steps/getMonthlyGrid";
-import type { ReviewedIssue } from "../../../src/domain/rules/plIssueAck";
+import type { PlIssueAckStatus, ReviewedIssue } from "../../../src/domain/rules/plIssueAck";
 import {
   OVERRIDABLE_FIELDS,
   OVERRIDABLE_FIELD_META,
@@ -208,8 +208,12 @@ interface VehicleEdit {
   reason: string;
 }
 
+/**
+ * この画面で下した判断。null = 判断を取り消した (もう一度確認対象に戻る)。
+ * サーバ側にも同じものが保存されているが、押した結果をその場で見せるために重ねて持つ。
+ */
 interface AckState {
-  acknowledged: boolean;
+  status: PlIssueAckStatus | null;
   ackedByName: string | null;
 }
 
@@ -302,17 +306,25 @@ export function GridTable({
     [rows],
   );
 
-  /** 確認済みの印を重ねた指摘。件数・セルの色・パネルの表示はすべてこれを見る。 */
+  /** 判断の印を重ねた指摘。件数・セルの色・パネルの表示はすべてこれを見る。 */
   const issuesOf = (row: GridRow): ReviewedIssue[] =>
     row.issues.map((issue) => {
       const local = acks[issue.key];
       if (!local) return issue;
       return {
         ...issue,
-        acknowledged: local.acknowledged,
-        ack: local.acknowledged
-          ? { note: null, ackedAt: Date.now(), ackedByName: local.ackedByName }
+        acknowledged: local.status === "ok",
+        postponed: local.status === "later",
+        ack: local.status
+          ? {
+              status: local.status,
+              note: null,
+              ackedAt: Date.now(),
+              ackedByName: local.ackedByName,
+            }
           : null,
+        // 今月の判断を付けたら、先月の話はもう案内する必要がない。
+        carriedOver: local.status === null ? issue.carriedOver : null,
       };
     });
 
@@ -398,18 +410,29 @@ export function GridTable({
     let warning = 0;
     let info = 0;
     let acknowledged = 0;
+    let postponed = 0;
     for (const row of rows) {
       for (const issue of issuesOf(row)) {
         if (issue.acknowledged) {
           acknowledged += 1;
           continue;
         }
+        // 後回しも「まだ確認していない」件数に入れる (確認は終わっていないため)。
+        // そのうえで何件が後回しなのかを別に数え、画面から消えないようにする。
+        if (issue.postponed) postponed += 1;
         if (issue.severity === "blocking") blocking += 1;
         else if (issue.severity === "warning") warning += 1;
         else info += 1;
       }
     }
-    return { blocking, warning, info, acknowledged, cleanVehicles: review.cleanVehicles };
+    return {
+      blocking,
+      warning,
+      info,
+      acknowledged,
+      postponed,
+      cleanVehicles: review.cleanVehicles,
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, acks, review.cleanVehicles]);
 
@@ -526,9 +549,15 @@ export function GridTable({
     }
   }
 
-  async function toggleAck(issue: ReviewedIssue, acknowledged: boolean) {
+  /**
+   * 指摘1件の判断を保存する。status に null を渡すと判断を取り消す。
+   *
+   * 「あとで見る」もここを通してサーバに残す。画面の中だけで覚えていると、
+   * 対象年月を切り替えて戻ってきた瞬間に後回しが消え、確認し直しになる。
+   */
+  async function setAck(issue: ReviewedIssue, status: PlIssueAckStatus | null) {
     const url = "/api/vehicle-pl/issue-ack";
-    const res = acknowledged
+    const res = status
       ? await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -537,6 +566,9 @@ export function GridTable({
             vehicleNo: issue.vehicleNo,
             field: issue.field,
             code: issue.code,
+            status,
+            // 翌月に「先月もOKにした」を出すかどうかの判定に使う (値が動いたら引き継がない)。
+            value: typeof issue.value === "number" ? issue.value : undefined,
           }),
         })
       : await fetch(
@@ -549,11 +581,76 @@ export function GridTable({
     } | null;
     // 呼び出し側 (確認モード) が失敗を検知して先へ進めないようにする必要があるため、
     // ここで握りつぶさずに投げる。表側は catch して通知欄に出す。
-    if (!res.ok) throw new Error(data?.error ?? "確認済みにできませんでした");
+    if (!res.ok) throw new Error(data?.error ?? "判断を保存できませんでした");
     setAcks((prev) => ({
       ...prev,
-      [issue.key]: { acknowledged, ackedByName: data?.ackedByName ?? null },
+      [issue.key]: { status, ackedByName: data?.ackedByName ?? null },
     }));
+  }
+
+  /**
+   * 同じ種類の指摘をまとめて「問題なし」にする。
+   *
+   * 押し間違いの被害が大きい操作なので、件数の提示 (呼び出し側) と
+   * この後の「元に戻す」(bulkUndo) を必ずセットにする。
+   */
+  async function bulkAck(issues: readonly ReviewedIssue[], reason: string): Promise<number> {
+    const res = await fetch("/api/vehicle-pl/issue-ack/bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        yearMonth,
+        status: "ok",
+        reason,
+        targets: issues.map((issue) => ({
+          vehicleNo: issue.vehicleNo,
+          field: issue.field,
+          code: issue.code,
+          value: typeof issue.value === "number" ? issue.value : undefined,
+        })),
+      }),
+    });
+    const data = (await res.json().catch(() => null)) as {
+      error?: string;
+      count?: number;
+      ackedByName?: string | null;
+    } | null;
+    if (!res.ok) throw new Error(data?.error ?? "まとめて確認済みにできませんでした");
+    setAcks((prev) => {
+      const next = { ...prev };
+      for (const issue of issues) {
+        next[issue.key] = { status: "ok", ackedByName: data?.ackedByName ?? null };
+      }
+      return next;
+    });
+    return data?.count ?? issues.length;
+  }
+
+  /** まとめて付けた判断をまとめて取り消す。 */
+  async function bulkUndo(issues: readonly ReviewedIssue[]): Promise<number> {
+    const res = await fetch("/api/vehicle-pl/issue-ack/bulk", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        yearMonth,
+        targets: issues.map((issue) => ({
+          vehicleNo: issue.vehicleNo,
+          field: issue.field,
+          code: issue.code,
+        })),
+      }),
+    });
+    const data = (await res.json().catch(() => null)) as {
+      error?: string;
+      count?: number;
+    } | null;
+    if (!res.ok) throw new Error(data?.error ?? "元に戻せませんでした");
+    setAcks((prev) => {
+      const next = { ...prev };
+      for (const issue of issues) next[issue.key] = { status: null, ackedByName: null };
+      return next;
+    });
+    return data?.count ?? issues.length;
   }
 
   async function applyPending() {
@@ -604,7 +701,9 @@ export function GridTable({
           applying={applying}
           vehicleCount={rows.length}
           onSave={(row, field, value, reason) => saveEdit(row, field, value, reason)}
-          onAck={(issue, acknowledged) => toggleAck(issue, acknowledged)}
+          onAck={(issue, status) => setAck(issue, status)}
+          onBulkAck={(issues, reason) => bulkAck(issues, reason)}
+          onBulkUndo={(issues) => bulkUndo(issues)}
           onApply={() => void applyPending()}
           onExit={() => setReviewing(false)}
         />
@@ -622,13 +721,19 @@ export function GridTable({
         warning={progress.warning}
         info={progress.info}
         cleanVehicles={progress.cleanVehicles}
+        postponed={progress.postponed}
         vehicleCount={rows.length}
         pendingCount={pendingCount}
         canEdit={canEdit}
         applying={applying}
         lockedReason={lockedReason}
-        onStart={() => {
-          setQueue(buildReviewQueue(rows.map((row) => ({ ...row, issues: issuesOf(row) }))));
+        onStart={(onlyPostponed) => {
+          setQueue(
+            buildReviewQueue(
+              rows.map((row) => ({ ...row, issues: issuesOf(row) })),
+              { onlyPostponed },
+            ),
+          );
           setReviewing(true);
         }}
         onApply={() => void applyPending()}
@@ -945,9 +1050,9 @@ export function GridTable({
               canEdit={canEdit}
               editable={canEdit && isEditableField(opened!.field as ColumnKey)}
               onEdit={() => startEdit(openedRow, opened!.field as EditableColumn)}
-              onToggleAck={(issue, acknowledged) => {
-                void toggleAck(issue, acknowledged).catch((e: unknown) =>
-                  setNotice(e instanceof Error ? e.message : "確認済みにできませんでした"),
+              onToggleAck={(issue, status) => {
+                void setAck(issue, status).catch((e: unknown) =>
+                  setNotice(e instanceof Error ? e.message : "判断を保存できませんでした"),
                 );
               }}
               onClose={() => setOpened(null)}
@@ -977,6 +1082,7 @@ function OpeningGuide({
   warning,
   info,
   cleanVehicles,
+  postponed,
   vehicleCount,
   pendingCount,
   canEdit,
@@ -990,12 +1096,14 @@ function OpeningGuide({
   warning: number;
   info: number;
   cleanVehicles: number;
+  /** 「あとで見る」にしたまま残っている件数 */
+  postponed: number;
   vehicleCount: number;
   pendingCount: number;
   canEdit: boolean;
   applying: boolean;
   lockedReason: string | null;
-  onStart: () => void;
+  onStart: (onlyPostponed: boolean) => void;
   onApply: () => void;
 }) {
   const counts: { severity: ReviewSeverity; count: number }[] = [
@@ -1014,15 +1122,29 @@ function OpeningGuide({
           <p className="mt-1 text-sm text-ink-muted">
             1件ずつ順番にご案内します。{vehicleCount}台のうち {cleanVehicles}台は指摘なしなので、
             見ていただくのはこの{openIssueCount}件だけです。
+            {postponed > 0 ? `このうち ${postponed}件は後回し中です。` : ""}
           </p>
           {canEdit ? (
-            <button
-              type="button"
-              onClick={onStart}
-              className="pressable mt-3 rounded-md bg-accent px-6 py-3 text-base font-semibold text-white hover:bg-accent-deep"
-            >
-              確認をはじめる
-            </button>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => onStart(false)}
+                className="pressable rounded-md bg-accent px-6 py-3 text-base font-semibold text-white hover:bg-accent-deep"
+              >
+                確認をはじめる
+              </button>
+              {/* 後回しにした分だけをもう一度見に行ける入口。ここが無いと、
+                  後回しにした指摘を探すために全件をもう一度めくることになる。 */}
+              {postponed > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => onStart(true)}
+                  className="pressable rounded-md border border-brand px-5 py-3 text-sm font-semibold text-brand-deep hover:bg-brand-soft"
+                >
+                  後回しの{postponed}件だけ確認する
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </>
       ) : pendingCount > 0 ? (
@@ -1090,7 +1212,14 @@ function ReviewProgressBar({
   applying,
   onApply,
 }: {
-  progress: { blocking: number; warning: number; info: number; acknowledged: number; cleanVehicles: number };
+  progress: {
+    blocking: number;
+    warning: number;
+    info: number;
+    acknowledged: number;
+    postponed: number;
+    cleanVehicles: number;
+  };
   vehicleCount: number;
   pendingCount: number;
   canEdit: boolean;
@@ -1115,6 +1244,13 @@ function ReviewProgressBar({
               {done > 0 ? `(確認済み ${done}件)` : null}
               残り{progress.cleanVehicles}台は指摘なしです。
             </p>
+            {/* 後回しの件数は、表を見ているときも必ず目に入る場所に置く
+                (後回しにしたこと自体を忘れると、確認したつもりで月を閉じてしまう)。 */}
+            {progress.postponed > 0 ? (
+              <span className="rounded-full border border-caution-border bg-caution-soft px-2 py-0.5 text-xs font-semibold text-ink">
+                後回し {progress.postponed}件
+              </span>
+            ) : null}
             {(["blocking", "warning", "info"] as const).map((severity) => {
               const count = progress[severity];
               if (count === 0) return null;
@@ -1329,7 +1465,7 @@ function IssuePanel({
   canEdit: boolean;
   editable: boolean;
   onEdit: () => void;
-  onToggleAck: (issue: ReviewedIssue, acknowledged: boolean) => void;
+  onToggleAck: (issue: ReviewedIssue, status: PlIssueAckStatus | null) => void;
   onClose: () => void;
 }) {
   return (
@@ -1367,29 +1503,61 @@ function IssuePanel({
                     : SEVERITY_STYLE[issue.severity].chip
                 }`}
               >
-                {issue.acknowledged ? "確認済み" : SEVERITY_STYLE[issue.severity].label}
+                {issue.acknowledged
+                  ? "確認済み"
+                  : issue.postponed
+                    ? "あとで見る"
+                    : SEVERITY_STYLE[issue.severity].label}
               </span>
               <span className="text-sm font-semibold text-ink">{issue.title}</span>
 
               {canEdit ? (
-                <button
-                  type="button"
-                  onClick={() => onToggleAck(issue, !issue.acknowledged)}
-                  className={`pressable ml-auto rounded px-3 py-1 text-xs font-semibold ${
-                    issue.acknowledged
-                      ? "border border-line text-ink-muted hover:bg-subtle"
-                      : "border border-brand text-brand-deep"
-                  }`}
-                >
-                  {issue.acknowledged ? "確認済みを取り消す" : "確認しました(このままでよい)"}
-                </button>
+                <span className="ml-auto flex items-center gap-2">
+                  {issue.acknowledged || issue.postponed ? (
+                    <button
+                      type="button"
+                      onClick={() => onToggleAck(issue, null)}
+                      className="pressable rounded border border-line px-3 py-1 text-xs font-semibold text-ink-muted hover:bg-subtle"
+                    >
+                      {issue.acknowledged ? "確認済みを取り消す" : "後回しをやめる"}
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onToggleAck(issue, "later")}
+                        className="pressable rounded border border-line px-3 py-1 text-xs font-semibold text-ink-muted hover:bg-subtle"
+                      >
+                        あとで見る
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onToggleAck(issue, "ok")}
+                        className="pressable rounded border border-brand px-3 py-1 text-xs font-semibold text-brand-deep"
+                      >
+                        確認しました(このままでよい)
+                      </button>
+                    </>
+                  )}
+                </span>
               ) : null}
             </div>
             <p className="mt-1.5 text-xs leading-relaxed text-ink-muted">{issue.reason}</p>
 
-            {issue.acknowledged && issue.ack?.ackedByName ? (
+            {/* 先月の判断は黙って引き継がず、必ず文で見せる (ux-design §6 正直なUI)。 */}
+            {issue.carriedOver ? (
               <p className="mt-1 text-[11px] text-ink-muted">
-                確認した人: {issue.ack.ackedByName}
+                先月もOKにした指摘です
+                {issue.carriedOver.previousValue !== null
+                  ? ` (先月の値 ${num(issue.carriedOver.previousValue)})`
+                  : ""}
+                {issue.carriedOver.ackedByName ? ` / 判断した人: ${issue.carriedOver.ackedByName}` : ""}
+              </p>
+            ) : null}
+
+            {(issue.acknowledged || issue.postponed) && issue.ack?.ackedByName ? (
+              <p className="mt-1 text-[11px] text-ink-muted">
+                判断した人: {issue.ack.ackedByName}
               </p>
             ) : null}
 
