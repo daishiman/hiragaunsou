@@ -14,6 +14,7 @@ import {
   isReviewIssueCode,
   type ReviewIssueCode,
 } from "../../../../src/domain/rules/vehiclePlReview";
+import { isPlIssueAckStatus } from "../../../../src/domain/rules/plIssueAck";
 import { isSameOriginRequest } from "../../../_lib/assertSameOrigin";
 
 interface AckKeyInput {
@@ -59,10 +60,16 @@ export async function POST(request: Request) {
   }
 
   const body = (await request.json().catch(() => null)) as
-    | (RawAckKeyInput & { note?: string })
+    | (RawAckKeyInput & { note?: string; status?: string; value?: number })
     | null;
   const key = parseKey(body);
   if ("error" in key) return NextResponse.json({ error: key.error }, { status: 400 });
+
+  // 判断の指定が無い場合は「問題なし」。この列を足す前の画面から来た要求も通るようにする。
+  const status = body?.status ?? "ok";
+  if (!isPlIssueAckStatus(status)) {
+    return NextResponse.json({ error: `「${status}」は判断として扱えません` }, { status: 400 });
+  }
 
   const db = createDb(env.DB);
   await new AcknowledgePlIssueUseCase(
@@ -70,12 +77,20 @@ export async function POST(request: Request) {
     new D1AuditLogRepository(db),
   ).execute({
     ...key,
+    status,
     note: body?.note ?? null,
+    value: typeof body?.value === "number" ? body.value : null,
     actorId: session!.id,
     actorName: session!.name,
   });
 
-  return NextResponse.json({ ...key, acknowledged: true, ackedByName: session!.name });
+  return NextResponse.json({
+    ...key,
+    status,
+    acknowledged: status === "ok",
+    postponed: status === "later",
+    ackedByName: session!.name,
+  });
 }
 
 /** 確認済みを取り消して、もう一度確認対象に戻す。 */

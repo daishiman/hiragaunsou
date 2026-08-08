@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../src/infrastructure/auth/session";
@@ -89,6 +90,7 @@ export default async function GridPage({
                 status={confirmation}
                 yearMonth={yearMonth}
                 canConfirm={checkAccess(session, "input")}
+                postponedCount={grid.review.postponed}
               />
               <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-line bg-white px-4 py-3">
                 <p className="text-sm text-ink-muted">
@@ -100,6 +102,14 @@ export default async function GridPage({
                 >
                   CSVで書き出す
                 </a>
+                {/* 数字そのものではなく「確認の記録」を渡したい場面 (上長・経理への報告) の入口。
+                    CSVと並べて置く。どちらも「表を見終わったあとの出口」だから。 */}
+                <Link
+                  href={`/grid/report?ym=${encodeURIComponent(yearMonth)}`}
+                  className="pressable rounded border border-line px-3 py-1.5 text-sm text-ink hover:bg-subtle"
+                >
+                  確認の記録を印刷・共有
+                </Link>
               </div>
             </>
           }
