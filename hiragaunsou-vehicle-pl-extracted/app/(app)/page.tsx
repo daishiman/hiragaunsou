@@ -166,7 +166,14 @@ export default async function HomePage() {
               <br className="hidden sm:block" />
               STEP {next.step.id}「{next.step.title}」から始めましょう
             </p>
-            <p className="mt-2 text-sm leading-relaxed text-ink-muted">{next.step.summary}</p>
+            {/*
+              見出しとボタンだけで「次に何を押すか」は伝わる。ステップの中身の説明まで常時出すと
+              押す前に読む文章が増えるので、折りたたみへ移す(文章はそのまま)。
+              進み具合(detail)は数字なので出したままにする。
+            */}
+            <Disclosure tone="inline" summary="このステップで何をしますか?">
+              {next.step.summary}
+            </Disclosure>
             <p className="num mt-2 text-xs text-ink-muted">{next.detail}</p>
             <Link
               href={withYm(next.step.href, yearMonth)}

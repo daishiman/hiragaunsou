@@ -440,12 +440,17 @@ export function VehicleMasterManager({
 
       <section className="rounded-xl border border-line bg-white p-5">
         <h2 className="text-sm font-bold text-ink">現在の車両マスタ({vehicles.length}台)</h2>
-        <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+        {/*
+          けん引先の仕組みの説明は、一覧を見るたびに読むものではない。常時出すと一覧より先に
+          説明が目に入るので、折りたたみへ移す(文章はそのまま)。けん引先が決まっていない
+          トレーラがあるときは、下の注意パネルが開かなくても出るので気づける。
+        */}
+        <Disclosure tone="inline" summary="けん引先を決めるとどうなりますか?">
           トレーラ(被けん引車)は運賃も運転者も付かないのに保険・税・リース料だけが付くため、
           けん引先を決めないと「売上ゼロ・費用だけの赤字行」として収支表に並びます。
           けん引先を選ぶとその行に合算され、車番は「129/1113」のようにまとめて表示されます
           (収支表は{yearMonth}分を作り直します)。
-        </p>
+        </Disclosure>
 
         {vehicles.length === 0 ? (
           <div className="mt-3">
