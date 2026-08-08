@@ -75,9 +75,7 @@ describe("ManualEntryStepper", () => {
     // 初期は STEP2「キリンの協力金」
     expect(screen.getByRole("heading", { name: "キリンの輸送協力金・経営支援金" })).toBeInTheDocument();
 
-    // 輸送協力金と経営支援金の2つのinputがあるため、最初の要素を取得
-    const inputs = screen.getAllByPlaceholderText("1200+340");
-    await user.type(inputs[0]!, "1000+1000");
+    await user.type(screen.getByLabelText("輸送協力金(円)"), "1000+1000");
 
     // 配分先(既定は24,300の2台)への割り当て額が更新される -> 2000/2=1000円
     expect(await screen.findByText("1,000")).toBeInTheDocument();
@@ -211,8 +209,8 @@ describe("ManualEntryStepper", () => {
 
     // 全角「２４」でも24番がヒットする(NFKC正規化)
     await user.type(search, "２４");
-    expect(await screen.findByLabelText("24番の通行料金")).toBeInTheDocument();
-    expect(screen.queryByLabelText("300番の通行料金")).not.toBeInTheDocument();
+    expect(await screen.findByLabelText("24番の通行料金(円)")).toBeInTheDocument();
+    expect(screen.queryByLabelText("300番の通行料金(円)")).not.toBeInTheDocument();
 
     // 一致0件のときは「マスタが空」ではなく「検索に一致しない」と書き分ける
     await user.clear(search);
@@ -220,7 +218,7 @@ describe("ManualEntryStepper", () => {
     expect(await screen.findByText("「999」に一致する車両がありません")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "絞り込みを解除して全車両を表示" }));
-    expect(await screen.findByLabelText("300番の通行料金")).toBeInTheDocument();
+    expect(await screen.findByLabelText("300番の通行料金(円)")).toBeInTheDocument();
   });
 
   it("ステップを移ると検索の絞り込みを解除する(前のステップの検索語で次の表が空に見えるのを防ぐ)", async () => {
@@ -236,11 +234,11 @@ describe("ManualEntryStepper", () => {
 
     await user.click(screen.getByRole("button", { name: /高速料金/ }));
     await user.type(screen.getByPlaceholderText("車番・運転者で検索"), "24");
-    expect(screen.queryByLabelText("300番の通行料金")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("300番の通行料金(円)")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /燃料費/ }));
     expect(screen.getByPlaceholderText("車番・運転者で検索")).toHaveValue("");
-    expect(await screen.findByLabelText("300番の外部給油代")).toBeInTheDocument();
+    expect(await screen.findByLabelText("300番の外部給油代(円)")).toBeInTheDocument();
   });
 
   it("確定しても収支表が0行だったときは成功として見せない", async () => {
@@ -302,6 +300,129 @@ describe("ManualEntryStepper", () => {
     expect(screen.getByDisplayValue("80000")).toBeInTheDocument();
     // (120000+80000)/2台
     expect(await screen.findByText("100,000")).toBeInTheDocument();
+  });
+  it("保存済みの0を空欄として読み戻す(一度保存しただけで全車両が入力済みにならない)", async () => {
+    const user = userEvent.setup();
+    // 保存すると全車両の行が書かれ、入力していない欄には0が入る。
+    // その0を値として読み戻すと「未入力のみ」の絞り込みが常に0件になり、表が壊れて見えていた。
+    global.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (!init || init.method === undefined) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            manualInputs: [
+              {
+                vehicleNo: "24",
+                fuelInQty: 500,
+                fuelOut: 0,
+                fuelOutQty: 0,
+                adblue: 0,
+                repairActual: 0,
+                tireActual: null,
+                equip: 0,
+                mainte: 0,
+                tollActual: null,
+                tollDiscountActual: null,
+                miscOther: 0,
+              },
+              {
+                vehicleNo: "300",
+                fuelInQty: 0,
+                fuelOut: 0,
+                fuelOutQty: 0,
+                adblue: 0,
+                repairActual: 0,
+                tireActual: null,
+                equip: 0,
+                mainte: 0,
+                tollActual: null,
+                tollDiscountActual: null,
+                miscOther: 0,
+              },
+            ],
+            kirinTargetVehicleNos: [],
+          }),
+        } as Response);
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ vehicleCount: 2 }) } as Response);
+    }) as unknown as typeof fetch;
+
+    render(
+      <ManualEntryStepper
+        yearMonth="2026-05"
+        vehicles={vehicles}
+        prefill={prefill}
+        payrollStatus={null}
+        initialWorkflowStep="3"
+      />,
+    );
+
+    // 実際に入力した 500 だけが残り、0で保存された欄は空欄に戻る
+    expect(await screen.findByDisplayValue("500")).toBeInTheDocument();
+    expect(screen.getByLabelText("24番の外部給油代(円)")).toHaveValue("");
+    expect(screen.getByLabelText("300番のインタンク給油量(ℓ)")).toHaveValue("");
+
+    // 「入力済み」は実際に入力した1台だけ。「未入力のみ」で残り1台が出る
+    expect(screen.getByText(/入力済み 1台/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "未入力のみ" }));
+    expect(screen.getByText(/表示 1台 \/ 全 2台/)).toBeInTheDocument();
+  });
+
+  it("空欄の欄には自動計算される金額を出す(規則を文章で説明しない)", async () => {
+    global.fetch = setupFetchMock() as unknown as typeof fetch;
+    render(
+      <ManualEntryStepper
+        yearMonth="2026-05"
+        vehicles={vehicles}
+        prefill={prefill}
+        payrollStatus={null}
+        initialWorkflowStep="6"
+        autoValues={{ tireActual: {}, tollActual: { "24": 50000, "300": 20000 } }}
+        tollDiscountRate={0.356}
+      />,
+    );
+
+    // 通行料金の空欄 = 売上モニタリスト由来の金額、割引額の空欄 = それ×組合割引率
+    expect(await screen.findByText("自動 50,000")).toBeInTheDocument();
+    expect(screen.getByText("自動 17,800")).toBeInTheDocument();
+  });
+
+  it("インタンク単価が0のときは警告し、前月の単価をワンタップで引き継げる", async () => {
+    const user = userEvent.setup();
+    global.fetch = setupFetchMock() as unknown as typeof fetch;
+    render(
+      <ManualEntryStepper
+        yearMonth="2026-05"
+        vehicles={vehicles}
+        prefill={{ ...prefill, tankPricePerLiter: 0 }}
+        payrollStatus={null}
+        initialWorkflowStep="3"
+        prevTankPricePerLiter={128}
+      />,
+    );
+
+    expect(
+      await screen.findByText("単価が0のままだと、全車の軽油代が0円になります"),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "先月と同じ 128 円/ℓ にする" }));
+    expect(screen.getByRole("spinbutton")).toHaveValue(128);
+  });
+
+  it("備品費・メンテ費の入力欄は出さない(業務フローに対応する手順が無いため)", async () => {
+    global.fetch = setupFetchMock() as unknown as typeof fetch;
+    render(
+      <ManualEntryStepper
+        yearMonth="2026-05"
+        vehicles={vehicles}
+        prefill={prefill}
+        payrollStatus={null}
+        initialWorkflowStep="5"
+      />,
+    );
+
+    expect(await screen.findByLabelText("24番の修繕費(円)")).toBeInTheDocument();
+    expect(screen.queryByLabelText("24番の備品費(円)")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("24番のメンテ費(円)")).not.toBeInTheDocument();
   });
 });
 
