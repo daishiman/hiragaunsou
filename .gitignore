@@ -5,3 +5,4 @@
 # シンボリックリンクの場合にマッチしなくなり、git status に顔を出してしまうため。
 hiragaunsou-vehicle-pl-extracted/data
 
+node_modules/
