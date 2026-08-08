@@ -139,11 +139,19 @@ test.describe("車両マスタCSV取込・ym引き継ぎ・入力担当ロール
     await expect(page.getByRole("link", { name: "ユーザー管理" })).toHaveCount(0);
   });
 
-  test("input_staffロールは/admin/usersへ直接アクセスすると/へリダイレクトされる", async ({
+  /*
+    以前は黙ってホームへ戻していたが、押した本人には「リンクが壊れている」としか見えなかった。
+    画面の中身(ユーザー一覧)は今までどおり一切出さないまま、開けない理由だけを出す。
+  */
+  test("input_staffロールが/admin/usersを開くと、開けない理由と依頼先が出る", async ({
     page,
   }) => {
     await page.goto("/admin/users");
-    await expect(page).not.toHaveURL(/\/admin\/users$/);
+    await expect(page.getByText("「ユーザー管理」は管理者のみが開けます。")).toBeVisible();
+    await expect(page.getByText("必要な場合は管理者にご依頼ください。")).toBeVisible();
+    await expect(page.getByRole("link", { name: "ホームに戻る" })).toBeVisible();
+    // 一覧そのものは描かない(露出の条件は変えていない)
+    await expect(page.locator("table")).toHaveCount(0);
   });
 
   test("クレンジング画面(売上データ未取込)の導線リンクに対象年月(ym)が引き継がれる", async ({
