@@ -1,17 +1,24 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { DriverMasterRecord } from "../../../../src/domain/repositories/MasterRepository";
 import type {
   DriverMasterImportRow,
   DriverMasterImportRowError,
 } from "../../../../src/infrastructure/parsers/driverMasterParser";
+import {
+  describeImportSource,
+  type ImportSourceInfo,
+} from "../../../../src/infrastructure/parsers/importSource";
+import { AlertPanel } from "../../../_components/AlertPanel";
 
 interface Preview {
   fileName: string;
   valid: DriverMasterImportRow[];
   errors: DriverMasterImportRowError[];
+  source?: ImportSourceInfo;
 }
 
 interface SkippedRow {
@@ -21,7 +28,27 @@ interface SkippedRow {
   reason: string;
 }
 
-export function DriverMasterManager({ initialDrivers }: { initialDrivers: DriverMasterRecord[] }) {
+/**
+ * 「対象月のシートが無かったので別の月で代用した」ときに続けて出す一文。
+ * 車両マスタは金額、運転者マスタは人事の対応と、代用してよい理由が違う。
+ */
+const FALLBACK_NOTE =
+  "社員Noと車番の対応は月ごとの実績ではなく人事の状態なので、この月から読んでも同じ対応表になります。";
+
+export function DriverMasterManager({
+  initialDrivers,
+  vehicleNos,
+  yearMonth,
+}: {
+  initialDrivers: DriverMasterRecord[];
+  /**
+   * 現在の車両マスタの車番。運転者の車番がここに無いと確定時に取り込まれないため、
+   * 確定を押す前に「この人は取り込まれない」と分かるようにする。
+   */
+  vehicleNos: string[];
+  /** 社内Excelのどの月のシートを読むかの手掛かり (年度ブック対策) */
+  yearMonth: string;
+}) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [drivers, setDrivers] = useState(initialDrivers);
@@ -32,6 +59,7 @@ export function DriverMasterManager({ initialDrivers }: { initialDrivers: Driver
   const [done, setDone] = useState<string | null>(null);
 
   const existingCodes = useMemo(() => new Set(drivers.map((d) => d.employeeCode)), [drivers]);
+  const knownVehicleNos = useMemo(() => new Set(vehicleNos), [vehicleNos]);
   const unassigned = drivers.filter((d) => !d.vehicleNo).length;
 
   async function upload(file: File) {
@@ -43,13 +71,20 @@ export function DriverMasterManager({ initialDrivers }: { initialDrivers: Driver
     try {
       const form = new FormData();
       form.append("file", file);
+      // 年度ブック(12か月分のシート)を渡されたとき、どの月のシートを見るかの手掛かり。
+      form.append("yearMonth", yearMonth);
       const res = await fetch("/api/admin/driver-master", { method: "POST", body: form });
       const data = (await res.json().catch(() => null)) as (Preview & { error?: string }) | null;
       if (!res.ok || !data) {
-        setError(data?.error ?? "CSVの読み込みに失敗しました");
+        setError(data?.error ?? "ファイルの読み込みに失敗しました");
         return;
       }
-      setPreview({ fileName: data.fileName, valid: data.valid, errors: data.errors });
+      setPreview({
+        fileName: data.fileName,
+        valid: data.valid,
+        errors: data.errors,
+        source: data.source,
+      });
     } catch {
       setError("通信エラーが発生しました");
     } finally {
@@ -74,7 +109,10 @@ export function DriverMasterManager({ initialDrivers }: { initialDrivers: Driver
         setError(data?.error ?? "取込に失敗しました");
         return;
       }
-      setDone(`運転者マスタを更新しました(新規${data.inserted ?? 0}件・更新${data.updated ?? 0}件)`);
+      setDone(
+        `${(data.inserted ?? 0) + (data.updated ?? 0)}名を登録しました` +
+          `(新規${data.inserted ?? 0}名・更新${data.updated ?? 0}名)`,
+      );
       setSkipped(data.skipped ?? []);
       setPreview(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -94,20 +132,25 @@ export function DriverMasterManager({ initialDrivers }: { initialDrivers: Driver
 
   const newCount = preview?.valid.filter((r) => !existingCodes.has(r.employeeCode)).length ?? 0;
   const updateCount = (preview?.valid.length ?? 0) - newCount;
+  /** 車両マスタに無い車番の人。確定しても取り込まれないので、押す前に見せる。 */
+  const unknownVehicleRows =
+    preview?.valid.filter((r) => r.vehicleNo !== null && !knownVehicleNos.has(r.vehicleNo)) ?? [];
+  const sourceText = describeImportSource(preview?.source, { fallbackNote: FALLBACK_NOTE });
 
   return (
     <div className="space-y-6">
       <section className="rounded-xl border border-line bg-white p-5">
-        <h2 className="text-sm font-bold text-ink">CSVを取り込む</h2>
+        <h2 className="text-sm font-bold text-ink">ファイルを取り込む</h2>
         <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-          社員No・氏名・車番の3列を書き出したCSVを選んでください。
-          給与集計表は社員No単位、収支表は車番単位で集計されるため、両者を結ぶのはこの表だけです。
+          社内Excel「★車両別収支計算用」をそのまま選んでください({yearMonth}
+          の収支表シートの「コード」「運転者名」「車番」から読み取ります)。
+          CSVに書き出す必要はありません。CSVを選ぶ場合は、社員No・氏名・車番の3列を書き出したものにしてください。
           車番が空の方(内勤・退職等)も登録できます。給与が乗らないだけで、エラーにはなりません。
         </p>
         <input
           ref={fileInputRef}
           type="file"
-          accept=".csv,text/csv"
+          accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           disabled={busy}
           onChange={(e) => {
             const file = e.target.files?.[0];
@@ -115,21 +158,57 @@ export function DriverMasterManager({ initialDrivers }: { initialDrivers: Driver
           }}
           className="mt-3 block w-full text-xs text-ink file:mr-3 file:rounded-md file:border file:border-line file:bg-subtle file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-ink"
         />
-        {error ? <p className="mt-2 text-xs text-danger">{error}</p> : null}
-        {done ? <p className="mt-2 text-xs font-semibold text-brand-deep">{done}</p> : null}
+        {busy && !preview ? (
+          <p className="mt-3 text-xs text-ink-muted">ファイルを読み取っています…</p>
+        ) : null}
+
+        {error ? (
+          <div className="mt-3">
+            <AlertPanel tone="danger" title="取り込めませんでした">
+              <p>{error}</p>
+              <p className="mt-1">
+                直したファイルをもう一度選んでください。原因が分からないときは、この画面のまま
+                スクリーンショットを送ってください。
+              </p>
+            </AlertPanel>
+          </div>
+        ) : null}
+
+        {done ? (
+          <div className="mt-3">
+            <AlertPanel tone="success" title={done}>
+              <p>
+                このあと月次の収支表を作り直すと、人件費が各車両に乗ります(
+                <Link href={`/import?ym=${yearMonth}`} className="underline">
+                  データ取込
+                </Link>
+                )。
+              </p>
+            </AlertPanel>
+          </div>
+        ) : null}
 
         {skipped.length > 0 ? (
-          <div className="mt-3 rounded-md border border-caution-border bg-caution-soft px-3 py-2">
-            <p className="text-xs font-semibold text-ink">
-              以下の{skipped.length}件は車両マスタに無い車番のため取り込んでいません
-            </p>
-            <ul className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-ink">
-              {skipped.map((s) => (
-                <li key={s.employeeCode}>
-                  社員No{s.employeeCode} {s.driverName}: {s.reason}
-                </li>
-              ))}
-            </ul>
+          <div className="mt-3">
+            <AlertPanel
+              tone="caution"
+              title={`${skipped.length}名は車番が車両マスタに無いため登録していません`}
+            >
+              <ul className="space-y-1">
+                {skipped.map((s) => (
+                  <li key={s.employeeCode}>
+                    社員No{s.employeeCode} {s.driverName}(車番{s.vehicleNo}): {s.reason}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1.5">
+                先に
+                <Link href={`/admin/vehicle-master?ym=${yearMonth}`} className="underline">
+                  車両マスタ管理
+                </Link>
+                でこの車番を登録してから、もう一度取り込んでください。
+              </p>
+            </AlertPanel>
           </div>
         ) : null}
       </section>
@@ -139,23 +218,57 @@ export function DriverMasterManager({ initialDrivers }: { initialDrivers: Driver
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-sm font-bold text-ink">取込内容の確認({preview.fileName})</h2>
             <p className="num text-xs text-ink-muted">
-              新規{newCount}件・更新{updateCount}件
-              {preview.errors.length > 0 ? ` / エラー${preview.errors.length}件` : ""}
+              新規{newCount}名・更新{updateCount}名
+              {preview.errors.length > 0 ? ` / 取り込めない行${preview.errors.length}件` : ""}
             </p>
           </div>
+          {sourceText ? (
+            <p className="mt-1 text-xs leading-relaxed text-ink-muted">{sourceText}</p>
+          ) : null}
+          <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+            この取込は、いま登録されている運転者を消しません。同じ社員Noの方は車番を上書きし、
+            初めての社員Noの方は追加します。一覧から消したい方がいるときはご連絡ください。
+          </p>
 
           {preview.errors.length > 0 ? (
-            <div className="mt-3 rounded-md border border-caution-border bg-caution-soft px-3 py-2">
-              <p className="text-xs font-semibold text-ink">
-                以下の行は取り込めません(CSVを直してから入れ直してください)
-              </p>
-              <ul className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-ink">
-                {preview.errors.map((e) => (
-                  <li key={`${e.rowNumber}-${e.employeeCode}`}>
-                    {e.rowNumber}行目 社員No{e.employeeCode}: {e.reason}
-                  </li>
-                ))}
-              </ul>
+            <div className="mt-3">
+              <AlertPanel
+                tone="caution"
+                title={`次の${preview.errors.length}件は取り込めません(元のExcel・CSVを直してから入れ直してください)`}
+              >
+                <ul className="space-y-1">
+                  {preview.errors.map((e) => (
+                    <li key={`${e.rowNumber}-${e.employeeCode}`}>
+                      {e.rowNumber}行目
+                      {e.employeeCode ? ` 社員No${e.employeeCode}` : ""}: {e.reason}
+                    </li>
+                  ))}
+                </ul>
+              </AlertPanel>
+            </div>
+          ) : null}
+
+          {unknownVehicleRows.length > 0 ? (
+            <div className="mt-3">
+              <AlertPanel
+                tone="caution"
+                title={`${unknownVehicleRows.length}名の車番が車両マスタにありません`}
+              >
+                <ul className="space-y-1">
+                  {unknownVehicleRows.map((r) => (
+                    <li key={r.employeeCode}>
+                      社員No{r.employeeCode} {r.driverName}: 車番{r.vehicleNo}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1.5">
+                  このまま取り込むと、この方たちだけ登録されません(残りの方は登録されます)。先に
+                  <Link href={`/admin/vehicle-master?ym=${yearMonth}`} className="underline">
+                    車両マスタ管理
+                  </Link>
+                  でこの車両を登録してから取り込むと、全員がそろいます。
+                </p>
+              </AlertPanel>
             </div>
           ) : null}
 
@@ -181,7 +294,15 @@ export function DriverMasterManager({ initialDrivers }: { initialDrivers: Driver
                     </td>
                     <td className="num py-2 pr-3">{r.employeeCode}</td>
                     <td className="py-2 pr-3 text-ink-muted">{r.driverName}</td>
-                    <td className="num py-2 text-ink-muted">{r.vehicleNo ?? "未割当"}</td>
+                    <td className="num py-2 text-ink-muted">
+                      {r.vehicleNo === null ? (
+                        "未割当"
+                      ) : knownVehicleNos.has(r.vehicleNo) ? (
+                        r.vehicleNo
+                      ) : (
+                        <span className="text-danger">{r.vehicleNo}(車両マスタに無し)</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -194,7 +315,7 @@ export function DriverMasterManager({ initialDrivers }: { initialDrivers: Driver
             onClick={() => void confirm()}
             className="pressable mt-4 rounded-md bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
           >
-            {busy ? "取り込んでいます…" : `${preview.valid.length}件を取り込む`}
+            {busy ? "取り込んでいます…" : `${preview.valid.length}名を取り込む`}
           </button>
         </section>
       ) : null}
@@ -204,35 +325,46 @@ export function DriverMasterManager({ initialDrivers }: { initialDrivers: Driver
           現在の運転者マスタ({drivers.length}名
           {unassigned > 0 ? ` / うち車番未割当${unassigned}名` : ""})
         </h2>
-        <div className="mt-3 overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="border-b border-line text-left text-xs text-ink-muted">
-                <th className="py-2 pr-3">社員No</th>
-                <th className="py-2 pr-3">氏名</th>
-                <th className="py-2">車番</th>
-              </tr>
-            </thead>
-            <tbody>
-              {drivers.map((d) => (
-                <tr key={d.employeeCode} className="border-b border-line last:border-b-0">
-                  <td className="num py-2 pr-3">{d.employeeCode}</td>
-                  <td className="py-2 pr-3 text-ink-muted">{d.driverName}</td>
-                  <td className="num py-2 text-ink-muted">
-                    {d.vehicleNo ?? <span className="text-ink-muted">未割当</span>}
-                  </td>
+        {drivers.length === 0 ? (
+          <div className="mt-3">
+            <AlertPanel tone="caution" title="まだ1名も登録されていません">
+              <p>
+                このままだと、給与を取り込んでも収支表の人件費は全車両0のままになります。
+                上の「ファイルを取り込む」で社内Excel「★車両別収支計算用」を選んでください。
+              </p>
+              <p className="mt-1.5">
+                車両マスタが空の場合は、先に
+                <Link href={`/admin/vehicle-master?ym=${yearMonth}`} className="underline">
+                  車両マスタ管理
+                </Link>
+                を済ませると、車番付きで登録できます。
+              </p>
+            </AlertPanel>
+          </div>
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-xs text-ink-muted">
+                  <th className="py-2 pr-3">社員No</th>
+                  <th className="py-2 pr-3">氏名</th>
+                  <th className="py-2">車番</th>
                 </tr>
-              ))}
-              {drivers.length === 0 ? (
-                <tr>
-                  <td colSpan={3} className="py-4 text-center text-xs text-ink-muted">
-                    運転者マスタが登録されていません。このままだと収支表の人件費が全車両0のままになります。
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {drivers.map((d) => (
+                  <tr key={d.employeeCode} className="border-b border-line last:border-b-0">
+                    <td className="num py-2 pr-3">{d.employeeCode}</td>
+                    <td className="py-2 pr-3 text-ink-muted">{d.driverName}</td>
+                    <td className="num py-2 text-ink-muted">
+                      {d.vehicleNo ?? <span className="text-ink-muted">未割当</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </div>
   );

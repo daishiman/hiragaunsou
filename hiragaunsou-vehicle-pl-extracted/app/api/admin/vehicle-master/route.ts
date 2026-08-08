@@ -58,8 +58,11 @@ export async function POST(request: Request) {
   const preferredYearMonth = typeof yearMonth === "string" && yearMonth !== "" ? yearMonth : undefined;
 
   try {
-    const { valid, errors } = parseVehicleMasterFile(await file.arrayBuffer(), preferredYearMonth);
-    return NextResponse.json({ fileName: file.name, valid, errors });
+    const { valid, errors, source } = parseVehicleMasterFile(
+      await file.arrayBuffer(),
+      preferredYearMonth,
+    );
+    return NextResponse.json({ fileName: file.name, valid, errors, source });
   } catch (e) {
     const message = e instanceof Error ? e.message : "ファイルの解析に失敗しました";
     return NextResponse.json({ error: message }, { status: 422 });

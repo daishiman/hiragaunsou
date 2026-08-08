@@ -7,7 +7,10 @@ import {
   parseVehicleMasterFile,
 } from "../../src/infrastructure/parsers/vehicleMasterParser";
 import { decodeCp932 } from "../../src/infrastructure/parsers/encoding";
-import { buildMonthlyPlWorkbookFixture } from "../fixtures/monthlyPlWorkbook";
+import {
+  buildAnnualWorkbookFixture,
+  buildMonthlyPlWorkbookFixture,
+} from "../fixtures/monthlyPlWorkbook";
 
 const fixture = readFileSync(resolve(__dirname, "../fixtures/vehicle_master_sample.csv"));
 
@@ -225,6 +228,55 @@ describe("parseVehicleMasterFile", () => {
     expect(parseVehicleMasterFile(xlsx, "2026-05").valid).toHaveLength(1);
     expect(parseVehicleMasterFile(xlsx, "2026-09").valid).toHaveLength(1);
   });
+
+  /**
+   * 保険・税・リース料は「その月の実績」ではなく車両ごとの決まった金額なので、対象年月の
+   * シートが無くてもいちばん新しい月で代用してよい。ここを月次収支表の取込と同じ厳格さに
+   * していたため、8月に既定の対象月(6月)で5月までのブックを選ぶと必ず 422 になり、
+   * 画面は理由が読み取りにくいまま0台で止まっていた。
+   */
+  it("対象年月のシートが無いときは、いちばん新しい月のシートで代用して取り込む", () => {
+    const xlsx = buildAnnualWorkbookFixture([
+      {
+        sheetName: "4月収支表",
+        heading: "令和8年4月車両別収支表",
+        vehicleRows: [{ no: 24, type: "10ｔW", depot: "本社", lease: 100 }],
+      },
+      {
+        sheetName: "5月収支表",
+        heading: "令和8年5月車両別収支表",
+        vehicleRows: [{ no: 300, type: "10ｔW", depot: "本社", lease: 227062 }],
+      },
+    ]);
+
+    const { valid, source } = parseVehicleMasterFile(xlsx, "2026-06");
+
+    expect(valid.map((r) => r.vehicleNo)).toEqual(["300"]);
+    expect(source).toMatchObject({
+      kind: "excel",
+      sheetName: "5月収支表",
+      sheetYearMonth: "2026-05",
+      fallbackFromYearMonth: "2026-06",
+    });
+  });
+
+  /**
+   * 完成済みの収支表(運送収支表ブック)は、けん引の組を1行にまとめて車番を「129 1113」と書く。
+   * そのまま正規化すると "1291113" という実在しない車両が1台でき、以後どの実績とも
+   * 結合できない行が静かに残る。
+   */
+  it("車番が2台分まとめて書かれた行は、理由と対処を添えて弾く", () => {
+    const xlsx = buildMonthlyPlWorkbookFixture({
+      vehicleRows: [{ no: "129　　1113", type: "セミトレ", depot: "本社" }],
+    });
+
+    const { valid, errors } = parseVehicleMasterFile(xlsx);
+
+    expect(valid).toEqual([]);
+    expect(errors[0]?.reason).toContain("129 / 1113");
+    expect(errors[0]?.reason).toContain("★車両別収支計算用");
+  });
+
 
   it("CSVはこれまでどおり同じ入口で取り込める(拡張子ではなく中身で振り分ける)", () => {
     const { valid, errors } = parseVehicleMasterFile(new Uint8Array(fixture));
