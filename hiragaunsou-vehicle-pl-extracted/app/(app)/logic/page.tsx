@@ -148,6 +148,65 @@ function buildMap(rates: RateSettings): readonly MapRow[] {
   ];
 }
 
+/**
+ * 元ファイル一覧。実ファイル(data/)を開いて列構成まで確かめた内容だけを載せる。
+ * 詳細な列単位の対応は docs/product/data-flow-map.md。
+ *
+ * 「運送収支表」を出力として最後に置いているのは、これを入力だと取り違えると
+ * 「完成した表から数字を読んで同じ表を作る」という循環した仕様になるため。
+ */
+interface SourceFileRow {
+  file: string;
+  role: "入力" | "作業台" | "成果物";
+  system: string;
+  用途: string;
+}
+
+const SOURCE_FILES: readonly SourceFileRow[] = [
+  {
+    file: "車両別運行実績表(燃費計算)◯◯.csv",
+    role: "入力",
+    system: "デジタコ ITP-WEBServiceV3",
+    用途: "STEP1 運行回数・稼働時間・稼働Km。営業所ごとに1ファイル",
+  },
+  {
+    file: "◯年◯月売上モニタリスト.csv",
+    role: "入力",
+    system: "車楽クラウド",
+    用途: "STEP2 運賃・付帯料金・道路使用料を車番別に集計",
+  },
+  {
+    file: "◯給与集計表(日給者).csv",
+    role: "入力",
+    system: "ACELINK NX-CE",
+    用途: "STEP4 給与・社保合計。車番の列は無い",
+  },
+  {
+    file: "請求書・給油機レシート(紙)",
+    role: "入力",
+    system: "各社・高速協",
+    用途: "STEP3/5/6 燃料費・修繕費・タイヤ・高速料金。手入力画面から入れる",
+  },
+  {
+    file: "★車両別収支計算用◯年◯月.xlsx",
+    role: "作業台",
+    system: "社内Excel",
+    用途: "収支表シートが車両マスタ・運転者マスタの元データ。STEP7の結果でもある",
+  },
+  {
+    file: "運送収支表 ◯-◯ ◯月更新.xlsx",
+    role: "成果物",
+    system: "社内Excel",
+    用途: "STEP8の転記先。このシステムが作る側であり、数字を読む先ではない",
+  },
+] as const;
+
+const ROLE_CLASS: Record<SourceFileRow["role"], string> = {
+  入力: "bg-subtle text-ink border-line",
+  作業台: "bg-brand-soft text-brand-deep border-transparent",
+  成果物: "bg-caution-soft text-ink border-caution-border",
+};
+
 const QUESTIONS: readonly (readonly [string, string])[] = [
   ["車楽のデータ出力手段(CSV/API/画面のみ)", "層①の接続方式が確定"],
   ["燃料集計Excelの1次ソースと作成手順", "層③の2項目を自動化できるか決まる"],
@@ -219,6 +278,59 @@ export default async function LogicPage() {
             <p className="mt-1 text-xs text-ink-muted">{s.desc}</p>
           </div>
         ))}
+      </section>
+
+      <section className="mt-5 rounded-xl border border-line bg-white">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line px-5 py-3">
+          <h2 className="text-sm font-bold text-ink">元になるファイルと、その役割</h2>
+          <p className="text-xs text-ink-muted">列単位の対応は docs/product/data-flow-map.md</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-max border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-line bg-subtle text-ink-muted">
+                <th className="px-3 py-2 text-left font-medium">ファイル(名前の例)</th>
+                <th className="px-3 py-2 text-left font-medium">役割</th>
+                <th className="px-3 py-2 text-left font-medium">出力元</th>
+                <th className="px-3 py-2 text-left font-medium">何に使うか</th>
+              </tr>
+            </thead>
+            <tbody>
+              {SOURCE_FILES.map((f) => (
+                <tr key={f.file} className="border-b border-line align-top">
+                  <td className="min-w-[14rem] px-3 py-2 font-semibold text-ink">{f.file}</td>
+                  <td className="whitespace-nowrap px-3 py-2">
+                    <span
+                      className={`inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${ROLE_CLASS[f.role]}`}
+                    >
+                      {f.role}
+                    </span>
+                  </td>
+                  <td className="min-w-[10rem] px-3 py-2 text-ink-muted">{f.system}</td>
+                  <td className="min-w-[18rem] px-3 py-2 text-ink-muted">{f.用途}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="mx-5 my-4 space-y-2 rounded-md border border-caution-border bg-caution-soft px-3 py-2 text-xs leading-relaxed text-ink">
+          <p>
+            <strong>「運送収支表」は入力ではなく、このシステムが作る成果物です。</strong>
+            業務フローのSTEP8で、出来上がった収支表を貼り付ける先にあたります。
+            ここから数字を読む仕様は作りません(完成した表を元に同じ表を作ることになるため)。
+          </p>
+          <p>
+            <strong>ファイル名は変わっても構いません。中身で判定します。</strong>
+            上の表のファイル名は目印としての例です(◯の部分は月や営業所名が入ります)。
+            どの帳票かは列の見出しで見分け、何年何月分かもファイルの中身から判定します。
+          </p>
+          <p>
+            年月の判定は帳票によって根拠が違います。★車両別収支計算用はシート1行目の見出し
+            「令和◯年◯月車両別収支表」、売上モニタリストは「計上日」の日付から判定します。
+            給与集計表と車両別運行実績表は<strong>中身に日付が1つも無い</strong>ため自動では決まらず、
+            取込のときに何年何月分かを画面で選んでいただきます。
+          </p>
+        </div>
       </section>
 
       <section className="mt-5 rounded-xl border border-line bg-white">

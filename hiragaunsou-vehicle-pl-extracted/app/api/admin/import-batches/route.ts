@@ -5,6 +5,7 @@ import { checkAccess } from "../../../../src/infrastructure/auth/accessControl";
 import { createDb } from "../../../../src/infrastructure/db/client";
 import { D1ImportBatchRepository } from "../../../../src/infrastructure/db/D1ImportBatchRepository";
 import { D1AuditLogRepository } from "../../../../src/infrastructure/db/D1AuditLogRepository";
+import { D1FileImportLogRepository } from "../../../../src/infrastructure/db/D1FileImportLogRepository";
 import {
   DeleteImportBatchUseCase,
   ListImportBatchDeletionLogUseCase,
@@ -30,7 +31,8 @@ export async function GET() {
   const db = createDb(env.DB);
   const batches = await new ListImportBatchesUseCase(new D1ImportBatchRepository(db)).execute();
   const deletionLog = await new ListImportBatchDeletionLogUseCase(new D1AuditLogRepository(db)).execute();
-  return NextResponse.json({ batches, deletionLog });
+  const fileLog = await new D1FileImportLogRepository(db).listAll();
+  return NextResponse.json({ batches, deletionLog, fileLog });
 }
 
 export async function DELETE(request: Request) {
@@ -44,13 +46,31 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const id = new URL(request.url).searchParams.get("id");
+  const params = new URL(request.url).searchParams;
+  const logId = params.get("logId");
+  const id = params.get("id");
+
+  // 取込の記録だけを取り消す場合。データ本体は消さず「取り込み済み」の目印だけを外すので、
+  // 同じファイルをもう一度取り込めるようになる。
+  if (logId) {
+    try {
+      await new D1FileImportLogRepository(createDb(env.DB)).deleteByIds([logId]);
+      return NextResponse.json({ ok: true });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "記録の取り消しに失敗しました";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+  }
+
   if (!id) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
 
   try {
     const db = createDb(env.DB);
+    const batch = (await new ListImportBatchesUseCase(new D1ImportBatchRepository(db)).execute()).find(
+      (b) => b.id === id,
+    );
     await new DeleteImportBatchUseCase(
       new D1ImportBatchRepository(db),
       new D1AuditLogRepository(db),
@@ -59,6 +79,20 @@ export async function DELETE(request: Request) {
       actorName: session!.name,
       batchId: id,
     });
+
+    // データ本体を消したら「取り込み済み」の記録も消す。片方だけ残ると、実際には無いデータを
+    // 「取り込み済みです」と案内してしまう。記録の削除に失敗しても本体の削除は成功として返す。
+    if (batch) {
+      try {
+        await new D1FileImportLogRepository(db).deleteMatching({
+          sourceType: batch.sourceType,
+          yearMonth: batch.yearMonth,
+          fileName: batch.fileName,
+        });
+      } catch (e) {
+        console.error("file import log cleanup failed", { batchId: id, error: e });
+      }
+    }
     return NextResponse.json({ ok: true });
   } catch (e) {
     const message = e instanceof Error ? e.message : "削除に失敗しました";

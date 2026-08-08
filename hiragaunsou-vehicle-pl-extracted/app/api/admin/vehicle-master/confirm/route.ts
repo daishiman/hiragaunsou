@@ -23,6 +23,7 @@ import { RecalculateMonthlyPlUseCase } from "../../../../../src/usecase/steps/re
 import { STANDARD_COST_RATES } from "../../../../../src/domain/entities/VehiclePl";
 import type { VehicleMasterUpsertInput } from "../../../../../src/domain/repositories/MasterRepository";
 import { isSameOriginRequest } from "../../../../_lib/assertSameOrigin";
+import { recordFileImport } from "../../../../_lib/recordFileImport";
 
 /** 金額として受け付けられる値に整える (負値・非数は0にする) */
 function toAmount(value: unknown): number {
@@ -104,6 +105,8 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     records?: unknown;
     yearMonth?: unknown;
+    fileName?: unknown;
+    contentHash?: unknown;
   } | null;
   if (!Array.isArray(body?.records)) {
     return NextResponse.json({ error: "recordsが必要です" }, { status: 400 });
@@ -133,6 +136,14 @@ export async function POST(request: Request) {
     // 表も作り直す (けん引先の更新APIと同じ扱い)。ただしマスタの更新自体は既に済んでおり
     // 取り消せないため、まだ収支表が無い月などで失敗しても取込は成功として返し、
     // 画面側に「作り直せなかった」ことだけ伝える。
+    await recordFileImport(db, {
+      screen: "vehicle_master",
+      fileName: body.fileName,
+      contentHash: body.contentHash,
+      rowCount: records.length,
+      session: session!,
+    });
+
     const yearMonth = typeof body.yearMonth === "string" ? body.yearMonth : "";
     const recalculated = yearMonth === "" ? false : await recalculate(db, yearMonth);
 

@@ -4,6 +4,8 @@ import { getServerSession } from "../../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../../src/infrastructure/auth/accessControl";
 import { createDb } from "../../../../src/infrastructure/db/client";
 import { D1ImportBatchRepository } from "../../../../src/infrastructure/db/D1ImportBatchRepository";
+import { D1FileImportLogRepository } from "../../../../src/infrastructure/db/D1FileImportLogRepository";
+import { computeContentHash } from "../../../../src/infrastructure/parsers/contentHash";
 import { R2FileStorageRepository } from "../../../../src/infrastructure/storage/R2FileStorageRepository";
 import { ImportVehicleOperationUseCase } from "../../../../src/usecase/steps/importVehicleOperation";
 import { ImportSalesMonitorUseCase } from "../../../../src/usecase/steps/importSalesMonitor";
@@ -12,9 +14,7 @@ import {
   ImportMonthlyPlWorkbookUseCase,
   MONTHLY_PL_WORKBOOK_SOURCE_TYPE,
 } from "../../../../src/usecase/steps/importMonthlyPlWorkbook";
-import { detectFileType } from "../../../../src/infrastructure/parsers/detectFileType";
-import { decodeCp932 } from "../../../../src/infrastructure/parsers/encoding";
-import { parseCsv } from "../../../../src/infrastructure/parsers/csvUtils";
+import { resolveSourceTypeFromContent } from "../../../../src/infrastructure/parsers/detectFileType";
 import { isSameOriginRequest } from "../../../_lib/assertSameOrigin";
 import { findImportSource } from "../../../../src/domain/rules/importSources";
 import { parseSalesMonitorCsv, detectDominantYearMonth } from "../../../../src/infrastructure/parsers/salesMonitorParser";
@@ -37,29 +37,6 @@ function isSourceType(value: string): value is SourceType {
 
 function isYearMonth(value: string): boolean {
   return /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
-}
-
-/**
- * 種別判定用に見出し行だけを取り出す。
- * 見出し行の判定にファイル全文は不要なので、先頭64KB(90列程度の見出し行が
- * 収まるのに十分な余裕)だけをデコード・パースする。実データのCSVは数百KB〜数MBあり、
- * 全文をここで一度パースしたうえで各UseCaseがもう一度全文をパースする二重コストは、
- * ファイルサイズに比例してCloudflare WorkersのCPU時間上限(無料プランは既定10ms)を
- * 圧迫する要因になっていた。
- */
-function extractHeaderChunk(content: ArrayBuffer, maxBytes = 64 * 1024): ArrayBuffer {
-  const bytes = new Uint8Array(content);
-  const limit = Math.min(bytes.length, maxBytes);
-  const newline = bytes.subarray(0, limit).indexOf(0x0a);
-  return content.slice(0, newline >= 0 ? newline + 1 : limit);
-}
-
-/** CSVは列見出し、Excelは収支表シート構造で判定する。ファイル名だけには依存しない。 */
-function resolveSourceType(fileName: string, content: ArrayBuffer): Exclude<SourceType, "auto"> | "unknown" {
-  const bytes = new Uint8Array(content);
-  if (bytes[0] === 0x50 && bytes[1] === 0x4b) return MONTHLY_PL_WORKBOOK_SOURCE_TYPE;
-  const rows = parseCsv(decodeCp932(extractHeaderChunk(content)));
-  return detectFileType(fileName, rows[0] ?? []);
 }
 
 /** F3/F4/F5 データ取込。Presentation層はUseCase呼び出しのみ、パース・保存ロジックは持たない。 */
@@ -97,7 +74,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ sou
 
   let detected: Exclude<SourceType, "auto"> | "unknown";
   try {
-    detected = resolveSourceType(file.name, content);
+    detected = resolveSourceTypeFromContent(file.name, content) as
+      | Exclude<SourceType, "auto">
+      | "unknown";
   } catch (e) {
     // 種別判定(見出し行の読み取り)自体が想定外に失敗した場合も、フレームワークの
     // 汎用エラーページに落とさず、原因を特定できるメッセージをJSONで返す。
@@ -183,25 +162,42 @@ export async function POST(request: Request, { params }: { params: Promise<{ sou
         superseded.map((batch) => batch.id),
       );
     }
-    if (resolvedSourceType === "vehicle_operation") {
-      const result = await new ImportVehicleOperationUseCase(fileStorage, importBatchRepo).execute(input);
-      return NextResponse.json({ sourceType: resolvedSourceType, ...result });
+    // 帳票ごとに戻り値の形が違うので、記録と応答で共通に読める形に受ける。
+    const result: { totalRows?: number } & object =
+      resolvedSourceType === "vehicle_operation"
+        ? await new ImportVehicleOperationUseCase(fileStorage, importBatchRepo).execute(input)
+        : resolvedSourceType === "sales_monitor"
+          ? await new ImportSalesMonitorUseCase(fileStorage, importBatchRepo).execute(input)
+          : resolvedSourceType === "payroll"
+            ? await new ImportPayrollUseCase(fileStorage, importBatchRepo).execute(input)
+            : // 完成済みExcelは答え合わせの相手として保管するだけ。収支表はCSVと手入力から作る。
+              // ここに車両マスタや手入力への書き込みを足すと、CSVが1本も通っていなくても表が
+              // 完成してしまう(実際に本番の2026年5月データがそうなっていた)ので足さないこと。
+              await new ImportMonthlyPlWorkbookUseCase(fileStorage, importBatchRepo).execute({
+                ...input,
+                importedByName: session!.name,
+              });
+
+    // 取込の記録を残す。次に同じファイルが選ばれたときの照合に使う
+    // (docs/product/file-import-common-spec.md §5)。
+    // 記録に失敗しても取込自体は成功しているので、画面には失敗を出さない。
+    try {
+      const sentHash = form.get("contentHash");
+      await new D1FileImportLogRepository(db).record({
+        screen: "import",
+        sourceType: resolvedSourceType,
+        yearMonth,
+        fileName: file.name,
+        contentHash:
+          typeof sentHash === "string" && sentHash !== "" ? sentHash : await computeContentHash(content),
+        rowCount: typeof result.totalRows === "number" ? result.totalRows : 0,
+        importedBy: session!.id,
+        importedByName: session!.name,
+      });
+    } catch (e) {
+      console.error("file import log failed", { fileName: file.name, error: e });
     }
-    if (resolvedSourceType === "sales_monitor") {
-      const result = await new ImportSalesMonitorUseCase(fileStorage, importBatchRepo).execute(input);
-      return NextResponse.json({ sourceType: resolvedSourceType, ...result });
-    }
-    if (resolvedSourceType === "payroll") {
-      const result = await new ImportPayrollUseCase(fileStorage, importBatchRepo).execute(input);
-      return NextResponse.json({ sourceType: resolvedSourceType, ...result });
-    }
-    // 完成済みExcelは答え合わせの相手として保管するだけ。収支表はCSVと手入力から作る。
-    // ここに車両マスタや手入力への書き込みを足すと、CSVが1本も通っていなくても表が
-    // 完成してしまう(実際に本番の2026年5月データがそうなっていた)ので足さないこと。
-    const result = await new ImportMonthlyPlWorkbookUseCase(fileStorage, importBatchRepo).execute({
-      ...input,
-      importedByName: session!.name,
-    });
+
     return NextResponse.json({ sourceType: resolvedSourceType, ...result });
   } catch (e) {
     console.error("import failed", { sourceType: resolvedSourceType, fileName: file.name, error: e });

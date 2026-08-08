@@ -3,12 +3,22 @@
 import { useMemo, useState } from "react";
 import type { ImportBatchSummary } from "../../../../src/usecase/steps/manageImportBatches";
 import type { AuditLogRecord } from "../../../../src/domain/repositories/AuditLogRepository";
+import type { FileImportLogEntry } from "../../../../src/infrastructure/db/D1FileImportLogRepository";
 
 const SOURCE_TYPE_LABELS: Record<string, string> = {
   vehicle_operation: "車両別運行実績表",
   sales_monitor: "売上モニタリスト",
   payroll: "給与集計表",
   monthly_pl_workbook: "完成済み収支表(Excel)",
+  vehicle_master: "車両マスタ",
+  driver_master: "運転者マスタ",
+};
+
+/** 記録がどの画面から取り込まれたか。利用者にはメニュー名で見せる。 */
+const SCREEN_LABELS: Record<string, string> = {
+  import: "データ取込",
+  vehicle_master: "車両マスタ管理",
+  driver_master: "運転者マスタ管理",
 };
 
 type RowState = { status: "idle" } | { status: "deleting" } | { status: "error"; message: string };
@@ -26,12 +36,17 @@ function formatDateTime(ms: number): string {
 export function ImportBatchesManager({
   initialBatches,
   initialDeletionLog,
+  initialFileLog,
 }: {
   initialBatches: ImportBatchSummary[];
   initialDeletionLog: AuditLogRecord[];
+  /** 取り込んだファイルの記録 (マスタ取込も含む)。同じファイルの二重取込を防ぐ照合に使う。 */
+  initialFileLog: FileImportLogEntry[];
 }) {
   const [batches, setBatches] = useState(initialBatches);
   const [deletionLog, setDeletionLog] = useState(initialDeletionLog);
+  const [fileLog, setFileLog] = useState(initialFileLog);
+  const [fileLogBusy, setFileLogBusy] = useState<string | null>(null);
   const [rowState, setRowState] = useState<Record<string, RowState>>({});
   const [yearMonthFilter, setYearMonthFilter] = useState("");
   const [sourceTypeFilter, setSourceTypeFilter] = useState("");
@@ -82,15 +97,46 @@ export function ImportBatchesManager({
       const listRes = await fetch("/api/admin/import-batches");
       const listData = (await listRes.json().catch(() => null)) as {
         deletionLog?: AuditLogRecord[];
+        fileLog?: FileImportLogEntry[];
       } | null;
       if (listRes.ok && listData?.deletionLog) {
         setDeletionLog(listData.deletionLog);
+      }
+      // データ本体を消すと取込の記録も消えるので、画面の記録一覧も取り直す。
+      if (listRes.ok && listData?.fileLog) {
+        setFileLog(listData.fileLog);
       }
     } catch {
       setRowState((prev) => ({
         ...prev,
         [batch.id]: { status: "error", message: "通信エラーが発生しました" },
       }));
+    }
+  }
+
+  /**
+   * 取込の記録だけを取り消す。取り込んだデータ自体は消さず「取り込み済み」の目印を外すだけなので、
+   * 同じファイルをもう一度取り込めるようになる。
+   */
+  async function forgetFile(entry: FileImportLogEntry) {
+    if (
+      !window.confirm(
+        `「${entry.fileName}」を取り込み済みの記録から外します。\n` +
+          "取り込んだデータ自体は消えません。同じファイルをもう一度取り込めるようになります。",
+      )
+    ) {
+      return;
+    }
+    setFileLogBusy(entry.id);
+    try {
+      const res = await fetch(`/api/admin/import-batches?logId=${encodeURIComponent(entry.id)}`, {
+        method: "DELETE",
+      });
+      if (res.ok) setFileLog((prev) => prev.filter((f) => f.id !== entry.id));
+    } catch {
+      // 失敗しても記録は残るだけで実害が無いので、画面はそのままにする。
+    } finally {
+      setFileLogBusy(null);
     }
   }
 
@@ -185,6 +231,60 @@ export function ImportBatchesManager({
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="rounded-xl border border-line bg-white p-5">
+        <h2 className="text-sm font-bold text-ink">取り込んだファイルの記録({fileLog.length}件)</h2>
+        <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+          どの画面で・いつ・どのファイルを取り込んだかの記録です。同じファイルをもう一度選んだときに
+          「取り込み済みです」とお知らせするために使っています。もう一度取り込み直したいときは
+          「記録から外す」を押してください(取り込んだデータ自体は消えません)。
+        </p>
+        {fileLog.length > 0 ? (
+          <div className="mt-3 overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-xs text-ink-muted">
+                  <th className="py-2 pr-3">取込日時</th>
+                  <th className="py-2 pr-3">取り込んだ画面</th>
+                  <th className="py-2 pr-3">ファイルの種類</th>
+                  <th className="py-2 pr-3">対象年月</th>
+                  <th className="py-2 pr-3">ファイル名</th>
+                  <th className="py-2 pr-3">件数</th>
+                  <th className="py-2 pr-3">取込者</th>
+                  <th className="py-2">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fileLog.map((f) => (
+                  <tr key={f.id} className="border-b border-line last:border-b-0">
+                    <td className="py-2 pr-3 text-ink-muted">{formatDateTime(f.importedAt)}</td>
+                    <td className="py-2 pr-3 text-ink-muted">{SCREEN_LABELS[f.screen] ?? f.screen}</td>
+                    <td className="py-2 pr-3 text-ink-muted">
+                      {SOURCE_TYPE_LABELS[f.sourceType] ?? f.sourceType}
+                    </td>
+                    <td className="py-2 pr-3 text-ink-muted">{f.yearMonth ?? "—"}</td>
+                    <td className="py-2 pr-3 text-ink-muted">{f.fileName}</td>
+                    <td className="py-2 pr-3 text-ink-muted">{f.rowCount}</td>
+                    <td className="py-2 pr-3 text-ink-muted">{f.importedByName}</td>
+                    <td className="py-2">
+                      <button
+                        type="button"
+                        disabled={fileLogBusy === f.id}
+                        onClick={() => void forgetFile(f)}
+                        className="pressable rounded-md border border-line bg-subtle px-3 py-1 text-xs font-semibold text-ink disabled:opacity-50"
+                      >
+                        {fileLogBusy === f.id ? "処理中…" : "記録から外す"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-3 text-xs text-ink-muted">まだ記録はありません。</p>
+        )}
       </section>
 
       <section className="rounded-xl border border-line bg-white p-5">

@@ -30,13 +30,24 @@ export function describeImportSource(
   if (source.kind === "csv") return "CSVから読み取りました。";
 
   const sheet = source.sheetName ? `シート「${source.sheetName}」` : "収支シート";
-  const month = source.sheetYearMonth ? `(${source.sheetYearMonth}分)` : "";
+  // 年月はファイル名ではなくシート見出しの「令和N年M月」から復元している。
+  // どこを根拠に何月分と判断したのかが画面で分かるように、根拠と月を続けて書く。
+  const month = source.sheetYearMonth
+    ? `の見出しから${describeYearMonth(source.sheetYearMonth)}分と判定し、そこ`
+    : "";
   if (source.fallbackFromYearMonth) {
     return (
-      `対象月 ${source.fallbackFromYearMonth} のシートがこのExcelに無かったため、` +
+      `対象月 ${describeYearMonth(source.fallbackFromYearMonth)} のシートがこのExcelに無かったため、` +
       `いちばん新しい${sheet}${month}から読み取りました。` +
       (options?.fallbackNote ?? "")
     );
   }
   return `${sheet}${month}から読み取りました。`;
+}
+
+/** YYYY-MM を「2026年5月」の業務の言葉にする。 */
+function describeYearMonth(yearMonth: string): string {
+  const [year, month] = yearMonth.split("-");
+  if (!year || !month) return yearMonth;
+  return `${year}年${Number(month)}月`;
 }

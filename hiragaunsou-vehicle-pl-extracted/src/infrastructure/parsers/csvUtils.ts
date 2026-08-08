@@ -60,6 +60,26 @@ export function parseCsv(text: string): string[][] {
 export type HeaderRequirement = string | readonly string[];
 
 /**
+ * 見出し行に足りない必須列を、画面にそのまま出せる名前で返す。
+ *
+ * 取込前の下読み(/api/import/detect)は「取り込めません」ではなく
+ * 「『車番』の列が見つかりませんでした」と具体名で伝える必要があるため、
+ * 例外を投げる検証(assertRequiredHeaders)と判定部分を共有する。
+ */
+export function findMissingHeaders(
+  header: readonly string[],
+  requirements: readonly HeaderRequirement[],
+): string[] {
+  const headerSet = new Set(header.map((h) => h.trim()));
+  return requirements
+    .filter((requirement) => {
+      const candidates = Array.isArray(requirement) ? requirement : [requirement as string];
+      return !candidates.some((name) => headerSet.has(name));
+    })
+    .map((requirement) => (Array.isArray(requirement) ? requirement.join("または") : (requirement as string)));
+}
+
+/**
  * ヘッダー行に必須列が名前で全て揃っているかを検証する。
  *
  * 帳票の出力元(ACELINK NX-CE / ITP-WEBServiceV3 / 車楽クラウド等)が列順を変えても
@@ -73,13 +93,7 @@ export function assertRequiredHeaders(
   sourceLabel: string,
 ): void {
   const header = rows[0] ?? [];
-  const headerSet = new Set(header.map((h) => h.trim()));
-  const missing = requirements
-    .filter((requirement) => {
-      const candidates = Array.isArray(requirement) ? requirement : [requirement as string];
-      return !candidates.some((name) => headerSet.has(name));
-    })
-    .map((requirement) => (Array.isArray(requirement) ? requirement.join("または") : (requirement as string)));
+  const missing = findMissingHeaders(header, requirements);
 
   if (missing.length > 0) {
     const actual = header.filter((h) => h.trim() !== "").join(" / ") || "(見出しを読み取れませんでした)";

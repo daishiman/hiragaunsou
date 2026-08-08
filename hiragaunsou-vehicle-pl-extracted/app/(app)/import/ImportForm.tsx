@@ -4,27 +4,45 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { IMPORT_SOURCES, type ImportSourceType } from "../../../src/domain/rules/importSources";
+import type { FileImportVerdict } from "../../../src/domain/rules/fileImportCheck";
+import { ImportCheckPanel } from "../../_components/ImportCheckPanel";
 import { selectableYearMonths } from "../../_lib/yearMonth";
 
 type Batch = { fileName: string; rowCount: number; importedAt: number };
 
-type Result = { ok: boolean; fileName: string; message: string };
+type Result = { ok: boolean; fileName: string; message: string; basis?: string };
 
 type Conflict = {
   sourceType: ImportSourceType;
   file: File;
+  yearMonth: string;
   sameFileName: boolean;
   superseded: Batch[];
 };
 
-type YearMonthMismatch = {
+/** 下読み(/api/import/detect)の応答。判定結果と、その判定に使った中身の指紋。 */
+type Detection = {
+  yearMonth: string | null;
+  basis: string;
+  candidates: string[];
+  contentHash?: string;
+  verdict?: FileImportVerdict;
+};
+
+/** 取込前の確認。中身の判定に問題があったときだけ出す(問題なしならそのまま取り込む)。 */
+type CheckState = {
   sourceType: ImportSourceType;
   file: File;
-  selectedYearMonth: string;
-  detectedYearMonth: string;
-  matchedRows: number;
-  dominantCount: number;
+  verdict: FileImportVerdict;
+  contentHash: string | null;
+  chosen: string;
 };
+
+/** YYYY-MM を「2026年5月」の業務の言葉にする。 */
+function describeYearMonth(yearMonth: string): string {
+  const [year, month] = yearMonth.split("-");
+  return `${year}年${Number(month)}月`;
+}
 
 function formatDateTime(epochMs: number): string {
   return new Date(epochMs).toLocaleString("ja-JP", {
@@ -74,9 +92,11 @@ export function ImportForm({
 }) {
   const router = useRouter();
   const [pending, setPending] = useState<ImportSourceType | null>(null);
+  // 「中身を確認中」と「取込中」は待たされる理由が違うので、画面の文言を分ける。
+  const [phase, setPhase] = useState<"inspecting" | "uploading">("uploading");
   const [results, setResults] = useState<Partial<Record<ImportSourceType, Result>>>({});
   const [conflict, setConflict] = useState<Conflict | null>(null);
-  const [yearMonthMismatch, setYearMonthMismatch] = useState<YearMonthMismatch | null>(null);
+  const [check, setCheck] = useState<CheckState | null>(null);
 
   const doneCount = IMPORT_SOURCES.filter((source) => (imported[source.sourceType] ?? []).length > 0).length;
 
@@ -92,20 +112,99 @@ export function ImportForm({
   const focusSourceType =
     explicitFocusSourceType ?? nextIncompleteSource?.sourceType ?? lastSource.sourceType;
 
+  /**
+   * ファイルを選んだ直後の下読み。ファイル名ではなく中身から
+   * 「何の帳票か」「何年何月分か」「必要な列が揃っているか」「前に取り込んでいないか」を聞きに行く。
+   *
+   * 問題が無ければ確認を挟まずそのまま取り込む(毎月何度も通る操作に摩擦を足すと、
+   * 本当に止めたいときの確認まで読み飛ばされる)。問題があれば必ず止めて利用者に確定させる。
+   * 判定と文言のルールは docs/product/file-import-common-spec.md。
+   */
+  async function inspectThenUpload(sourceType: ImportSourceType, file: File) {
+    setPhase("inspecting");
+    setPending(sourceType);
+    setConflict(null);
+    setCheck(null);
+    setResults((prev) => ({ ...prev, [sourceType]: undefined }));
+
+    let detection: Detection = {
+      yearMonth: null,
+      basis: "ファイルの中身を確認できませんでした。何年何月分として取り込むかを選んでください。",
+      candidates: [],
+    };
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("screen", "import");
+      form.append("expectedSourceType", sourceType);
+      form.append("expectedYearMonth", yearMonth);
+      const res = await fetch("/api/import/detect", { method: "POST", body: form });
+      if (res.ok) detection = (await res.json()) as Detection;
+    } catch {
+      // 下読みに失敗しても取込自体は続けられる。年月は利用者に選んでもらう。
+    }
+    setPending(null);
+
+    const verdict = detection.verdict;
+    if (verdict && verdict.status === "ok") {
+      void upload(sourceType, file, yearMonth, false, false, detection.basis, detection.contentHash);
+      return;
+    }
+    if (verdict) {
+      setCheck({
+        sourceType,
+        file,
+        verdict,
+        contentHash: detection.contentHash ?? null,
+        chosen: verdict.suggestedYearMonth ?? yearMonth,
+      });
+      return;
+    }
+    // 下読み自体に到達できなかったとき。年月だけは必ず人に確定させる。
+    setCheck({
+      sourceType,
+      file,
+      contentHash: null,
+      verdict: {
+        summary: "中身を確認できませんでした",
+        basis: detection.basis,
+        status: "confirm",
+        issues: [
+          {
+            kind: "yearMonthUnknown",
+            title: "この取込は何年何月分ですか?",
+            body: "ファイルの中身を確認できませんでした。取り込む年月を選んでください。",
+            link: null,
+          },
+        ],
+        confirmLabel: "この内容で取り込む",
+        needsYearMonthChoice: true,
+        suggestedYearMonth: yearMonth,
+      },
+      chosen: yearMonth,
+    });
+  }
+
   async function upload(
     sourceType: ImportSourceType,
     file: File,
+    targetYearMonth: string,
     replace: boolean,
     confirmYearMonth = false,
+    basis?: string,
+    contentHash?: string | null,
   ) {
+    setPhase("uploading");
     setPending(sourceType);
     setConflict(null);
-    setYearMonthMismatch(null);
+    setCheck(null);
     const form = new FormData();
     form.append("file", file);
-    form.append("yearMonth", yearMonth);
+    form.append("yearMonth", targetYearMonth);
     if (replace) form.append("replace", "true");
     if (confirmYearMonth) form.append("confirmYearMonth", "true");
+    // 取込の記録に残す中身の指紋。次に同じファイルを選んだときの照合に使う。
+    if (contentHash) form.append("contentHash", contentHash);
 
     try {
       // サーバーに全く到達できなかった場合(オフライン・DNS失敗等)と、サーバーが
@@ -143,25 +242,45 @@ export function ImportForm({
       }
 
       if (res.status === 409 && data.error === "yearMonthMismatch") {
+        // 下読みをすり抜けた取り違え(サーバー側の最終チェック)。同じ確認画面に集約する。
         const m = data.yearMonthMismatch as {
-          selectedYearMonth: string;
           detectedYearMonth: string;
           matchedRows: number;
           dominantCount: number;
         };
-        setYearMonthMismatch({
+        setCheck({
           sourceType,
           file,
-          selectedYearMonth: m.selectedYearMonth,
-          detectedYearMonth: m.detectedYearMonth,
-          matchedRows: m.matchedRows,
-          dominantCount: m.dominantCount,
+          contentHash: contentHash ?? null,
+          verdict: {
+            summary: `「${IMPORT_SOURCES.find((s) => s.sourceType === sourceType)?.label ?? "この帳票"}」 / ${describeYearMonth(m.detectedYearMonth)}分`,
+            basis: `日付を読み取れた${m.matchedRows}件のうち${m.dominantCount}件が${describeYearMonth(m.detectedYearMonth)}でした。`,
+            status: "confirm",
+            issues: [
+              {
+                kind: "yearMonthMismatch",
+                title: "この取込は何年何月分ですか?",
+                body: `選ばれたファイルは${describeYearMonth(m.detectedYearMonth)}分ですが、いま作成中なのは${describeYearMonth(targetYearMonth)}分です。どちらの月として取り込むか選んでください。`,
+                link: null,
+              },
+            ],
+            confirmLabel: `${describeYearMonth(m.detectedYearMonth)}分として取り込む`,
+            needsYearMonthChoice: true,
+            suggestedYearMonth: m.detectedYearMonth,
+          },
+          chosen: m.detectedYearMonth,
         });
         return;
       }
       if (res.status === 409) {
         const c = data.conflict as { sameFileName: boolean; superseded: Batch[] };
-        setConflict({ sourceType, file, sameFileName: c.sameFileName, superseded: c.superseded });
+        setConflict({
+          sourceType,
+          file,
+          yearMonth: targetYearMonth,
+          sameFileName: c.sameFileName,
+          superseded: c.superseded,
+        });
         return;
       }
       if (!res.ok) {
@@ -177,8 +296,19 @@ export function ImportForm({
       }
       setResults((prev) => ({
         ...prev,
-        [sourceType]: { ok: true, fileName: file.name, message: describeResult(data) },
+        [sourceType]: {
+          ok: true,
+          fileName: file.name,
+          message: `${describeYearMonth(targetYearMonth)}分として取り込みました（${describeResult(data)}）`,
+          basis,
+        },
       }));
+      // 画面で見ている月と違う月に取り込んだときは、その月の取込状況へ切り替える。
+      // 取り込んだはずのファイルが一覧に出てこない、という食い違いを残さない。
+      if (targetYearMonth !== yearMonth) {
+        router.replace(`/import?ym=${targetYearMonth}`);
+        return;
+      }
       router.refresh();
     } finally {
       setPending(null);
@@ -196,7 +326,7 @@ export function ImportForm({
             onChange={(e) => {
               setResults({});
               setConflict(null);
-              setYearMonthMismatch(null);
+              setCheck(null);
               router.replace(`/import?ym=${e.target.value}`);
             }}
             className="rounded-md border border-line bg-white px-2 py-1 text-sm font-normal text-ink"
@@ -208,6 +338,10 @@ export function ImportForm({
         </label>
         <p className="text-sm font-semibold text-brand-deep">
           {doneCount} / {IMPORT_SOURCES.length} 完了
+        </p>
+        <p className="w-full text-xs leading-5 text-ink-muted">
+          ファイルを選ぶと中身を読んで何年何月分かを確認します。ここで選んだ月と違っていたときや、
+          中身に日付が無い帳票のときは、取り込む前にお尋ねします。
         </p>
       </section>
 
@@ -227,7 +361,7 @@ export function ImportForm({
         const result = results[source.sourceType];
         const isPending = pending === source.sourceType;
         const isConflicting = conflict?.sourceType === source.sourceType;
-        const isYearMonthMismatching = yearMonthMismatch?.sourceType === source.sourceType;
+        const isChecking = check?.sourceType === source.sourceType;
         // ホームの特定STEPカードから来たときは、その帳票だけを主役にして他を畳む。
         // フォーカス無し(サイドバー「データ取込」から直接来た)ときは全部を並列に見せる。
         const isFocused = !focusSourceType || source.sourceType === focusSourceType;
@@ -273,40 +407,25 @@ export function ImportForm({
               </Link>
             ) : null}
 
-            {isYearMonthMismatching ? (
-              <div className="mt-4 rounded-lg border border-caution-border bg-caution-soft p-4">
-                <p className="text-sm font-bold text-ink">
-                  「{yearMonthMismatch.file.name}」の中身は主に {yearMonthMismatch.detectedYearMonth}{" "}
-                  の伝票のようです。対象年月「{yearMonthMismatch.selectedYearMonth}」と違いますが、このまま取り込みますか?
-                </p>
-                <p className="mt-2 text-xs leading-5 text-ink-muted">
-                  積荷日を読み取れた {yearMonthMismatch.matchedRows} 件中 {yearMonthMismatch.dominantCount}{" "}
-                  件が {yearMonthMismatch.detectedYearMonth} でした。前月分など別の年月のファイルを取り違えていないか確認してください。
-                </p>
-                <div className="mt-3 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void upload(
-                        yearMonthMismatch.sourceType,
-                        yearMonthMismatch.file,
-                        false,
-                        true,
-                      )
-                    }
-                    className="rounded-md bg-brand-deep px-4 py-2 text-sm font-semibold text-white"
-                  >
-                    このまま取り込む
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setYearMonthMismatch(null)}
-                    className="rounded-md border border-line px-4 py-2 text-sm font-semibold text-ink"
-                  >
-                    キャンセル
-                  </button>
-                </div>
-              </div>
+            {isChecking ? (
+              <ImportCheckPanel
+                fileName={check.file.name}
+                verdict={check.verdict}
+                yearMonth={check.chosen}
+                onYearMonthChange={(ym) => setCheck({ ...check, chosen: ym })}
+                onConfirm={() =>
+                  void upload(
+                    check.sourceType,
+                    check.file,
+                    check.chosen,
+                    false,
+                    true,
+                    check.verdict.basis,
+                    check.contentHash,
+                  )
+                }
+                onCancel={() => setCheck(null)}
+              />
             ) : null}
 
             {isConflicting ? (
@@ -316,7 +435,7 @@ export function ImportForm({
                 <p className="text-sm font-bold text-ink">
                   {conflict.sameFileName
                     ? `「${conflict.file.name}」は既に取り込み済みです。入れ直しますか?`
-                    : `${yearMonth} の${source.label}は既に取り込み済みです。入れ直しますか?`}
+                    : `${describeYearMonth(conflict.yearMonth)}の${source.label}は既に取り込み済みです。入れ直しますか?`}
                 </p>
                 <p className="mt-2 text-xs leading-5 text-ink">
                   入れ直すと、下記の既存データは<strong>削除</strong>されてから新しいファイルの内容に置き換わります。削除したデータは元に戻せません。
@@ -338,7 +457,7 @@ export function ImportForm({
                 <div className="mt-3 flex gap-2">
                   <button
                     type="button"
-                    onClick={() => void upload(conflict.sourceType, conflict.file, true)}
+                    onClick={() => void upload(conflict.sourceType, conflict.file, conflict.yearMonth, true, true)}
                     className="rounded-md bg-brand-deep px-4 py-2 text-sm font-semibold text-white"
                   >
                     削除して入れ直す
@@ -352,7 +471,7 @@ export function ImportForm({
                   </button>
                 </div>
               </div>
-            ) : isYearMonthMismatching ? null : (
+            ) : isChecking ? null : (
               <input
                 type="file"
                 accept={source.accept}
@@ -360,17 +479,27 @@ export function ImportForm({
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   event.target.value = "";
-                  if (file) void upload(source.sourceType, file, false);
+                  if (file) void inspectThenUpload(source.sourceType, file);
                 }}
                 className="mt-3 block max-w-full text-sm text-ink file:mr-3 file:rounded-md file:border file:border-brand file:bg-white file:px-4 file:py-2 file:text-sm file:font-semibold file:text-brand-deep hover:file:bg-brand-soft disabled:opacity-50"
               />
             )}
 
-            {isPending ? <p className="mt-2 text-xs text-ink-muted">取り込んでいます…</p> : null}
-            {result && !isConflicting && !isYearMonthMismatching ? (
-              <p className={`mt-2 text-xs leading-5 ${result.ok ? "text-ink-muted" : "text-danger"}`}>
-                {result.fileName}: {result.message}
+            {isPending ? (
+              <p className="mt-2 text-xs text-ink-muted">
+                {phase === "inspecting" ? "ファイルの中身を確認しています…" : "取り込んでいます…"}
               </p>
+            ) : null}
+            {result && !isConflicting && !isChecking ? (
+              <div className="mt-2">
+                <p className={`text-xs leading-5 ${result.ok ? "text-ink-muted" : "text-danger"}`}>
+                  {result.fileName}: {result.message}
+                </p>
+                {/* どの根拠でその月と判定したかを残す。あとから「なぜこの月に入ったのか」を追える。 */}
+                {result.ok && result.basis ? (
+                  <p className="text-xs leading-5 text-ink-muted">{result.basis}</p>
+                ) : null}
+              </div>
             ) : null}
           </>
         );
@@ -409,6 +538,11 @@ export function ImportForm({
           <li>車番「88888」は傭車として自動除外します。</li>
           <li>「諸口」と、10・888・5000番の重複候補は削除せず要確認として原本とともに保存します。</li>
           <li>同じ年月の同じ帳票を取り込むと、確認のうえ既存データを削除して入れ直します。</li>
+          <li>
+            ファイル名は変わっても構いません。どの帳票かは列の見出しで、何年何月分かはファイルの中身
+            (Excelの見出し・CSVの日付)で判定します。中身に日付が無い帳票(給与集計表・車両別運行実績表)は、
+            取込のときに何年何月分かをお尋ねします。
+          </li>
           <li>キリン配賦、燃料・修繕・高速の原票PDF取込は次段階で追加します。</li>
         </ul>
       </details>

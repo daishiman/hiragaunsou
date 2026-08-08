@@ -77,10 +77,26 @@ vi.mock("../../src/usecase/steps/importMonthlyPlWorkbook", () => ({
 // 種別判定は実物のロジックを通す。例外経路(422)を作るときだけ差し替えられるよう包んでおく。
 const { detectFileTypeMock } = vi.hoisted(() => ({ detectFileTypeMock: vi.fn() }));
 let actualDetectFileType: (fileName: string, header: string[]) => string;
+const { actualParseCsv, actualDecodeCp932 } = await vi.hoisted(async () => {
+  const csvUtils = await import("../../src/infrastructure/parsers/csvUtils");
+  const encoding = await import("../../src/infrastructure/parsers/encoding");
+  return { actualParseCsv: csvUtils.parseCsv, actualDecodeCp932: encoding.decodeCp932 };
+});
 vi.mock("../../src/infrastructure/parsers/detectFileType", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../src/infrastructure/parsers/detectFileType")>();
   actualDetectFileType = actual.detectFileType;
-  return { detectFileType: detectFileTypeMock };
+  return {
+    ...actual,
+    detectFileType: detectFileTypeMock,
+    // ルートが呼ぶのは resolveSourceTypeFromContent。中身(列見出し・ZIP判定)は実物を通しつつ、
+    // 列見出しからの判定だけを detectFileTypeMock 経由にして例外経路を作れるようにする。
+    resolveSourceTypeFromContent: (fileName: string, content: ArrayBuffer) => {
+      const bytes = new Uint8Array(content);
+      if (bytes[0] === 0x50 && bytes[1] === 0x4b) return "monthly_pl_workbook";
+      const rows = actualParseCsv(actualDecodeCp932(content.slice(0, 64 * 1024)));
+      return detectFileTypeMock(fileName, rows[0] ?? []);
+    },
+  };
 });
 
 function cp932(text: string): Uint8Array {
