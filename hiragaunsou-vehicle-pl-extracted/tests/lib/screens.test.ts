@@ -84,24 +84,10 @@ describe("SCREENS の定義漏れ防止", () => {
     expect(accountIds).toEqual(["spec", "account"]);
   });
 
-  /**
-   * 依頼者の指示 (2026-08-09): 「なぜこの画面だけ右側が空いているのか」が起きないよう、
-   * 幅は画面ごとに決めず、この定義1箇所で決める。判断基準は docs/design-system.md §11-11。
-   */
-  it("幅の指定は wide か narrow のどちらかしか無い", () => {
-    for (const s of SCREENS) {
-      if (s.width !== undefined) {
-        expect(["wide", "narrow"], s.href).toContain(s.width);
-      }
-    }
-  });
-
-  it("narrow にするのは読むだけの画面と1列のフォームだけ", () => {
-    const narrow = SCREENS.filter((s) => s.width === "narrow").map((s) => s.href);
-    expect(narrow.sort()).toEqual(
-      ["/report", "/logic", "/profile", "/ai-settings", "/grid/report"].sort(),
-    );
-  });
+  /*
+    幅は画面ごとに決めない。全画面で幅いっぱい。
+    ここに width を戻そうとすると tests/lib/contentWidth.test.ts が落ちる。
+  */
 
   it("自分自身へは誘導しない(押しても何も起きないリンクを作らない)", () => {
     for (const s of SCREENS) {

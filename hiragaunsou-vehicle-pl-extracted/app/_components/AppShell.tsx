@@ -7,7 +7,6 @@ import {
   visibleNavGroups,
   visibleAccountGroups,
   findNavItem,
-  contentWidthClass,
   NAV_ITEMS,
   type NavBadge,
   type NavItem,
@@ -248,13 +247,16 @@ export function AppShell({ userName, userRole, role, badges, children }: AppShel
         </header>
 
         {/*
-          本文の幅はここ1箇所で決める。ページ側は max-w-* を書かない
-          (書くと画面によって右の余白がまちまちになり、揃っていないことだけが目に付く)。
-          どの画面がどの幅かは app/_lib/screens.ts の width 宣言が正。
+          本文はどの画面でも幅いっぱい。画面ごとに幅を変えない。
+
+          一度「読むだけの画面は狭くする」を入れたが、依頼者から不具合として指摘された。
+          カード・フォーム・見出しは横に伸びても読みにくくならないのに、ページごと
+          止めると広い画面で右半分が丸ごと空き、表示が壊れて見える。
+          読み幅を制限してよいのは「途切れない長文の段落」だけで、それは
+          globals.css の .prose-note が段落ブロック単位で持つ。ページ全体には掛けない。
+          詳細は docs/design-system.md §11-11。
         */}
-        <main className={`min-w-0 flex-1 px-4 py-6 lg:px-8 lg:py-8 ${contentWidthClass(pathname)}`}>
-          {children}
-        </main>
+        <main className="min-w-0 flex-1 px-4 py-6 lg:px-8 lg:py-8">{children}</main>
 
         {/*
           フッターはアプリ名だけにした。かつて置いていた3本のリンクは
