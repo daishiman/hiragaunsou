@@ -12,7 +12,7 @@ import type { DeficitFactorCategory } from "../../../../src/domain/repositories/
 import { GetVehicleHistoryUseCase } from "../../../../src/usecase/steps/getVehicleHistory";
 import { resolveWorkingYearMonth } from "../../../_lib/workingYearMonth";
 import { kmPriceLabel, num, yen, yearMonthLabel } from "../../../_lib/format";
-import { PageHead } from "../../../_components/PageHead";
+import { ScreenHeader } from "../../../_components/ScreenHeader";
 import { EmptyState } from "../../../_components/EmptyState";
 import { BarRow } from "../../../_components/BarRow";
 import { D1VehiclePlOverrideRepository } from "../../../../src/infrastructure/db/D1VehiclePlOverrideRepository";
@@ -100,8 +100,8 @@ export default async function VehicleDetailPage({
 
   return (
     <>
-      <PageHead
-        kind="data"
+      <ScreenHeader
+        screen="/vehicle"
         title={`車番 ${vehicleNoLabel}`}
         lead={
           current

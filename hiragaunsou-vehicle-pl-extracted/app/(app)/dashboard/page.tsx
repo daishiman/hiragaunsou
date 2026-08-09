@@ -13,7 +13,7 @@ import { GetPeriodOverviewUseCase } from "../../../src/usecase/steps/getPeriodOv
 import { isYearMonth, periodPresets, selectableYearMonths } from "../../_lib/yearMonth";
 import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { chartMonthLabel, kmPriceLabel, man, num, pct, yen } from "../../_lib/format";
-import { PageHead } from "../../_components/PageHead";
+import { ScreenHeader } from "../../_components/ScreenHeader";
 import { EmptyState } from "../../_components/EmptyState";
 import { PeriodSelect } from "../../_components/PeriodSelect";
 import { StatTile } from "../../_components/StatTile";
@@ -63,9 +63,8 @@ export default async function DashboardPage({
 
   return (
     <>
-      <PageHead
-        kind="analysis"
-        title="経営ダッシュボード"
+      <ScreenHeader
+        screen="/dashboard"
         action={
           <PeriodSelect
             basePath="/dashboard"

@@ -8,7 +8,7 @@ import {
   D1VehicleMasterRepository,
 } from "../../../../src/infrastructure/db/D1MasterRepository";
 import { AccessDenied } from "../../../_components/AccessDenied";
-import { PageHead } from "../../../_components/PageHead";
+import { ScreenHeader } from "../../../_components/ScreenHeader";
 import { SourceDataNote } from "../../../_components/SourceDataNote";
 import { isYearMonth } from "../../../_lib/yearMonth";
 import { resolveWorkingYearMonth } from "../../../_lib/workingYearMonth";
@@ -47,10 +47,8 @@ export default async function AdminDriverMasterPage({
 
   return (
     <div className="max-w-5xl">
-      <PageHead
-        kind="tool"
-        title="運転者マスタ管理"
-        lead="社員Noと車番の対応表です。"
+      <ScreenHeader
+        screen="/admin/driver-master"
         help={
           <SourceDataNote sourceFile="★車両別収支計算用2026年5月.xlsx">
             <p>

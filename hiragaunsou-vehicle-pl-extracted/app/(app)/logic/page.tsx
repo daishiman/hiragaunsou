@@ -7,7 +7,7 @@ import { D1RateMasterRepository } from "../../../src/infrastructure/db/D1MasterR
 import type { RateSettings } from "../../../src/domain/rules/vehiclePlCalculation";
 import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { Disclosure } from "../../_components/Disclosure";
-import { PageHead } from "../../_components/PageHead";
+import { ScreenHeader } from "../../_components/ScreenHeader";
 
 /**
  * S10 データ設計・自動化方針 (モック view-logic.js に対応)。
@@ -267,11 +267,7 @@ export default async function LogicPage() {
 
   return (
     <>
-      <PageHead
-        kind="spec"
-        title="データ設計・自動化方針"
-        lead="各項目がどこから来て、どう決まるかの一覧"
-      />
+      <ScreenHeader screen="/logic" />
 
       {/*
         この画面は「どの数字がどこから来るか」の合意文書で、文章量が多い。

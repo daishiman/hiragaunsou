@@ -7,7 +7,7 @@ import { AccessDenied } from "../../_components/AccessDenied";
 import { createDb } from "../../../src/infrastructure/db/client";
 import { D1UsageLogRepository } from "../../../src/infrastructure/db/D1UsageLogRepository";
 import { summarizeUsage, DEFAULT_USAGE_PRICING, type UsagePricing } from "../../../src/usecase/steps/summarizeUsage";
-import { PageHead } from "../../_components/PageHead";
+import { ScreenHeader } from "../../_components/ScreenHeader";
 
 function readPricing(env: { ANTHROPIC_PRICE_IN_USD_PER_M?: string; ANTHROPIC_PRICE_OUT_USD_PER_M?: string; USD_JPY_RATE?: string }): UsagePricing {
   const inPrice = Number(env.ANTHROPIC_PRICE_IN_USD_PER_M);
@@ -45,7 +45,7 @@ export default async function UsagePage() {
 
   return (
     <div className="max-w-3xl">
-      <PageHead kind="tool" title="利用状況" lead="AI(Claude API)利用の概算費用です。" />
+      <ScreenHeader screen="/usage" />
 
       <div className="rounded-md border border-caution-border bg-caution-soft px-4 py-3 text-xs leading-relaxed">
         表示金額はトークン数からの概算です。請求の正はAnthropicのコンソールを確認してください。現在、費用集計の対象はAnthropic(Claude)経由の呼び出しのみです(他プロバイダは未対応のため集計されません)。

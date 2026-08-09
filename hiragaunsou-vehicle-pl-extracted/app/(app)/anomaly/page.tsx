@@ -10,7 +10,7 @@ import { GetAnomalyQueueUseCase } from "../../../src/usecase/steps/getAnomalyQue
 import { selectableYearMonths } from "../../_lib/yearMonth";
 import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
-import { PageHead } from "../../_components/PageHead";
+import { ScreenHeader } from "../../_components/ScreenHeader";
 import { D1VehicleMasterRepository } from "../../../src/infrastructure/db/D1MasterRepository";
 import { AnomalyQueue } from "./AnomalyQueue";
 import { LeaseEditor } from "./LeaseEditor";
@@ -56,11 +56,8 @@ export default async function AnomalyPage({
 
   return (
     <>
-      <PageHead
-        kind="ops"
-        title="収支表のチェック(業務フロー STEP7)"
-        lead="いつもと違う値を1件ずつ「入力ミス」か「実績」か判定します"
-        showHomeLink
+      <ScreenHeader
+        screen="/anomaly"
         action={
           <YearMonthSelect basePath="/anomaly" value={yearMonth} options={selectableYearMonths(13)} />
         }

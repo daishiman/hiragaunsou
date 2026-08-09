@@ -9,7 +9,7 @@ import { GetTodoBoardUseCase } from "../../../src/usecase/steps/getTodoBoard";
 import { selectableYearMonths } from "../../_lib/yearMonth";
 import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
-import { PageHead } from "../../_components/PageHead";
+import { ScreenHeader } from "../../_components/ScreenHeader";
 import { TodoBoard } from "./TodoBoard";
 
 /** F2/F7 ToDoボード (S1/S5相当)。要確認カードを「修正/承認」の2択で捌く。 */
@@ -42,10 +42,8 @@ export default async function TodoPage({
 
   return (
     <div className="max-w-3xl">
-      <PageHead
-        kind="ops"
-        title="ToDoボード"
-        lead="未入力・要確認の一覧"
+      <ScreenHeader
+        screen="/todo"
         action={
           <YearMonthSelect basePath="/todo" value={yearMonth} options={selectableYearMonths(13)} />
         }

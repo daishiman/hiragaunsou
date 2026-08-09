@@ -17,7 +17,7 @@ import { selectableYearMonths } from "../../_lib/yearMonth";
 import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { kmPriceLabel, man, num, pct, yen } from "../../_lib/format";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
-import { PageHead } from "../../_components/PageHead";
+import { ScreenHeader } from "../../_components/ScreenHeader";
 import { EmptyState } from "../../_components/EmptyState";
 import { StatTile } from "../../_components/StatTile";
 import { TrendBars } from "../../_components/charts/TrendBars";
@@ -89,9 +89,8 @@ export default async function AnnualPage({
 
   return (
     <>
-      <PageHead
-        kind="data"
-        title="年間集計・対前年"
+      <ScreenHeader
+        screen="/annual"
         action={
           <YearMonthSelect basePath="/annual" value={yearMonth} options={selectableYearMonths(25)} />
         }

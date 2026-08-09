@@ -18,7 +18,7 @@ import { selectableYearMonths } from "../../_lib/yearMonth";
 import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { kmPriceLabel, man, num, yen, yearMonthLabel } from "../../_lib/format";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
-import { PageHead } from "../../_components/PageHead";
+import { ScreenHeader } from "../../_components/ScreenHeader";
 import { EmptyState } from "../../_components/EmptyState";
 import { DeficitAnalysisButton } from "./DeficitAnalysisButton";
 
@@ -159,10 +159,9 @@ export default async function DeficitPage({
 
   return (
     <>
-      <PageHead
-        kind="analysis"
-        title="赤字の理由(3分類)"
-        lead={`赤字 ${data.deficitCount}台を原因の違いで3つに分けています`}
+      <ScreenHeader
+        screen="/deficit"
+        lead={`赤字 ${data.deficitCount}台を、原因の違いで3つに分けています。`}
         action={
           <div className="flex flex-wrap items-center gap-3">
             <YearMonthSelect basePath="/deficit" value={yearMonth} options={selectableYearMonths(13)} />
