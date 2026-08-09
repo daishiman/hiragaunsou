@@ -7,6 +7,7 @@ import {
   type ScreenBadge,
   type ScreenDef,
   type ScreenKind,
+  type ScreenPlacement,
 } from "./screens";
 import { hasPermission } from "../../src/domain/rules/permissions";
 
@@ -51,17 +52,34 @@ function toNavItem(s: ScreenDef): NavItem {
   };
 }
 
-function buildGroups(screens: readonly ScreenDef[]): NavGroup[] {
-  return SCREEN_GROUPS.map((g) => ({
-    label: g.label,
-    kind: g.kind,
-    items: screens.filter((s) => s.group === g.id && !s.hiddenFromNav).map(toNavItem),
-  })).filter((g) => g.items.length > 0);
+function buildGroups(screens: readonly ScreenDef[], placement: ScreenPlacement): NavGroup[] {
+  return SCREEN_GROUPS.filter((g) => g.placement === placement)
+    .map((g) => ({
+      label: g.label,
+      kind: g.kind,
+      items: screens.filter((s) => s.group === g.id && !s.hiddenFromNav).map(toNavItem),
+    }))
+    .filter((g) => g.items.length > 0);
 }
 
-export const NAV_GROUPS: readonly NavGroup[] = buildGroups(SCREENS);
+/** サイドバーに常時出すグループ。 */
+export const NAV_GROUPS: readonly NavGroup[] = buildGroups(SCREENS, "sidebar");
 
 export const NAV_ITEMS: readonly NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
+
+/**
+ * サイドバー下部のユーザー名から開くメニューに入れるグループ。
+ * 月1回も開かない運用・設定・仕様書の画面をここへ集め、常時見える選択肢を減らす。
+ */
+export const ACCOUNT_GROUPS: readonly NavGroup[] = buildGroups(SCREENS, "account");
+
+export const ACCOUNT_ITEMS: readonly NavItem[] = ACCOUNT_GROUPS.flatMap((g) => g.items);
+
+/**
+ * サイドバーとアカウントメニューを合わせた、メニューから辿れる全画面。
+ * 「どこからも辿れない画面」を作っていないことをテストで見張るために使う。
+ */
+export const ALL_MENU_ITEMS: readonly NavItem[] = [...NAV_ITEMS, ...ACCOUNT_ITEMS];
 
 /**
  * ロールで開けない画面をサイドバーから除く。
@@ -70,7 +88,17 @@ export const NAV_ITEMS: readonly NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
  * 結果として空になったグループも表示しない。
  */
 export function visibleNavGroups(role: string): NavGroup[] {
-  return buildGroups(visibleScreens(role));
+  return buildGroups(visibleScreens(role), "sidebar");
+}
+
+/** アカウントメニュー側も同じ基準で、開けない画面は出さない。 */
+export function visibleAccountGroups(role: string): NavGroup[] {
+  return buildGroups(visibleScreens(role), "account");
+}
+
+/** その画面がアカウントメニュー側にあるか (現在地の表示をどちらに出すかの判定に使う)。 */
+export function isAccountScreen(href: string): boolean {
+  return ACCOUNT_ITEMS.some((i) => i.href === href);
 }
 
 /** パスに対応するナビ項目 (最長一致)。該当なしは null。 */

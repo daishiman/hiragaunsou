@@ -69,6 +69,21 @@ describe("SCREENS の定義漏れ防止", () => {
     }
   });
 
+  /**
+   * 依頼者の指示 (2026-08-09): サイドバーには「絶対にこの情報が無いと分からない」ものだけを出す。
+   * どこに出すかはグループの placement 1箇所で決まる。判断基準は docs/design-system.md §11-9。
+   */
+  it("全グループが置き場所(placement)を持つ", () => {
+    for (const g of SCREEN_GROUPS) {
+      expect(["sidebar", "account"], g.id).toContain(g.placement);
+    }
+  });
+
+  it("運用・設定・仕様書の画面はサイドバーに常時出さない", () => {
+    const accountIds = SCREEN_GROUPS.filter((g) => g.placement === "account").map((g) => g.id);
+    expect(accountIds).toEqual(["spec", "account"]);
+  });
+
   it("自分自身へは誘導しない(押しても何も起きないリンクを作らない)", () => {
     for (const s of SCREENS) {
       expect(s.notHere?.href).not.toBe(s.href);

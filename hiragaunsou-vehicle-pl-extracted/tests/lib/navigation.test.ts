@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  ACCOUNT_GROUPS,
+  ACCOUNT_ITEMS,
+  ALL_MENU_ITEMS,
   findNavItem,
+  isAccountScreen,
   KIND_LABELS,
   kindOf,
   NAV_GROUPS,
   NAV_ITEMS,
+  visibleAccountGroups,
   visibleNavGroups,
 } from "../../app/_lib/navigation";
+import { SCREENS } from "../../app/_lib/screens";
 
 describe("NAV_GROUPS / NAV_ITEMS", () => {
   it("分析グループが毎月の締めグループより前に来る(分析が主目的であるため)", () => {
@@ -87,18 +93,80 @@ describe("visibleNavGroups", () => {
   });
 
   it("権限を一つも持たないロールでは、権限指定の無い画面だけが残る", () => {
-    const groups = visibleNavGroups("unknown-role");
-    const hrefs = groups.flatMap((g) => g.items.map((i) => i.href));
-    expect(hrefs).toEqual(["/", "/logic", "/profile"]);
+    const sidebar = visibleNavGroups("unknown-role").flatMap((g) => g.items.map((i) => i.href));
+    const account = visibleAccountGroups("unknown-role").flatMap((g) => g.items.map((i) => i.href));
+    expect(sidebar).toEqual(["/"]);
+    expect(account).toEqual(["/logic", "/profile"]);
   });
 
   it("全項目が除外されたグループはそのものが結果から消える", () => {
-    const groups = visibleNavGroups("unknown-role");
-    const labels = groups.map((g) => g.label);
+    const labels = visibleNavGroups("unknown-role").map((g) => g.label);
     // 分析グループの全項目はpermission指定ありのため空になり、消える
     expect(labels).not.toContain("儲かっているかを見る");
-    // 「仕組みの説明」は無権限項目(/logic)を含むため残る
-    expect(labels).toContain("仕組みの説明");
+    // 「仕組みの説明」は無権限項目(/logic)を含むためアカウントメニュー側に残る
+    expect(visibleAccountGroups("unknown-role").map((g) => g.label)).toContain("仕組みの説明");
+  });
+});
+
+/**
+ * 依頼者の指示 (2026-08-09): サイドバーの認知負荷を下げる。
+ * 常時サイドバーに出すのは「毎月の締めで何度も行き来する業務の画面」だけにし、
+ * 月1回も開かない運用・設定・仕様書はユーザー名から開くメニューへ移した。
+ * 置き場所の判断基準は docs/design-system.md §11-9。
+ */
+describe("サイドバーとアカウントメニューの振り分け", () => {
+  it("サイドバーには業務の画面だけを置く", () => {
+    const labels = NAV_GROUPS.map((g) => g.label);
+    expect(labels).toEqual([
+      "儲かっているかを見る",
+      "毎月の締め（この順に進む）",
+      "できあがった収支表",
+      "計算の基準（先に登録しておく）",
+      "直した内容の反映（最後に確認）",
+    ]);
+  });
+
+  it("運用・設定・仕様書はアカウントメニューへ移す", () => {
+    expect(ACCOUNT_GROUPS.map((g) => g.label)).toEqual(["仕組みの説明", "アカウント・管理"]);
+    expect(ACCOUNT_ITEMS.map((i) => i.href)).toEqual([
+      "/logic",
+      "/profile",
+      "/usage",
+      "/ai-settings",
+      "/admin/users",
+      "/admin/import-batches",
+    ]);
+  });
+
+  it("サイドバーとアカウントメニューは重複しない", () => {
+    const sidebar = new Set(NAV_ITEMS.map((i) => i.href));
+    for (const item of ACCOUNT_ITEMS) expect(sidebar.has(item.href)).toBe(false);
+  });
+
+  /** 移した先から辿れなくなった画面が1つも無いこと。無言で到達不能になるのを防ぐ。 */
+  it("メニューに出す全画面が、どちらか一方から必ず辿れる", () => {
+    const reachable = new Set(ALL_MENU_ITEMS.map((i) => i.href));
+    for (const s of SCREENS) {
+      if (s.hiddenFromNav) continue;
+      expect(reachable.has(s.href), s.href).toBe(true);
+    }
+  });
+
+  it("isAccountScreen はアカウントメニュー側の画面だけ true", () => {
+    expect(isAccountScreen("/profile")).toBe(true);
+    expect(isAccountScreen("/logic")).toBe(true);
+    expect(isAccountScreen("/grid")).toBe(false);
+    expect(isAccountScreen("/no-such-page")).toBe(false);
+  });
+
+  /**
+   * 件数バッジは「開かないと分からないこと」を教えるものだけに絞る。
+   * 未判定件数だけが残り、登録済み台数 (見ても次の行動が変わらない) は廃止した。
+   */
+  it("件数バッジを持つのは未判定件数の画面だけ", () => {
+    const withBadge = ALL_MENU_ITEMS.filter((i) => i.badge);
+    expect(withBadge.map((i) => i.href)).toEqual(["/anomaly"]);
+    expect(withBadge[0]?.badge).toBe("anomaly");
   });
 });
 

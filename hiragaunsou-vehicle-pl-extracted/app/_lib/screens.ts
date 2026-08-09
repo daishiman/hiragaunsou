@@ -30,8 +30,23 @@ export type ScreenGroupId =
   | "account"
   | "reflect";
 
-/** サイドバーに出す件数バッジの種類 */
-export type ScreenBadge = "registration" | "anomaly";
+/**
+ * サイドバーに出す件数バッジの種類。
+ *
+ * 「その数字が無いと、画面を開くまで分からないことがあるか?」を満たすものだけを置く。
+ * anomaly(未判定の件数)は「まだ手が残っているか」が開かずに分かる唯一の手がかりなので残す。
+ * かつてあった registration(登録済み台数)は、見ても次の行動が変わらないため廃止した。
+ */
+export type ScreenBadge = "anomaly";
+
+/**
+ * そのグループをどこに置くか。
+ *   sidebar — 常時サイドバーに出す。毎月の締めで何度も行き来する業務の画面。
+ *   account — サイドバー下部のユーザー名から開くメニューに入れる。
+ *             月1回も開かない運用・設定・仕様書の画面。常時見えていても選択肢を増やすだけで、
+ *             「これが無いと何が分からないか」に答えられない。
+ */
+export type ScreenPlacement = "sidebar" | "account";
 
 /** 「ここでは見ないこと」「次にすること」で使う一言 + 行き先 */
 export interface ScreenPointer {
@@ -78,16 +93,25 @@ export interface ScreenDef {
   hiddenFromNav?: boolean;
 }
 
-export const SCREEN_GROUPS: readonly { id: ScreenGroupId; label: string; kind: ScreenKind }[] = [
-  { id: "analysis", label: "儲かっているかを見る", kind: "analysis" },
-  { id: "monthly", label: "毎月の締め（この順に進む）", kind: "ops" },
-  { id: "result", label: "できあがった収支表", kind: "data" },
-  { id: "master", label: "計算の基準（先に登録しておく）", kind: "master" },
-  { id: "spec", label: "仕組みの説明", kind: "spec" },
-  { id: "account", label: "アカウント・管理", kind: "tool" },
+export const SCREEN_GROUPS: readonly {
+  id: ScreenGroupId;
+  label: string;
+  kind: ScreenKind;
+  placement: ScreenPlacement;
+}[] = [
+  { id: "analysis", label: "儲かっているかを見る", kind: "analysis", placement: "sidebar" },
+  { id: "monthly", label: "毎月の締め（この順に進む）", kind: "ops", placement: "sidebar" },
+  { id: "result", label: "できあがった収支表", kind: "data", placement: "sidebar" },
+  { id: "master", label: "計算の基準（先に登録しておく）", kind: "master", placement: "sidebar" },
+  // 読むだけの仕様書。毎月の作業では開かないので、常時サイドバーに置かず
+  // ユーザー名から開くメニューへ入れる (置き場所の判断は docs/design-system.md §11-9)。
+  { id: "spec", label: "仕組みの説明", kind: "spec", placement: "account" },
+  // 自分のアカウント・利用者の管理・APIキー・取込の後始末。いずれも業務ではなく運用の画面で、
+  // 月に1回も開かない。常時見せると選択肢だけが増えるため、ユーザー名のメニューに集約する。
+  { id: "account", label: "アカウント・管理", kind: "tool", placement: "account" },
   // 依頼者の指示: 「直した内容の反映」は率マスタ・車両マスタ・運転者マスタとは性質が違う
   // (マスタを直す画面ではなく、直した結果を締めた月へ反映するか決める画面) ため一番下に置く。
-  { id: "reflect", label: "直した内容の反映（最後に確認）", kind: "master" },
+  { id: "reflect", label: "直した内容の反映（最後に確認）", kind: "master", placement: "sidebar" },
 ] as const;
 
 export const KIND_LABELS: Record<ScreenKind, string> = {
@@ -206,7 +230,6 @@ export const SCREENS: readonly ScreenDef[] = [
     group: "monthly",
     kind: "ops",
     flowOrder: 1,
-    badge: "registration",
     permission: "input",
   },
   {
