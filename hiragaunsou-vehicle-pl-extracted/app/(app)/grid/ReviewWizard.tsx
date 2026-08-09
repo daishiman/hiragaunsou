@@ -406,7 +406,7 @@ export function ReviewWizard({
             type="button"
             disabled={busy}
             onClick={() => void undoBulk()}
-            className="pressable rounded border border-brand bg-white px-3 py-0.5 font-semibold disabled:opacity-50"
+            className="btn btn-secondary pressable"
           >
             元に戻す
           </button>
@@ -637,7 +637,7 @@ function IssueCard({
                 type="button"
                 onClick={onAcceptAsIs}
                 disabled={busy}
-                className="pressable rounded border border-brand bg-white px-3 py-0.5 font-semibold disabled:opacity-50"
+                className="btn btn-secondary pressable"
               >
                 先月と同じくOKにする
               </button>
@@ -744,7 +744,7 @@ function IssueCard({
               type="button"
               onClick={onStartEdit}
               disabled={busy}
-              className="pressable rounded-md bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+              className="btn btn-primary pressable"
             >
               {editTarget === field ? "値を直す" : `${labelOf(editTarget)}を直す`}
             </button>
@@ -769,7 +769,7 @@ function IssueCard({
               type="button"
               onClick={onAcceptAsIs}
               disabled={busy}
-              className="pressable rounded-md border border-brand px-5 py-2.5 text-sm font-semibold text-brand-deep hover:bg-brand-soft disabled:opacity-50"
+              className="btn btn-secondary pressable"
             >
               このままでOK(問題なし)
             </button>
@@ -782,7 +782,7 @@ function IssueCard({
               type="button"
               onClick={onBulkOk}
               disabled={busy}
-              className="pressable rounded-md border border-line px-4 py-2.5 text-sm font-semibold text-ink hover:bg-subtle disabled:opacity-50"
+              className="btn btn-quiet pressable"
             >
               同じ指摘 {sameCodeCount}件 をまとめてOK
             </button>
@@ -863,7 +863,7 @@ function BulkConfirm({
           type="button"
           onClick={onCancel}
           disabled={busy}
-          className="pressable rounded-md border border-line bg-white px-5 py-2.5 text-sm font-semibold text-ink hover:bg-subtle disabled:opacity-50"
+          className="btn btn-quiet pressable"
         >
           やめる(1件ずつ見る)
         </button>
@@ -871,7 +871,7 @@ function BulkConfirm({
           type="button"
           onClick={onConfirm}
           disabled={busy}
-          className="pressable rounded-md border border-brand bg-white px-5 py-2.5 text-sm font-semibold text-brand-deep hover:bg-brand-soft disabled:opacity-50"
+          className="btn btn-secondary pressable"
         >
           {busy ? "処理しています…" : `${items.length}件をまとめてOKにする`}
         </button>
@@ -1083,7 +1083,7 @@ function ValueEditor({
           type="button"
           onClick={submit}
           disabled={busy}
-          className="pressable rounded-md bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+          className="btn btn-primary pressable"
         >
           {busy ? "保存しています…" : "この値で保存して次へ"}
         </button>
@@ -1180,7 +1180,7 @@ function FinishedPanel({
                 type="button"
                 onClick={onApply}
                 disabled={pendingCount === 0}
-                className="pressable mt-3 rounded-md bg-accent px-6 py-3 text-base font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+                className="btn btn-primary pressable mt-3"
               >
                 収支表に反映する
               </button>

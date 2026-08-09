@@ -157,13 +157,14 @@ test.describe("車両マスタCSV取込・ym引き継ぎ・入力担当ロール
   test("クレンジング画面(売上データ未取込)の導線リンクに対象年月(ym)が引き継がれる", async ({
     page,
   }) => {
-    // ローカルD1は空データのため売上モニタリスト未取込状態(notImported=true)になり、
-    // 「データ取込へ進む」の導線が出る(判断済み0件時の「次のステップへ進む」分岐は
-    // CleansingQueue.tsx:521-531 で withYm("/manual-entry?step=2", yearMonth) を使っており、
-    // 同じ withYm 実装がヘッダー/フッターのナビゲーションリンクでym引き継ぎ済みであることは
+    // 売上モニタリスト未取込(notImported=true)のときだけ「データ取込へ進む」の導線が出る。
+    // 取込のある月を指定すると導線ごと消えるので、業務では絶対に取り込まない過去の月を使い、
+    // ローカルD1に何が入っているかにテストが左右されないようにする(判断済み0件時の
+    // 「次のステップへ進む」分岐は CleansingQueue.tsx で withYm("/manual-entry?step=2", yearMonth)
+    // を使っており、同じ withYm 実装がヘッダー/フッターでym引き継ぎ済みであることは
     // 他のテストケースで既に確認済み)。
-    await page.goto("/cleansing?ym=2026-05");
+    await page.goto("/cleansing?ym=2019-01");
     const link = page.getByRole("link", { name: "データ取込へ進む" });
-    await expect(link).toHaveAttribute("href", "/import?ym=2026-05");
+    await expect(link).toHaveAttribute("href", "/import?ym=2019-01");
   });
 });

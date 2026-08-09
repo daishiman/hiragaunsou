@@ -4,15 +4,24 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { IMPORT_SOURCES, type ImportSourceType } from "../../../src/domain/rules/importSources";
+import { MONTHLY_PL_WORKBOOK_SOURCE_TYPE } from "../../../src/usecase/steps/importMonthlyPlWorkbook";
 import { Disclosure } from "../../_components/Disclosure";
-import { StepRail } from "../../_components/StepRail";
+import { StickyActionBar } from "../../_components/StickyActionBar";
+import { StickyStepHeader } from "../../_components/StickyStepHeader";
 import type { FileImportVerdict } from "../../../src/domain/rules/fileImportCheck";
 import { ImportCheckPanel } from "../../_components/ImportCheckPanel";
 import { selectableYearMonths } from "../../_lib/yearMonth";
 
 type Batch = { fileName: string; rowCount: number; importedAt: number };
 
-type Result = { ok: boolean; fileName: string; message: string; basis?: string };
+type Result = {
+  ok: boolean;
+  fileName: string;
+  message: string;
+  basis?: string;
+  /** 取り込めたが先に進めない理由があるときの、直しに行く先。 */
+  fix?: { href: string; label: string };
+};
 
 type Conflict = {
   sourceType: ImportSourceType;
@@ -72,6 +81,43 @@ function describeResult(data: Record<string, unknown>): string {
 }
 
 /**
+ * 取込のあとに収支表の下地を作れたかどうかを、業務の言葉で1行にする。
+ *
+ * 取込は成功しているのに手入力の自動計算値・月次収支表・年間集計が空のまま、という状態が
+ * 起きていた。取込のたびに下地を作り直すようにしたので、その結果まで画面に出して
+ * 「取り込んだのに何も変わらない」という見え方を残さない。
+ */
+export function describePlRebuild(value: unknown): {
+  text: string;
+  fix?: { href: string; label: string };
+} {
+  if (typeof value !== "object" || value === null) return { text: "" };
+  const r = value as { status?: string; vehicleCount?: number; reason?: string };
+  if (r.status === "built") {
+    return { text: `。収支表の下地を ${r.vehicleCount ?? 0} 台分作りました` };
+  }
+  if (r.status !== "skipped") return { text: "" };
+  if (r.reason === "imports_incomplete") {
+    return { text: "。収支表は運行実績と売上の両方が揃うと作られます" };
+  }
+  if (r.reason === "confirmed") {
+    return { text: "。この月は確定済みのため収支表は作り直していません" };
+  }
+  if (r.reason === "no_vehicle_master") {
+    /*
+      収支表の行は車両マスタの車両から作られるので、マスタが空だと何度取り込んでも0台のまま。
+      ここで「0台分作りました」と言うと、利用者は取込をやり直す以外に打つ手が無くなる。
+      真因(車両マスタが空)を名指しし、直しに行く先まで出す。
+    */
+    return {
+      text: "。ただし車両マスタに車両が1台も登録されていないため、収支表はまだ作れません",
+      fix: { href: "/admin/vehicle-master", label: "車両マスタを登録する" },
+    };
+  }
+  return { text: "。収支表の作り直しに失敗しました(手入力画面から作り直せます)" };
+}
+
+/**
  * 業務フローのSTEPごとに投入口を分けた取込画面。
  * 種別を利用者に選ばせるのではなく「どのSTEPの帳票か」を投入口で固定し、
  * サーバー側の自動判定は取り違え検知に使う。送信は1件ずつ直列に行う。
@@ -102,6 +148,11 @@ export function ImportForm({
 
   const doneCount = IMPORT_SOURCES.filter((source) => (imported[source.sourceType] ?? []).length > 0).length;
 
+  // 収支表の下地は運行実績と売上の2つで作られる。この2つが揃った時点で先へ進めるので、
+  // 4つ全部を待たずに次の手順を案内する。
+  const importsReady =
+    (imported["vehicle_operation"] ?? []).length > 0 && (imported["sales_monitor"] ?? []).length > 0;
+
   // ホームの各STEPカード「この手順を開く」から来たときは、その帳票を主役にする。
   // サイドバー「データ取込」から来たとき(指定なし)は、まだ取り込んでいない最初の帳票を
   // 自動で主役にする。取り込むたびに imported が更新され、次の帳票へ自動で主役が移る
@@ -110,9 +161,16 @@ export function ImportForm({
   const nextIncompleteSource = IMPORT_SOURCES.find(
     (source) => (imported[source.sourceType] ?? []).length === 0,
   );
-  const lastSource = IMPORT_SOURCES[IMPORT_SOURCES.length - 1]!;
+  /*
+    全部取り込み終えたときの主役。一覧の最後は「答え合わせ用Excel」で、これは業務ステップでは
+    無い(取り込んでも収支表の数値は1つも変わらない)。そこへ主役が落ちると、締め作業が
+    終わっていないのに「次は答え合わせ」に見えてしまうので、最後の業務帳票(給与集計表)に留める。
+  */
+  const lastWorkflowSource =
+    [...IMPORT_SOURCES].reverse().find((s) => s.sourceType !== MONTHLY_PL_WORKBOOK_SOURCE_TYPE) ??
+    IMPORT_SOURCES[0]!;
   const focusSourceType =
-    explicitFocusSourceType ?? nextIncompleteSource?.sourceType ?? lastSource.sourceType;
+    explicitFocusSourceType ?? nextIncompleteSource?.sourceType ?? lastWorkflowSource.sourceType;
 
   /**
    * ファイルを選んだ直後の下読み。ファイル名ではなく中身から
@@ -296,13 +354,15 @@ export function ImportForm({
         }));
         return;
       }
+      const rebuild = describePlRebuild(data.plRebuild);
       setResults((prev) => ({
         ...prev,
         [sourceType]: {
           ok: true,
           fileName: file.name,
-          message: `${describeYearMonth(targetYearMonth)}分として取り込みました（${describeResult(data)}）`,
+          message: `${describeYearMonth(targetYearMonth)}分として取り込みました（${describeResult(data)}）${rebuild.text}`,
           basis,
+          fix: rebuild.fix,
         },
       }));
       // 画面で見ている月と違う月に取り込んだときは、その月の取込状況へ切り替える。
@@ -338,8 +398,12 @@ export function ImportForm({
             ))}
           </select>
         </label>
+        {/*
+          「4 / 4 完了」とだけ出すと、締め作業そのものが終わったように読める。
+          ここで数えているのは取り込むファイルの数だけなので、そう書く。
+        */}
         <p className="text-sm font-semibold text-brand-deep">
-          {doneCount} / {IMPORT_SOURCES.length} 完了
+          取り込むファイル {doneCount} / {IMPORT_SOURCES.length} 件
         </p>
         {/*
           取込のときに何が起きるかの説明。毎月同じ文章を読む必要は無いので、
@@ -354,7 +418,7 @@ export function ImportForm({
       </section>
 
       {/* どの帳票まで進んだかを、手入力画面と同じステップ札で示す */}
-      <StepRail
+      <StickyStepHeader
         steps={IMPORT_SOURCES.map((s) => ({ label: s.label, badge: s.step }))}
         currentIndex={
           nextIncompleteSource
@@ -413,16 +477,6 @@ export function ImportForm({
                   </li>
                 ))}
               </ul>
-            ) : null}
-
-            {/* STEP2(売上モニタリスト)が取り込めたら、次にやること(データ整形)へ誘導する */}
-            {source.sourceType === "sales_monitor" && batches.length > 0 && !isConflicting ? (
-              <Link
-                href={`/cleansing?ym=${yearMonth}`}
-                className="pressable mt-3 inline-flex items-center gap-1 rounded-md bg-brand-soft px-3 py-1.5 text-xs font-semibold text-brand-deep hover:bg-brand-soft/70"
-              >
-                次へ: データ整形(STEP2)に進む →
-              </Link>
             ) : null}
 
             {isChecking ? (
@@ -493,6 +547,8 @@ export function ImportForm({
               <input
                 type="file"
                 accept={source.accept}
+                // 投入口が4つ並ぶので、読み上げでも「どの帳票の欄か」が分かる名前を付ける
+                aria-label={`${source.label}のファイルを選ぶ`}
                 disabled={pending !== null}
                 onChange={(event) => {
                   const file = event.target.files?.[0];
@@ -516,6 +572,14 @@ export function ImportForm({
                 {/* どの根拠でその月と判定したかを残す。あとから「なぜこの月に入ったのか」を追える。 */}
                 {result.ok && result.basis ? (
                   <p className="text-xs leading-5 text-ink-muted">{result.basis}</p>
+                ) : null}
+                {result.fix ? (
+                  <Link
+                    href={result.fix.href}
+                    className="mt-1 inline-block text-xs font-semibold text-brand-deep underline"
+                  >
+                    {result.fix.label}
+                  </Link>
                 ) : null}
               </div>
             ) : null}
@@ -569,6 +633,35 @@ export function ImportForm({
         <Link href={`/grid?ym=${yearMonth}`} className="text-sm font-semibold text-brand-deep underline">
           {yearMonth} の車両別収支表を見る
         </Link>
+      ) : null}
+
+      {/*
+        取込のあとに何をすればよいかの案内。
+        以前は売上モニタリストのカードの中にしか置いておらず、4つとも取り込むとそのカードが
+        畳まれて案内ごと消えていた(「全部入れたのに次が分からない」の直接の原因)。
+        帳票の一覧は縦に長く、下まで見るころには上の案内が画面外に出てしまうので、
+        他の画面と同じ固定の操作バーに置いて、どこまでスクロールしても見える状態にする。
+      */}
+      {importsReady ? (
+        <StickyActionBar
+          notice={
+            <p className="text-sm font-bold text-ink">
+              この月の取込はここまでで大丈夫です。次は
+              <span className="num">{describeYearMonth(yearMonth)}</span>
+              分のデータ整形(STEP2)です
+            </p>
+          }
+        >
+          <Link href={`/cleansing?ym=${yearMonth}`} className="btn btn-primary pressable">
+            データ整形(STEP2)へ進む
+          </Link>
+          <Link href="/" className="btn btn-quiet pressable">
+            残りの手順をホームで確認する
+          </Link>
+          <span className="text-xs text-ink-muted">
+            傭車・2重計上・諸口を判断すると、月次収支表と年間集計に反映されます。
+          </span>
+        </StickyActionBar>
       ) : null}
     </div>
   );

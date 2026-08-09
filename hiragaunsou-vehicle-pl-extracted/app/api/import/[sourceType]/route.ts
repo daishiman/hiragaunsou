@@ -16,6 +16,7 @@ import {
 } from "../../../../src/usecase/steps/importMonthlyPlWorkbook";
 import { resolveSourceTypeFromContent } from "../../../../src/infrastructure/parsers/detectFileType";
 import { isSameOriginRequest } from "../../../_lib/assertSameOrigin";
+import { rebuildMonthlyPlAfterImport } from "../../../_lib/monthlyPlRecalculator";
 import { findImportSource } from "../../../../src/domain/rules/importSources";
 import { parseSalesMonitorCsv, detectDominantYearMonth } from "../../../../src/infrastructure/parsers/salesMonitorParser";
 
@@ -198,7 +199,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ sou
       console.error("file import log failed", { fileName: file.name, error: e });
     }
 
-    return NextResponse.json({ sourceType: resolvedSourceType, ...result });
+    // 取り込んだ内容を、そのまま他の画面(手入力の自動計算値・月次収支表・年間集計・ホームの進捗)へ
+    // 通す。ここで下地を作らないと、4つとも取り込み終えても全画面が空のままになる。
+    // 答え合わせ用Excelは収支表の材料ではないので対象外。
+    const plRebuild =
+      resolvedSourceType === MONTHLY_PL_WORKBOOK_SOURCE_TYPE
+        ? null
+        : await rebuildMonthlyPlAfterImport(db, yearMonth);
+
+    return NextResponse.json({ sourceType: resolvedSourceType, ...result, plRebuild });
   } catch (e) {
     console.error("import failed", { sourceType: resolvedSourceType, fileName: file.name, error: e });
     return NextResponse.json({ error: toImportErrorMessage(e) }, { status: 422 });

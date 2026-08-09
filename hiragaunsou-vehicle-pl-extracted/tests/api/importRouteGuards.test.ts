@@ -384,6 +384,10 @@ describe("POST /api/import/[sourceType] のUseCase振り分け", () => {
       storedFileKey: "k1",
       totalRows: 3,
       charteredExcluded: 1,
+      // 取込のあとに収支表の下地を作り直した結果も返す。このテストはDBを差し替えていないので
+      // 作り直しは失敗するが、取込そのものは成功として返ることをここで担保する
+      // (下地づくりの失敗で取込を巻き戻さない)。
+      plRebuild: { status: "skipped", reason: "failed" },
     });
     expect(vehicleOperationMock).toHaveBeenCalledWith(
       expect.objectContaining({ yearMonth: "2026-05", fileName: "運行実績表.csv", importedBy: "user-1" }),

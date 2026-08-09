@@ -17,7 +17,8 @@ import { D1DriverMasterRepository } from "../../../src/infrastructure/db/D1Maste
 import { GetPayrollDetailByVehicleUseCase } from "../../../src/usecase/steps/getPayrollDetailByVehicle";
 import { ConfirmMonthlyPlUseCase } from "../../../src/usecase/steps/confirmMonthlyPl";
 import { STANDARD_COST_RATES } from "../../../src/domain/entities/VehiclePl";
-import { currentYearMonth, monthsBefore, selectableYearMonths } from "../../_lib/yearMonth";
+import { monthsBefore, selectableYearMonths } from "../../_lib/yearMonth";
+import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { PageHead } from "../../_components/PageHead";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
 import { ManualEntryStepper, type PrefillValues } from "./ManualEntryStepper";
@@ -36,10 +37,16 @@ export default async function ManualEntryPage({
   }
 
   const { ym, step } = await searchParams;
-  const yearMonth = ym || currentYearMonth();
 
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);
+
+  /*
+    対象月の既定は「まだ締めていない、取込のある最も新しい月」に揃える(app/_lib/workingYearMonth.ts)。
+    以前は画面ごとに当月・前月とバラバラで、取込画面で5月分を取り込んでから移ると
+    別の月の空っぽの画面が出て「取り込んだのに反映されていない」ように見えていた。
+  */
+  const yearMonth = ym || (await resolveWorkingYearMonth(db));
   const vehicleMasterRepo = new D1VehicleMasterRepository(db);
   const rateMasterRepo = new D1RateMasterRepository(db);
   const vehiclePlRepo = new D1VehiclePlRepository(db);

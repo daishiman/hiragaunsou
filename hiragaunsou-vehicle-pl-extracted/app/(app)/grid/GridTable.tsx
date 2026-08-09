@@ -232,6 +232,7 @@ export function GridTable({
   lockedReason,
   header,
   footer,
+  actionBar,
 }: {
   rows: GridRow[];
   yearMonth: string;
@@ -248,6 +249,12 @@ export function GridTable({
    */
   header?: React.ReactNode;
   footer?: React.ReactNode;
+  /**
+   * 画面の下端に貼り付けておく操作 (確定・書き出し)。
+   * 表は車両の台数だけ縦に伸びるので、出口が表の上にあると下まで見た人には見えなくなる。
+   * 集中モード中は header/footer と同じく出さない。
+   */
+  actionBar?: React.ReactNode;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"summary" | "full">("summary");
@@ -836,7 +843,7 @@ export function GridTable({
             <button
               type="button"
               onClick={() => void undoLastEdit()}
-              className="pressable rounded border border-brand px-3 py-0.5 font-semibold"
+              className="btn btn-secondary pressable"
             >
               元に戻す
             </button>
@@ -845,7 +852,7 @@ export function GridTable({
       ) : null}
 
       <div className="overflow-x-auto rounded-xl border border-line bg-white">
-        <table className="min-w-max border-collapse text-xs">
+        <table className="data-table min-w-max border-collapse text-xs">
           <thead>
             <tr className="border-b border-line bg-subtle text-ink-muted">
               {groups.map((g) => (
@@ -1065,6 +1072,8 @@ export function GridTable({
           )}
 
       {footer}
+
+      {actionBar}
     </>
   );
 }
@@ -1119,17 +1128,23 @@ function OpeningGuide({
           <h2 className="text-xl font-bold text-ink">
             <span className="num">{openIssueCount}件</span>の確認が必要です。
           </h2>
+          {/* 文の途中(「指摘な / しなので」)で折れないよう、意味のまとまりごとに塊にする */}
           <p className="mt-1 text-sm text-ink-muted">
-            1件ずつ順番にご案内します。{vehicleCount}台のうち {cleanVehicles}台は指摘なしなので、
-            見ていただくのはこの{openIssueCount}件だけです。
-            {postponed > 0 ? `このうち ${postponed}件は後回し中です。` : ""}
+            <span className="inline-block">1件ずつ順番にご案内します。</span>
+            <span className="inline-block">
+              {vehicleCount}台のうち {cleanVehicles}台は指摘なしなので、
+            </span>
+            <span className="inline-block">見ていただくのはこの{openIssueCount}件だけです。</span>
+            {postponed > 0 ? (
+              <span className="inline-block">このうち {postponed}件は後回し中です。</span>
+            ) : null}
           </p>
           {canEdit ? (
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <button
                 type="button"
                 onClick={() => onStart(false)}
-                className="pressable rounded-md bg-accent px-6 py-3 text-base font-semibold text-white hover:bg-accent-deep"
+                className="btn btn-primary pressable"
               >
                 確認をはじめる
               </button>
@@ -1139,7 +1154,7 @@ function OpeningGuide({
                 <button
                   type="button"
                   onClick={() => onStart(true)}
-                  className="pressable rounded-md border border-brand px-5 py-3 text-sm font-semibold text-brand-deep hover:bg-brand-soft"
+                  className="btn btn-secondary pressable"
                 >
                   後回しの{postponed}件だけ確認する
                 </button>
@@ -1158,7 +1173,7 @@ function OpeningGuide({
               type="button"
               onClick={onApply}
               disabled={applying}
-              className="pressable mt-3 rounded-md bg-accent px-6 py-3 text-base font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+              className="btn btn-primary pressable mt-3"
             >
               {applying ? "反映しています…" : "収支表に反映する"}
             </button>
@@ -1178,7 +1193,7 @@ function OpeningGuide({
           {counts.map(({ severity, count }) => (
             <li key={severity} className="flex items-baseline gap-2 text-xs">
               <span
-                className={`rounded-full border px-2 py-0.5 font-semibold ${SEVERITY_STYLE[severity].chip}`}
+                className={`shrink-0 rounded-full border px-2 py-0.5 font-semibold whitespace-nowrap ${SEVERITY_STYLE[severity].chip}`}
               >
                 {SEVERITY_STYLE[severity].label} {count}
               </span>
@@ -1257,7 +1272,7 @@ function ReviewProgressBar({
               return (
                 <span
                   key={severity}
-                  className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${SEVERITY_STYLE[severity].chip}`}
+                  className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${SEVERITY_STYLE[severity].chip}`}
                 >
                   {SEVERITY_STYLE[severity].label} {count}
                 </span>
@@ -1275,7 +1290,7 @@ function ReviewProgressBar({
               type="button"
               disabled={applying || pendingCount === 0}
               onClick={onApply}
-              className="pressable rounded-md bg-accent px-4 py-1.5 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+              className="btn btn-primary pressable"
             >
               {applying ? "反映しています…" : "収支表に反映する"}
             </button>
@@ -1430,7 +1445,7 @@ function CellEditor({
           type="button"
           disabled={saving}
           onClick={() => void submit()}
-          className="pressable rounded-md bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+          className="btn btn-primary pressable"
         >
           {saving ? "保存しています…" : "保存する"}
         </button>
@@ -1478,7 +1493,7 @@ function IssuePanel({
           <button
             type="button"
             onClick={onEdit}
-            className="pressable rounded border border-brand px-3 py-0.5 text-xs font-semibold text-brand-deep"
+            className="btn btn-secondary btn-sm pressable"
           >
             この値を直す
           </button>
@@ -1517,7 +1532,7 @@ function IssuePanel({
                     <button
                       type="button"
                       onClick={() => onToggleAck(issue, null)}
-                      className="pressable rounded border border-line px-3 py-1 text-xs font-semibold text-ink-muted hover:bg-subtle"
+                      className="btn btn-quiet btn-sm pressable"
                     >
                       {issue.acknowledged ? "確認済みを取り消す" : "後回しをやめる"}
                     </button>
@@ -1526,14 +1541,14 @@ function IssuePanel({
                       <button
                         type="button"
                         onClick={() => onToggleAck(issue, "later")}
-                        className="pressable rounded border border-line px-3 py-1 text-xs font-semibold text-ink-muted hover:bg-subtle"
+                        className="btn btn-quiet btn-sm pressable"
                       >
                         あとで見る
                       </button>
                       <button
                         type="button"
                         onClick={() => onToggleAck(issue, "ok")}
-                        className="pressable rounded border border-brand px-3 py-1 text-xs font-semibold text-brand-deep"
+                        className="btn btn-secondary btn-sm pressable"
                       >
                         確認しました(このままでよい)
                       </button>

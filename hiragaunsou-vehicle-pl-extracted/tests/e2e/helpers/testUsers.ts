@@ -100,6 +100,24 @@ export async function clearMasterImportTestData(spec: {
         .run(),
     );
     const nos = spec.vehicleNos.map(() => "?").join(",");
+    /*
+      テスト用の車番は、実データを入れたローカルでは他の行から参照されていることがある
+      (運転者マスタの担当車両・トラクタのけん引先)。参照を残したまま消すと
+      FOREIGN KEY constraint failed で後片付けが落ちる。かといって参照元まで消すと
+      開発者がローカルに持っているデータを巻き込むので、参照だけを外して行は残す。
+    */
+    await withBusyRetry(() =>
+      env.DB.prepare(`UPDATE driver_master SET vehicle_no = NULL WHERE vehicle_no IN (${nos})`)
+        .bind(...spec.vehicleNos)
+        .run(),
+    );
+    await withBusyRetry(() =>
+      env.DB.prepare(
+        `UPDATE vehicle_master SET towed_by_vehicle_no = NULL WHERE towed_by_vehicle_no IN (${nos})`,
+      )
+        .bind(...spec.vehicleNos)
+        .run(),
+    );
     await withBusyRetry(() =>
       env.DB.prepare(`DELETE FROM vehicle_master WHERE vehicle_no IN (${nos})`)
         .bind(...spec.vehicleNos)
@@ -110,12 +128,50 @@ export async function clearMasterImportTestData(spec: {
   }
 }
 
-/** テストユーザーを削除する(session/accountはuser.idへのonDelete cascadeで一緒に消える)。 */
+/**
+ * user.id を指す外部キーのうち、cascade で消えないもの(「誰がやったか」の記録)。
+ * 消し忘れると次回の beforeAll でユーザーを消せず FOREIGN KEY constraint failed になる。
+ * 画面を操作した副作用(例: 保存で率マスタに月別行ができる)まで各specが把握するのは無理なので、
+ * ここで一括して参照を外す。
+ */
+const USER_REFERENCES: ReadonlyArray<{ table: string; column: string; nullable: boolean }> = [
+  { table: "csv_import_batch", column: "imported_by", nullable: true },
+  { table: "rate_master", column: "updated_by", nullable: true },
+  { table: "review_flag", column: "resolved_by", nullable: true },
+  { table: "usage_log", column: "recorded_by", nullable: true },
+  { table: "annual_reference", column: "updated_by", nullable: true },
+  { table: "manual_vehicle_input", column: "updated_by", nullable: true },
+  { table: "cleansing_decision", column: "decided_by", nullable: true },
+  { table: "app_setting", column: "updated_by", nullable: true },
+  { table: "ai_provider_credential", column: "updated_by", nullable: true },
+  { table: "deficit_factor_analysis", column: "updated_by", nullable: true },
+  { table: "user_invitation", column: "invited_by", nullable: false },
+  { table: "admin_audit_log", column: "actor_id", nullable: true },
+  { table: "vehicle_pl_override", column: "updated_by", nullable: true },
+  { table: "pl_issue_ack", column: "acked_by", nullable: true },
+  { table: "file_import_log", column: "imported_by", nullable: true },
+];
+
+/**
+ * テストユーザーを削除する。
+ * session/account は user.id への onDelete cascade で一緒に消えるが、
+ * 「誰が更新したか」を持つ表は残るため、先に参照を外す(消せない列は行ごと落とす)。
+ */
 export async function deleteTestUserByEmail(email: string): Promise<void> {
   const { env, dispose } = await getLocalEnv();
   try {
+    const owner = `(SELECT id FROM user WHERE email = ?)`;
     await withBusyRetry(() =>
-      env.DB.prepare("DELETE FROM user WHERE email = ?").bind(email).run(),
+      env.DB.batch([
+        ...USER_REFERENCES.map(({ table, column, nullable }) =>
+          env.DB.prepare(
+            nullable
+              ? `UPDATE ${table} SET ${column} = NULL WHERE ${column} IN ${owner}`
+              : `DELETE FROM ${table} WHERE ${column} IN ${owner}`,
+          ).bind(email),
+        ),
+        env.DB.prepare("DELETE FROM user WHERE email = ?").bind(email),
+      ]),
     );
   } finally {
     await dispose();

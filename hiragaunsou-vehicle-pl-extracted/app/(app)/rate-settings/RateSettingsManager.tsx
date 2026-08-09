@@ -9,6 +9,8 @@ import {
 } from "../../../src/domain/rules/rateMasterCatalog";
 import type { RateMasterEntry } from "../../../src/infrastructure/db/D1MasterRepository";
 import { Disclosure } from "../../_components/Disclosure";
+import { NumberEntryField } from "../../_components/NumberEntryField";
+import { parseAmountInput } from "../../_lib/numberEntry";
 import { StagePanel } from "../../_components/StagePanel";
 
 const KIND_UNIT: Record<RateValueKind, string> = {
@@ -36,8 +38,9 @@ function toDisplay(kind: RateValueKind, value: number): string {
 }
 
 function fromDisplay(kind: RateValueKind, text: string): number {
-  const n = Number(text);
-  if (!Number.isFinite(n)) return Number.NaN;
+  // 読み取り規則は全画面共通 (全角数字・カンマも受ける)。読めなければ NaN のまま検証で弾く。
+  const n = parseAmountInput(text);
+  if (n === null) return Number.NaN;
   return kind === "rate" ? n / 100 : n;
 }
 
@@ -140,7 +143,7 @@ export function RateSettingsManager({
   function renderTable(definitions: readonly RateMasterKeyDef[], ariaLabel: string) {
     return (
       <div className="overflow-x-auto rounded-xl border border-line bg-white">
-        <table aria-label={ariaLabel} className="w-full min-w-max border-collapse text-xs">
+        <table aria-label={ariaLabel} className="data-table w-full min-w-max border-collapse text-xs">
           <thead>
             <tr className="border-b border-line bg-subtle text-ink-muted">
               <th className="px-3 py-2 text-left font-medium">項目</th>
@@ -296,12 +299,16 @@ function ScopeCell({
   return (
     <div className="space-y-1">
       <div className="flex items-center gap-1">
-        <input
-          type="number"
-          step="any"
+        {/*
+          他の画面と同じ入力欄を使う。編集を始めた時点でいまの値が入っているので
+          自動値の印は要らないが、読み取り規則 (全角数字・カンマ) とEnterでの移動は揃う。
+        */}
+        <NumberEntryField
           value={draft}
-          onChange={(e) => onDraftChange(e.target.value)}
-          className="w-24 rounded border border-line px-2 py-1 text-right font-mono text-xs"
+          onChange={onDraftChange}
+          ariaLabel={`${def.label}の${scope === "common" ? "全期間共通値" : "月別値"}(${KIND_UNIT[def.kind]})`}
+          widthClass="w-24"
+          showEcho={false}
         />
         <span className="text-[11px] text-ink-muted">{KIND_UNIT[def.kind]}</span>
       </div>

@@ -105,6 +105,15 @@ export function MasterFieldEditor({
         placeholder={placeholder}
         disabled={busy}
         onChange={(e) => setDraft(e.target.value)}
+        /*
+          数字の欄 (NumberEntryField) と同じく、Enterで確定できるようにする。
+          IME確定のEnterでは保存しない (変換途中で送ってしまうため)。
+        */
+        onKeyDown={(e) => {
+          if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+          e.preventDefault();
+          if (!busy) void save();
+        }}
         className="w-28 rounded-md border border-line px-2 py-1 text-sm"
       />
       <button

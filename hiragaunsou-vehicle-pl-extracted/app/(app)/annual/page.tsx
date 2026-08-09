@@ -13,7 +13,8 @@ import {
 } from "../../../src/usecase/steps/getAnnualSummary";
 import type { MonthTotals } from "../../../src/domain/rules/monthlyAggregation";
 import { costBreakdown, diffRatio } from "../../../src/domain/rules/periodAggregation";
-import { currentYearMonth, selectableYearMonths } from "../../_lib/yearMonth";
+import { selectableYearMonths } from "../../_lib/yearMonth";
+import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { kmPriceLabel, man, num, pct, yen } from "../../_lib/format";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
 import { PageHead } from "../../_components/PageHead";
@@ -54,15 +55,31 @@ export default async function AnnualPage({
   }
 
   const { ym } = await searchParams;
-  const yearMonth = ym || currentYearMonth();
 
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);
+
+  /*
+    対象月の既定は「まだ締めていない、取込のある最も新しい月」に揃える(app/_lib/workingYearMonth.ts)。
+    以前は画面ごとに当月・前月とバラバラで、取込画面で5月分を取り込んでから移ると
+    別の月の空っぽの画面が出て「取り込んだのに反映されていない」ように見えていた。
+  */
+  const yearMonth = ym || (await resolveWorkingYearMonth(db));
   const useCase = new GetAnnualSummaryUseCase(
     new D1VehiclePlRepository(db),
     new D1AnnualReferenceRepository(db),
   );
   const data = await useCase.execute(yearMonth);
+
+  /*
+    この会社の期は6月始まりなので、7月に2026年5月分を見ようとすると「今期」には入っていない。
+    5月の実績はきちんと残っているのに画面が空になり、消えたように見えるのはこのため。
+    期を1つずつ前後に動かせる導線を常に出し、今期が空のときは前の期に実績があるかまで見て名指しする。
+  */
+  const prevFiscalAnchor = `${data.fiscalYear - 1}-06`;
+  const nextFiscalAnchor = `${data.fiscalYear + 1}-06`;
+  const prevFiscalData = data.isEmpty ? await useCase.execute(prevFiscalAnchor) : null;
+  const prevFiscalHasData = prevFiscalData !== null && !prevFiscalData.isEmpty;
 
   const prev = data.comparisonPrevTotal;
   const hasPrevYear = prev !== null;
@@ -80,20 +97,37 @@ export default async function AnnualPage({
         }
       />
 
-      <p className="-mt-3 mb-4 text-xs font-semibold text-ink-muted">
-        <span className="num">{data.fiscalYear}</span>年6月〜
-        <span className="num">{data.fiscalYear + 1}</span>年5月 (1期) ・ 取込済{" "}
-        <span className="num">
-          {importedCount}/{data.months.length}
+      <div className="-mt-3 mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-ink-muted">
+        <Link href={`/annual?ym=${prevFiscalAnchor}`} className="text-brand-deep hover:underline">
+          ← 前の期
+        </Link>
+        <span>
+          <span className="num">{data.fiscalYear}</span>年6月〜
+          <span className="num">{data.fiscalYear + 1}</span>年5月 (1期) ・ 取込済{" "}
+          <span className="num">
+            {importedCount}/{data.months.length}
+          </span>
+          ヶ月
         </span>
-        ヶ月
-      </p>
+        <Link href={`/annual?ym=${nextFiscalAnchor}`} className="text-brand-deep hover:underline">
+          次の期 →
+        </Link>
+      </div>
 
       {data.isEmpty ? (
-        <EmptyState
-          title="この期のデータはまだありません"
-          description="月次データを取り込むと、13ヶ月の推移と対前年比較が表示されます。"
-        />
+        prevFiscalHasData ? (
+          <EmptyState
+            title="この期のデータはまだありません"
+            description={`${data.fiscalYear}年6月からの実績はまだありません。${data.fiscalYear - 1}年6月〜${data.fiscalYear}年5月の実績は、1つ前の期にまとまっています。`}
+            actionHref={`/annual?ym=${prevFiscalAnchor}`}
+            actionLabel="前の期の集計を見る"
+          />
+        ) : (
+          <EmptyState
+            title="この期のデータはまだありません"
+            description="月次データを取り込むと、13ヶ月の推移と対前年比較が表示されます。"
+          />
+        )
       ) : (
         <>
           {/* 主役 = 年間損益。残りは同格に揃えて静かに置く */}
@@ -214,7 +248,7 @@ export default async function AnnualPage({
               </span>
             </summary>
             <div className="overflow-x-auto border-t border-line">
-              <table className="w-full min-w-max border-collapse text-xs">
+              <table className="data-table w-full min-w-max border-collapse text-xs">
                 <caption className="sr-only">月別の経費内訳明細 (円)</caption>
                 <thead>
                   <tr className="border-b border-line bg-subtle text-ink-muted">
@@ -338,7 +372,7 @@ export default async function AnnualPage({
               </p>
             ) : (
               <div className="overflow-x-auto border-t border-line">
-                <table className="w-full min-w-max border-collapse text-xs">
+                <table className="data-table w-full min-w-max border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-line bg-subtle text-ink-muted">
                       <th className="px-3 py-2 text-left font-medium">月</th>
@@ -395,7 +429,7 @@ export default async function AnnualPage({
               </p>
             ) : (
               <div className="overflow-x-auto border-t border-line">
-                <table className="w-full min-w-max border-collapse text-xs">
+                <table className="data-table w-full min-w-max border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-line bg-subtle text-ink-muted">
                       <th className="px-3 py-2 text-left font-medium">月</th>

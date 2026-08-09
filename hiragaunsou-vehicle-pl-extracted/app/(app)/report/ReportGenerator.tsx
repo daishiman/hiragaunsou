@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { FactorAnalysisReport } from "../../../src/domain/services/FactorAnalysisAiPort";
-import { currentYearMonth, selectableYearMonths } from "../../_lib/yearMonth";
+import { selectableYearMonths } from "../../_lib/yearMonth";
 
 type State =
   | { status: "idle" }
@@ -10,8 +10,8 @@ type State =
   | { status: "done"; report: FactorAnalysisReport; monthsAnalyzed: string[] }
   | { status: "error"; message: string };
 
-export function ReportGenerator() {
-  const [targetYearMonth, setTargetYearMonth] = useState(currentYearMonth());
+export function ReportGenerator({ defaultYearMonth }: { defaultYearMonth: string }) {
+  const [targetYearMonth, setTargetYearMonth] = useState(defaultYearMonth);
   const [state, setState] = useState<State>({ status: "idle" });
 
   async function generate() {
@@ -55,7 +55,7 @@ export function ReportGenerator() {
           type="button"
           onClick={generate}
           disabled={state.status === "loading"}
-          className="pressable rounded-md bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+          className="btn btn-primary pressable"
         >
           {state.status === "loading" ? "レポートを作成しています…" : "レポートを作成する"}
         </button>

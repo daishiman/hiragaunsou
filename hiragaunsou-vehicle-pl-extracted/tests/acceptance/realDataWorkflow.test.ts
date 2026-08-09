@@ -238,6 +238,15 @@ describe.skipIf(!hasRealData)("業務フロー STEP1〜8 実データ通し検�
     const importBatchRepo = {
       findRawRows: async (_ym: string, sourceType: string) =>
         sourceType === "vehicle_operation" ? opRows : sourceType === "sales_monitor" ? salesRaw : payrollRaw,
+      // 収支表は取込のある月にしか作らない。実データを流すこのテストは取込済みの月にあたる。
+      findLatestBatch: async () => ({
+        id: "batch-1",
+        fileName: "a.csv",
+        rowCount: 1,
+        excludedRowCount: 0,
+        importedAt: 0,
+        status: "done",
+      }),
     } as unknown as ImportBatchRepository;
 
     const result = await new FinalizeMonthlyPlUseCase(

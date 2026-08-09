@@ -10,12 +10,8 @@ import { D1RateMasterRepository } from "../../../src/infrastructure/db/D1MasterR
 import { D1AnnualReferenceRepository } from "../../../src/infrastructure/db/D1AnnualReferenceRepository";
 import { D1ReviewFlagRepository } from "../../../src/infrastructure/db/D1ReviewFlagRepository";
 import { GetPeriodOverviewUseCase } from "../../../src/usecase/steps/getPeriodOverview";
-import {
-  currentYearMonth,
-  isYearMonth,
-  periodPresets,
-  selectableYearMonths,
-} from "../../_lib/yearMonth";
+import { isYearMonth, periodPresets, selectableYearMonths } from "../../_lib/yearMonth";
+import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { chartMonthLabel, kmPriceLabel, man, num, pct, yen } from "../../_lib/format";
 import { PageHead } from "../../_components/PageHead";
 import { EmptyState } from "../../_components/EmptyState";
@@ -51,13 +47,15 @@ export default async function DashboardPage({
 
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);
+  // 未判定件数も他画面と同じ作業対象月で数える。当月で数えると、5月分の判定が残っていても0件に見える。
+  const anomalyYearMonth = await resolveWorkingYearMonth(db);
   const [data, openAnomalyFlags] = await Promise.all([
     new GetPeriodOverviewUseCase(
       new D1VehiclePlRepository(db),
       new D1RateMasterRepository(db),
       new D1AnnualReferenceRepository(db),
     ).execute(from, to),
-    new D1ReviewFlagRepository(db).findOpenByYearMonth(currentYearMonth()),
+    new D1ReviewFlagRepository(db).findOpenByYearMonth(anomalyYearMonth),
   ]);
   const anomalyCount = openAnomalyFlags.filter((f) => f.status === "open").length;
 
@@ -215,7 +213,7 @@ export default async function DashboardPage({
             <section className="mt-4 rounded-xl border border-line bg-white p-5">
               <h2 className="text-sm font-bold text-ink">営業所別</h2>
               <div className="mt-3 overflow-x-auto">
-                <table className="w-full min-w-[30rem] text-sm">
+                <table className="data-table w-full min-w-[30rem] text-sm">
                   <thead>
                     <tr className="border-b border-line text-xs font-medium text-ink-muted">
                       <th className="py-2 text-left">所属</th>

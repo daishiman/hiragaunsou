@@ -68,7 +68,7 @@ export function ConfirmDialog({
             type="button"
             disabled={busy}
             onClick={onCancel}
-            className="pressable rounded-md border border-line bg-white px-4 py-2 text-sm font-semibold text-ink hover:bg-subtle disabled:opacity-50"
+            className="btn btn-quiet pressable"
           >
             {cancelLabel}
           </button>

@@ -153,4 +153,56 @@ describe("D1ImportBatchRepository", () => {
       await expect(repo.deleteBatches("2026-05", "payroll", ["b1"])).rejects.toThrow();
     });
   });
+
+  describe("listYearMonths", () => {
+    async function seed(repo: D1ImportBatchRepository, yearMonth: string, sourceType: string) {
+      await repo.createBatch({
+        id: `${yearMonth}-${sourceType}`,
+        sourceType,
+        yearMonth,
+        fileName: "a.csv",
+        importedBy: null,
+        rowCount: 1,
+      });
+    }
+
+    it("同じ月に複数帳票を取り込んでも月は1つだけ返す(新しい順)", async () => {
+      const repo = new D1ImportBatchRepository(ctx.db);
+      await seed(repo, "2026-04", "payroll");
+      await seed(repo, "2026-05", "vehicle_operation");
+      await seed(repo, "2026-05", "sales_monitor");
+      expect(await repo.listYearMonths()).toEqual(["2026-05", "2026-04"]);
+    });
+
+    it("limitで件数を絞れる", async () => {
+      const repo = new D1ImportBatchRepository(ctx.db);
+      await seed(repo, "2026-03", "payroll");
+      await seed(repo, "2026-04", "payroll");
+      await seed(repo, "2026-05", "payroll");
+      expect(await repo.listYearMonths(2)).toEqual(["2026-05", "2026-04"]);
+    });
+
+    it("年月の大小ではなく、最後に取り込んだ順に並べる", async () => {
+      // 過去の月をあとから取り込み直すことがある。「いま手を動かしている月」は
+      // 年月の新しさではなく、最後に取り込んだ月で決まる。
+      ctx.sqlite
+        .prepare(
+          "INSERT INTO csv_import_batch (id, source_type, year_month, file_name, row_count, imported_at) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .run("old", "payroll", "2026-08", "a.csv", 1, 1000);
+      ctx.sqlite
+        .prepare(
+          "INSERT INTO csv_import_batch (id, source_type, year_month, file_name, row_count, imported_at) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .run("new", "payroll", "2026-05", "b.csv", 1, 2000);
+      expect(await new D1ImportBatchRepository(ctx.db).listYearMonths()).toEqual([
+        "2026-05",
+        "2026-08",
+      ]);
+    });
+
+    it("取込が1件も無ければ空配列", async () => {
+      expect(await new D1ImportBatchRepository(ctx.db).listYearMonths()).toEqual([]);
+    });
+  });
 });

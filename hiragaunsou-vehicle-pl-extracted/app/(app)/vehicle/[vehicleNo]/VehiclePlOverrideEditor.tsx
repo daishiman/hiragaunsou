@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { HelpDrawer } from "../../../_components/HelpDrawer";
+import { NumberEntryField } from "../../../_components/NumberEntryField";
+import { parseAmountInput } from "../../../_lib/numberEntry";
 import {
   OVERRIDABLE_FIELDS,
   OVERRIDABLE_FIELD_META,
@@ -69,7 +71,9 @@ export function VehiclePlOverrideEditor({
     try {
       const values: Record<string, number> = {};
       for (const field of editedFields) {
-        values[field] = Number(draft[field]);
+        // 読み取り規則は全画面共通 (カンマ・全角数字も受ける)。読めない欄は上書きしない。
+        const parsed = parseAmountInput(draft[field] ?? "");
+        if (parsed !== null) values[field] = parsed;
       }
       const res = await fetch("/api/vehicle-pl/override", {
         method: "POST",
@@ -126,7 +130,8 @@ export function VehiclePlOverrideEditor({
             <p>
               請求側の事情でCSVの値と実態がずれる月に使います。直せるのは計算の入口の値だけで、
               損益・経費計・各小計は必ずここから計算し直されます。
-              左の列はいま収支表に載っている値です(上書き済みの項目はその結果が出ます)。
+              欄には、いま収支表に載っている値が薄い文字で入っています(上書き済みの項目はその結果です)。
+              薄いままの欄は直したことになりません。直した欄だけが濃い文字になり、上書きとして保存されます。
             </p>
           </HelpDrawer>
         </div>
@@ -159,12 +164,13 @@ export function VehiclePlOverrideEditor({
       {open ? (
         <>
           <div className="mt-4 overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="data-table min-w-full text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-xs text-ink-muted">
                   <th className="py-2 pr-3">項目</th>
-                  <th className="py-2 pr-3">いまの収支表の値(出どころ)</th>
-                  <th className="py-2">上書きする値</th>
+                  <th className="py-2 pr-3">出どころ</th>
+                  {/* いまの値は欄の中に薄く入っているので、同じ数字を左にも並べない */}
+                  <th className="py-2">値(直すとここが変わります)</th>
                 </tr>
               </thead>
               <tbody>
@@ -175,23 +181,18 @@ export function VehiclePlOverrideEditor({
                   return (
                     <tr key={field} className="border-b border-line last:border-b-0">
                       <td className="py-2 pr-3 font-medium text-ink">{meta.label}</td>
-                      <td className="num py-2 pr-3 text-ink-muted">
-                        {typeof current === "number" ? current.toLocaleString("ja-JP") : "—"}
-                        <span className="ml-2 text-[11px]">
-                          {overridden ? "上書き済み" : meta.source}
-                        </span>
+                      <td className="py-2 pr-3 text-[11px] text-ink-muted">
+                        {overridden ? "上書き済み" : meta.source}
                       </td>
                       <td className="py-2">
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          disabled={busy || excluded}
+                        <NumberEntryField
                           value={draft[field] ?? ""}
-                          placeholder="直さない"
-                          onChange={(e) =>
-                            setDraft((d) => ({ ...d, [field]: e.target.value }))
-                          }
-                          className="num w-36 rounded-md border border-line px-2 py-1 text-right text-sm disabled:bg-subtle"
+                          onChange={(raw) => setDraft((d) => ({ ...d, [field]: raw }))}
+                          autoValue={typeof current === "number" ? current : null}
+                          autoLabel="いまの値"
+                          ariaLabel={`${meta.label}(${meta.unit})`}
+                          disabled={busy || excluded}
+                          widthClass="w-36"
                         />
                         <span className="ml-1 text-[11px] text-ink-muted">{meta.unit}</span>
                       </td>
@@ -234,7 +235,7 @@ export function VehiclePlOverrideEditor({
               type="button"
               disabled={busy || (!excluded && editedFields.length === 0)}
               onClick={() => void save()}
-              className="pressable rounded-md bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+              className="btn btn-primary pressable"
             >
               {busy ? "保存して再計算しています…" : "保存して収支表を作り直す"}
             </button>
@@ -243,7 +244,7 @@ export function VehiclePlOverrideEditor({
                 type="button"
                 disabled={busy}
                 onClick={() => void clear()}
-                className="pressable rounded-md border border-line bg-white px-5 py-2 text-sm text-ink hover:bg-subtle disabled:opacity-50"
+                className="btn btn-quiet pressable"
               >
                 上書きを取り消して元に戻す
               </button>

@@ -25,6 +25,44 @@
   --caution-border: #e6c96a;
 
   --font-num: "Helvetica Neue", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+
+  /*
+   * 常に見えている部分(アプリのヘッダー・工程タブ・操作列)の高さ。
+   * 貼り付け位置・重なり順・フォーカス移動の逃げ幅を、この3つの値だけで決める。
+   * 各画面が独自に px を書き始めると、1画面直すたびに他の画面がずれる。
+   */
+  --app-header-h: 3.25rem;
+  --screen-step-header-h: 3.25rem;
+  --screen-action-bar-h: 4rem;
+
+  /*
+   * 形の基準値。画面ごとに px / rem を直書きすると、隣り合う画面で角丸や余白が
+   * 1〜2px ずつずれて「作りが荒い」印象になる。丸み・行の高さはここだけで決める。
+   */
+  --radius-control: 0.375rem; /* ボタン・入力欄 */
+  --radius-card: 0.75rem; /* カード・パネル */
+  --row-h: 2.25rem; /* 表の1行の中身の高さ(入力欄を含む行も同じ高さに保つ) */
+}
+
+/*
+ * ノートPCのように画面の縦が狭いときは、常に見えている帯を薄くして本文の見える範囲を確保する。
+ * 帯の高さはこの変数だけで決まるので、画面ごとの調整は要らない。
+ */
+@media (max-height: 760px) {
+  :root {
+    --app-header-h: 2.75rem;
+    --screen-step-header-h: 2.75rem;
+    --screen-action-bar-h: 3.25rem;
+  }
+}
+
+/*
+ * Tabキーでフォーカスを送ったとき、上下に貼り付いた帯の下へ隠れないようにする。
+ * 画面ごとに書くと必ず抜けが出るので、ここ1箇所で操作できる要素すべてに効かせる。
+ */
+:where(a, button, input, select, textarea, summary, [tabindex]) {
+  scroll-margin-top: calc(var(--app-header-h) + var(--screen-step-header-h) + 0.5rem);
+  scroll-margin-bottom: calc(var(--screen-action-bar-h) + 0.5rem);
 }
 
 @theme inline {
@@ -61,6 +99,65 @@ body {
     Meiryo,
     sans-serif;
   font-feature-settings: "palt";
+
+  /*
+   * 日本語の折り返し。
+   * word-break: break-all を当てると「通行料」「金」のように語の途中で割れる。
+   * normal のままにして文節の切れ目で折り、line-break: strict で
+   * 「、。ー っ ゃ」などが行頭に落ちるのを防ぐ。
+   * URLや長い英数字だけは、はみ出すより割れた方がましなので anywhere を許す。
+   */
+  word-break: normal;
+  /*
+   * 対応ブラウザ(Chromium系)では文節単位で折る。
+   * 「最後のス / テップで」のようにカタカナ語の途中で割れるのを防ぐ。
+   * 非対応ブラウザは上の normal のままになる。
+   */
+  word-break: auto-phrase;
+  overflow-wrap: anywhere;
+  line-break: strict;
+  /* 最終行に1文字だけ残る割れ方を避ける(対応ブラウザのみ効く) */
+  text-wrap: pretty;
+}
+
+/* 見出しは行ごとの長さを揃える。2行目に1〜2文字だけ落ちると見た目が崩れて読みにくい */
+:where(h1, h2, h3, h4) {
+  text-wrap: balance;
+}
+
+/*
+ * 短い言葉は割らない。
+ * ボタン・表の見出し・タブ・札は、割れた瞬間に意味が読み取れなくなる
+ * (「ここまでを保 / 存」「通行料金( / 円)」)。長い説明文には当てない。
+ */
+:where(button, th, label, .nowrap) {
+  white-space: nowrap;
+}
+
+/*
+ * 丸い札(要修正 5 / 取込済み / 凍結中 …)も割らない。
+ * 幅の狭い画面で「要確 / 認 5」のように1文字だけ次の行に落ちていた。
+ * 同じ rounded-full でも棒グラフの帯は div なので、span だけに当てる。
+ */
+span:where([class~="rounded-full"]) {
+  white-space: nowrap;
+}
+
+/* 説明を兼ねる長いボタン(空状態の案内など)だけは折り返しを許す */
+:where(button).wrap,
+:where(label).wrap {
+  white-space: normal;
+}
+
+/*
+ * 押せるもの・入力できるものは形で分かるようにする(色だけに頼らない)。
+ * 読むだけの欄は面を沈め、枠を消す。
+ */
+:where(button, [role="button"], a[href], summary):not(:disabled) {
+  cursor: pointer;
+}
+:where(button, input, select, textarea):disabled {
+  cursor: not-allowed;
 }
 
 .num {
@@ -68,6 +165,93 @@ body {
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
   white-space: nowrap;
+}
+
+/*
+ * ボタンの見た目を3種類に固定する。
+ * 画面ごとに px と色を書いていたため、同じ「主要な操作」でも画面によって
+ * 高さも丸みも違っていた。並び順は「副次 → 主要(右端)」で全画面そろえる。
+ *   btn-primary   その画面で最後に押すもの (次へ・確定する・取り込む)
+ *   btn-secondary 途中で押すもの (ここまでを保存・書き出す)
+ *   btn-quiet     戻る・閉じるなど、押しても何も起きないに等しいもの
+ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border-radius: var(--radius-control);
+  border: 1px solid transparent;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.btn:disabled {
+  opacity: 0.5;
+}
+/* 行の中に置く小さめの操作 (「直す」「取込値に戻す」など)。高さだけを落とす */
+.btn-sm {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+.btn-sm.btn-primary {
+  padding-inline: 0.875rem;
+}
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  padding-inline: 1.25rem;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-deep);
+}
+.btn-secondary {
+  border-color: var(--brand);
+  background: #fff;
+  color: var(--brand-deep);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: var(--brand-soft);
+}
+.btn-quiet {
+  border-color: var(--line);
+  background: #fff;
+  color: var(--ink);
+  font-weight: 400;
+}
+.btn-quiet:hover:not(:disabled) {
+  background: var(--subtle);
+}
+
+/*
+ * 表の視線移動を減らすための共通指定。
+ * 106台を上から打っていくとき、いま何行目を触っているかが分からなくなると
+ * 車番まで目を戻すことになる。行にいる間ずっと面の色で示す。
+ */
+.data-table tbody tr:hover {
+  background: var(--brand-mist);
+}
+.data-table tbody tr:focus-within {
+  background: var(--brand-soft);
+}
+/* 行の高さを入力欄のあるなしで変えない(打っている途中で行がずれない) */
+.data-table tbody td {
+  vertical-align: middle;
+}
+/*
+ * 表の中の短い値は割らない。「本社」が「本 / 社」と縦に割れると
+ * 行の高さがばらつき、上から順に打っている手が止まる。
+ * 表はすべて横スクロールできる箱に入っているので、幅が足りなければ
+ * 折り返すのではなく横に流す。長い文を入れるセルだけ .wrap を付ける。
+ */
+.data-table :where(th, td) {
+  white-space: nowrap;
+}
+.data-table :where(th, td).wrap {
+  white-space: normal;
 }
 
 .pressable {
@@ -97,7 +281,10 @@ body {
   aside,
   header,
   footer,
-  .no-print {
+  .no-print,
+  /* 貼り付いた工程タブ・操作列は操作するためのものなので、紙には残さない */
+  .screen-step-header,
+  .screen-action-bar {
     display: none !important;
   }
   main {

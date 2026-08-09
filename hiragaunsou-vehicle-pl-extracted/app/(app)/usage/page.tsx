@@ -88,7 +88,7 @@ export default async function UsagePage() {
           <p className="text-sm text-ink-muted">ログはまだありません。</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full text-xs">
+            <table className="data-table min-w-full text-xs">
               <thead>
                 <tr className="border-b border-line text-left text-ink-muted">
                   <th className="py-2 pr-3">日時</th>
@@ -124,7 +124,7 @@ export default async function UsagePage() {
           </p>
           <Link
             href="/ai-settings"
-            className="pressable mt-3 inline-block rounded-md border border-brand bg-brand-soft px-4 py-1.5 text-xs font-semibold text-brand-deep"
+            className="btn btn-secondary btn-sm pressable mt-3 inline-block"
           >
             AI設定ページを開く
           </Link>

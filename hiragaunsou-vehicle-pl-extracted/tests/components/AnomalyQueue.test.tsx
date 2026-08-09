@@ -44,7 +44,7 @@ describe("AnomalyQueue", () => {
   it("推奨された判定を押すと保存APIが呼ばれ、取り消し線つきの直前判定が出て次の項目に進む", async () => {
     const user = userEvent.setup();
     const items = [makeItem({ id: "a", vehicleNo: "24" }), makeItem({ id: "b", vehicleNo: "300" })];
-    render(<AnomalyQueue items={items} yearMonth="2026-05" canApprove />);
+    render(<AnomalyQueue items={items} yearMonth="2026-05" plVehicleCount={106} canApprove />);
 
     expect(screen.getByText("1 / 2 件目")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /車番 24/ })).toBeInTheDocument();
@@ -79,7 +79,7 @@ describe("AnomalyQueue", () => {
     const user = userEvent.setup();
     global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 500 } as Response);
     const items = [makeItem({ id: "a" })];
-    render(<AnomalyQueue items={items} yearMonth="2026-05" canApprove />);
+    render(<AnomalyQueue items={items} yearMonth="2026-05" plVehicleCount={106} canApprove />);
 
     await user.click(screen.getByRole("button", { name: /入力ミス — 直しに送る/ }));
 
@@ -89,19 +89,34 @@ describe("AnomalyQueue", () => {
 
   it("承認権限がない場合は判定ボタンを出さず、閲覧のみである旨を表示する", () => {
     const items = [makeItem()];
-    render(<AnomalyQueue items={items} yearMonth="2026-05" canApprove={false} />);
+    render(<AnomalyQueue items={items} yearMonth="2026-05" plVehicleCount={106} canApprove={false} />);
 
     expect(screen.getByText("判定するには承認権限が必要です。閲覧のみ可能です。")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /入力ミス — 直しに送る/ })).not.toBeInTheDocument();
   });
 
   it("全件判定済みのときは完了メッセージとダッシュボードへの導線を表示する", () => {
-    render(<AnomalyQueue items={[]} yearMonth="2026-05" canApprove />);
+    render(<AnomalyQueue items={[]} yearMonth="2026-05" plVehicleCount={106} canApprove />);
 
     expect(screen.getByText("この月の異常値はすべて判定済みです")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "ダッシュボードへ" })).toHaveAttribute(
       "href",
       "/dashboard?ym=2026-05",
+    );
+  });
+
+  it("収支表がまだ無い月では、判定済みではなく理由と前工程への導線を出す", () => {
+    render(<AnomalyQueue items={[]} yearMonth="2026-05" plVehicleCount={0} canApprove />);
+
+    expect(screen.getByText("この月の収支表がまだありません")).toBeInTheDocument();
+    expect(screen.queryByText("この月の異常値はすべて判定済みです")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "月次収支表で確認する" })).toHaveAttribute(
+      "href",
+      "/grid?ym=2026-05",
+    );
+    expect(screen.getByRole("link", { name: "データ取込へ戻る" })).toHaveAttribute(
+      "href",
+      "/import?ym=2026-05",
     );
   });
 
@@ -111,7 +126,7 @@ describe("AnomalyQueue", () => {
       makeItem({ id: "a", vehicleNo: "24" }),
       makeItem({ id: "b", vehicleNo: "300" }),
     ];
-    render(<AnomalyQueue items={items} yearMonth="2026-05" canApprove />);
+    render(<AnomalyQueue items={items} yearMonth="2026-05" plVehicleCount={106} canApprove />);
 
     const search = screen.getByPlaceholderText("車番・項目で検索");
     await user.type(search, "300");

@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Db } from "./client";
 import { csvImportBatch, rawIngestion } from "./schema";
 import { user } from "./auth-schema";
@@ -144,6 +144,28 @@ export class D1ImportBatchRepository implements ImportBatchRepository {
       importedAt: row.importedAt.getTime(),
       status: row.status,
     };
+  }
+
+  /**
+   * 取込のある年月を「最後に取り込んだのが新しい順」に返す。
+   *
+   * ホームや各画面の対象月の既定を決めるのに使う。当月固定にしていたため、5月分を
+   * 取り込んだ直後でも画面は当月の話をしており、「取り込んだのに何も変わらない」という
+   * 見え方になっていた。
+   *
+   * 年月の新しい順ではなく取込の新しい順にするのは、過去の月をあとから取り込み直すことが
+   * あるため。「いま手を動かしている月」は、年月の大小ではなく最後に取り込んだ月で決まる。
+   */
+  async listYearMonths(limit = 13): Promise<string[]> {
+    const lastImportedAt = sql<number>`max(${csvImportBatch.importedAt})`;
+    const rows = await this.db
+      .select({ yearMonth: csvImportBatch.yearMonth, lastImportedAt })
+      .from(csvImportBatch)
+      .groupBy(csvImportBatch.yearMonth)
+      // 同時刻に入った月同士は年月の新しい順にして、並びが実行ごとに揺れないようにする。
+      .orderBy(desc(lastImportedAt), desc(csvImportBatch.yearMonth))
+      .limit(limit);
+    return rows.map((r) => r.yearMonth);
   }
 
   /**

@@ -44,10 +44,13 @@ export function AnomalyQueue({
   items,
   yearMonth,
   canApprove,
+  plVehicleCount,
 }: {
   items: AnomalyQueueItem[];
   yearMonth: string;
   canApprove: boolean;
+  /** その月の収支表の台数。0なら判定対象そのものが存在しない。 */
+  plVehicleCount: number;
 }) {
   const router = useRouter();
   const [index, setIndex] = useState(0);
@@ -131,6 +134,34 @@ export function AnomalyQueue({
     }
   }
 
+  /*
+    判定するものが無い理由は2つあり、意味が正反対になる。
+      収支表がある → 全部見終わった (完了)
+      収支表が無い → まだ見るものが作られていない (未着手)
+    以前はどちらも「すべて判定済みです」と出ていたため、取込の直後にここへ来た人が
+    工程が終わったと受け取ってしまっていた。理由を1行で言い、前の工程へ戻れるようにする。
+    収支表が作られない原因(取込が足りない/車両マスタが空)は月次収支表の画面が名指しするので、
+    説明を二重に持たず、そちらへ送る。
+  */
+  if (plVehicleCount === 0) {
+    return (
+      <div className="rounded-xl border border-line bg-white px-6 py-12 text-center">
+        <p className="text-sm font-semibold text-ink">この月の収支表がまだありません</p>
+        <p className="mt-1 text-sm text-ink-muted">
+          チェックする中身が無いため、判定はまだ始められません。月次収支表で、何が足りないかを確認してください。
+        </p>
+        <div className="mt-4 flex justify-center gap-2">
+          <Link href={`/grid?ym=${yearMonth}`} className="btn btn-primary pressable">
+            月次収支表で確認する
+          </Link>
+          <Link href={`/import?ym=${yearMonth}`} className="btn btn-quiet pressable">
+            データ取込へ戻る
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (!current) {
     return (
       <div className="rounded-xl border border-line bg-white px-6 py-12 text-center">
@@ -155,13 +186,13 @@ export function AnomalyQueue({
         <div className="mt-4 flex justify-center gap-2">
           <Link
             href={`/dashboard?ym=${yearMonth}`}
-            className="pressable rounded-md bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent-deep"
+            className="btn btn-primary pressable"
           >
             ダッシュボードへ
           </Link>
           <Link
             href={`/grid?ym=${yearMonth}`}
-            className="pressable rounded-md border border-line bg-white px-4 py-2 text-sm text-ink hover:bg-subtle"
+            className="btn btn-quiet pressable"
           >
             月次収支表へ
           </Link>

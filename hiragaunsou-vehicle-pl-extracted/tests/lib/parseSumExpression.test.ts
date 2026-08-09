@@ -35,10 +35,15 @@ describe("parseSumExpression", () => {
     expect(parseSumExpression("0")).toBe(0);
   });
 
+  it("金額の書き方の揺れは受ける(請求書からそのまま写せる)", () => {
+    expect(parseSumExpression("1200円")).toBe(1200);
+    expect(parseSumExpression("¥1,200")).toBe(1200);
+  });
+
   it("数字と + 以外が混ざったら null を返し、確定させない", () => {
-    expect(parseSumExpression("1200円")).toBeNull();
     expect(parseSumExpression("1200-300")).toBeNull();
     expect(parseSumExpression("あとで")).toBeNull();
+    expect(parseSumExpression("1200円分")).toBeNull();
   });
 
   it("末尾の + は入力途中とみなして無視する", () => {

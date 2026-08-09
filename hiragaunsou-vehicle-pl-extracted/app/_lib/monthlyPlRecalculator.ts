@@ -42,3 +42,107 @@ export function monthlyPlRecalculator(db: Db) {
     ),
   );
 }
+
+export type PostImportRebuildResult =
+  | { status: "built"; vehicleCount: number }
+  | {
+      status: "skipped";
+      reason:
+        | "imports_incomplete"
+        /** 確定済みの月なので作り直さない */
+        | "confirmed"
+        /**
+         * 車両マスタに1台も居ないため、収支表の行を作りようがない。
+         *
+         * 「0台で成功」と混ぜてはいけない。0台で成功を返すと画面は「0台分作りました」としか
+         * 言えず、利用者は取込をやり直すしかなくなる(やり直しても何も変わらない)。
+         * 収支表の行は車両マスタの車両から作られるので、真因はいつでも車両マスタ側にある。
+         */
+        | "no_vehicle_master"
+        | "failed";
+    };
+
+/**
+ * 取込のあとに収支表(vehicle_pl)の下地を作る。
+ *
+ * 収支表はこれまで「手入力の最後で作り直す」まで1行も存在しなかった。そのため取込を
+ * 終えた直後は、手入力のタイヤ代・高速料金の自動計算値が0(走行km・通行料金を収支表から
+ * 読むため)、ホームの進捗が「先に運行実績・売上の取込が必要です」、月次収支表・年間集計が空、
+ * という「4つとも取り込んだのに、どの画面にも何も出ない」状態になっていた。
+ *
+ * 運行実績と売上が揃った時点でここが下地を作り、以降の画面が取込内容をそのまま読めるようにする。
+ * 手入力はこの下地に上書きしていく形になり、入力の有無にかかわらず画面の数字が動く。
+ *
+ * 確定済みの月では作り直さない。締めた月の数字が取込のたびに黙って動き、確定まで外れると、
+ * 「締めた」という意思表示が意味を失うため。
+ */
+export async function rebuildMonthlyPlAfterImport(
+  db: Db,
+  yearMonth: string,
+): Promise<PostImportRebuildResult> {
+  // 下地づくりに失敗しても取込自体は成功している。取込を失敗として巻き戻すと
+  // 「取り込めたはずのファイルが消える」ほうが困るので、判定・実行のどちらで転んでも
+  // ここで受け止めて、結果だけを画面に伝える。
+  try {
+    const importBatchRepo = new D1ImportBatchRepository(db);
+    const vehiclePlRepo = new D1VehiclePlRepository(db);
+
+    const [opBatch, salesBatch, confirmation] = await Promise.all([
+      importBatchRepo.findLatestBatch(yearMonth, "vehicle_operation"),
+      importBatchRepo.findLatestBatch(yearMonth, "sales_monitor"),
+      vehiclePlRepo.getConfirmation(yearMonth),
+    ]);
+
+    // 走行距離(運行実績)と売上の両方が揃わないと1台分も計算できない。
+    if (!opBatch || !salesBatch) return { status: "skipped", reason: "imports_incomplete" };
+    if (confirmation.total > 0 && confirmation.confirmed >= confirmation.total) {
+      return { status: "skipped", reason: "confirmed" };
+    }
+
+    /*
+      収支表の行は車両マスタの車両から作る。マスタが空のまま作り直すと0行で「成功」し、
+      画面には「0台分作りました」としか出せない。利用者から見ると取込をやり直す以外に
+      打つ手が無く、やり直しても結果は変わらない(行き止まり)。
+      作り直す前にマスタを見て、真因を名指しできる形で返す。
+    */
+    const activeVehicles = await new D1VehicleMasterRepository(db).findAllActive();
+    if (activeVehicles.length === 0) {
+      return { status: "skipped", reason: "no_vehicle_master" };
+    }
+
+    const result = await monthlyPlRecalculator(db).execute({ yearMonth });
+    return { status: "built", vehicleCount: result.vehicleCount };
+  } catch (e) {
+    console.error("post-import PL rebuild failed", { yearMonth, error: e });
+    return { status: "skipped", reason: "failed" };
+  }
+}
+
+/**
+ * 取込はあるのに収支表が1行も無い月を、まとめて作り直す。
+ *
+ * 収支表の行は車両マスタの車両から作られる。そのため車両マスタが空のまま取り込むと
+ * 0台で「成功」し、あとから車両マスタを登録しても作り直しの対象にならなかった
+ * (作り直す月の一覧を vehicle_pl から作っていたため、0行の月は「存在しない月」だった)。
+ * 「収支表が無いから作れない、作らないから収支表が無い」の行き止まりを、ここで開ける。
+ *
+ * 既に1行でもある月には触らない。確定済み・入力途中の月を、マスタを直したついでに
+ * 黙って作り直すのは別の話(ApplyMasterChangeUseCase の担当)なので混ぜない。
+ */
+export async function rebuildMonthsWithoutPl(db: Db): Promise<string[]> {
+  try {
+    const months = await new D1ImportBatchRepository(db).listYearMonths(24);
+    const vehiclePlRepo = new D1VehiclePlRepository(db);
+    const built: string[] = [];
+    for (const yearMonth of months) {
+      const confirmation = await vehiclePlRepo.getConfirmation(yearMonth);
+      if (confirmation.total > 0) continue;
+      const result = await rebuildMonthlyPlAfterImport(db, yearMonth);
+      if (result.status === "built" && result.vehicleCount > 0) built.push(yearMonth);
+    }
+    return built;
+  } catch (e) {
+    console.error("rebuild months without PL failed", { error: e });
+    return [];
+  }
+}

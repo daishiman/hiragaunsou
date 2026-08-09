@@ -164,6 +164,26 @@ export class FinalizeMonthlyPlUseCase {
   ) {}
 
   async execute(input: FinalizeMonthlyPlInput): Promise<FinalizeMonthlyPlResult> {
+    /*
+      取込が1件も無い月には収支表を作らない。
+
+      収支表の行は車両マスタの車両から作られるため、取込が無くても「全車両ぶんの行」は作れて
+      しまう。走行も売上も0なので、固定費だけが並ぶ赤字の行が台数ぶんできる。実際に本番では
+      取込が1件も無い月に101台ぶんの行(売上0円・損益▲882万円)が残り、ホームの経営サマリが
+      その架空の月の数字を出していた。
+
+      入口(取込直後・作り直し・手入力の保存・マスタ変更の反映)ごとに条件を書くと、
+      書き漏らした経路から同じことが起きる。行を書く唯一の場所であるここで止める。
+    */
+    const monthBatches = await Promise.all(
+      ["vehicle_operation", "sales_monitor", "payroll"].map((sourceType) =>
+        this.importBatchRepo.findLatestBatch(input.yearMonth, sourceType),
+      ),
+    );
+    if (monthBatches.every((batch) => batch === null)) {
+      return { yearMonth: input.yearMonth, vehicleCount: 0, rows: [] };
+    }
+
     const [opRawRows, salesRawRows, payrollRawRows, vehicles, drivers, rates] = await Promise.all([
       this.importBatchRepo.findRawRows(input.yearMonth, "vehicle_operation"),
       this.importBatchRepo.findRawRows(input.yearMonth, "sales_monitor"),

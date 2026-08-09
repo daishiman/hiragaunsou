@@ -187,7 +187,7 @@ export function UsersManager({
     <div className="space-y-6">
       <section className="rounded-xl border border-line bg-white p-5">
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
+          <table className="data-table min-w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left text-xs text-ink-muted">
                 <th className="py-2 pr-3">氏名</th>
@@ -253,7 +253,7 @@ export function UsersManager({
                           type="button"
                           disabled={saving || isSelf}
                           onClick={() => setPendingDelete(u)}
-                          className="pressable rounded-md border border-line px-3 py-1 text-xs font-semibold text-ink-muted disabled:opacity-50"
+                          className="btn btn-quiet btn-sm pressable"
                         >
                           削除
                         </button>
@@ -332,7 +332,7 @@ export function UsersManager({
           <button
             type="submit"
             disabled={inviteState.status === "saving"}
-            className="pressable rounded-md border border-brand bg-brand-soft px-4 py-1.5 text-xs font-semibold text-brand-deep disabled:opacity-50"
+            className="btn btn-secondary btn-sm pressable"
           >
             招待する
           </button>
@@ -354,7 +354,7 @@ export function UsersManager({
 
         {invitations.length > 0 ? (
           <div className="mt-4 overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="data-table min-w-full text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-xs text-ink-muted">
                   <th className="py-2 pr-3">メールアドレス</th>
@@ -382,7 +382,7 @@ export function UsersManager({
                               type="button"
                               disabled={state.status === "saving"}
                               onClick={() => prefillForReissue(inv)}
-                              className="pressable rounded-md border border-brand bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-deep disabled:opacity-50"
+                              className="btn btn-secondary btn-sm pressable"
                             >
                               初期パスワードを再発行
                             </button>
@@ -391,7 +391,7 @@ export function UsersManager({
                             type="button"
                             disabled={state.status === "saving"}
                             onClick={() => void revokeInvitation(inv.id)}
-                            className="pressable rounded-md border border-line px-3 py-1 text-xs font-semibold text-ink-muted disabled:opacity-50"
+                            className="btn btn-quiet btn-sm pressable"
                           >
                             取消
                           </button>

@@ -6,7 +6,7 @@ import { D1VehiclePlRepository } from "../../src/infrastructure/db/D1VehiclePlRe
 import { D1ReviewFlagRepository } from "../../src/infrastructure/db/D1ReviewFlagRepository";
 import { AppShell } from "../_components/AppShell";
 import { YmProvider } from "../_components/YmProvider";
-import { currentYearMonth } from "../_lib/yearMonth";
+import { resolveWorkingYearMonth } from "../_lib/workingYearMonth";
 
 /**
  * 認証済み画面の共通レイアウト。
@@ -17,9 +17,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await getServerSession();
   if (!session) redirect("/sign-in");
 
-  const yearMonth = currentYearMonth();
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);
+  // サイドバーの件数も各画面と同じ「いま作業している月」で数える。
+  // 当月固定だと、5月分を取り込んだ直後でも台数0・未判定0と表示され、
+  // 「取り込んだのに何も入っていない」と受け取られてしまう。
+  const yearMonth = await resolveWorkingYearMonth(db);
 
   const [registration, anomalyFlags] = await Promise.all([
     new D1VehiclePlRepository(db).countByYearMonth(yearMonth),

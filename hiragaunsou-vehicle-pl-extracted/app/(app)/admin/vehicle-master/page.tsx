@@ -7,7 +7,8 @@ import { D1VehicleMasterRepository } from "../../../../src/infrastructure/db/D1M
 import { AccessDenied } from "../../../_components/AccessDenied";
 import { PageHead } from "../../../_components/PageHead";
 import { SourceDataNote } from "../../../_components/SourceDataNote";
-import { defaultImportYearMonth, isYearMonth } from "../../../_lib/yearMonth";
+import { isYearMonth } from "../../../_lib/yearMonth";
+import { resolveWorkingYearMonth } from "../../../_lib/workingYearMonth";
 import { VehicleMasterManager } from "./VehicleMasterManager";
 
 /**
@@ -31,11 +32,14 @@ export default async function AdminVehicleMasterPage({
   }
 
   const { env } = await getCloudflareContext({ async: true });
-  const vehicles = await new D1VehicleMasterRepository(createDb(env.DB)).findAllActive();
+  const db = createDb(env.DB);
+  const vehicles = await new D1VehicleMasterRepository(db).findAllActive();
 
   // けん引先を変えると収支表を作り直すため、どの月の表を直すのかが要る。
+  // 既定は他画面と同じ「いま作業している月」。当月を既定にすると、5月を締めている最中の変更が
+  // 誰も見ていない月の収支表に反映されてしまう。
   const ym = (await searchParams).ym;
-  const yearMonth = isYearMonth(ym) ? ym : defaultImportYearMonth();
+  const yearMonth = isYearMonth(ym) ? ym : await resolveWorkingYearMonth(db);
 
   return (
     <div className="max-w-5xl">

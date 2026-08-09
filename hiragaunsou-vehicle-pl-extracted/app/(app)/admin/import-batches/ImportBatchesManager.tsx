@@ -163,7 +163,7 @@ export function ImportBatchesManager({
         </div>
 
         <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full text-sm">
+          <table className="data-table min-w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left text-xs text-ink-muted">
                 <th className="py-2 pr-3">年月</th>
@@ -232,7 +232,7 @@ export function ImportBatchesManager({
         </p>
         {fileLog.length > 0 ? (
           <div className="mt-3 overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="data-table min-w-full text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-xs text-ink-muted">
                   <th className="py-2 pr-3">取込日時</th>
@@ -262,7 +262,7 @@ export function ImportBatchesManager({
                         type="button"
                         disabled={fileLogBusy === f.id}
                         onClick={() => setPendingForget(f)}
-                        className="pressable rounded-md border border-line bg-subtle px-3 py-1 text-xs font-semibold text-ink disabled:opacity-50"
+                        className="btn btn-quiet btn-sm pressable"
                       >
                         {fileLogBusy === f.id ? "処理中…" : "記録から外す"}
                       </button>

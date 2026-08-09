@@ -14,7 +14,8 @@ import {
   type DeficitGroupResult,
   type DeficitVehicle,
 } from "../../../src/usecase/steps/getDeficitAnalysis";
-import { currentYearMonth, selectableYearMonths } from "../../_lib/yearMonth";
+import { selectableYearMonths } from "../../_lib/yearMonth";
+import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { kmPriceLabel, man, num, yen, yearMonthLabel } from "../../_lib/format";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
 import { PageHead } from "../../_components/PageHead";
@@ -93,7 +94,7 @@ function GroupTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-max border-collapse text-xs">
+      <table className="data-table w-full min-w-max border-collapse text-xs">
         <thead>
           <tr className="border-b border-line bg-subtle text-ink-muted">
             <th className="px-3 py-2 text-left font-medium">車番</th>
@@ -136,10 +137,16 @@ export default async function DeficitPage({
   }
 
   const { ym } = await searchParams;
-  const yearMonth = ym || currentYearMonth();
 
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);
+
+  /*
+    対象月の既定は「まだ締めていない、取込のある最も新しい月」に揃える(app/_lib/workingYearMonth.ts)。
+    以前は画面ごとに当月・前月とバラバラで、取込画面で5月分を取り込んでから移ると
+    別の月の空っぽの画面が出て「取り込んだのに反映されていない」ように見えていた。
+  */
+  const yearMonth = ym || (await resolveWorkingYearMonth(db));
   const useCase = new GetDeficitAnalysisUseCase(
     new D1VehiclePlRepository(db),
     new D1RateMasterRepository(db),

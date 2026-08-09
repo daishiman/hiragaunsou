@@ -158,7 +158,7 @@ export function ProfileForm({
             type="button"
             onClick={handleSave}
             disabled={saveState.status === "saving" || name.trim().length === 0}
-            className="pressable self-start rounded-md bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+            className="btn btn-primary pressable self-start"
           >
             {saveState.status === "saving" ? "保存しています…" : "保存する"}
           </button>
@@ -203,7 +203,7 @@ export function ProfileForm({
             <button
               type="submit"
               disabled={emailSaveState.status === "saving" || newEmail.trim().length === 0}
-              className="pressable self-start rounded-md border border-line bg-white px-5 py-2 text-sm font-semibold text-ink hover:bg-subtle disabled:opacity-50"
+              className="btn btn-quiet pressable self-start"
             >
               {emailSaveState.status === "saving" ? "変更しています…" : "メールアドレスを変更する"}
             </button>
@@ -260,7 +260,7 @@ export function ProfileForm({
             <button
               type="submit"
               disabled={passwordSaveState.status === "saving"}
-              className="pressable self-start rounded-md border border-line bg-white px-5 py-2 text-sm font-semibold text-ink hover:bg-subtle disabled:opacity-50"
+              className="btn btn-quiet pressable self-start"
             >
               {passwordSaveState.status === "saving" ? "変更しています…" : "パスワードを変更する"}
             </button>

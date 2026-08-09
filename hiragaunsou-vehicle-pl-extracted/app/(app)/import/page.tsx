@@ -8,7 +8,8 @@ import { createDb } from "../../../src/infrastructure/db/client";
 import { D1ImportBatchRepository } from "../../../src/infrastructure/db/D1ImportBatchRepository";
 import { IMPORT_SOURCES } from "../../../src/domain/rules/importSources";
 import { PageHead } from "../../_components/PageHead";
-import { defaultImportYearMonth, isYearMonth } from "../../_lib/yearMonth";
+import { isYearMonth } from "../../_lib/yearMonth";
+import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { ImportForm } from "./ImportForm";
 
 /**
@@ -29,10 +30,17 @@ export default async function ImportPage({
   }
 
   const { ym, step } = await searchParams;
-  const yearMonth = isYearMonth(ym) ? ym : defaultImportYearMonth();
 
   const { env } = await getCloudflareContext({ async: true });
-  const repo = new D1ImportBatchRepository(createDb(env.DB));
+  const db = createDb(env.DB);
+  const repo = new D1ImportBatchRepository(db);
+
+  /*
+    対象月の既定は他の画面と同じ「まだ締めていない、取込のある最も新しい月」にする。
+    取込だけ前月・後続画面は当月という食い違いがあり、取り込んだ月と違う月の画面へ
+    移ってしまうことが「反映されていない」の一因になっていた。
+  */
+  const yearMonth = isYearMonth(ym) ? ym : await resolveWorkingYearMonth(db);
   const imported = Object.fromEntries(
     await Promise.all(
       IMPORT_SOURCES.map(

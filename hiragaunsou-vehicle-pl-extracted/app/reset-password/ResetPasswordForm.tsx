@@ -105,7 +105,7 @@ export function ResetPasswordForm() {
       <button
         type="submit"
         disabled={pending}
-        className="pressable mt-1 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+        className="btn btn-primary pressable mt-1"
       >
         {pending ? "設定しています…" : "パスワードを設定する"}
       </button>

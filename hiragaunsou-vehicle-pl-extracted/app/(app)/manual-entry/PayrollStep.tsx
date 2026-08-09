@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { NumberEntryField } from "../../_components/NumberEntryField";
 import type { OverridableField } from "../../../src/domain/rules/vehiclePlOverride";
 
 /**
@@ -285,7 +286,7 @@ export function PayrollStep({
             </span>
             <Link
               href={`/import?step=4&ym=${yearMonth}`}
-              className="pressable rounded-md border border-brand px-3 py-1.5 text-xs font-semibold text-brand-deep hover:bg-brand-soft"
+              className="btn btn-secondary btn-sm pressable"
             >
               データ取込へ
             </Link>
@@ -329,20 +330,26 @@ export function PayrollStep({
             </p>
           </div>
 
-          <div className="max-h-[50vh] overflow-auto rounded-md border border-line">
-            <table className="min-w-full text-sm">
-              <thead className="sticky top-0 bg-subtle">
+          <div className="max-h-[56vh] min-h-[14rem] overflow-auto rounded-md border border-line">
+            <table className="data-table min-w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-subtle">
                 <tr>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-ink-muted">車番</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-ink-muted">運転者</th>
-                  <th className="px-3 py-2 text-right text-xs font-bold text-ink-muted whitespace-nowrap">
+                  <th className="w-px px-3 py-2 text-left text-xs font-bold text-ink-muted">
+                    車番
+                  </th>
+                  <th className="w-px px-3 py-2 text-left text-xs font-bold text-ink-muted">
+                    運転者
+                  </th>
+                  <th className="w-px px-3 py-2 text-right text-xs font-bold text-ink-muted">
                     総支給額(円)
                     <span className="block text-[11px] font-normal">給与集計表CSV</span>
                   </th>
-                  <th className="px-3 py-2 text-right text-xs font-bold text-ink-muted whitespace-nowrap">
+                  <th className="w-px px-3 py-2 text-right text-xs font-bold text-ink-muted">
                     社保合計(円)
                     <span className="block text-[11px] font-normal">給与集計表CSV</span>
                   </th>
+                  {/* 余った幅を吸わせ、運転者名と金額欄を隣り合わせに保つ */}
+                  <th className="w-full" aria-hidden />
                 </tr>
               </thead>
               <tbody>
@@ -354,10 +361,10 @@ export function PayrollStep({
                       key={row.vehicleNo}
                       // 保存していない行は、表の中でも見つけられるようにしておく
                       // (表の下の操作パネルと行が離れていても、どの行の話か迷わない)
-                      className={`border-t border-line align-top ${dirty ? "bg-caution-soft" : ""}`}
+                      className={`border-t border-line ${dirty ? "bg-caution-soft" : ""}`}
                     >
                       <td className="num px-3 py-2 whitespace-nowrap">{row.vehicleNo}</td>
-                      <td className="px-3 py-2">
+                      <td className="max-w-[12rem] px-3 py-2 whitespace-nowrap">
                         {row.driverName ?? <span className="text-danger">未割当</span>}
                         {/*
                           運転者は割り当たっているのに給与が見つからない車両は、0円が正しいのか
@@ -383,6 +390,7 @@ export function PayrollStep({
                         overridden={row.welfareOverridden}
                         onChange={(v) => setEdit(row, { welfare: v })}
                       />
+                      <td aria-hidden />
                     </tr>
                   );
                 })}
@@ -432,14 +440,14 @@ export function PayrollStep({
                           type="button"
                           disabled={savingVehicleNo === row.vehicleNo}
                           onClick={() => void saveRow(row)}
-                          className="pressable rounded-md bg-accent px-4 py-1.5 text-xs font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+                          className="btn btn-primary btn-sm pressable"
                         >
                           {savingVehicleNo === row.vehicleNo ? "保存しています…" : "この車両を保存"}
                         </button>
                         <button
                           type="button"
                           onClick={() => cancelEdit(row)}
-                          className="pressable rounded-md border border-line bg-white px-4 py-1.5 text-xs text-ink hover:bg-subtle"
+                          className="btn btn-quiet btn-sm pressable"
                         >
                           やめる
                         </button>
@@ -448,7 +456,7 @@ export function PayrollStep({
                       <button
                         type="button"
                         onClick={() => revertToImported(row)}
-                        className="pressable rounded-md border border-brand bg-white px-4 py-1.5 text-xs font-semibold text-brand-deep hover:bg-brand-soft"
+                        className="btn btn-secondary btn-sm pressable"
                       >
                         取込値に戻す
                       </button>
@@ -480,7 +488,16 @@ export function PayrollStep({
   );
 }
 
-/** 金額1つ分のセル。取込値と手修正値が同じ列に並ぶので、どちらを見ているかを必ず添える。 */
+/**
+ * 金額1つ分のセル。全画面共通の入力欄 (NumberEntryField) を使う。
+ *
+ * この欄の「自動の値」は給与集計表CSVの取込値にあたる。取込値のままなら薄い文字に
+ * 「取込値」の印、手で直せば通常の濃い文字に「取込値に戻す」が出る — 高速料金やタイヤ代と
+ * 全く同じ作法にすることで、タブが変わるたびに欄の読み方を考え直さずに済む。
+ *
+ * 共通部品は「人が触っていない = 空文字」で持つのに対し、人件費は常に実額を保存するため、
+ * ここで値を橋渡しする (取込値と同じなら空文字として渡し、空で戻ってきたら取込値に復元)。
+ */
 function PayrollAmountCell({
   label,
   value,
@@ -494,36 +511,24 @@ function PayrollAmountCell({
   overridden: boolean;
   onChange: (value: string) => void;
 }) {
-  const parsed = parseYen(value);
-  const isInvalid = value.trim() !== "" && parsed === null;
+  const importedRaw = String(imported);
   return (
     <td className="px-3 py-2 text-right">
-      <input
-        data-payroll-field
-        type="text"
-        inputMode="decimal"
-        aria-label={label}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={`num w-32 rounded-md border px-2 py-1 text-right ${
-          isInvalid ? "border-danger" : overridden ? "border-caution-border bg-caution-soft" : "border-line"
-        }`}
+      <NumberEntryField
+        value={value === importedRaw ? "" : value}
+        onChange={(raw) => onChange(raw === "" ? importedRaw : raw)}
+        autoValue={imported}
+        autoLabel="取込値"
+        ariaLabel={label}
+        parse={parseYen}
+        invalidMessage="数字で入力してください"
+        // 戻す入口は行ごとの「取込値に戻す」(保存済みの直しごと取り消す) に一本化する
+        resettable={false}
+        hints={
+          // 保存済みの手修正は、開き直したときにも「直っている」と分かるようにする
+          overridden ? <p className="text-[11px] font-semibold text-ink">手修正</p> : null
+        }
       />
-      {overridden ? (
-        <p className="mt-0.5 text-[11px] font-semibold text-ink">手修正</p>
-      ) : null}
-      {/* 手修正した欄にだけ取込値を添える。全欄に出すと同じ数字が2つ並ぶだけで読む量が増える。 */}
-      {overridden ? (
-        <p className="num mt-0.5 text-[11px] text-ink-muted">
-          取込 {imported.toLocaleString("ja-JP")}
-        </p>
-      ) : null}
-      {parsed !== null && parsed >= 1000 && !overridden ? (
-        <p className="num mt-0.5 text-[11px] text-ink-muted">{parsed.toLocaleString("ja-JP")}</p>
-      ) : null}
-      {isInvalid ? (
-        <p className="mt-0.5 text-[11px] text-danger">数字で入力してください</p>
-      ) : null}
     </td>
   );
 }
@@ -583,7 +588,7 @@ function PayrollDiagnosis({
       {!problem.needsAdmin || canManageMasters ? (
         <Link
           href={problem.href}
-          className="pressable mt-3 inline-block rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-deep"
+          className="btn btn-primary pressable mt-3 inline-block"
         >
           {problem.linkLabel}
         </Link>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { NumberEntryField } from "../../_components/NumberEntryField";
 import { num } from "../../_lib/format";
 
 export interface LeaseEditorRow {
@@ -116,7 +117,7 @@ export function LeaseEditor({
           />
 
           <div className="mt-3 overflow-x-auto">
-            <table className="w-full min-w-[36rem] text-sm">
+            <table className="data-table w-full min-w-[36rem] text-sm">
               <thead>
                 <tr className="border-b border-line text-xs font-medium text-ink-muted">
                   <th className="px-2 py-2 text-left">車番</th>
@@ -134,22 +135,35 @@ export function LeaseEditor({
                     <tr key={r.vehicleNo} className="border-b border-line last:border-b-0">
                       <td className="num px-2 py-2 font-semibold">{r.vehicleNo}</td>
                       <td className="px-2 py-2 text-ink-muted">{r.vehicleType}</td>
-                      {(["lease", "installment"] as const).map((field) => (
-                        <td key={field} className="px-2 py-1.5 text-right">
-                          <input
-                            inputMode="numeric"
-                            disabled={!canEdit}
-                            value={v[field]}
-                            onChange={(e) =>
-                              setValues((prev) => ({
-                                ...prev,
-                                [r.vehicleNo]: { ...v, [field]: e.target.value },
-                              }))
-                            }
-                            className="num w-28 rounded-md border border-line bg-white px-2 py-1 text-right disabled:bg-subtle"
-                          />
-                        </td>
-                      ))}
+                      {(
+                        [
+                          { key: "lease", label: "リース料" },
+                          { key: "installment", label: "割賦支払額" },
+                        ] as const
+                      ).map(({ key, label }, colIndex) => {
+                        // 共通部品は「人が触っていない = 空文字」で持つ。
+                        // ここは常に実額を保存するので、いまの値と同じなら空文字として渡す。
+                        const currentRaw = String(r[key]);
+                        return (
+                          <td key={key} className="px-2 py-1.5 text-right">
+                            <NumberEntryField
+                              value={v[key] === currentRaw ? "" : v[key]}
+                              onChange={(raw) =>
+                                setValues((prev) => ({
+                                  ...prev,
+                                  [r.vehicleNo]: { ...v, [key]: raw === "" ? currentRaw : raw },
+                                }))
+                              }
+                              autoValue={r[key]}
+                              autoLabel="いまの値"
+                              ariaLabel={`${r.vehicleNo}番の${label}(円)`}
+                              disabled={!canEdit}
+                              col={colIndex}
+                              widthClass="w-28"
+                            />
+                          </td>
+                        );
+                      })}
                       <td className="px-2 py-1.5 text-right">
                         {savedNo === r.vehicleNo && !dirty ? (
                           <span className="text-xs text-ink-muted">保存済み</span>
@@ -158,7 +172,7 @@ export function LeaseEditor({
                             type="button"
                             disabled={!canEdit || !dirty || savingNo === r.vehicleNo}
                             onClick={() => save(r)}
-                            className="pressable rounded-md border border-brand px-3 py-1 text-xs font-semibold text-brand-deep hover:bg-brand-soft disabled:border-line disabled:text-ink-muted disabled:opacity-60"
+                            className="btn btn-secondary btn-sm pressable"
                           >
                             {savingNo === r.vehicleNo ? "保存中…" : "保存する"}
                           </button>

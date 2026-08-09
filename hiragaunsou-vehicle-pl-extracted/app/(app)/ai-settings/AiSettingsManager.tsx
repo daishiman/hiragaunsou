@@ -187,7 +187,7 @@ export function AiSettingsManager({
             type="button"
             onClick={handleSave}
             disabled={saveState.status === "saving"}
-            className="pressable self-start rounded-md bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+            className="btn btn-primary pressable self-start"
           >
             {saveState.status === "saving" ? "保存しています…" : "保存する"}
           </button>

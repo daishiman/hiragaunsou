@@ -4,17 +4,20 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../src/infrastructure/auth/accessControl";
 import { AccessDenied } from "../../_components/AccessDenied";
+import { StickyActionBar } from "../../_components/StickyActionBar";
 import { createDb } from "../../../src/infrastructure/db/client";
 import { D1VehiclePlRepository } from "../../../src/infrastructure/db/D1VehiclePlRepository";
 import { D1ReviewFlagRepository } from "../../../src/infrastructure/db/D1ReviewFlagRepository";
 import { D1ImportBatchRepository } from "../../../src/infrastructure/db/D1ImportBatchRepository";
 import { GetMonthlyGridUseCase } from "../../../src/usecase/steps/getMonthlyGrid";
 import { GetExcelReconciliationUseCase } from "../../../src/usecase/steps/getExcelReconciliation";
-import { currentYearMonth, selectableYearMonths } from "../../_lib/yearMonth";
+import { selectableYearMonths } from "../../_lib/yearMonth";
+import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { yearMonthLabel } from "../../_lib/format";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
 import { PageHead } from "../../_components/PageHead";
 import { EmptyState } from "../../_components/EmptyState";
+import { RebuildPanel } from "./RebuildPanel";
 import { ConfirmMonthlyPlUseCase } from "../../../src/usecase/steps/confirmMonthlyPl";
 import { GridTable } from "./GridTable";
 import { D1VehiclePlOverrideRepository } from "../../../src/infrastructure/db/D1VehiclePlOverrideRepository";
@@ -36,10 +39,16 @@ export default async function GridPage({
   }
 
   const { ym } = await searchParams;
-  const yearMonth = ym || currentYearMonth();
 
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);
+
+  /*
+    対象月の既定は「まだ締めていない、取込のある最も新しい月」に揃える(app/_lib/workingYearMonth.ts)。
+    以前は画面ごとに当月・前月とバラバラで、取込画面で5月分を取り込んでから移ると
+    別の月の空っぽの画面が出て「取り込んだのに反映されていない」ように見えていた。
+  */
+  const yearMonth = ym || (await resolveWorkingYearMonth(db));
   const plRepo = new D1VehiclePlRepository(db);
   const flagRepo = new D1ReviewFlagRepository(db);
   // Excelとの差もセルの所見として表に出すため、突合を先に済ませてからグリッドを組む。
@@ -47,6 +56,18 @@ export default async function GridPage({
     new ConfirmMonthlyPlUseCase(plRepo, flagRepo).status(yearMonth),
     new GetExcelReconciliationUseCase(plRepo, new D1ImportBatchRepository(db)).execute(yearMonth),
   ]);
+  /*
+    表が空のときに何を出すかは「取込がまだ」か「取込はあるのに収支表が無い」かで変わる。
+    後者で「データ取込へ」だけを出すと、取り込んだ本人には同じファイルを入れ直す以外の
+    道が見えない。判断材料はここで取っておく。
+  */
+  const importBatchRepo = new D1ImportBatchRepository(db);
+  const [opBatch, salesBatch] = await Promise.all([
+    importBatchRepo.findLatestBatch(yearMonth, "vehicle_operation"),
+    importBatchRepo.findLatestBatch(yearMonth, "sales_monitor"),
+  ]);
+  const canRebuild = Boolean(opBatch && salesBatch);
+
   const grid = await new GetMonthlyGridUseCase(
     plRepo,
     flagRepo,
@@ -65,12 +86,16 @@ export default async function GridPage({
       />
 
       {grid.isEmpty ? (
-        <EmptyState
-          title={`${yearMonthLabel(yearMonth)}のデータはまだありません`}
-          description="月次データ取込でExcel/CSVを取り込むと、ここに車両別の収支が表示されます。"
-          actionLabel="月次データ取込へ"
-          actionHref="/import"
-        />
+        canRebuild && checkAccess(session, "input") ? (
+          <RebuildPanel yearMonth={yearMonth} />
+        ) : (
+          <EmptyState
+            title={`${yearMonthLabel(yearMonth)}のデータはまだありません`}
+            description="月次データ取込でExcel/CSVを取り込むと、ここに車両別の収支が表示されます。"
+            actionLabel="月次データ取込へ"
+            actionHref={`/import?ym=${yearMonth}`}
+          />
+        )
       ) : (
         <GridTable
           rows={grid.rows}
@@ -88,36 +113,36 @@ export default async function GridPage({
           }
           // 確定・書き出し・Excel突合は「表を見る」ときの操作。
           // 1件ずつ確認している最中には出さないよう、表と一緒に出し分けてもらう。
-          header={
-            <>
+          footer={<ExcelReconcileList result={reconciliation} />}
+          /*
+            確定・書き出しは「表を見終わったあとの出口」。表は台数ぶん縦に伸びるので、
+            他の画面の「ここまでを保存」と同じく画面の下端に貼り付け、いつでも押せるようにする。
+          */
+          actionBar={
+            <StickyActionBar>
               <ConfirmBar
                 status={confirmation}
                 yearMonth={yearMonth}
                 canConfirm={checkAccess(session, "input")}
                 postponedCount={grid.review.postponed}
               />
-              <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-line bg-white px-4 py-3">
-                <p className="text-sm text-ink-muted">
-                  収支表51列をそのままの並びで書き出します。Excelにそのまま貼り付けられます。
-                </p>
-                <a
-                  href={`/api/export?yearMonth=${encodeURIComponent(yearMonth)}`}
-                  className="pressable ml-auto rounded border border-brand px-3 py-1.5 text-sm font-semibold text-brand-deep"
-                >
-                  CSVで書き出す
-                </a>
-                {/* 数字そのものではなく「確認の記録」を渡したい場面 (上長・経理への報告) の入口。
-                    CSVと並べて置く。どちらも「表を見終わったあとの出口」だから。 */}
-                <Link
-                  href={`/grid/report?ym=${encodeURIComponent(yearMonth)}`}
-                  className="pressable rounded border border-line px-3 py-1.5 text-sm text-ink hover:bg-subtle"
-                >
-                  確認の記録を印刷・共有
-                </Link>
-              </div>
-            </>
+              {/* 数字そのものではなく「確認の記録」を渡したい場面 (上長・経理への報告) の入口。
+                  CSVと並べて置く。どちらも「表を見終わったあとの出口」だから。
+                  他の画面と同じく、副次の操作を左、強い操作を右に置く。 */}
+              <Link
+                href={`/grid/report?ym=${encodeURIComponent(yearMonth)}`}
+                className="btn btn-quiet pressable"
+              >
+                確認の記録を印刷・共有
+              </Link>
+              <a
+                href={`/api/export?yearMonth=${encodeURIComponent(yearMonth)}`}
+                className="btn btn-secondary pressable"
+              >
+                CSVで書き出す
+              </a>
+            </StickyActionBar>
           }
-          footer={<ExcelReconcileList result={reconciliation} />}
         />
       )}
     </>

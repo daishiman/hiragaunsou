@@ -28,14 +28,14 @@ export function PrintActions() {
       <button
         type="button"
         onClick={() => window.print()}
-        className="pressable rounded-md bg-accent px-4 py-1.5 text-sm font-semibold text-white hover:bg-accent-deep"
+        className="btn btn-primary pressable"
       >
         印刷する / PDFで保存
       </button>
       <button
         type="button"
         onClick={() => void copyUrl()}
-        className="pressable rounded-md border border-line bg-white px-4 py-1.5 text-sm text-ink hover:bg-subtle"
+        className="btn btn-quiet pressable"
       >
         {copied ? "コピーしました" : "このページのURLをコピー"}
       </button>

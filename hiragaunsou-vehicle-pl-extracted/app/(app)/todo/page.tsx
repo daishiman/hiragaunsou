@@ -6,7 +6,8 @@ import { AccessDenied } from "../../_components/AccessDenied";
 import { createDb } from "../../../src/infrastructure/db/client";
 import { D1ReviewFlagRepository } from "../../../src/infrastructure/db/D1ReviewFlagRepository";
 import { GetTodoBoardUseCase } from "../../../src/usecase/steps/getTodoBoard";
-import { currentYearMonth, selectableYearMonths } from "../../_lib/yearMonth";
+import { selectableYearMonths } from "../../_lib/yearMonth";
+import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
 import { PageHead } from "../../_components/PageHead";
 import { TodoBoard } from "./TodoBoard";
@@ -25,10 +26,18 @@ export default async function TodoPage({
   }
 
   const { ym } = await searchParams;
-  const yearMonth = ym || currentYearMonth();
 
   const { env } = await getCloudflareContext({ async: true });
-  const useCase = new GetTodoBoardUseCase(new D1ReviewFlagRepository(createDb(env.DB)));
+  const db = createDb(env.DB);
+
+  /*
+    対象月の既定は「まだ締めていない、取込のある最も新しい月」に揃える(app/_lib/workingYearMonth.ts)。
+    以前は画面ごとに当月・前月とバラバラで、取込画面で5月分を取り込んでから移ると
+    別の月の空っぽの画面が出て「取り込んだのに反映されていない」ように見えていた。
+  */
+  const yearMonth = ym || (await resolveWorkingYearMonth(db));
+
+  const useCase = new GetTodoBoardUseCase(new D1ReviewFlagRepository(db));
   const todo = await useCase.execute(yearMonth);
 
   return (

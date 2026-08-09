@@ -49,7 +49,8 @@ export function ConfirmBar({
 
   return (
     <div
-      className={`mb-4 rounded-lg border px-4 py-3 ${
+      /* 画面下端の操作帯の中に置くので、外側の余白は帯側が持つ。横は余った幅いっぱいに広げる。 */
+      className={`min-w-[18rem] flex-1 rounded-lg border px-4 py-2 ${
         state.isConfirmed ? "border-brand bg-brand-soft" : "border-line bg-white"
       }`}
     >
@@ -72,7 +73,7 @@ export function ConfirmBar({
                 type="button"
                 disabled={pending}
                 onClick={() => toggle(false)}
-                className="pressable rounded-md border border-line bg-white px-4 py-1.5 text-sm text-ink hover:bg-subtle disabled:opacity-50"
+                className="btn btn-quiet pressable"
               >
                 {pending ? "処理中…" : "確定を取り消す"}
               </button>
@@ -81,7 +82,7 @@ export function ConfirmBar({
                 type="button"
                 disabled={pending || !state.canConfirm}
                 onClick={() => toggle(true)}
-                className="pressable rounded-md bg-accent px-5 py-1.5 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+                className="btn btn-primary pressable"
               >
                 {pending ? "確定中…" : "この月を確定する"}
               </button>

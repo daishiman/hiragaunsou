@@ -18,7 +18,9 @@ function stubImportBatchRepo(raw: {
   vehicle_operation: { naturalKey: string; raw: VehicleOperationRecord }[];
   sales_monitor: { naturalKey: string; raw: SalesMonitorRow }[];
   payroll: { naturalKey: string; raw: PayrollRecord }[];
-}): ImportBatchRepository {
+},
+  imported = true,
+): ImportBatchRepository {
   return {
     createBatch: async () => {},
     saveRawIngestion: async () => {},
@@ -26,8 +28,23 @@ function stubImportBatchRepo(raw: {
       const rows = raw[sourceType as keyof typeof raw] ?? [];
       return rows.map((r) => ({ naturalKey: r.naturalKey, raw: r.raw, flags: [] }));
     },
-  };
+    /*
+      その月に取込があったかどうか。収支表は取込のある月にしか作らないため、
+      ここが null だと1行も作られない。既定では「取込済みの月」として振る舞わせ、
+      取込が無い月の挙動は専用のテストで確かめる。
+    */
+    findLatestBatch: async () => (imported ? { ...DUMMY_BATCH } : null),
+  } as unknown as ImportBatchRepository;
 }
+
+const DUMMY_BATCH = {
+  id: "batch-1",
+  fileName: "a.csv",
+  rowCount: 1,
+  excludedRowCount: 0,
+  importedAt: 0,
+  status: "done",
+};
 
 function stubVehicleMasterRepo(vehicles: VehicleMasterRecord[]): VehicleMasterRepository {
   return { findAllActive: async () => vehicles };
@@ -403,6 +420,29 @@ describe("FinalizeMonthlyPlUseCase", () => {
     ).execute({ yearMonth: "2026-05", manualInputs: [] });
 
     expect(result.rows.map((r) => r.no)).toEqual(["1113"]);
+  });
+
+  /**
+   * 取込が1件も無い月に収支表を作ると、走行も売上も0のまま固定費だけが並ぶ赤字の行が
+   * 台数ぶんできる。本番では取込ゼロの月に101台ぶんの行(売上0円・損益▲882万円)が残り、
+   * ホームの経営サマリがその架空の月の数字を出していた。行を書く唯一の場所で止める。
+   */
+  it("取込が1件も無い月には、車両マスタがあっても収支表を作らない", async () => {
+    const { repo, calls, removed } = stubVehiclePlRepo();
+
+    const result = await new FinalizeMonthlyPlUseCase(
+      stubImportBatchRepo({ vehicle_operation: [], sales_monitor: [], payroll: [] }, false),
+      stubVehicleMasterRepo([baseVehicle({ vehicleNo: "24" }), baseVehicle({ vehicleNo: "300" })]),
+      stubDriverMasterRepo([]),
+      stubRateMasterRepo(),
+      repo,
+    ).execute({ yearMonth: "2026-07", manualInputs: [] });
+
+    expect(result.vehicleCount).toBe(0);
+    expect(result.rows).toEqual([]);
+    // 書き込みそのものが起きないこと。0行で書くと既存の行を消す挙動と紛れる。
+    expect(calls).toEqual([]);
+    expect(removed).toEqual([]);
   });
 
   it("けん引するトラクタを収支表から外すと、ぶら下がるトレーラも一緒に消える", async () => {

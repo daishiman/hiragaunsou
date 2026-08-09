@@ -368,7 +368,7 @@ describe("ManualEntryStepper", () => {
     expect(screen.getByText(/表示 1台 \/ 全 2台/)).toBeInTheDocument();
   });
 
-  it("空欄の欄には自動計算される金額を出す(規則を文章で説明しない)", async () => {
+  it("自動計算される金額は欄の中に初期値として入れ、自動のままだと分かるように出す", async () => {
     global.fetch = setupFetchMock() as unknown as typeof fetch;
     render(
       <ManualEntryStepper
@@ -382,9 +382,48 @@ describe("ManualEntryStepper", () => {
       />,
     );
 
-    // 通行料金の空欄 = 売上モニタリスト由来の金額、割引額の空欄 = それ×組合割引率
-    expect(await screen.findByText("自動 50,000")).toBeInTheDocument();
-    expect(screen.getByText("自動 17,800")).toBeInTheDocument();
+    // 通行料金の自動値 = 売上モニタリスト由来の金額、割引額の自動値 = それ×組合割引率。
+    // どちらも欄の外ではなく「欄の中」に入っている (タブごとに作法を変えない)。
+    const toll = await screen.findByLabelText("24番の通行料金(円)(自動の値です)");
+    expect(toll).toHaveValue("50000");
+    expect(toll).toHaveAttribute("data-auto", "true");
+    expect(toll.className).toContain("text-ink-muted");
+
+    const discount = screen.getByLabelText("24番の割引額(円)(自動の値です)");
+    expect(discount).toHaveValue("17800");
+    expect(discount).toHaveAttribute("data-auto", "true");
+  });
+
+  it("自動の欄を手で直すと通常の文字色になり、「自動に戻す」で元へ戻せる", async () => {
+    const user = userEvent.setup();
+    global.fetch = setupFetchMock() as unknown as typeof fetch;
+    render(
+      <ManualEntryStepper
+        yearMonth="2026-05"
+        vehicles={vehicles}
+        prefill={prefill}
+        payrollStatus={null}
+        initialWorkflowStep="6"
+        autoValues={{ tireActual: {}, tollActual: { "24": 50000, "300": 20000 } }}
+        tollDiscountRate={0.356}
+      />,
+    );
+
+    // 欄に入ると自動の値は全選択される。そのまま打てば置き換わる (桁が増える事故を防ぐ)
+    const toll = await screen.findByLabelText("24番の通行料金(円)(自動の値です)");
+    await user.type(toll, "61000", { initialSelectionStart: 0, initialSelectionEnd: 5 });
+
+    // 人が入れた値は自動の印を外し、通常の濃い文字色にする
+    const edited = screen.getByLabelText("24番の通行料金(円)");
+    expect(edited).toHaveValue("61000");
+    expect(edited).not.toHaveAttribute("data-auto");
+    expect(edited.className).toContain("text-ink");
+
+    // 戻す入口が同じ欄に出ている。押せば自動の値に戻る
+    await user.click(screen.getByRole("button", { name: "自動に戻す" }));
+    const restored = screen.getByLabelText("24番の通行料金(円)(自動の値です)");
+    expect(restored).toHaveValue("50000");
+    expect(restored).toHaveAttribute("data-auto", "true");
   });
 
   it("インタンク単価が未設定なら前月の単価を入れた状態で開き、先月の値だと分かるように出す", async () => {
@@ -403,7 +442,9 @@ describe("ManualEntryStepper", () => {
     );
 
     // 0のまま開かない。ただし黙って埋めず「先月の値である」ことを必ず出す。
-    expect(await screen.findByRole("spinbutton")).toHaveValue(128);
+    const price = await screen.findByLabelText("インタンク単価(円/ℓ)(先月(2026-04)の単価の値です)");
+    expect(price).toHaveValue("128");
+    expect(price).toHaveAttribute("data-auto", "true");
     expect(
       screen.getByText("先月(2026-04)の単価をそのまま入れています"),
     ).toBeInTheDocument();

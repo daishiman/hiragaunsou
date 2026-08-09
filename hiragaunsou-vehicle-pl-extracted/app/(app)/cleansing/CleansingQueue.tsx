@@ -536,7 +536,7 @@ export function CleansingQueue({
               type="button"
               onClick={applyAllSuggestions}
               disabled={pending !== null}
-              className="pressable rounded border border-brand px-3 py-1.5 text-sm font-semibold text-brand-deep disabled:opacity-50"
+              className="btn btn-secondary pressable"
             >
               前月と同じ判断をまとめて適用({suggestable.length}件)
             </button>

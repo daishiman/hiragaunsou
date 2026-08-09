@@ -10,7 +10,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh, replace, push: vi.fn() }),
 }));
 
-import { ImportForm } from "../../app/(app)/import/ImportForm";
+import { describePlRebuild, ImportForm } from "../../app/(app)/import/ImportForm";
 import {
   evaluateFileImport,
   type DuplicateFinding,
@@ -306,5 +306,58 @@ describe("ImportForm", () => {
     expect(
       await screen.findByText(/operation\.csv: 2026年5月分として取り込みました/),
     ).toBeInTheDocument();
+  });
+
+  /*
+    「全部入れたのに次が分からない」への対応。案内は帳票カードの中ではなく、
+    どこまでスクロールしても見える固定の操作バーに置く。
+  */
+  it("運行実績と売上が揃うと、次の手順への導線が固定の操作バーに出る", () => {
+    const batch = [{ fileName: "a.csv", rowCount: 10, importedAt: Date.now() }];
+    render(
+      <ImportForm
+        yearMonth="2026-05"
+        imported={{ vehicle_operation: batch, sales_monitor: batch }}
+      />,
+    );
+
+    expect(screen.getByText(/この月の取込はここまでで大丈夫です/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "データ整形(STEP2)へ進む" })).toHaveAttribute(
+      "href",
+      "/cleansing?ym=2026-05",
+    );
+  });
+
+  it("運行実績だけでは次の手順への導線を出さない(収支表の下地が作れないため)", () => {
+    const batch = [{ fileName: "a.csv", rowCount: 10, importedAt: Date.now() }];
+    render(<ImportForm yearMonth="2026-05" imported={{ vehicle_operation: batch }} />);
+
+    expect(screen.queryByRole("link", { name: "データ整形(STEP2)へ進む" })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * 取込は成功したが収支表が作れなかったときの見せ方。
+ * 「0台分作りました」で終わらせると、利用者は取込をやり直すしかなくなる(やり直しても変わらない)。
+ * 真因を名指しし、直しに行く先まで出ることを固定する。
+ */
+describe("describePlRebuild(収支表の下地づくりの結果表示)", () => {
+  it("車両マスタが空のときは、作れない理由と直しに行く先を返す", () => {
+    const result = describePlRebuild({ status: "skipped", reason: "no_vehicle_master" });
+    expect(result.text).toContain("車両マスタに車両が1台も登録されていない");
+    expect(result.fix).toEqual({ href: "/admin/vehicle-master", label: "車両マスタを登録する" });
+  });
+
+  it("作れたときは台数を伝え、直しに行く先は出さない", () => {
+    const result = describePlRebuild({ status: "built", vehicleCount: 106 });
+    expect(result.text).toContain("106 台分");
+    expect(result.fix).toBeUndefined();
+  });
+
+  it("材料不足・確定済みはそれぞれの理由を伝える", () => {
+    expect(describePlRebuild({ status: "skipped", reason: "imports_incomplete" }).text).toContain(
+      "運行実績と売上の両方",
+    );
+    expect(describePlRebuild({ status: "skipped", reason: "confirmed" }).text).toContain("確定済み");
   });
 });

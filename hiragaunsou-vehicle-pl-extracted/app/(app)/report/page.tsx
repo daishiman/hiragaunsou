@@ -1,4 +1,7 @@
 import { redirect } from "next/navigation";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { createDb } from "../../../src/infrastructure/db/client";
+import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { getServerSession } from "../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../src/infrastructure/auth/accessControl";
 import { AccessDenied } from "../../_components/AccessDenied";
@@ -14,6 +17,11 @@ export default async function ReportPage() {
     return <AccessDenied screenName="AI要因分析" permission="report_settings" />;
   }
 
+  // 生成の既定月も他画面と同じ「いま作業している月」。当月を既定にすると、
+  // まだ収支表の無い月でレポートを作ろうとしてしまう。
+  const { env } = await getCloudflareContext({ async: true });
+  const defaultYearMonth = await resolveWorkingYearMonth(createDb(env.DB));
+
   return (
     <div className="max-w-3xl">
       <PageHead
@@ -21,7 +29,7 @@ export default async function ReportPage() {
         title="AI要因分析レポート"
         lead="損益変動の要因をAIが要約します(生成ごとに費用が発生)"
       />
-      <ReportGenerator />
+      <ReportGenerator defaultYearMonth={defaultYearMonth} />
     </div>
   );
 }

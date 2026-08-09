@@ -10,7 +10,7 @@ import { D1VehiclePlRepository } from "../../../../src/infrastructure/db/D1Vehic
 import { D1DeficitFactorAnalysisRepository } from "../../../../src/infrastructure/db/D1DeficitFactorAnalysisRepository";
 import type { DeficitFactorCategory } from "../../../../src/domain/repositories/DeficitFactorAnalysisRepository";
 import { GetVehicleHistoryUseCase } from "../../../../src/usecase/steps/getVehicleHistory";
-import { currentYearMonth } from "../../../_lib/yearMonth";
+import { resolveWorkingYearMonth } from "../../../_lib/workingYearMonth";
 import { kmPriceLabel, num, yen, yearMonthLabel } from "../../../_lib/format";
 import { PageHead } from "../../../_components/PageHead";
 import { EmptyState } from "../../../_components/EmptyState";
@@ -54,10 +54,12 @@ export default async function VehicleDetailPage({
   const { vehicleNo: rawVehicleNo } = await params;
   const vehicleNo = decodeURIComponent(rawVehicleNo);
   const { ym } = await searchParams;
-  const yearMonth = ym || currentYearMonth();
 
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);
+  // 対象月の既定は他画面と同じ「まだ締めていない、取込のある最も新しい月」に揃える。
+  // 月次収支表から車番を押して開いた先だけ当月だと、同じ車の別の月を見ることになる。
+  const yearMonth = ym || (await resolveWorkingYearMonth(db));
   const data = await new GetVehicleHistoryUseCase(new D1VehiclePlRepository(db)).execute(
     vehicleNo,
     yearMonth,
@@ -113,7 +115,7 @@ export default async function VehicleDetailPage({
         action={
           <Link
             href={`/grid?ym=${yearMonth}`}
-            className="pressable inline-block rounded-md border border-line bg-white px-4 py-2 text-sm text-ink hover:bg-subtle"
+            className="btn btn-quiet pressable inline-block"
           >
             月次収支表へ戻る
           </Link>
@@ -237,7 +239,7 @@ export default async function VehicleDetailPage({
           )}
 
           <section className="mt-5 overflow-x-auto rounded-xl border border-line bg-white">
-            <table className="w-full min-w-max border-collapse text-xs">
+            <table className="data-table w-full min-w-max border-collapse text-xs">
               <thead>
                 <tr className="border-b border-line bg-subtle text-ink-muted">
                   <th className="px-3 py-2 text-left font-medium">月</th>

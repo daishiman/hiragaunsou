@@ -13,13 +13,16 @@ import { D1RateMasterRepository, RATE_KEYS } from "../../src/infrastructure/db/D
 import { D1AnnualReferenceRepository } from "../../src/infrastructure/db/D1AnnualReferenceRepository";
 import { GetWorkflowProgressUseCase } from "../../src/usecase/steps/getWorkflowProgress";
 import { GetPeriodOverviewUseCase } from "../../src/usecase/steps/getPeriodOverview";
-import { currentYearMonth, defaultImportYearMonth } from "../_lib/yearMonth";
+import { isYearMonth, selectableYearMonths } from "../_lib/yearMonth";
+import { resolveOverviewYearMonth, resolveWorkingYearMonth } from "../_lib/workingYearMonth";
 import { yearMonthLabel, man, num, kmPriceLabel, pct } from "../_lib/format";
 import { withYm } from "../_lib/withYm";
 import { PageHead } from "../_components/PageHead";
 import { EmptyState } from "../_components/EmptyState";
 import { StatTile } from "../_components/StatTile";
 import { Disclosure } from "../_components/Disclosure";
+import { YearMonthSelect } from "../_components/YearMonthSelect";
+import { WorkflowStepCard } from "../_components/WorkflowStepCard";
 
 /**
  * ホーム。
@@ -28,14 +31,34 @@ import { Disclosure } from "../_components/Disclosure";
  * そのため画面の最上段は直近で締めた月の経営サマリ(ダッシュボードの要約)とし、
  * その下に「次にやること」という入力作業の進行案内を続ける2段構成にしている。
  */
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ym?: string }>;
+}) {
   const session = await getServerSession();
   if (!session) redirect("/sign-in");
 
-  const yearMonth = currentYearMonth();
-  const overviewYearMonth = defaultImportYearMonth();
+  const { ym } = await searchParams;
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);
+
+  /*
+    最上段の経営サマリは「締めた月の数字」を見せる場所。前月固定だったため、
+    確定した月が1つも無くても前月の数字を出してしまい、取込ゼロの月に収支表だけが
+    残っていると売上0円・赤字だけのサマリが一番上に出ていた。
+    確定済みの直近月 → 無ければ取込のある最新月、と実データから決める。
+  */
+  const overviewTarget = await resolveOverviewYearMonth(db);
+  const overviewYearMonth = overviewTarget.yearMonth;
+
+  /*
+    「次にやること」が話題にする月。当月固定だったため、5月分を取り込んでもホームは
+    当月の話をし続け、取り込んだ内容がどこにも出てこないように見えていた。
+    実データから「まだ締めていない、取込のある最も新しい月」を採り、
+    利用者が別の月を見たいときは ?ym= で切り替えられるようにする。
+  */
+  const yearMonth = isYearMonth(ym) ? ym : await resolveWorkingYearMonth(db);
 
   const canViewAnalysis = checkAccess(session, "view");
 
@@ -90,7 +113,14 @@ export default async function HomePage() {
           />
         ) : (
           <section>
-            <p className="text-xs font-semibold text-ink-muted">{overview.label}度 経営サマリ(締め済み直近月)</p>
+            {/*
+              締めた月の数字か、まだ締めていない作業中の月の途中経過かで数字の重みが違う。
+              どちらも「直近の月」ではあるので、見出しでどちらなのかを言い切る。
+            */}
+            <p className="text-xs font-semibold text-ink-muted">
+              {overview.label}度 経営サマリ
+              {overviewTarget.basis === "confirmed" ? "(締め済み直近月)" : "(締め作業中・途中経過)"}
+            </p>
             <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <StatTile
                 hero
@@ -135,14 +165,18 @@ export default async function HomePage() {
         「入力は締めるための手段」という位置づけを画面構成でも表す。
       */}
       <section className="mt-5 rounded-xl border border-brand bg-gradient-to-br from-white to-brand-soft p-5 sm:p-6">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs font-semibold text-ink-muted">
             次にやること
             <span className="num ml-1.5 font-normal text-ink-muted/80">({yearMonthLabel(yearMonth)}度)</span>
           </p>
-          <p className="num text-xs text-ink-muted">
-            {progress.doneCount} / {progress.totalCount} ステップ完了
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="num text-xs text-ink-muted">
+              {progress.doneCount} / {progress.totalCount} ステップ完了
+            </p>
+            {/* 締める月を跨いで作業することがあるので、ホームからも月を切り替えられるようにする */}
+            <YearMonthSelect basePath="/" value={yearMonth} options={selectableYearMonths(13)} />
+          </div>
         </div>
 
         <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-subtle">
@@ -174,11 +208,16 @@ export default async function HomePage() {
               {next.step.summary}
             </Disclosure>
             <p className="num mt-2 text-xs text-ink-muted">{next.detail}</p>
+            {/*
+              行き先はステップの入口ではなく「続きができる画面」。
+              例: STEP2の取込が済んでいれば /import ではなくデータ整形やキリン配賦へ送る。
+              ボタンの文言も、そこで何をするのかが分かる言葉に差し替える。
+            */}
             <Link
-              href={withYm(next.step.href, yearMonth)}
-              className="pressable mt-5 inline-block rounded-md bg-accent px-6 py-3 text-base font-bold text-white hover:bg-accent-deep"
+              href={withYm(next.href, yearMonth)}
+              className="btn btn-primary pressable mt-5 inline-block"
             >
-              STEP {next.step.id} を開く
+              {next.actionLabel ?? `STEP ${next.step.id} を開く`}
             </Link>
           </div>
         ) : (
@@ -187,12 +226,29 @@ export default async function HomePage() {
             <p className="mt-1.5 text-sm text-ink-muted">月次収支表・年間集計は最新です</p>
             <Link
               href={withYm("/grid", yearMonth)}
-              className="pressable mt-5 inline-block rounded-md border border-brand bg-white px-6 py-3 text-base font-bold text-brand-deep hover:bg-brand-soft"
+              className="btn btn-secondary pressable mt-5 inline-block"
             >
               月次収支表を見る
             </Link>
           </div>
         )}
+        {/*
+          8つの手順の全体像。ふだんは「次にやること」1つだけ見えていれば足りるので畳んでおく。
+          ただし「あと何が残っているのか」「さっきの手順に戻りたい」は必ず起きるため、
+          全部の手順とその進み具合をこの1箇所から開けるようにしておく。
+        */}
+        <Disclosure summary={`8つの手順を全部見る(${progress.doneCount} / ${progress.totalCount} 完了)`}>
+          <div className="flex flex-col gap-1.5">
+            {progress.steps.map((s) => (
+              <WorkflowStepCard
+                key={s.step.id}
+                progress={s}
+                isNext={false}
+                yearMonth={yearMonth}
+              />
+            ))}
+          </div>
+        </Disclosure>
       </section>
 
       {/* ダッシュボードは最上段のサマリに導線があるので、ここでは他の閲覧系画面だけを並べる */}
@@ -206,7 +262,7 @@ export default async function HomePage() {
             <Link
               key={l.href}
               href={l.href}
-              className="pressable rounded-lg border border-line px-4 py-3 hover:bg-subtle"
+              className="btn btn-quiet pressable"
             >
               <p className="text-sm font-semibold text-ink">{l.label}</p>
               <p className="mt-0.5 text-xs text-ink-muted">{l.desc}</p>

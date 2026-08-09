@@ -9,6 +9,7 @@ import { ConfirmImportVehicleMasterUseCase } from "../../../../../src/usecase/st
 import { STANDARD_COST_RATES } from "../../../../../src/domain/entities/VehiclePl";
 import type { VehicleMasterUpsertInput } from "../../../../../src/domain/repositories/MasterRepository";
 import { isSameOriginRequest } from "../../../../_lib/assertSameOrigin";
+import { rebuildMonthsWithoutPl } from "../../../../_lib/monthlyPlRecalculator";
 import { recordFileImport } from "../../../../_lib/recordFileImport";
 import { importDiffDetector, masterChangeStack } from "../../../../_lib/masterChangeStack";
 
@@ -112,6 +113,11 @@ export async function POST(request: Request) {
     const actor = { id: session!.id, name: session!.name ?? "" };
     const applied = await masterChangeStack(db, actor).applier.execute({ edits: [], actor });
 
+    // 車両マスタが空のまま取り込んだ月は収支表が0行で、上の作り直しの対象にすら入らない
+    // (対象月の一覧を収支表から作っているため)。車両を登録したいまが唯一の復旧機会なので、
+    // 取込はあるのに収支表が無い月をここで作り直す。
+    const firstBuilt = await rebuildMonthsWithoutPl(db);
+
     // 前回の取込と何が変わったかを見つけて残す (画面のアラートはここが元になる)
     const alert = await importDiffDetector(db).execute({ persist: true });
 
@@ -120,6 +126,8 @@ export async function POST(request: Request) {
       yearMonth,
       recalculated: applied.appliedYearMonths.includes(yearMonth),
       applied: applied.appliedYearMonths,
+      // 車両が居なかったせいで空だった月を、この登録で作れたぶん
+      firstBuilt,
       heldBack: applied.heldBackYearMonths,
       diffCount: alert.diffs.length,
       criticalCount: alert.criticalCount,

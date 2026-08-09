@@ -45,7 +45,7 @@ export function StagePanel({
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
-            className="pressable rounded-md border border-line px-3 py-1 text-xs font-semibold text-brand-deep hover:bg-brand-soft"
+            className="btn btn-quiet btn-sm pressable"
           >
             {open ? closeLabel : openLabel}
           </button>
