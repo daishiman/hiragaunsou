@@ -134,7 +134,13 @@ export function NumberEntryField({
           読み上げでも「自動のまま」が分かるようにする。
           色の濃淡は目で見ている人にしか届かない。
         */
-        aria-label={isAuto ? `${ariaLabel}(${autoLabel}の値です)` : ariaLabel}
+        aria-label={
+          isAuto
+            ? // 呼び名がすでに「〜の値」で終わるときは「の値」を重ねない
+              // (「いまの値の値です」と読み上げられてしまう)
+              `${ariaLabel}(${autoLabel}${autoLabel.endsWith("値") ? "です" : "の値です"})`
+            : ariaLabel
+        }
         value={display}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={moveFocusOnEnter}
