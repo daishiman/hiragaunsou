@@ -56,7 +56,7 @@ export function ConfirmDialog({
         role="alertdialog"
         aria-modal="true"
         aria-label={title}
-        className="relative w-full max-w-md rounded-xl border border-line bg-white p-5 shadow-xl"
+        className="relative w-full max-w-md card p-5 shadow-xl"
       >
         <h2 className="text-sm font-bold text-ink">{title}</h2>
         {children ? (

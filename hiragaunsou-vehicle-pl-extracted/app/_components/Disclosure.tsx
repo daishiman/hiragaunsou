@@ -21,7 +21,9 @@ export function Disclosure({
   tone?: "quiet" | "inline";
 }) {
   return (
-    <details className={tone === "inline" ? "mt-2" : "mt-3 rounded-md border border-line bg-white"}>
+    <details
+      className={tone === "inline" ? "mt-2" : "card mt-3 rounded-md"}
+    >
       <summary
         className={
           tone === "inline"
@@ -31,11 +33,15 @@ export function Disclosure({
       >
         {summary}
       </summary>
+      {/*
+        本文は必ず prose-note に入れる。折り返しの指定を持つのは globals.css の
+        .prose-note 1箇所だけで、ここに長い日本語を書いてもカードの外へ出ない。
+      */}
       <div
         className={
           tone === "inline"
-            ? "mt-1.5 text-xs leading-relaxed text-ink-muted"
-            : "border-t border-line px-4 py-3 text-xs leading-relaxed text-ink-muted"
+            ? "prose-note mt-1.5 text-xs leading-relaxed text-ink-muted"
+            : "prose-note border-t border-line px-4 py-3 text-xs leading-relaxed text-ink-muted"
         }
       >
         {children}

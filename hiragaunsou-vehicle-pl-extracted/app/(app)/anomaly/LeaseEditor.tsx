@@ -91,7 +91,7 @@ export function LeaseEditor({
   if (rows.length === 0) return null;
 
   return (
-    <section className="mt-4 rounded-xl border border-line bg-white">
+    <section className="mt-4 card">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}

@@ -5,7 +5,7 @@ import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { getServerSession } from "../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../src/infrastructure/auth/accessControl";
 import { AccessDenied } from "../../_components/AccessDenied";
-import { PageHead } from "../../_components/PageHead";
+import { ScreenHeader } from "../../_components/ScreenHeader";
 import { ReportGenerator } from "./ReportGenerator";
 
 /** F12 AI要因分析レポート (S10画面)。生成はadmin/executiveのみ(要件定義4章「レポート配信設定」相当)。 */
@@ -24,11 +24,7 @@ export default async function ReportPage() {
 
   return (
     <div className="max-w-3xl">
-      <PageHead
-        kind="analysis"
-        title="AI要因分析レポート"
-        lead="損益変動の要因をAIが要約します(生成ごとに費用が発生)"
-      />
+      <ScreenHeader screen="/report" />
       <ReportGenerator defaultYearMonth={defaultYearMonth} />
     </div>
   );

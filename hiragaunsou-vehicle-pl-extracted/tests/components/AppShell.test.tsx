@@ -64,7 +64,7 @@ describe("AppShell", () => {
     expect(mainNav().queryByRole("link", { name: /^データ取込/ })).not.toBeInTheDocument();
     expect(mainNav().queryByRole("link", { name: /^手入力/ })).not.toBeInTheDocument();
     // view権限のみの画面は引き続き見える
-    expect(mainNav().getByRole("link", { name: "ダッシュボード" })).toBeInTheDocument();
+    expect(mainNav().getByRole("link", { name: /^ダッシュボード/ })).toBeInTheDocument();
     expect(mainNav().getByRole("link", { name: "利用状況" })).toBeInTheDocument();
   });
 
@@ -80,7 +80,7 @@ describe("AppShell", () => {
         <p>本文</p>
       </AppShell>,
     );
-    expect(mainNav().getByRole("link", { name: "ダッシュボード" })).toHaveAttribute(
+    expect(mainNav().getByRole("link", { name: /^ダッシュボード/ })).toHaveAttribute(
       "aria-current",
       "page",
     );

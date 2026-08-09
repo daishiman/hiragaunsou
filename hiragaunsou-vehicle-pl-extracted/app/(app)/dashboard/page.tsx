@@ -13,7 +13,7 @@ import { GetPeriodOverviewUseCase } from "../../../src/usecase/steps/getPeriodOv
 import { isYearMonth, periodPresets, selectableYearMonths } from "../../_lib/yearMonth";
 import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { chartMonthLabel, kmPriceLabel, man, num, pct, yen } from "../../_lib/format";
-import { PageHead } from "../../_components/PageHead";
+import { ScreenHeader } from "../../_components/ScreenHeader";
 import { EmptyState } from "../../_components/EmptyState";
 import { PeriodSelect } from "../../_components/PeriodSelect";
 import { StatTile } from "../../_components/StatTile";
@@ -63,9 +63,8 @@ export default async function DashboardPage({
 
   return (
     <>
-      <PageHead
-        kind="analysis"
-        title="経営ダッシュボード"
+      <ScreenHeader
+        screen="/dashboard"
         action={
           <PeriodSelect
             basePath="/dashboard"
@@ -136,7 +135,7 @@ export default async function DashboardPage({
             />
           </div>
 
-          <section className="mt-4 rounded-xl border border-line bg-white p-5">
+          <section className="mt-4 card p-5">
             <h2 className="text-sm font-bold text-ink">損益の推移</h2>
             <div className="mt-3">
               <TrendBars
@@ -153,7 +152,7 @@ export default async function DashboardPage({
             </div>
           </section>
 
-          <section className="mt-4 rounded-xl border border-line bg-white p-5">
+          <section className="mt-4 card p-5">
             <h2 className="text-sm font-bold text-ink">売上の推移</h2>
             <div className="mt-3">
               <TrendBars
@@ -170,7 +169,7 @@ export default async function DashboardPage({
           </section>
 
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <section className="rounded-xl border border-line bg-white p-5">
+            <section className="card p-5">
               <div className="flex items-baseline justify-between gap-2">
                 <h2 className="text-sm font-bold text-ink">経費の内訳</h2>
                 <p className="num text-xs text-ink-muted">計 {man(t.expense)}</p>
@@ -186,7 +185,7 @@ export default async function DashboardPage({
               </div>
             </section>
 
-            <section className="rounded-xl border border-line bg-white p-5">
+            <section className="card p-5">
               <div className="flex items-baseline justify-between gap-2">
                 <h2 className="text-sm font-bold text-ink">赤字が大きい車両</h2>
                 <p className="num text-xs text-ink-muted">{num(data.deficitCount)}台</p>
@@ -210,7 +209,7 @@ export default async function DashboardPage({
           </div>
 
           {data.depots.length > 1 && (
-            <section className="mt-4 rounded-xl border border-line bg-white p-5">
+            <section className="mt-4 card p-5">
               <h2 className="text-sm font-bold text-ink">営業所別</h2>
               <div className="mt-3 overflow-x-auto">
                 <table className="data-table w-full min-w-[30rem] text-sm">
@@ -254,7 +253,7 @@ export default async function DashboardPage({
           )}
 
           {/* 一段深い分析は既定で畳む。開く前から中身が分かるラベルにする */}
-          <details className="group mt-4 rounded-xl border border-line bg-white">
+          <details className="group mt-4 card">
             <summary className="cursor-pointer list-none px-5 py-4 text-sm font-bold text-ink hover:bg-subtle">
               km単価の分布を見る
               <span className="ml-2 text-xs font-normal text-ink-muted">

@@ -31,7 +31,7 @@ export function StagePanel({
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <section className="rounded-xl border border-line bg-white p-5">
+    <section className="card p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-sm font-bold text-ink">
           {step !== undefined ? (

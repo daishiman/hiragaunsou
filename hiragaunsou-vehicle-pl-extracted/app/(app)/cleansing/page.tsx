@@ -10,7 +10,7 @@ import { GetCleansingQueueUseCase } from "../../../src/usecase/steps/getCleansin
 import { selectableYearMonths } from "../../_lib/yearMonth";
 import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
-import { PageHead } from "../../_components/PageHead";
+import { ScreenHeader } from "../../_components/ScreenHeader";
 import { CleansingQueue } from "./CleansingQueue";
 
 /**
@@ -52,11 +52,8 @@ export default async function CleansingPage({
 
   return (
     <>
-      <PageHead
-        kind="ops"
-        title="データ整形(業務フロー STEP2)"
-        lead="傭車・2重計上の疑い・諸口の伝票を1件ずつ判断します"
-        showHomeLink
+      <ScreenHeader
+        screen="/cleansing"
         action={
           <YearMonthSelect basePath="/cleansing" value={yearMonth} options={selectableYearMonths(13)} />
         }

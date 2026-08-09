@@ -8,7 +8,7 @@ import { D1RateMasterRepository } from "../../../src/infrastructure/db/D1MasterR
 import { selectableYearMonths } from "../../_lib/yearMonth";
 import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { AccessDenied } from "../../_components/AccessDenied";
-import { PageHead } from "../../_components/PageHead";
+import { ScreenHeader } from "../../_components/ScreenHeader";
 import { SourceDataNote } from "../../_components/SourceDataNote";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
 import { RateSettingsManager } from "./RateSettingsManager";
@@ -52,10 +52,8 @@ export default async function RateSettingsPage({
 
   return (
     <div className="max-w-5xl">
-      <PageHead
-        kind="tool"
-        title="率マスタ設定"
-        lead="収支表の計算に使う率・単価を設定します。"
+      <ScreenHeader
+        screen="/rate-settings"
         help={
           <SourceDataNote>
             <p>

@@ -18,7 +18,7 @@ export function ExcelReconcileList({ result }: { result: ExcelReconcileResult })
   const rest = result.vehicles.slice(TOP_VEHICLES);
 
   return (
-    <section className="mt-4 rounded-xl border border-line bg-white p-5">
+    <section className="mt-4 card p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-sm font-bold text-ink">Excelとの差異</h2>
         <p className="num text-xs text-ink-muted">

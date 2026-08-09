@@ -7,7 +7,7 @@ import { D1RateMasterRepository } from "../../../src/infrastructure/db/D1MasterR
 import type { RateSettings } from "../../../src/domain/rules/vehiclePlCalculation";
 import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { Disclosure } from "../../_components/Disclosure";
-import { PageHead } from "../../_components/PageHead";
+import { ScreenHeader } from "../../_components/ScreenHeader";
 
 /**
  * S10 データ設計・自動化方針 (モック view-logic.js に対応)。
@@ -267,11 +267,7 @@ export default async function LogicPage() {
 
   return (
     <>
-      <PageHead
-        kind="spec"
-        title="データ設計・自動化方針"
-        lead="各項目がどこから来て、どう決まるかの一覧"
-      />
+      <ScreenHeader screen="/logic" />
 
       {/*
         この画面は「どの数字がどこから来るか」の合意文書で、文章量が多い。
@@ -281,7 +277,7 @@ export default async function LogicPage() {
       <Disclosure summary="全体の考え方(3つの層)">
         <div className="grid gap-3 lg:grid-cols-3">
         {STEP_FLOW.map((s) => (
-          <div key={s.num} className="rounded-xl border border-line bg-white p-5">
+          <div key={s.num} className="card p-5">
             <p className="text-[11px] font-semibold text-brand-deep">{s.num}</p>
             <p className="mt-1.5 text-sm font-bold text-ink">{s.title}</p>
             <p className="mt-1 text-xs text-ink-muted">{s.desc}</p>

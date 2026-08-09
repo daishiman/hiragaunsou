@@ -145,7 +145,7 @@ export function AnomalyQueue({
   */
   if (plVehicleCount === 0) {
     return (
-      <div className="rounded-xl border border-line bg-white px-6 py-12 text-center">
+      <div className="card px-6 py-12 text-center">
         <p className="text-sm font-semibold text-ink">この月の収支表がまだありません</p>
         <p className="mt-1 text-sm text-ink-muted">
           チェックする中身が無いため、判定はまだ始められません。月次収支表で、何が足りないかを確認してください。
@@ -164,7 +164,7 @@ export function AnomalyQueue({
 
   if (!current) {
     return (
-      <div className="rounded-xl border border-line bg-white px-6 py-12 text-center">
+      <div className="card px-6 py-12 text-center">
         <p className="text-sm font-semibold text-ink">この月の異常値はすべて判定済みです</p>
         <p className="mt-1 text-sm text-ink-muted">
           締めの結果はダッシュボードと月次収支表で確認できます。
@@ -206,7 +206,7 @@ export function AnomalyQueue({
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_18rem]">
-      <section className="rounded-xl border border-line bg-white p-5">
+      <section className="card p-5">
         <div className="flex items-baseline justify-between gap-3">
           <p className="num text-xs text-ink-muted">
             {index + 1} / {items.length} 件目
@@ -336,7 +336,7 @@ export function AnomalyQueue({
         </p>
       </section>
 
-      <aside className="rounded-xl border border-line bg-white p-4">
+      <aside className="card p-4">
         <p className="text-xs font-semibold text-ink">残りの待ち行列({remaining.length}件)</p>
         <div className="mt-2">
           <ListToolbar

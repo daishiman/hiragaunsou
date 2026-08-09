@@ -51,7 +51,7 @@ export function TodoBoard({ initialCards }: { initialCards: ReviewFlagRecord[] }
         </div>
       ) : null}
       {cards.map((card) => (
-        <section key={card.id} className="rounded-xl border border-line bg-white p-4">
+        <section key={card.id} className="card p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
               <span className="inline-flex items-center whitespace-nowrap rounded-full border border-transparent bg-brand-soft px-2.5 py-0.5 text-xs font-medium text-brand-deep">

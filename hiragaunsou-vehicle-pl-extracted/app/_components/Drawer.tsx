@@ -60,7 +60,7 @@ export function Drawer({
             閉じる
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4 text-xs leading-relaxed text-ink-muted">
+        <div className="prose-note flex-1 overflow-y-auto px-5 py-4 text-xs leading-relaxed text-ink-muted">
           {children}
         </div>
       </div>

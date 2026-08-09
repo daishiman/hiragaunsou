@@ -38,7 +38,7 @@ export function AccessDenied({
   return (
     <div className="max-w-2xl">
       <PageHead kind="tool" title={screenName} />
-      <div className="rounded-xl border border-line bg-white px-6 py-10 text-center">
+      <div className="card px-6 py-10 text-center">
         <p className="text-sm font-semibold text-ink">
           「{screenName}」は{describeAllowedRoles(permission)}のみが開けます。
         </p>

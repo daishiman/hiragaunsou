@@ -62,7 +62,7 @@ export function ReportGenerator({ defaultYearMonth }: { defaultYearMonth: string
       </div>
 
       {state.status === "loading" ? (
-        <div className="rounded-xl border border-line bg-white p-5">
+        <div className="card p-5">
           <div className="skeleton h-4 w-full" aria-hidden />
           <div className="skeleton mt-2 h-4 w-3/4" aria-hidden />
           <p className="mt-3 text-xs text-ink-muted">
@@ -82,12 +82,12 @@ export function ReportGenerator({ defaultYearMonth }: { defaultYearMonth: string
           <p className="text-xs text-ink-muted">
             分析対象月: {state.monthsAnalyzed.join(" / ")}
           </p>
-          <section className="rounded-xl border border-line bg-white p-5">
+          <section className="card p-5">
             <h2 className="text-sm font-bold text-ink">要約</h2>
             <p className="mt-2 text-sm text-ink">{state.report.summary}</p>
           </section>
 
-          <section className="rounded-xl border border-line bg-white p-5">
+          <section className="card p-5">
             <h2 className="text-sm font-bold text-ink">主な変動要因</h2>
             <div className="mt-3 flex flex-col gap-2">
               {state.report.keyDrivers.map((driver, i) => (
@@ -107,7 +107,7 @@ export function ReportGenerator({ defaultYearMonth }: { defaultYearMonth: string
             </div>
           </section>
 
-          <section className="rounded-xl border border-line bg-white p-5">
+          <section className="card p-5">
             <h2 className="text-sm font-bold text-ink">推奨アクション</h2>
             <ul className="mt-2 flex list-disc flex-col gap-1 pl-5 text-sm text-ink">
               {state.report.recommendations.map((rec, i) => (

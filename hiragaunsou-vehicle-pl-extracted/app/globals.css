@@ -150,6 +150,73 @@ span:where([class~="rounded-full"]) {
 }
 
 /*
+ * ─────────────────────────────────────────────────────────────
+ * カードからのはみ出しを根から止める。
+ *
+ * 「車両マスタ管理の説明文がカードの枠外へ出る」という不具合が出た。
+ * 原因は画面ごとの書き方ではなく、面(カード)の中身に幅の下限が残っていたこと。
+ * flex/grid の子要素は既定で min-width:auto になり、
+ * 中の一番長い塊(折り返せない札・表・入力欄・長い英数字)より縮まない。
+ * その結果、親の幅を無視して横へ伸び、白い面の外へ文章が流れる。
+ *
+ * 画面ごとに overflow-wrap を足して回ると、次に足す画面でまた同じことが起きる。
+ * min-width の下限を本文領域まるごとで外し、ここ1箇所だけで面倒を見る。
+ *
+ * :where() は詳細度0なので、幅を意図して指定している箇所
+ * (表の min-w-full など Tailwind のユーティリティ) は従来どおり勝つ。
+ * ─────────────────────────────────────────────────────────────
+ */
+main :where(section, article, aside, div, dl, dd, dt, p, ul, ol, li, details, summary, figure) {
+  min-width: 0;
+}
+
+/* 画像・埋め込み・整形済みテキストは、親より広くならない */
+main :where(img, svg, video, canvas, iframe, pre, table) {
+  max-width: 100%;
+}
+
+/*
+ * 入力欄も親より広くならない。ファイル選択の欄は選んだファイル名の長さで
+ * 内側の幅が決まるため、w-full を指定していてもカードの外へ出ることがある。
+ */
+main :where(input, select, textarea) {
+  max-width: 100%;
+}
+
+/*
+ * 白カードの共通クラス。画面側は <Card> を使い、この見た目を直接書かない。
+ * (app/_components/Card.tsx)
+ */
+.card {
+  border-radius: var(--radius-card);
+  border: 1px solid var(--line);
+  background: #fff;
+  min-width: 0;
+}
+
+/* 長い説明文の器 (app/_components/Card.tsx の <Prose>)。 */
+.card > *,
+.prose-note,
+.prose-note > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.prose-note {
+  overflow-wrap: anywhere;
+  word-break: auto-phrase;
+  line-break: strict;
+}
+/*
+ * 折りたたみ(details)の中身も同じ扱いにする。
+ * 「どのファイルを選べばよいですか?」の本文はここに入る。
+ */
+main :where(details) > :not(summary) {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/*
  * 押せるもの・入力できるものは形で分かるようにする(色だけに頼らない)。
  * 読むだけの欄は面を沈め、枠を消す。
  */
