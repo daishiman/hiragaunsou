@@ -13,8 +13,8 @@ import { D1RateMasterRepository, RATE_KEYS } from "../../src/infrastructure/db/D
 import { D1AnnualReferenceRepository } from "../../src/infrastructure/db/D1AnnualReferenceRepository";
 import { GetWorkflowProgressUseCase } from "../../src/usecase/steps/getWorkflowProgress";
 import { GetPeriodOverviewUseCase } from "../../src/usecase/steps/getPeriodOverview";
-import { defaultImportYearMonth, isYearMonth, selectableYearMonths } from "../_lib/yearMonth";
-import { resolveWorkingYearMonth } from "../_lib/workingYearMonth";
+import { isYearMonth, selectableYearMonths } from "../_lib/yearMonth";
+import { resolveOverviewYearMonth, resolveWorkingYearMonth } from "../_lib/workingYearMonth";
 import { yearMonthLabel, man, num, kmPriceLabel, pct } from "../_lib/format";
 import { withYm } from "../_lib/withYm";
 import { PageHead } from "../_components/PageHead";
@@ -39,9 +39,16 @@ export default async function HomePage({
   if (!session) redirect("/sign-in");
 
   const { ym } = await searchParams;
-  const overviewYearMonth = defaultImportYearMonth();
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);
+
+  /*
+    最上段の経営サマリは「締めた月の数字」を見せる場所。前月固定だったため、
+    確定した月が1つも無くても前月の数字を出してしまい、取込ゼロの月に収支表だけが
+    残っていると売上0円・赤字だけのサマリが一番上に出ていた。
+    確定済みの直近月 → 無ければ取込のある最新月、と実データから決める。
+  */
+  const overviewYearMonth = await resolveOverviewYearMonth(db);
 
   /*
     「次にやること」が話題にする月。当月固定だったため、5月分を取り込んでもホームは
