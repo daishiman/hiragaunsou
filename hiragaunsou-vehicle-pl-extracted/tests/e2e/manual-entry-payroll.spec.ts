@@ -7,6 +7,7 @@ import {
   withBusyRetry,
 } from "./helpers/testUsers";
 import { getSessionCookie, injectSessionCookie } from "./helpers/loginAs";
+import { filterToVehicle } from "./helpers/manualEntry";
 
 test.describe.configure({ mode: "serial" });
 
@@ -118,7 +119,7 @@ test.describe("手入力 STEP4: 人件費を確認して直す", () => {
     await expect(page.getByRole("heading", { name: "人件費(給与集計表)の確認" })).toBeVisible();
 
     // 探すのに時間を使わせないため、まず対象の車両だけに絞る。
-    await page.getByPlaceholder("車番・運転者で検索").fill(VEHICLE_NOS[0]);
+    await filterToVehicle(page, VEHICLE_NOS[0]);
 
     const salary = page.getByLabel(`${VEHICLE_NOS[0]}番の総支給額(円)`);
     // 取込値が入った状態で開く(空欄から入力し直させない)。
@@ -131,7 +132,7 @@ test.describe("手入力 STEP4: 人件費を確認して直す", () => {
 
     // 開き直しても直した金額のまま。他の欄と同じ作法で「取込値のまま」と見分けられる。
     await page.goto(`/manual-entry?ym=${YEAR_MONTH}&step=4`);
-    await page.getByPlaceholder("車番・運転者で検索").fill(VEHICLE_NOS[0]);
+    await filterToVehicle(page, VEHICLE_NOS[0]);
     const edited = page.getByLabel(`${VEHICLE_NOS[0]}番の総支給額(円)`);
     await expect(edited).toHaveValue("250000");
     // 人が直した欄なので、取込値のままを表す印は付かない。
@@ -140,7 +141,7 @@ test.describe("手入力 STEP4: 人件費を確認して直す", () => {
     await expect(page.getByText("手修正", { exact: true })).toBeVisible();
 
     // 直していない車両は取込値のまま(1台直すと他が巻き込まれる、が起きない)。
-    await page.getByPlaceholder("車番・運転者で検索").fill(VEHICLE_NOS[1]);
+    await filterToVehicle(page, VEHICLE_NOS[1]);
     const untouched = page.getByLabel(`${VEHICLE_NOS[1]}番の総支給額(円)`);
     await expect(untouched).toHaveValue("310000");
     await expect(untouched).toHaveAttribute("data-auto", "true");
@@ -148,7 +149,7 @@ test.describe("手入力 STEP4: 人件費を確認して直す", () => {
 
   test("取込値に戻すと元の金額に戻る", async ({ page }) => {
     await page.goto(`/manual-entry?ym=${YEAR_MONTH}&step=4`);
-    await page.getByPlaceholder("車番・運転者で検索").fill(VEHICLE_NOS[0]);
+    await filterToVehicle(page, VEHICLE_NOS[0]);
     await expect(page.getByLabel(`${VEHICLE_NOS[0]}番の総支給額(円)`)).toHaveValue("250000");
 
     await page.getByRole("button", { name: "取込値に戻す" }).click();
@@ -156,7 +157,7 @@ test.describe("手入力 STEP4: 人件費を確認して直す", () => {
     await expect(page.getByText("取込値に戻しました")).toBeVisible();
 
     await page.goto(`/manual-entry?ym=${YEAR_MONTH}&step=4`);
-    await page.getByPlaceholder("車番・運転者で検索").fill(VEHICLE_NOS[0]);
+    await filterToVehicle(page, VEHICLE_NOS[0]);
     await expect(page.getByLabel(`${VEHICLE_NOS[0]}番の総支給額(円)`)).toHaveValue("300000");
     await expect(page.getByText("手修正", { exact: true })).toHaveCount(0);
   });
@@ -165,7 +166,7 @@ test.describe("手入力 STEP4: 人件費を確認して直す", () => {
     page,
   }) => {
     await page.goto(`/manual-entry?ym=${YEAR_MONTH}&step=3`);
-    await page.getByPlaceholder("車番・運転者で検索").fill(VEHICLE_NOS[0]);
+    await filterToVehicle(page, VEHICLE_NOS[0]);
     // 請求書を見て入れる欄。人件費と違い、取込値ではなく空欄から始まる。
     const adblue = page.getByLabel(`${VEHICLE_NOS[0]}番のアドブルー(円)`);
     await expect(adblue).toHaveValue("");
@@ -174,7 +175,7 @@ test.describe("手入力 STEP4: 人件費を確認して直す", () => {
 
     await page.goto(`/manual-entry?ym=${YEAR_MONTH}&step=6`);
     await expect(page.getByRole("heading", { name: "高速料金" })).toBeVisible();
-    await page.getByPlaceholder("車番・運転者で検索").fill(VEHICLE_NOS[0]);
+    await filterToVehicle(page, VEHICLE_NOS[0]);
     await expect(page.getByLabel(`${VEHICLE_NOS[0]}番の通行料金(円)`)).toBeVisible();
   });
 });

@@ -33,20 +33,40 @@ async function getLocalEnv() {
  * 同じ競合は `D1_ERROR: Failed to parse body as JSON, got: Error: internal error` の形でも
  * 出る(miniflare が sqlite の失敗をD1のエラー本文として返せずに落ちる)。文言が違うだけで
  * 待てば通る点は同じなので、こちらも待って作り直す。
+ *
+ * さらに better-auth を経由すると、元の SQLITE_BUSY はログに書かれるだけで、
+ * 投げ直されるのは `APIError: Failed to create user` という別の文言になる。
+ * 中身が見えないので、この文言自体を待てば通るものとして扱う。
+ * (本当にスキーマが壊れている場合も数回試すが、待つのは合計1.5秒で済む)
  */
 export async function withBusyRetry<T>(run: () => Promise<T>, attempts = 5): Promise<T> {
   for (let i = 1; ; i += 1) {
     try {
       return await run();
     } catch (e) {
-      const message = String(e);
+      const message = messageChainOf(e);
       const retryable =
         /SQLITE_BUSY|database is locked/i.test(message) ||
-        /D1_ERROR|Failed to parse body as JSON|internal error/i.test(message);
+        /D1_ERROR|Failed to parse body as JSON|internal error/i.test(message) ||
+        /Failed to create user|INTERNAL_SERVER_ERROR/i.test(message);
       if (i >= attempts || !retryable) throw e;
       await new Promise((r) => setTimeout(r, 150 * i));
     }
   }
+}
+
+/**
+ * 例外と、その原因(cause)を根までつないだ文字列。
+ * D1の失敗は `DrizzleQueryError` → `cause: D1_ERROR` → `cause: SQLITE_BUSY` と
+ * 二段三段に包まれて届くので、いちばん外側だけ見ると競合だと分からない。
+ */
+function messageChainOf(e: unknown): string {
+  const parts: string[] = [];
+  for (let cur: unknown = e, depth = 0; cur && depth < 5; depth += 1) {
+    parts.push(String(cur));
+    cur = (cur as { cause?: unknown }).cause;
+  }
+  return parts.join(" | ");
 }
 
 export async function createTestUser(spec: TestUserSpec): Promise<void> {
@@ -196,31 +216,45 @@ export async function clearRateLimits(): Promise<void> {
 export async function setUserBanned(email: string, banned: boolean): Promise<void> {
   const { env, dispose } = await getLocalEnv();
   try {
-    await env.DB.prepare("UPDATE user SET banned = ? WHERE email = ?")
-      .bind(banned ? 1 : 0, email)
-      .run();
+    await withBusyRetry(() =>
+      env.DB.prepare("UPDATE user SET banned = ? WHERE email = ?")
+        .bind(banned ? 1 : 0, email)
+        .run(),
+    );
   } finally {
     await dispose();
   }
 }
 
-/** email/passwordで実際にサインインし、Set-CookieヘッダーからセッションCookie文字列を得る。 */
+/**
+ * email/passwordで実際にサインインし、Set-CookieヘッダーからセッションCookie文字列を得る。
+ *
+ * sign-in はサーバー側でセッション行とレート制限行を書くので、ここもD1の競合に当たる。
+ * その場合サーバーは 500 を返す。待てば通るので数回試す。
+ * 401(パスワード違い)・403(凍結)・429(レート制限)は待っても変わらないので、すぐ throw して
+ * 「何が起きたか」をそのまま出す。
+ */
 export async function signInAndGetSetCookie(
   baseURL: string,
   email: string,
   password: string,
 ): Promise<string> {
-  const res = await fetch(`${baseURL}/api/auth/sign-in/email`, {
-    method: "POST",
-    headers: { "content-type": "application/json", origin: baseURL },
-    body: JSON.stringify({ email, password }),
+  return withBusyRetry(async () => {
+    const res = await fetch(`${baseURL}/api/auth/sign-in/email`, {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: baseURL },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      // 500 だけ「待てば通る」印を文言に混ぜて、上の withBusyRetry に拾わせる
+      const busy = res.status >= 500 ? " SQLITE_BUSY(サーバー側の一時的な失敗として再試行)" : "";
+      throw new Error(`sign-in failed: ${res.status} ${body}${busy}`);
+    }
+    const setCookie = res.headers.get("set-cookie");
+    if (!setCookie) {
+      throw new Error("sign-in response did not include Set-Cookie");
+    }
+    return setCookie;
   });
-  if (!res.ok) {
-    throw new Error(`sign-in failed: ${res.status} ${await res.text()}`);
-  }
-  const setCookie = res.headers.get("set-cookie");
-  if (!setCookie) {
-    throw new Error("sign-in response did not include Set-Cookie");
-  }
-  return setCookie;
 }

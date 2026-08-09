@@ -7,6 +7,7 @@ import {
   withBusyRetry,
 } from "./helpers/testUsers";
 import { getSessionCookie, injectSessionCookie } from "./helpers/loginAs";
+import { filterToVehicle } from "./helpers/manualEntry";
 
 test.describe.configure({ mode: "serial" });
 
@@ -91,7 +92,7 @@ test.describe("手で入れる欄の作法と、常に見える工程タブ・�
 
   test("自動計算の金額は欄の中に入り、薄い文字と印で『自動のまま』と分かる", async ({ page }) => {
     await page.goto(`/manual-entry?ym=${YEAR_MONTH}&step=6`);
-    await page.getByPlaceholder("車番・運転者で検索").fill(VEHICLE_NOS[0]);
+    await filterToVehicle(page, VEHICLE_NOS[0]);
 
     const toll = page.getByLabel(`${VEHICLE_NOS[0]}番の通行料金(円)`);
     // 欄の外に「自動 50,000」と出すのではなく、欄の中に初期値として入っている
@@ -105,7 +106,7 @@ test.describe("手で入れる欄の作法と、常に見える工程タブ・�
 
   test("手で直すと自動の印が外れ、『自動に戻す』で元へ戻せる", async ({ page }) => {
     await page.goto(`/manual-entry?ym=${YEAR_MONTH}&step=6`);
-    await page.getByPlaceholder("車番・運転者で検索").fill(VEHICLE_NOS[0]);
+    await filterToVehicle(page, VEHICLE_NOS[0]);
 
     const toll = page.getByLabel(`${VEHICLE_NOS[0]}番の通行料金(円)`);
     await toll.fill("61000");
@@ -122,7 +123,7 @@ test.describe("手で入れる欄の作法と、常に見える工程タブ・�
 
   test("保存して開き直しても『自動のまま』と『人が入れた』は分かれたまま", async ({ page }) => {
     await page.goto(`/manual-entry?ym=${YEAR_MONTH}&step=6`);
-    await page.getByPlaceholder("車番・運転者で検索").fill(VEHICLE_NOS[0]);
+    await filterToVehicle(page, VEHICLE_NOS[0]);
 
     // 1台目だけ手で直し、2台目は自動のままにする
     await page.getByLabel(`${VEHICLE_NOS[0]}番の通行料金(円)`).fill("61000");
@@ -130,14 +131,14 @@ test.describe("手で入れる欄の作法と、常に見える工程タブ・�
     await expect(page.getByText("保存しました")).toBeVisible();
 
     await page.goto(`/manual-entry?ym=${YEAR_MONTH}&step=6`);
-    await page.getByPlaceholder("車番・運転者で検索").fill(VEHICLE_NOS[0]);
+    await filterToVehicle(page, VEHICLE_NOS[0]);
     const edited = page.getByLabel(`${VEHICLE_NOS[0]}番の通行料金(円)`);
     await expect(edited).toHaveValue("61000");
     // 人が入れた値なので、自動の印は付かない
     await expect(edited).not.toHaveAttribute("data-auto", "true");
 
     // 触っていない車両は自動のまま。保存で数字が確定してしまっていない。
-    await page.getByPlaceholder("車番・運転者で検索").fill(VEHICLE_NOS[1]);
+    await filterToVehicle(page, VEHICLE_NOS[1]);
     const untouched = page.getByLabel(`${VEHICLE_NOS[1]}番の通行料金(円)`);
     await expect(untouched).toHaveValue(String(TOLL));
     await expect(untouched).toHaveAttribute("data-auto", "true");
@@ -164,7 +165,7 @@ test.describe("手で入れる欄の作法と、常に見える工程タブ・�
     await expect(page.locator(".screen-step-header")).toBeInViewport();
     await expect(page.locator(".screen-action-bar")).toBeInViewport();
 
-    await page.getByPlaceholder("車番・運転者で検索").fill(VEHICLE_NOS[0]);
+    await filterToVehicle(page, VEHICLE_NOS[0]);
     const toll = page.getByLabel(`${VEHICLE_NOS[0]}番の通行料金(円)`);
     // キーボードで欄へ入っても、貼り付けた帯の下に隠れない
     await toll.focus();

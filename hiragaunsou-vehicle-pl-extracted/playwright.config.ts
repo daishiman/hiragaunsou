@@ -9,6 +9,16 @@ export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
+  /*
+    CIでは1本ずつ流す。
+    ローカルD1(miniflare)は1つのSQLiteファイルで、同時に書き込むと
+    `SQLITE_BUSY: database is locked` を返す。ファイルごとの直列指定
+    (test.describe.configure({ mode: "serial" })) はファイル内の順番を決めるだけで、
+    **ファイル同士の同時実行**は止められない。テストユーザーの作成・sign-inの
+    レート制限記録・後片付けが別ファイル間でぶつかり、CIで3件が落ちた。
+    本番のD1は同時書き込みを捌けるので、これはローカル実行環境だけの制約。
+  */
+  workers: process.env.CI ? 1 : undefined,
   retries: process.env.CI ? 2 : 0,
   reporter: [["list"]],
   use: {

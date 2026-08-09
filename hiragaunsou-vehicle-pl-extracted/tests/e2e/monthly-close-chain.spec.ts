@@ -8,6 +8,8 @@ import {
   withBusyRetry,
 } from "./helpers/testUsers";
 import { getSessionCookie, injectSessionCookie } from "./helpers/loginAs";
+import { screenHeading } from "./helpers/screenNames";
+import { filterToVehicle } from "./helpers/manualEntry";
 
 test.describe.configure({ mode: "serial" });
 
@@ -215,7 +217,7 @@ test.describe("締め作業の通し(取込→整形→手入力→チェック�
   test("データ整形に、取り込んだ伝票が判断待ちとして出る", async ({ page }) => {
     await page.goto(`/cleansing?ym=${YEAR_MONTH}`);
 
-    await expect(page.getByRole("heading", { name: /データ整形/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: screenHeading("/cleansing") })).toBeVisible();
     // 「売上モニタリストが未取込です」= 取込が整形から見えていない状態。ここが出たら受け渡しが切れている
     await expect(page.getByText("売上モニタリストが未取込です")).toHaveCount(0);
     // 諸口の伝票は自動で消さず、判断待ちとして必ず人に出す
@@ -227,8 +229,8 @@ test.describe("締め作業の通し(取込→整形→手入力→チェック�
     // その金額が欄に出ていれば、取込 → 収支表 → 手入力 の受け渡しがつながっている。
     await page.goto(`/manual-entry?ym=${YEAR_MONTH}&step=6`);
 
-    await expect(page.getByRole("heading", { name: /手入力/ })).toBeVisible();
-    await page.getByPlaceholder("車番・運転者で検索").fill(VEHICLE_NOS[0]);
+    await expect(page.getByRole("heading", { name: screenHeading("/manual-entry") })).toBeVisible();
+    await filterToVehicle(page, VEHICLE_NOS[0]);
 
     const toll = page.getByRole("textbox", { name: new RegExp(`${VEHICLE_NOS[0]}番の通行料金`) });
     await expect(toll).toHaveValue(String(TOLL_9301));
@@ -237,7 +239,7 @@ test.describe("締め作業の通し(取込→整形→手入力→チェック�
   test("チェック画面が、収支表のある月を未着手として扱わない", async ({ page }) => {
     await page.goto(`/anomaly?ym=${YEAR_MONTH}`);
 
-    await expect(page.getByRole("heading", { name: /収支表のチェック/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: screenHeading("/anomaly") })).toBeVisible();
     // 収支表があるのにこの文言が出るなら、チェック画面が別の月を見ている
     await expect(page.getByText("この月の収支表がまだありません")).toHaveCount(0);
   });
@@ -245,7 +247,7 @@ test.describe("締め作業の通し(取込→整形→手入力→チェック�
   test("月次収支表で確定でき、確定した月が年間集計に出る", async ({ page }) => {
     await page.goto(`/grid?ym=${YEAR_MONTH}`);
 
-    await expect(page.getByRole("heading", { name: /月次収支表/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: screenHeading("/grid") })).toBeVisible();
     await expect(page.getByText(/データはまだありません/)).toHaveCount(0);
     await expect(page.getByRole("cell", { name: VEHICLE_NOS[0], exact: true }).first()).toBeVisible();
 
@@ -254,7 +256,7 @@ test.describe("締め作業の通し(取込→整形→手入力→チェック�
 
     // 年間集計は期(6月開始)で束ねる。対象月を渡したときに、その月が属する期が出ること
     await page.goto(`/annual?ym=${YEAR_MONTH}`);
-    await expect(page.getByRole("heading", { name: /年間集計/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: screenHeading("/annual") })).toBeVisible();
     await expect(page.getByText("この期のデータはまだありません")).toHaveCount(0);
     // 対象月が属する期(6月開始)が選ばれていること
     await expect(page.getByText("2025年6月〜2026年5月")).toBeVisible();

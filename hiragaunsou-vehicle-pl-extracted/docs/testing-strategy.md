@@ -25,6 +25,28 @@
 - CI/ローカルE2E専用のテスト用Google Workspaceアカウントを用意し、実OAuthフローを流す
 - 本番コードには含めない、テスト実行時のみ有効な署名済みセッションCookie発行の仕組みを追加する
 
+## E2Eが「実装は正しいのに落ちる」3つの型と、その塞ぎ方
+
+実際にCIで3件同時に落ちた。3件とも画面は正しく動いており、落ちたのはテストの書き方が原因だった。
+同じ形で落ちないよう、対策はすべてヘルパー1箇所に寄せてある。
+
+| 落ち方 | なぜ落ちるか | 塞ぎ方 |
+| --- | --- | --- |
+| 画面名を変えたら落ちる | 見出しの文言を spec に書き写していた。「収支表のチェック」→「チェック(…)」と改めた瞬間に赤くなる | `tests/e2e/helpers/screenNames.ts` の `screenHeading("/anomaly")`。呼び名は `app/_lib/screens.ts` から引く |
+| 畳んだメニューの中を見に行けず落ちる | 使用頻度の低い画面はサイドバー下部のアカウントメニューに畳んだ。閉じている間はDOMに無い | `tests/e2e/helpers/accountMenu.ts` の `openAccountMenu()`。「出ないこと」を見るときも必ず開いてから確かめる(開かずに `toHaveCount(0)` を書くと、権限で消えているのか畳まれているだけなのか区別できず素通りする) |
+| 打った値が消えて落ちる | 表が描き終わる前に金額欄を掴むと、直後の描き直しで打った値が捨てられる | `tests/e2e/helpers/manualEntry.ts` の `filterToVehicle()`。画面に出ている「表示 N台 / 全 M台」で描画の完了を待つ |
+
+### ローカルD1の同時書き込み
+
+E2EはCIで **1本ずつ** 流す(`playwright.config.ts` の `workers: process.env.CI ? 1 : undefined`)。
+ローカルD1(miniflare)は1つのSQLiteファイルで、同時に書き込むと `SQLITE_BUSY: database is locked` を返す。
+ファイル内の `test.describe.configure({ mode: "serial" })` は順番を決めるだけで、**ファイル同士の同時実行**は止められない。
+本番のD1は同時書き込みを捌けるので、これはローカル実行環境だけの制約。
+
+それでも取りこぼす一瞬の競合は `tests/e2e/helpers/testUsers.ts` の `withBusyRetry` が待って作り直す。
+better-auth を経由すると元の `SQLITE_BUSY` はログに出るだけで `APIError: Failed to create user` に化けるため、
+この文言と、原因(`cause`)を根まで辿った文字列も再試行の対象に含めている。
+
 ## カバレッジ基準
 
 `vitest.config.ts` の `coverage.thresholds` で statements / branches / functions / lines を
