@@ -10,7 +10,7 @@ import { D1VehiclePlRepository } from "../../../../src/infrastructure/db/D1Vehic
 import { D1DeficitFactorAnalysisRepository } from "../../../../src/infrastructure/db/D1DeficitFactorAnalysisRepository";
 import type { DeficitFactorCategory } from "../../../../src/domain/repositories/DeficitFactorAnalysisRepository";
 import { GetVehicleHistoryUseCase } from "../../../../src/usecase/steps/getVehicleHistory";
-import { currentYearMonth } from "../../../_lib/yearMonth";
+import { resolveWorkingYearMonth } from "../../../_lib/workingYearMonth";
 import { kmPriceLabel, num, yen, yearMonthLabel } from "../../../_lib/format";
 import { PageHead } from "../../../_components/PageHead";
 import { EmptyState } from "../../../_components/EmptyState";
@@ -54,10 +54,12 @@ export default async function VehicleDetailPage({
   const { vehicleNo: rawVehicleNo } = await params;
   const vehicleNo = decodeURIComponent(rawVehicleNo);
   const { ym } = await searchParams;
-  const yearMonth = ym || currentYearMonth();
 
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);
+  // 対象月の既定は他画面と同じ「まだ締めていない、取込のある最も新しい月」に揃える。
+  // 月次収支表から車番を押して開いた先だけ当月だと、同じ車の別の月を見ることになる。
+  const yearMonth = ym || (await resolveWorkingYearMonth(db));
   const data = await new GetVehicleHistoryUseCase(new D1VehiclePlRepository(db)).execute(
     vehicleNo,
     yearMonth,

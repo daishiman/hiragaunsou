@@ -10,12 +10,8 @@ import { D1RateMasterRepository } from "../../../src/infrastructure/db/D1MasterR
 import { D1AnnualReferenceRepository } from "../../../src/infrastructure/db/D1AnnualReferenceRepository";
 import { D1ReviewFlagRepository } from "../../../src/infrastructure/db/D1ReviewFlagRepository";
 import { GetPeriodOverviewUseCase } from "../../../src/usecase/steps/getPeriodOverview";
-import {
-  currentYearMonth,
-  isYearMonth,
-  periodPresets,
-  selectableYearMonths,
-} from "../../_lib/yearMonth";
+import { isYearMonth, periodPresets, selectableYearMonths } from "../../_lib/yearMonth";
+import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { chartMonthLabel, kmPriceLabel, man, num, pct, yen } from "../../_lib/format";
 import { PageHead } from "../../_components/PageHead";
 import { EmptyState } from "../../_components/EmptyState";
@@ -51,13 +47,15 @@ export default async function DashboardPage({
 
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);
+  // 未判定件数も他画面と同じ作業対象月で数える。当月で数えると、5月分の判定が残っていても0件に見える。
+  const anomalyYearMonth = await resolveWorkingYearMonth(db);
   const [data, openAnomalyFlags] = await Promise.all([
     new GetPeriodOverviewUseCase(
       new D1VehiclePlRepository(db),
       new D1RateMasterRepository(db),
       new D1AnnualReferenceRepository(db),
     ).execute(from, to),
-    new D1ReviewFlagRepository(db).findOpenByYearMonth(currentYearMonth()),
+    new D1ReviewFlagRepository(db).findOpenByYearMonth(anomalyYearMonth),
   ]);
   const anomalyCount = openAnomalyFlags.filter((f) => f.status === "open").length;
 

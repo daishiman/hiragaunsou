@@ -10,7 +10,8 @@ import {
 import { AccessDenied } from "../../../_components/AccessDenied";
 import { PageHead } from "../../../_components/PageHead";
 import { SourceDataNote } from "../../../_components/SourceDataNote";
-import { defaultImportYearMonth, isYearMonth } from "../../../_lib/yearMonth";
+import { isYearMonth } from "../../../_lib/yearMonth";
+import { resolveWorkingYearMonth } from "../../../_lib/workingYearMonth";
 import { DriverMasterManager } from "./DriverMasterManager";
 
 /**
@@ -42,7 +43,7 @@ export default async function AdminDriverMasterPage({
   // 社内Excelが年度ブック(12か月分のシート)のとき、どの月のシートを読むかの手掛かり。
   // 車両マスタ管理と同じ既定にしないと、同じExcelを選んだのに画面ごとに違う月を読む。
   const ym = (await searchParams).ym;
-  const yearMonth = isYearMonth(ym) ? ym : defaultImportYearMonth();
+  const yearMonth = isYearMonth(ym) ? ym : await resolveWorkingYearMonth(db);
 
   return (
     <div className="max-w-5xl">

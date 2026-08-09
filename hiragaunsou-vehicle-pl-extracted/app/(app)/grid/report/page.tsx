@@ -18,7 +18,7 @@ import {
   type ReviewReportJudgement,
 } from "../../../../src/usecase/steps/getReviewReport";
 import { OVERRIDABLE_FIELD_META } from "../../../../src/domain/rules/vehiclePlOverride";
-import { currentYearMonth } from "../../../_lib/yearMonth";
+import { resolveWorkingYearMonth } from "../../../_lib/workingYearMonth";
 import { num, yearMonthLabel } from "../../../_lib/format";
 import { FIELD_LABELS } from "../../../_lib/fieldLabels";
 import { PrintActions } from "./PrintActions";
@@ -118,10 +118,12 @@ export default async function ReviewReportPage({
   }
 
   const { ym } = await searchParams;
-  const yearMonth = ym || currentYearMonth();
 
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);
+  // 対象月の既定は他画面と同じ「まだ締めていない、取込のある最も新しい月」に揃える。
+  // 印刷だけ当月を見ていると、画面では出ている表が印刷では白紙になる。
+  const yearMonth = ym || (await resolveWorkingYearMonth(db));
   const plRepo = new D1VehiclePlRepository(db);
   const flagRepo = new D1ReviewFlagRepository(db);
   const [confirmation, reconciliation] = await Promise.all([

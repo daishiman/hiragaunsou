@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { FactorAnalysisReport } from "../../../src/domain/services/FactorAnalysisAiPort";
-import { currentYearMonth, selectableYearMonths } from "../../_lib/yearMonth";
+import { selectableYearMonths } from "../../_lib/yearMonth";
 
 type State =
   | { status: "idle" }
@@ -10,8 +10,8 @@ type State =
   | { status: "done"; report: FactorAnalysisReport; monthsAnalyzed: string[] }
   | { status: "error"; message: string };
 
-export function ReportGenerator() {
-  const [targetYearMonth, setTargetYearMonth] = useState(currentYearMonth());
+export function ReportGenerator({ defaultYearMonth }: { defaultYearMonth: string }) {
+  const [targetYearMonth, setTargetYearMonth] = useState(defaultYearMonth);
   const [state, setState] = useState<State>({ status: "idle" });
 
   async function generate() {

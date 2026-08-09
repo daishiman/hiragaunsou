@@ -5,7 +5,7 @@ import { getServerSession } from "../../../src/infrastructure/auth/session";
 import { createDb } from "../../../src/infrastructure/db/client";
 import { D1RateMasterRepository } from "../../../src/infrastructure/db/D1MasterRepository";
 import type { RateSettings } from "../../../src/domain/rules/vehiclePlCalculation";
-import { currentYearMonth } from "../../_lib/yearMonth";
+import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { Disclosure } from "../../_components/Disclosure";
 import { PageHead } from "../../_components/PageHead";
 
@@ -257,7 +257,9 @@ export default async function LogicPage() {
   if (!session) redirect("/sign-in");
 
   const { env } = await getCloudflareContext({ async: true });
-  const rates = await new D1RateMasterRepository(createDb(env.DB)).getRates(currentYearMonth());
+  const db = createDb(env.DB);
+  // 説明に出す率も、いま作業している月のものを見せる(他画面と違う月の率を説明すると読み合わせができない)。
+  const rates = await new D1RateMasterRepository(db).getRates(await resolveWorkingYearMonth(db));
   const MAP = buildMap(rates);
   const FLOW_TREE = buildFlowTree(rates);
 

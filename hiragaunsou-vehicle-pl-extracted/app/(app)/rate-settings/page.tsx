@@ -5,7 +5,8 @@ import { getServerSession } from "../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../src/infrastructure/auth/accessControl";
 import { createDb } from "../../../src/infrastructure/db/client";
 import { D1RateMasterRepository } from "../../../src/infrastructure/db/D1MasterRepository";
-import { currentYearMonth, selectableYearMonths } from "../../_lib/yearMonth";
+import { selectableYearMonths } from "../../_lib/yearMonth";
+import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { AccessDenied } from "../../_components/AccessDenied";
 import { PageHead } from "../../_components/PageHead";
 import { SourceDataNote } from "../../_components/SourceDataNote";
@@ -36,10 +37,13 @@ export default async function RateSettingsPage({
   }
 
   const { ym } = await searchParams;
-  const yearMonth = ym || currentYearMonth();
 
   const { env } = await getCloudflareContext({ async: true });
-  const repo = new D1RateMasterRepository(createDb(env.DB));
+  const db = createDb(env.DB);
+  // 率は月ごとに持つ値なので、既定の対象月は他画面と同じ「いま作業している月」に揃える。
+  // 当月を既定にすると、5月を締めている最中に開いた率が5月の計算に効かず、直したのに変わらないように見える。
+  const yearMonth = ym || (await resolveWorkingYearMonth(db));
+  const repo = new D1RateMasterRepository(db);
   const [entries, rates, thresholds] = await Promise.all([
     repo.listRates(),
     repo.getRates(yearMonth),
