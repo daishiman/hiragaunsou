@@ -3,21 +3,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../src/infrastructure/auth/accessControl";
 import { createDb } from "../../../src/infrastructure/db/client";
-import {
-  D1RateMasterRepository,
-  D1VehicleMasterRepository,
-  D1DriverMasterRepository,
-} from "../../../src/infrastructure/db/D1MasterRepository";
-import { D1ImportBatchRepository } from "../../../src/infrastructure/db/D1ImportBatchRepository";
-import { D1VehiclePlRepository } from "../../../src/infrastructure/db/D1VehiclePlRepository";
-import { D1ManualInputRepository } from "../../../src/infrastructure/db/D1ManualInputRepository";
-import {
-  D1AppSettingRepository,
-  D1CleansingDecisionRepository,
-} from "../../../src/infrastructure/db/D1CleansingDecisionRepository";
-import { D1VehiclePlOverrideRepository } from "../../../src/infrastructure/db/D1VehiclePlOverrideRepository";
-import { FinalizeMonthlyPlUseCase } from "../../../src/usecase/steps/finalizeMonthlyPl";
-import { RecalculateMonthlyPlUseCase } from "../../../src/usecase/steps/recalculateMonthlyPl";
+import { D1RateMasterRepository } from "../../../src/infrastructure/db/D1MasterRepository";
+import { masterChangeStack } from "../../_lib/masterChangeStack";
 import {
   findRateMasterKeyDef,
   RATE_MASTER_CATALOG,
@@ -121,32 +108,43 @@ export async function POST(request: Request) {
   try {
     const db = createDb(env.DB);
     const rateMasterRepo = new D1RateMasterRepository(db);
+
+    // 直す前の値を先に控える。控えないと履歴に「何から何へ変えたか」が残らず、
+    // 元に戻すこともできない。
+    const before = (await rateMasterRepo.listRates()).find(
+      (e) => e.key === def.key && (e.yearMonth ?? null) === (body?.yearMonth ?? null),
+    );
+
     await rateMasterRepo.setRate(def.key, body?.yearMonth ?? null, value, session!.id);
 
-    const target = body?.recalculateYearMonth;
-    if (!isYearMonth(target)) {
-      return NextResponse.json({ key: def.key, value, recalculated: null });
-    }
-
-    const result = await new RecalculateMonthlyPlUseCase(
-      new D1ManualInputRepository(db),
-      new D1CleansingDecisionRepository(db),
-      new D1AppSettingRepository(db),
-      rateMasterRepo,
-      new D1VehiclePlOverrideRepository(db),
-      new FinalizeMonthlyPlUseCase(
-        new D1ImportBatchRepository(db),
-        new D1VehicleMasterRepository(db),
-        new D1DriverMasterRepository(db),
-        rateMasterRepo,
-        new D1VehiclePlRepository(db),
-      ),
-    ).execute({ yearMonth: target });
+    // まだ締めていない月には自動で反映し、確定済みの月は据え置く。
+    // 月を指定して保存した率はその月にしか効かないので、その月だけを対象にする。
+    const stack = masterChangeStack(db, { id: session!.id, name: session!.name ?? "" });
+    const applied = await stack.applier.execute({
+      edits: [
+        {
+          targetKind: "rate",
+          targetKey: `${def.key}|${body?.yearMonth ?? ""}`,
+          targetLabel: def.label,
+          field: "value",
+          fieldLabel: def.label,
+          beforeValue: before ? String(before.value) : null,
+          afterValue: String(value),
+        },
+      ],
+      actor: { id: session!.id, name: session!.name ?? "" },
+      onlyYearMonth: body?.yearMonth ?? null,
+    });
 
     return NextResponse.json({
       key: def.key,
       value,
-      recalculated: { yearMonth: target, vehicleCount: result.vehicleCount },
+      applied: applied.appliedYearMonths,
+      heldBack: applied.heldBackYearMonths,
+      // 画面の互換のため、いま見ている月が作り直されたかどうかも返す
+      recalculated: applied.appliedYearMonths.includes(body?.recalculateYearMonth ?? "")
+        ? { yearMonth: body?.recalculateYearMonth, vehicleCount: null }
+        : null,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "率の保存に失敗しました";

@@ -3,21 +3,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../../src/infrastructure/auth/accessControl";
 import { createDb } from "../../../../src/infrastructure/db/client";
-import { D1ImportBatchRepository } from "../../../../src/infrastructure/db/D1ImportBatchRepository";
-import {
-  D1VehicleMasterRepository,
-  D1DriverMasterRepository,
-  D1RateMasterRepository,
-} from "../../../../src/infrastructure/db/D1MasterRepository";
-import { D1VehiclePlRepository } from "../../../../src/infrastructure/db/D1VehiclePlRepository";
-import { D1ManualInputRepository } from "../../../../src/infrastructure/db/D1ManualInputRepository";
-import {
-  D1AppSettingRepository,
-  D1CleansingDecisionRepository,
-} from "../../../../src/infrastructure/db/D1CleansingDecisionRepository";
-import { FinalizeMonthlyPlUseCase } from "../../../../src/usecase/steps/finalizeMonthlyPl";
-import { RecalculateMonthlyPlUseCase } from "../../../../src/usecase/steps/recalculateMonthlyPl";
-import { D1VehiclePlOverrideRepository } from "../../../../src/infrastructure/db/D1VehiclePlOverrideRepository";
+import { D1VehicleMasterRepository } from "../../../../src/infrastructure/db/D1MasterRepository";
+import { masterChangeStack } from "../../../_lib/masterChangeStack";
 import { isSameOriginRequest } from "../../../_lib/assertSameOrigin";
 
 /** 金額として受け付けられる値に整える (負値・非数は0にする) */
@@ -58,35 +45,50 @@ export async function POST(request: Request) {
   try {
     const db = createDb(env.DB);
     const vehicleMasterRepo = new D1VehicleMasterRepository(db);
+
+    // 直す前の値を控える。控えないと履歴に残らず、元に戻せない。
+    const before = (await vehicleMasterRepo.findAllActive()).find(
+      (v) => v.vehicleNo === body.vehicleNo,
+    );
+
     await vehicleMasterRepo.updateLeaseInstallment(
       body.vehicleNo,
       toAmount(body.lease),
       toAmount(body.installment),
     );
 
-    // マスタを直したら収支表を作り直す (直した値が反映されていない表を残さない)。
-    // 再計算の材料集めは RecalculateMonthlyPlUseCase に任せる。ここで自前に集めていたときは
-    // キリン配賦を渡し忘れており、リース料を1台直すだけで24番・300番への配賦が消えていた。
-    const rateMasterRepo = new D1RateMasterRepository(db);
-    const result = await new RecalculateMonthlyPlUseCase(
-      new D1ManualInputRepository(db),
-      new D1CleansingDecisionRepository(db),
-      new D1AppSettingRepository(db),
-      rateMasterRepo,
-      new D1VehiclePlOverrideRepository(db),
-      new FinalizeMonthlyPlUseCase(
-        new D1ImportBatchRepository(db),
-        vehicleMasterRepo,
-        new D1DriverMasterRepository(db),
-        rateMasterRepo,
-        new D1VehiclePlRepository(db),
-      ),
-    ).execute({ yearMonth: body.yearMonth });
+    // まだ締めていない月には自動で反映し、確定済みの月は据え置く。
+    // 車両マスタは全期間に効くので、月を絞らない。
+    const actor = { id: session!.id, name: session!.name ?? "" };
+    const applied = await masterChangeStack(db, actor).applier.execute({
+      edits: [
+        {
+          targetKind: "vehicle" as const,
+          targetKey: body.vehicleNo,
+          targetLabel: `車番 ${body.vehicleNo}`,
+          field: "lease",
+          fieldLabel: "リース料",
+          beforeValue: before ? String(before.lease) : null,
+          afterValue: String(toAmount(body.lease)),
+        },
+        {
+          targetKind: "vehicle" as const,
+          targetKey: body.vehicleNo,
+          targetLabel: `車番 ${body.vehicleNo}`,
+          field: "installment",
+          fieldLabel: "割賦の支払",
+          beforeValue: before ? String(before.installment) : null,
+          afterValue: String(toAmount(body.installment)),
+        },
+      ],
+      actor,
+    });
 
     return NextResponse.json({
       yearMonth: body.yearMonth,
       vehicleNo: body.vehicleNo,
-      vehicleCount: result.vehicleCount,
+      applied: applied.appliedYearMonths,
+      heldBack: applied.heldBackYearMonths,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "リース料・割賦支払額の更新に失敗しました";

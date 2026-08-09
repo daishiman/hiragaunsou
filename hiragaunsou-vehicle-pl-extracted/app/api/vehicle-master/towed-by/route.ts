@@ -3,21 +3,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../../src/infrastructure/auth/accessControl";
 import { createDb } from "../../../../src/infrastructure/db/client";
-import { D1ImportBatchRepository } from "../../../../src/infrastructure/db/D1ImportBatchRepository";
-import {
-  D1VehicleMasterRepository,
-  D1DriverMasterRepository,
-  D1RateMasterRepository,
-} from "../../../../src/infrastructure/db/D1MasterRepository";
-import { D1VehiclePlRepository } from "../../../../src/infrastructure/db/D1VehiclePlRepository";
-import { D1ManualInputRepository } from "../../../../src/infrastructure/db/D1ManualInputRepository";
-import { D1VehiclePlOverrideRepository } from "../../../../src/infrastructure/db/D1VehiclePlOverrideRepository";
-import {
-  D1AppSettingRepository,
-  D1CleansingDecisionRepository,
-} from "../../../../src/infrastructure/db/D1CleansingDecisionRepository";
-import { FinalizeMonthlyPlUseCase } from "../../../../src/usecase/steps/finalizeMonthlyPl";
-import { RecalculateMonthlyPlUseCase } from "../../../../src/usecase/steps/recalculateMonthlyPl";
+import { D1VehicleMasterRepository } from "../../../../src/infrastructure/db/D1MasterRepository";
+import { masterChangeStack } from "../../../_lib/masterChangeStack";
 import { isSameOriginRequest } from "../../../_lib/assertSameOrigin";
 
 /**
@@ -61,28 +48,34 @@ export async function POST(request: Request) {
   try {
     const db = createDb(env.DB);
     const vehicleMasterRepo = new D1VehicleMasterRepository(db);
+    const before = (await vehicleMasterRepo.findAllActive()).find(
+      (v) => v.vehicleNo === body.vehicleNo,
+    );
+
     await vehicleMasterRepo.updateTowedBy(body.vehicleNo, towedBy);
 
-    const rateMasterRepo = new D1RateMasterRepository(db);
-    const result = await new RecalculateMonthlyPlUseCase(
-      new D1ManualInputRepository(db),
-      new D1CleansingDecisionRepository(db),
-      new D1AppSettingRepository(db),
-      rateMasterRepo,
-      new D1VehiclePlOverrideRepository(db),
-      new FinalizeMonthlyPlUseCase(
-        new D1ImportBatchRepository(db),
-        vehicleMasterRepo,
-        new D1DriverMasterRepository(db),
-        rateMasterRepo,
-        new D1VehiclePlRepository(db),
-      ),
-    ).execute({ yearMonth: body.yearMonth });
+    // まだ締めていない月には自動で反映し、確定済みの月は据え置く。
+    const actor = { id: session!.id, name: session!.name ?? "" };
+    const applied = await masterChangeStack(db, actor).applier.execute({
+      edits: [
+        {
+          targetKind: "vehicle" as const,
+          targetKey: body.vehicleNo,
+          targetLabel: `車番 ${body.vehicleNo}`,
+          field: "towedByVehicleNo",
+          fieldLabel: "けん引するトラクタ",
+          beforeValue: before?.towedByVehicleNo ?? null,
+          afterValue: towedBy,
+        },
+      ],
+      actor,
+    });
 
     return NextResponse.json({
       vehicleNo: body.vehicleNo,
       towedByVehicleNo: towedBy,
-      vehicleCount: result.vehicleCount,
+      applied: applied.appliedYearMonths,
+      heldBack: applied.heldBackYearMonths,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "けん引先の更新に失敗しました";
