@@ -51,7 +51,7 @@ export default async function ImportPage({
   );
 
   return (
-    <div className="max-w-3xl">
+    <div>
       <ScreenHeader screen="/import" />
       {/*
         取り込んだ内容が前回と違うときだけ、ここに1行ずつ出る。

@@ -44,7 +44,7 @@ export default async function UsagePage() {
   const canManageApiKeys = checkAccess(session, "manage_api_keys");
 
   return (
-    <div className="max-w-3xl">
+    <div>
       <ScreenHeader screen="/usage" />
 
       <div className="rounded-md border border-caution-border bg-caution-soft px-4 py-3 text-xs leading-relaxed">

@@ -101,6 +101,20 @@ export function isAccountScreen(href: string): boolean {
   return ACCOUNT_ITEMS.some((i) => i.href === href);
 }
 
+/**
+ * その画面の本文に当てる幅のクラス。AppShell の <main> でだけ使う。
+ *
+ * ページ側が個別に max-w-* を書くと、画面によって右側だけ大きく空いたり空かなかったりして
+ * 「なぜここだけ違うのか」が分からなくなる。幅は screens.ts の width 宣言から決まる。
+ * 定義の無いパス(ログイン後の例外的な画面)は既定の wide 扱いにする。
+ */
+export function contentWidthClass(pathname: string): string {
+  const width = findScreen(pathname)?.width ?? "wide";
+  // narrow も中央寄せにはしない。左端はサイドバーと揃えたまま、右にだけ余白を作る。
+  // 中央寄せにすると、サイドバーを隠したときに本文ごと動いて読む位置が変わってしまう。
+  return width === "narrow" ? "max-w-3xl" : "";
+}
+
 /** パスに対応するナビ項目 (最長一致)。該当なしは null。 */
 export function findNavItem(pathname: string): NavItem | null {
   const screen = findScreen(pathname);

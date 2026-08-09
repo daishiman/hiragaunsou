@@ -50,7 +50,7 @@ export default async function AdminImportBatchesPage() {
   ).execute();
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <ScreenHeader screen="/admin/import-batches" />
       <ImportBatchesManager
         initialBatches={batches}

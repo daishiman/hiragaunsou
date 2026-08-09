@@ -42,7 +42,7 @@ export default async function AdminVehicleMasterPage({
   const yearMonth = isYearMonth(ym) ? ym : await resolveWorkingYearMonth(db);
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <ScreenHeader
         screen="/admin/vehicle-master"
         help={

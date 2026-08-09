@@ -169,7 +169,7 @@ export default async function ManualEntryPage({
 
   return (
     // 1台1行に燃料4項目・経費4項目を並べるため、他の入力画面より広く取る
-    <div className="max-w-5xl">
+    <div>
       <ScreenHeader
         screen="/manual-entry"
         action={

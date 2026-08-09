@@ -51,7 +51,7 @@ export default async function RateSettingsPage({
   ]);
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <ScreenHeader
         screen="/rate-settings"
         help={

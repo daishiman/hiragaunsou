@@ -7,6 +7,7 @@ import {
   visibleNavGroups,
   visibleAccountGroups,
   findNavItem,
+  contentWidthClass,
   NAV_ITEMS,
   type NavBadge,
   type NavItem,
@@ -14,7 +15,8 @@ import {
 import { withYm } from "../_lib/withYm";
 import { useCurrentYm } from "./YmProvider";
 import { signOut } from "../_lib/authClient";
-import { useSidebarTooltip } from "./useSidebarTooltip";
+import { useHoverTooltip } from "./useHoverTooltip";
+import { IconButton } from "./IconButton";
 import { SidebarAccountMenu } from "./SidebarAccountMenu";
 
 /**
@@ -124,7 +126,7 @@ export function AppShell({ userName, userRole, role, badges, children }: AppShel
       {navOpen && (
         <button
           type="button"
-          aria-label="メニューを閉じる"
+          aria-label="メニューを閉じる（背景）"
           onClick={() => setNavOpen(false)}
           className="fixed inset-0 z-40 bg-ink/30 lg:hidden"
         />
@@ -208,35 +210,51 @@ export function AppShell({ userName, userRole, role, badges, children }: AppShel
           高さを固定する。下に貼り付ける工程タブ (StickyStepHeader) が
           この高さを基準に位置を決めるため、中身によって伸び縮みすると重なる。
         */}
-        <header className="sticky top-0 z-30 flex h-[var(--app-header-h)] items-center gap-3 border-b border-line bg-white/95 px-4 backdrop-blur lg:px-6">
-          <button
-            type="button"
-            onClick={() => setNavOpen((v) => !v)}
-            aria-expanded={navOpen}
-            aria-controls="app-sidebar"
-            className="btn btn-quiet btn-sm pressable lg:hidden"
-          >
-            メニュー
-          </button>
+        <header className="sticky top-0 z-30 flex h-[var(--app-header-h)] items-center gap-2 border-b border-line bg-white/95 px-4 backdrop-blur lg:px-6">
+          {/*
+            サイドバーの開閉。幅によって「開閉するもの」が違うので2つ用意するが、
+            画面に出るのは常にどちらか1つだけ。どちらも同じ位置の同じ大きさのアイコンで、
+            名前(aria-label)は必ず「何が起きるか」を動詞で書く。
+
+            かつてここには「メニュー」という文字ボタンがあった。名詞なので押すと何が
+            起きるか分からず、しかも細い画面でしか出ないため「押しても何も出ない」と
+            受け取られていた。名前を動作にして、見た目はアイコンに統一した。
+          */}
+          <span className="lg:hidden">
+            <IconButton
+              name={navOpen ? "close" : "menu"}
+              label={navOpen ? "メニューを閉じる" : "メニューを開く"}
+              onClick={() => setNavOpen((v) => !v)}
+              aria-expanded={navOpen}
+              aria-controls="app-sidebar"
+            />
+          </span>
           {/*
             PC用の表示/非表示トグル。隠した状態でも必ずここに出ているので、
             戻し方が分からなくなることがない (1操作で元に戻せる)。
           */}
-          <button
-            type="button"
-            onClick={() => writeSidebarHidden(!sidebarHidden)}
-            aria-expanded={!sidebarHidden}
-            aria-controls="app-sidebar"
-            className="btn btn-quiet btn-sm pressable hidden lg:inline-flex"
-          >
-            {sidebarHidden ? "メニューを表示" : "メニューを隠す"}
-          </button>
+          <span className="hidden lg:inline-flex">
+            <IconButton
+              name={sidebarHidden ? "panel-left-open" : "panel-left-close"}
+              label={sidebarHidden ? "メニューを表示" : "メニューを隠す"}
+              onClick={() => writeSidebarHidden(!sidebarHidden)}
+              aria-expanded={!sidebarHidden}
+              aria-controls="app-sidebar"
+            />
+          </span>
           <p className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
             {current?.label ?? "車両収支管理システム"}
           </p>
         </header>
 
-        <main className="min-w-0 flex-1 px-4 py-6 lg:px-8 lg:py-8">{children}</main>
+        {/*
+          本文の幅はここ1箇所で決める。ページ側は max-w-* を書かない
+          (書くと画面によって右の余白がまちまちになり、揃っていないことだけが目に付く)。
+          どの画面がどの幅かは app/_lib/screens.ts の width 宣言が正。
+        */}
+        <main className={`min-w-0 flex-1 px-4 py-6 lg:px-8 lg:py-8 ${contentWidthClass(pathname)}`}>
+          {children}
+        </main>
 
         {/*
           フッターはアプリ名だけにした。かつて置いていた3本のリンクは
@@ -258,7 +276,7 @@ interface SidebarHomeLinkProps {
 
 /** ホームリンク単体。ホバー説明は自前ツールチップで毎回確実に出す (rules of hooks のため独立コンポーネント化)。 */
 function SidebarHomeLink({ active, closeNav, desc }: SidebarHomeLinkProps) {
-  const { triggerRef, handlers, tooltip } = useSidebarTooltip<HTMLAnchorElement>(desc);
+  const { triggerRef, handlers, tooltip } = useHoverTooltip<HTMLAnchorElement>(desc);
 
   return (
     <div className="border-b border-line px-2 pb-3 pt-3">
@@ -290,7 +308,7 @@ interface SidebarNavLinkProps {
 
 /** グループ内メニュー項目1件。ホバー説明は自前ツールチップで毎回確実に出す (rules of hooks のため独立コンポーネント化)。 */
 function SidebarNavLink({ item, href, active, count, closeNav }: SidebarNavLinkProps) {
-  const { triggerRef, handlers, tooltip } = useSidebarTooltip<HTMLAnchorElement>(item.desc);
+  const { triggerRef, handlers, tooltip } = useHoverTooltip<HTMLAnchorElement>(item.desc);
 
   return (
     <li>

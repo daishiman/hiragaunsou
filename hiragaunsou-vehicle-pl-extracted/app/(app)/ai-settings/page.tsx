@@ -29,7 +29,7 @@ export default async function AiSettingsPage() {
   ).execute();
 
   return (
-    <div className="max-w-3xl">
+    <div>
       <ScreenHeader screen="/ai-settings" />
       <AiSettingsManager initialCredentials={credentials} />
     </div>

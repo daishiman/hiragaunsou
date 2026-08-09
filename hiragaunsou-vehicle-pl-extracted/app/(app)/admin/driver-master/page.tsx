@@ -46,7 +46,7 @@ export default async function AdminDriverMasterPage({
   const yearMonth = isYearMonth(ym) ? ym : await resolveWorkingYearMonth(db);
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <ScreenHeader
         screen="/admin/driver-master"
         help={

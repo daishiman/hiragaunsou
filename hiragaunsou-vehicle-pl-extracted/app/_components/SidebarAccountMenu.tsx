@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { NavGroup } from "../_lib/navigation";
+import { Icon } from "./Icon";
 
 /**
  * サイドバー下部のユーザー名から開くアカウントメニュー。
@@ -14,7 +15,7 @@ import type { NavGroup } from "../_lib/navigation";
  *
  * 位置は body へのポータル + fixed で決める。サイドバー (aside) は overflow-y-auto を
  * 持つので、内側に絶対配置すると上方向へ開いたメニューが切り取られる
- * (useSidebarTooltip.tsx と同じ理由・同じ回避)。
+ * (useHoverTooltip.tsx と同じ理由・同じ回避)。
  */
 
 export interface SidebarAccountMenuProps {
@@ -230,16 +231,8 @@ export function SidebarAccountMenu({
             {currentItem ? currentItem.label : userRole}
           </span>
         </span>
-        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" className="shrink-0">
-          <path
-            d={open ? "M1.5 6.5 L5 3 L8.5 6.5" : "M1.5 3.5 L5 7 L8.5 3.5"}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        {/* 開閉の向き。図形は共通のアイコンセットから取る (自前で描き起こさない) */}
+        <Icon name={open ? "chevron-up" : "chevron-down"} size={14} className="shrink-0" />
       </button>
       {menu && typeof document !== "undefined" ? createPortal(menu, document.body) : null}
     </div>

@@ -40,7 +40,7 @@ export default async function MasterChangesPage() {
   }
 
   return (
-    <div className="max-w-4xl">
+    <div>
       <ScreenHeader
         screen="/master-changes"
         help={
