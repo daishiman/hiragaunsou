@@ -182,6 +182,25 @@ describe("D1ImportBatchRepository", () => {
       expect(await repo.listYearMonths(2)).toEqual(["2026-05", "2026-04"]);
     });
 
+    it("年月の大小ではなく、最後に取り込んだ順に並べる", async () => {
+      // 過去の月をあとから取り込み直すことがある。「いま手を動かしている月」は
+      // 年月の新しさではなく、最後に取り込んだ月で決まる。
+      ctx.sqlite
+        .prepare(
+          "INSERT INTO csv_import_batch (id, source_type, year_month, file_name, row_count, imported_at) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .run("old", "payroll", "2026-08", "a.csv", 1, 1000);
+      ctx.sqlite
+        .prepare(
+          "INSERT INTO csv_import_batch (id, source_type, year_month, file_name, row_count, imported_at) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .run("new", "payroll", "2026-05", "b.csv", 1, 2000);
+      expect(await new D1ImportBatchRepository(ctx.db).listYearMonths()).toEqual([
+        "2026-05",
+        "2026-08",
+      ]);
+    });
+
     it("取込が1件も無ければ空配列", async () => {
       expect(await new D1ImportBatchRepository(ctx.db).listYearMonths()).toEqual([]);
     });

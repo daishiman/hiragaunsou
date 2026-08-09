@@ -413,7 +413,7 @@ export function ImportForm({
         <section className="rounded-xl border border-brand bg-gradient-to-br from-white to-brand-soft p-5">
           <p className="text-xs font-semibold text-ink-muted">この月の取込はここまでで大丈夫です</p>
           <p className="mt-1 text-lg font-bold leading-relaxed text-ink">
-            次は<span className="num">{yearMonth}</span>分のデータ整形(STEP2)へ進みます
+            次は<span className="num">{describeYearMonth(yearMonth)}</span>分のデータ整形(STEP2)へ進みます
           </p>
           <p className="mt-1 text-xs text-ink-muted">
             傭車・2重計上・諸口を判断すると、月次収支表と年間集計に反映されます。
