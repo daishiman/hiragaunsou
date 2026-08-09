@@ -153,4 +153,37 @@ describe("D1ImportBatchRepository", () => {
       await expect(repo.deleteBatches("2026-05", "payroll", ["b1"])).rejects.toThrow();
     });
   });
+
+  describe("listYearMonths", () => {
+    async function seed(repo: D1ImportBatchRepository, yearMonth: string, sourceType: string) {
+      await repo.createBatch({
+        id: `${yearMonth}-${sourceType}`,
+        sourceType,
+        yearMonth,
+        fileName: "a.csv",
+        importedBy: null,
+        rowCount: 1,
+      });
+    }
+
+    it("同じ月に複数帳票を取り込んでも月は1つだけ返す(新しい順)", async () => {
+      const repo = new D1ImportBatchRepository(ctx.db);
+      await seed(repo, "2026-04", "payroll");
+      await seed(repo, "2026-05", "vehicle_operation");
+      await seed(repo, "2026-05", "sales_monitor");
+      expect(await repo.listYearMonths()).toEqual(["2026-05", "2026-04"]);
+    });
+
+    it("limitで件数を絞れる", async () => {
+      const repo = new D1ImportBatchRepository(ctx.db);
+      await seed(repo, "2026-03", "payroll");
+      await seed(repo, "2026-04", "payroll");
+      await seed(repo, "2026-05", "payroll");
+      expect(await repo.listYearMonths(2)).toEqual(["2026-05", "2026-04"]);
+    });
+
+    it("取込が1件も無ければ空配列", async () => {
+      expect(await new D1ImportBatchRepository(ctx.db).listYearMonths()).toEqual([]);
+    });
+  });
 });

@@ -33,6 +33,16 @@ export interface WorkflowStepProgress {
   detail: string;
   /** 前の必須ステップが終わっていないため、まだ着手できない */
   blocked: boolean;
+  /**
+   * いま押したときに実際に続きができる画面。
+   *
+   * ステップ定義の href は「そのステップの入口」であり、途中まで進んだ状態では行き先が変わる。
+   * 例: STEP2は取込・整形・キリン配賦の3つを含むため、取込が済んだあとに /import へ送ると
+   * 「取込済み」の画面に戻されて次に何をすればよいか分からなくなる。
+   */
+  href: string;
+  /** その画面で何をすることになるか。href が入口と違うときだけ入る */
+  actionLabel: string | null;
 }
 
 export interface WorkflowProgressResult {
@@ -122,6 +132,18 @@ export class GetWorkflowProgressUseCase {
     const kirinEntered = kirinAmount > 0 || manualInputs.some((r) => r.miscOther > 0);
     const isMonthConfirmed = confirmation.total > 0 && confirmation.confirmed >= confirmation.total;
 
+    // 取込(STEP1・2)が済むまで手入力系(STEP3・5・6)とチェック(7・8)は着手できない
+    const importsDone = opBatch !== null && salesBatch !== null;
+
+    /**
+     * 収支表が0台のときの理由。「取込がまだ」と「取り込んだが車両マスタに1台も居ない」は
+     * 対処が全く違う。取込を終えた人に「先に取込が必要です」と出すと、何をしても進まない画面に
+     * 見えるため、必ず分けて伝える。
+     */
+    const emptyReason = importsDone
+      ? "運行実績・売上は取込済みですが、収支表に載る車両が0台です。車両マスタに車両が登録されているか確認してください"
+      : "先に運行実績・売上の取込が必要です";
+
     const statusById: Record<WorkflowStepId, { status: WorkflowStepStatus; detail: string }> = {
       1: opBatch
         ? { status: "done", detail: `${opBatch.fileName} を取込済み (${opBatch.rowCount}行)` }
@@ -143,7 +165,7 @@ export class GetWorkflowProgressUseCase {
         status: entryStatus(fuelEntered, total),
         detail:
           total === 0
-            ? "先に運行実績・売上の取込が必要です"
+            ? emptyReason
             : `${total}台中 ${fuelEntered}台 入力済み`,
       },
       4: payrollBatch
@@ -153,14 +175,14 @@ export class GetWorkflowProgressUseCase {
         status: entryStatus(expenseEntered, total),
         detail:
           total === 0
-            ? "先に運行実績・売上の取込が必要です"
+            ? emptyReason
             : `${total}台中 ${expenseEntered}台 入力済み`,
       },
       6: {
         status: entryStatus(tollEntered, total),
         detail:
           total === 0
-            ? "先に運行実績・売上の取込が必要です"
+            ? emptyReason
             : `${total}台中 ${tollEntered}台 入力済み(未入力分は組合割引率で計算)`,
       },
       7:
@@ -180,13 +202,30 @@ export class GetWorkflowProgressUseCase {
             : { status: "todo", detail: "月次収支表を確認して「この月を確定する」を押してください" },
     };
 
-    // 取込(STEP1・2)が済むまで手入力系(STEP3・5・6)とチェック(7・8)は着手できない
-    const importsDone = opBatch !== null && salesBatch !== null;
+    /**
+     * STEP2は「取込 → 傭車・2重計上・諸口の整理 → キリンの協力金の配賦」の3つを含む。
+     * どこまで進んだかで続きの画面が変わるため、入口の href をそのまま返さない。
+     */
+    const step2Next: { href: string; actionLabel: string } | null = !salesBatch
+      ? null
+      : cleansingPending > 0
+        ? { href: "/cleansing", actionLabel: "傭車・2重計上・諸口を判断する" }
+        : !kirinEntered
+          ? { href: "/manual-entry?step=2", actionLabel: "キリンの協力金を入力する" }
+          : null;
 
     const steps: WorkflowStepProgress[] = WORKFLOW_STEPS.map((step) => {
       const s = statusById[step.id];
       const blocked = !importsDone && step.id >= 3;
-      return { step, status: s.status, detail: s.detail, blocked };
+      const next = step.id === 2 ? step2Next : null;
+      return {
+        step,
+        status: s.status,
+        detail: s.detail,
+        blocked,
+        href: next?.href ?? step.href,
+        actionLabel: next?.actionLabel ?? null,
+      };
     });
 
     const nextStep = steps.find((s) => !s.blocked && s.status !== "done") ?? null;

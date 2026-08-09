@@ -13,13 +13,15 @@ import { D1RateMasterRepository, RATE_KEYS } from "../../src/infrastructure/db/D
 import { D1AnnualReferenceRepository } from "../../src/infrastructure/db/D1AnnualReferenceRepository";
 import { GetWorkflowProgressUseCase } from "../../src/usecase/steps/getWorkflowProgress";
 import { GetPeriodOverviewUseCase } from "../../src/usecase/steps/getPeriodOverview";
-import { currentYearMonth, defaultImportYearMonth } from "../_lib/yearMonth";
+import { defaultImportYearMonth, isYearMonth, selectableYearMonths } from "../_lib/yearMonth";
+import { resolveWorkingYearMonth } from "../_lib/workingYearMonth";
 import { yearMonthLabel, man, num, kmPriceLabel, pct } from "../_lib/format";
 import { withYm } from "../_lib/withYm";
 import { PageHead } from "../_components/PageHead";
 import { EmptyState } from "../_components/EmptyState";
 import { StatTile } from "../_components/StatTile";
 import { Disclosure } from "../_components/Disclosure";
+import { YearMonthSelect } from "../_components/YearMonthSelect";
 
 /**
  * ホーム。
@@ -28,14 +30,26 @@ import { Disclosure } from "../_components/Disclosure";
  * そのため画面の最上段は直近で締めた月の経営サマリ(ダッシュボードの要約)とし、
  * その下に「次にやること」という入力作業の進行案内を続ける2段構成にしている。
  */
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ ym?: string }>;
+}) {
   const session = await getServerSession();
   if (!session) redirect("/sign-in");
 
-  const yearMonth = currentYearMonth();
+  const { ym } = await searchParams;
   const overviewYearMonth = defaultImportYearMonth();
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);
+
+  /*
+    「次にやること」が話題にする月。当月固定だったため、5月分を取り込んでもホームは
+    当月の話をし続け、取り込んだ内容がどこにも出てこないように見えていた。
+    実データから「まだ締めていない、取込のある最も新しい月」を採り、
+    利用者が別の月を見たいときは ?ym= で切り替えられるようにする。
+  */
+  const yearMonth = isYearMonth(ym) ? ym : await resolveWorkingYearMonth(db);
 
   const canViewAnalysis = checkAccess(session, "view");
 
@@ -135,14 +149,18 @@ export default async function HomePage() {
         「入力は締めるための手段」という位置づけを画面構成でも表す。
       */}
       <section className="mt-5 rounded-xl border border-brand bg-gradient-to-br from-white to-brand-soft p-5 sm:p-6">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs font-semibold text-ink-muted">
             次にやること
             <span className="num ml-1.5 font-normal text-ink-muted/80">({yearMonthLabel(yearMonth)}度)</span>
           </p>
-          <p className="num text-xs text-ink-muted">
-            {progress.doneCount} / {progress.totalCount} ステップ完了
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="num text-xs text-ink-muted">
+              {progress.doneCount} / {progress.totalCount} ステップ完了
+            </p>
+            {/* 締める月を跨いで作業することがあるので、ホームからも月を切り替えられるようにする */}
+            <YearMonthSelect basePath="/" value={yearMonth} options={selectableYearMonths(13)} />
+          </div>
         </div>
 
         <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-subtle">
@@ -174,11 +192,16 @@ export default async function HomePage() {
               {next.step.summary}
             </Disclosure>
             <p className="num mt-2 text-xs text-ink-muted">{next.detail}</p>
+            {/*
+              行き先はステップの入口ではなく「続きができる画面」。
+              例: STEP2の取込が済んでいれば /import ではなくデータ整形やキリン配賦へ送る。
+              ボタンの文言も、そこで何をするのかが分かる言葉に差し替える。
+            */}
             <Link
-              href={withYm(next.step.href, yearMonth)}
+              href={withYm(next.href, yearMonth)}
               className="btn btn-primary pressable mt-5 inline-block"
             >
-              STEP {next.step.id} を開く
+              {next.actionLabel ?? `STEP ${next.step.id} を開く`}
             </Link>
           </div>
         ) : (

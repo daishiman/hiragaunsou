@@ -72,6 +72,23 @@ function describeResult(data: Record<string, unknown>): string {
 }
 
 /**
+ * 取込のあとに収支表の下地を作れたかどうかを、業務の言葉で1行にする。
+ *
+ * 取込は成功しているのに手入力の自動計算値・月次収支表・年間集計が空のまま、という状態が
+ * 起きていた。取込のたびに下地を作り直すようにしたので、その結果まで画面に出して
+ * 「取り込んだのに何も変わらない」という見え方を残さない。
+ */
+function describePlRebuild(value: unknown): string {
+  if (typeof value !== "object" || value === null) return "";
+  const r = value as { status?: string; vehicleCount?: number; reason?: string };
+  if (r.status === "built") return `。収支表の下地を ${r.vehicleCount ?? 0} 台分作りました`;
+  if (r.status !== "skipped") return "";
+  if (r.reason === "imports_incomplete") return "。収支表は運行実績と売上の両方が揃うと作られます";
+  if (r.reason === "confirmed") return "。この月は確定済みのため収支表は作り直していません";
+  return "。収支表の作り直しに失敗しました(手入力画面から作り直せます)";
+}
+
+/**
  * 業務フローのSTEPごとに投入口を分けた取込画面。
  * 種別を利用者に選ばせるのではなく「どのSTEPの帳票か」を投入口で固定し、
  * サーバー側の自動判定は取り違え検知に使う。送信は1件ずつ直列に行う。
@@ -101,6 +118,11 @@ export function ImportForm({
   const [check, setCheck] = useState<CheckState | null>(null);
 
   const doneCount = IMPORT_SOURCES.filter((source) => (imported[source.sourceType] ?? []).length > 0).length;
+
+  // 収支表の下地は運行実績と売上の2つで作られる。この2つが揃った時点で先へ進めるので、
+  // 4つ全部を待たずに次の手順を案内する。
+  const importsReady =
+    (imported["vehicle_operation"] ?? []).length > 0 && (imported["sales_monitor"] ?? []).length > 0;
 
   // ホームの各STEPカード「この手順を開く」から来たときは、その帳票を主役にする。
   // サイドバー「データ取込」から来たとき(指定なし)は、まだ取り込んでいない最初の帳票を
@@ -301,7 +323,7 @@ export function ImportForm({
         [sourceType]: {
           ok: true,
           fileName: file.name,
-          message: `${describeYearMonth(targetYearMonth)}分として取り込みました（${describeResult(data)}）`,
+          message: `${describeYearMonth(targetYearMonth)}分として取り込みました（${describeResult(data)}）${describePlRebuild(data.plRebuild)}`,
           basis,
         },
       }));
@@ -369,6 +391,32 @@ export function ImportForm({
           : "すべて取込済みです。内容を直したいときはタップして開けます。"}
       </p>
 
+      {/*
+        取込のあとに何をすればよいかの案内。
+        以前は売上モニタリストのカードの中にしか置いておらず、4つとも取り込むとそのカードが
+        畳まれて案内ごと消えていた(「全部入れたのに次が分からない」の直接の原因)。
+        カードの開閉と無関係な位置に、常に出す。
+      */}
+      {importsReady ? (
+        <section className="rounded-xl border border-brand bg-gradient-to-br from-white to-brand-soft p-5">
+          <p className="text-xs font-semibold text-ink-muted">この月の取込はここまでで大丈夫です</p>
+          <p className="mt-1 text-lg font-bold leading-relaxed text-ink">
+            次は<span className="num">{yearMonth}</span>分のデータ整形(STEP2)へ進みます
+          </p>
+          <p className="mt-1 text-xs text-ink-muted">
+            傭車・2重計上・諸口を判断すると、月次収支表と年間集計に反映されます。
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link href={`/cleansing?ym=${yearMonth}`} className="btn btn-primary pressable">
+              データ整形(STEP2)へ進む
+            </Link>
+            <Link href="/" className="btn btn-quiet pressable">
+              残りの手順をホームで確認する
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
       {[...IMPORT_SOURCES].sort((a, b) => {
         if (!focusSourceType) return 0;
         if (a.sourceType === focusSourceType) return -1;
@@ -413,16 +461,6 @@ export function ImportForm({
                   </li>
                 ))}
               </ul>
-            ) : null}
-
-            {/* STEP2(売上モニタリスト)が取り込めたら、次にやること(データ整形)へ誘導する */}
-            {source.sourceType === "sales_monitor" && batches.length > 0 && !isConflicting ? (
-              <Link
-                href={`/cleansing?ym=${yearMonth}`}
-                className="pressable mt-3 inline-flex items-center gap-1 rounded-md bg-brand-soft px-3 py-1.5 text-xs font-semibold text-brand-deep hover:bg-brand-soft/70"
-              >
-                次へ: データ整形(STEP2)に進む →
-              </Link>
             ) : null}
 
             {isChecking ? (

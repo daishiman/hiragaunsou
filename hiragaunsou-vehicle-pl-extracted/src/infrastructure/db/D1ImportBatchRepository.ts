@@ -147,6 +147,22 @@ export class D1ImportBatchRepository implements ImportBatchRepository {
   }
 
   /**
+   * 取込のある年月を新しい順に返す。
+   *
+   * ホームの「次にやること」がどの月の話をするかを決めるのに使う。
+   * 当月固定にしていたため、5月分を取り込んだ直後でもホームは当月の話をしており、
+   * 「取り込んだのに何も変わらない」という見え方になっていた。
+   */
+  async listYearMonths(limit = 13): Promise<string[]> {
+    const rows = await this.db
+      .selectDistinct({ yearMonth: csvImportBatch.yearMonth })
+      .from(csvImportBatch)
+      .orderBy(desc(csvImportBatch.yearMonth))
+      .limit(limit);
+    return rows.map((r) => r.yearMonth);
+  }
+
+  /**
    * 管理画面(/admin/import-batches)向け: 全期間・全帳票種別の取込バッチを新しい順に返す。
    * インターフェース(ImportBatchRepository)には含めない管理専用の拡張メソッド
    * (通常業務のUseCaseからは使わせず、誤って全件走査するコードが増えるのを防ぐ)。

@@ -9,6 +9,7 @@ import {
   stubVehiclePlRepo,
 } from "../fixtures/stubRepositories";
 import { plRow } from "../fixtures/vehiclePlRow";
+import { CLEANSING_SOURCE_TYPE } from "../../src/usecase/steps/getCleansingQueue";
 
 const YM = "2026-05";
 
@@ -182,5 +183,66 @@ describe("GetWorkflowProgressUseCase", () => {
       manualInputs: [manualInput("1", { equip: 3000, mainte: 2000 })],
     }).execute(YM);
     expect(result.steps.find((s) => s.step.id === 5)?.status).toBe("todo");
+  });
+
+  describe("続きができる画面(href)への差し替え", () => {
+    it("取込前は各ステップの入口をそのまま指す", async () => {
+      const result = await useCase({}).execute(YM);
+      const step2 = result.steps.find((s) => s.step.id === 2)!;
+      expect(step2.href).toBe(step2.step.href);
+      expect(step2.actionLabel).toBeNull();
+    });
+
+    it("売上を取り込んだあと要確認が残っていれば、取込画面ではなくデータ整形へ送る", async () => {
+      // 取込済みの画面へ戻されると「もう取り込んだのに何をすればいいのか」で止まる。
+      const result = await useCase({
+        batches: {
+          ...ALL_IMPORTED,
+          [`${YM}:${CLEANSING_SOURCE_TYPE}`]: {
+            fileName: "売上モニタリスト.csv",
+            rowCount: 200,
+            flaggedRowCount: 5,
+          },
+        },
+        vehicleCount: 3,
+        cleansingDecisions: [],
+      }).execute(YM);
+      const step2 = result.steps.find((s) => s.step.id === 2)!;
+      expect(step2.href).toBe("/cleansing");
+      expect(step2.actionLabel).toBe("傭車・2重計上・諸口を判断する");
+    });
+
+    it("整形が済んでキリンの配賦だけが残っていれば、手入力のキリン配賦へ送る", async () => {
+      const result = await useCase({ batches: ALL_IMPORTED, vehicleCount: 3 }).execute(YM);
+      const step2 = result.steps.find((s) => s.step.id === 2)!;
+      expect(step2.href).toBe("/manual-entry?step=2");
+      expect(step2.actionLabel).toBe("キリンの協力金を入力する");
+    });
+
+    it("キリンの配賦まで済んでいればSTEP2は差し替えない", async () => {
+      const result = await useCase({
+        batches: ALL_IMPORTED,
+        vehicleCount: 3,
+        kirinAmount: 500_000,
+      }).execute(YM);
+      const step2 = result.steps.find((s) => s.step.id === 2)!;
+      expect(step2.href).toBe(step2.step.href);
+      expect(step2.actionLabel).toBeNull();
+    });
+  });
+
+  describe("収支表が0台のときの理由", () => {
+    it("取込前は「先に取込が必要」と伝える", async () => {
+      const result = await useCase({}).execute(YM);
+      expect(result.steps.find((s) => s.step.id === 3)!.detail).toContain("先に運行実績・売上の取込が必要です");
+    });
+
+    it("取込済みで0台なら、取込を促さず車両マスタを確認するよう伝える", async () => {
+      // 取り込んだ人に「先に取込が必要」と出すと、何をしても進まない画面に見える。
+      const result = await useCase({ batches: ALL_IMPORTED, vehicleCount: 0 }).execute(YM);
+      const detail = result.steps.find((s) => s.step.id === 3)!.detail;
+      expect(detail).toContain("車両マスタ");
+      expect(detail).not.toContain("先に運行実績・売上の取込が必要です");
+    });
   });
 });
