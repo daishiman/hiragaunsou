@@ -46,15 +46,30 @@ export async function resolveWorkingYearMonth(db: Db): Promise<string> {
  *
  * 取込のある月だけを候補にするのが要点。収支表の行があるかどうかで選ぶと、
  * 取込ゼロの月の収支表を拾ってしまい、直したはずの症状がここだけ再発する。
+ *
+ * どの根拠で選んだかも返す。締めた月の数字か、まだ作業中の月の途中経過かで
+ * 数字の読み方が変わるため、画面の見出しで言い分ける必要がある。
  */
-export async function resolveOverviewYearMonth(db: Db): Promise<string> {
+export type OverviewYearMonth = {
+  yearMonth: string;
+  /** confirmed = 締め済みの月 / inProgress = まだ締めていない作業中の月 */
+  basis: "confirmed" | "inProgress";
+};
+
+export async function resolveOverviewYearMonth(db: Db): Promise<OverviewYearMonth> {
   const months = await new D1ImportBatchRepository(db).listYearMonths(24);
-  if (months.length === 0) return defaultImportYearMonth();
+  if (months.length === 0) {
+    return { yearMonth: defaultImportYearMonth(), basis: "inProgress" };
+  }
 
   const vehiclePlRepo = new D1VehiclePlRepository(db);
   const confirmations = await Promise.all(
     months.map(async (ym) => ({ ym, c: await vehiclePlRepo.getConfirmation(ym) })),
   );
   const confirmed = confirmations.find(({ c }) => c.total > 0 && c.confirmed >= c.total);
-  return confirmed?.ym ?? months[0] ?? defaultImportYearMonth();
+  if (confirmed) return { yearMonth: confirmed.ym, basis: "confirmed" };
+  return {
+    yearMonth: months[0] ?? defaultImportYearMonth(),
+    basis: "inProgress",
+  };
 }

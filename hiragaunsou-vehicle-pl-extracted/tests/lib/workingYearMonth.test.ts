@@ -97,27 +97,34 @@ describe("resolveOverviewYearMonth", () => {
   }
 
   it("取込が1件も無ければ取込画面と同じ既定(前月)に揃える", async () => {
-    expect(await resolveOverviewYearMonth(ctx.db)).toBe(defaultImportYearMonth());
+    expect((await resolveOverviewYearMonth(ctx.db)).yearMonth).toBe(defaultImportYearMonth());
   });
 
   it("締めた月があれば、その最も新しい月の数字を見せる", async () => {
     addBatch("2026-04");
     addBatch("2026-05");
     addPlRow("2026-04", "101", true);
-    expect(await resolveOverviewYearMonth(ctx.db)).toBe("2026-04");
+    expect(await resolveOverviewYearMonth(ctx.db)).toEqual({
+      yearMonth: "2026-04",
+      basis: "confirmed",
+    });
   });
 
   it("まだ1つも締めていなければ、取込のある最新月の途中経過を見せる", async () => {
     addBatch("2026-04");
     addBatch("2026-05");
     addPlRow("2026-05", "101", false);
-    expect(await resolveOverviewYearMonth(ctx.db)).toBe("2026-05");
+    // 締めていない月の数字は途中経過。画面の見出しで言い分けられるよう根拠も返す
+    expect(await resolveOverviewYearMonth(ctx.db)).toEqual({
+      yearMonth: "2026-05",
+      basis: "inProgress",
+    });
   });
 
   it("取込が1件も無い月に収支表だけが残っていても、その月は選ばない", async () => {
     addBatch("2026-05");
     addPlRow("2026-05", "101", false);
     addPlRow("2026-07", "101", false);
-    expect(await resolveOverviewYearMonth(ctx.db)).toBe("2026-05");
+    expect((await resolveOverviewYearMonth(ctx.db)).yearMonth).toBe("2026-05");
   });
 });

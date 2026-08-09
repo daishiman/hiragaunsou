@@ -49,7 +49,8 @@ export default async function HomePage({
     残っていると売上0円・赤字だけのサマリが一番上に出ていた。
     確定済みの直近月 → 無ければ取込のある最新月、と実データから決める。
   */
-  const overviewYearMonth = await resolveOverviewYearMonth(db);
+  const overviewTarget = await resolveOverviewYearMonth(db);
+  const overviewYearMonth = overviewTarget.yearMonth;
 
   /*
     「次にやること」が話題にする月。当月固定だったため、5月分を取り込んでもホームは
@@ -112,7 +113,14 @@ export default async function HomePage({
           />
         ) : (
           <section>
-            <p className="text-xs font-semibold text-ink-muted">{overview.label}度 経営サマリ(締め済み直近月)</p>
+            {/*
+              締めた月の数字か、まだ締めていない作業中の月の途中経過かで数字の重みが違う。
+              どちらも「直近の月」ではあるので、見出しでどちらなのかを言い切る。
+            */}
+            <p className="text-xs font-semibold text-ink-muted">
+              {overview.label}度 経営サマリ
+              {overviewTarget.basis === "confirmed" ? "(締め済み直近月)" : "(締め作業中・途中経過)"}
+            </p>
             <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <StatTile
                 hero
