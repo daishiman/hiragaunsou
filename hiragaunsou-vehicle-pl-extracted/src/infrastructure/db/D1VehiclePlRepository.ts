@@ -163,6 +163,44 @@ export class D1VehiclePlRepository implements VehiclePlRepository {
     };
   }
 
+  /**
+   * 収支表がある月を、その月の中身の要約つきで新しい順に返す。
+   *
+   * 管理画面で「この月を消す」を選ぶ前に、何がどれだけ消えるのかを見せるために使う。
+   * 台数だけでは判断できないので、売上と損益も一緒に出す
+   * (取込が無いのに残っている月は、売上0円・損益が大きな赤字という形で見分けられる)。
+   */
+  async listYearMonthSummaries(): Promise<
+    { yearMonth: string; vehicleCount: number; sales: number; profit: number; confirmed: number }[]
+  > {
+    const rows = await this.db
+      .select({
+        yearMonth: vehiclePl.yearMonth,
+        vehicleCount: count(),
+        sales: sum(vehiclePl.sales),
+        profit: sum(vehiclePl.profit),
+        confirmed: sum(vehiclePl.confirmed),
+      })
+      .from(vehiclePl)
+      .groupBy(vehiclePl.yearMonth)
+      .orderBy(sql`${vehiclePl.yearMonth} desc`);
+    // SQLite の SUM() は文字列で返ることがある。数として扱う場所で毎回変換すると漏れるので、ここで揃える。
+    return rows.map((r) => ({
+      yearMonth: r.yearMonth,
+      vehicleCount: r.vehicleCount,
+      sales: Number(r.sales ?? 0),
+      profit: Number(r.profit ?? 0),
+      confirmed: Number(r.confirmed ?? 0),
+    }));
+  }
+
+  /** その月の収支表を丸ごと消す。@returns 消した行数 */
+  async deleteYearMonth(yearMonth: string): Promise<number> {
+    const rows = await this.db.select({ value: count() }).from(vehiclePl).where(eq(vehiclePl.yearMonth, yearMonth));
+    await this.db.delete(vehiclePl).where(eq(vehiclePl.yearMonth, yearMonth));
+    return rows[0]?.value ?? 0;
+  }
+
   async setConfirmed(yearMonth: string, confirmed: boolean): Promise<void> {
     await this.db
       .update(vehiclePl)

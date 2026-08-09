@@ -11,8 +11,14 @@ import {
   ListImportBatchDeletionLogUseCase,
   ListImportBatchesUseCase,
 } from "../../../../src/usecase/steps/manageImportBatches";
+import { D1VehiclePlRepository } from "../../../../src/infrastructure/db/D1VehiclePlRepository";
+import {
+  ListMonthlyPlDeletionLogUseCase,
+  ListMonthsWithoutImportsUseCase,
+} from "../../../../src/usecase/steps/manageMonthlyPlData";
 import { PageHead } from "../../../_components/PageHead";
 import { ImportBatchesManager } from "./ImportBatchesManager";
+import { EmptyMonthsManager } from "./EmptyMonthsManager";
 
 /**
  * /admin/import-batches: 管理者による全期間・全帳票種別の取込バッチ管理画面 (manage_imports=admin専用)。
@@ -33,6 +39,15 @@ export default async function AdminImportBatchesPage() {
   const deletionLog = await new ListImportBatchDeletionLogUseCase(new D1AuditLogRepository(db)).execute();
   // 取り込んだファイルの記録 (マスタ取込も含む)。同じファイルを二重に取り込まないための照合に使う。
   const fileLog = await new D1FileImportLogRepository(db).listAll();
+  // ファイルを1件も取り込んでいないのに収支表だけが残っている月。
+  // 探す手間をこちらで引き受け、消すかどうかの判断は利用者に残す。
+  const emptyMonths = await new ListMonthsWithoutImportsUseCase(
+    new D1VehiclePlRepository(db),
+    new D1ImportBatchRepository(db),
+  ).execute();
+  const emptyMonthsDeletionLog = await new ListMonthlyPlDeletionLogUseCase(
+    new D1AuditLogRepository(db),
+  ).execute();
 
   return (
     <div className="max-w-5xl">
@@ -45,6 +60,10 @@ export default async function AdminImportBatchesPage() {
         initialBatches={batches}
         initialDeletionLog={deletionLog}
         initialFileLog={fileLog}
+      />
+      <EmptyMonthsManager
+        initialMonths={emptyMonths}
+        initialDeletionLog={emptyMonthsDeletionLog}
       />
     </div>
   );
