@@ -42,6 +42,7 @@ export {
 export { EditableField, EditableRowCells, SelectEntryField } from "./EditableField";
 export { EditFormActionBar } from "./EditFormActionBar";
 export { UnsavedChangesBar } from "./UnsavedChangesBar";
+export { UnsavedLeaveGuard } from "./UnsavedLeaveGuard";
 export { requestLeave, setLeaveGuard, type LeaveGuard } from "./navigationGuard";
 export { saveMasterChanges } from "./submitMasterChanges";
 export { saveRateChanges } from "./submitRateChanges";

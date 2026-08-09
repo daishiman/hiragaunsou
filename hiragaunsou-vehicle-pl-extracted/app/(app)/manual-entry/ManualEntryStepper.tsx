@@ -7,6 +7,7 @@ import { ListToolbar } from "../../_components/ListToolbar";
 import { NumberEntryField } from "../../_components/NumberEntryField";
 import { StickyActionBar } from "../../_components/StickyActionBar";
 import { StickyStepHeader } from "../../_components/StickyStepHeader";
+import { UnsavedLeaveGuard } from "../../_components/editForm";
 import { parseAmountInput, parsePastedRows } from "../../_lib/numberEntry";
 import {
   PayrollStep,
@@ -1519,9 +1520,13 @@ export function ManualEntryStepper({
         {saveState === "done" && !dirty ? (
           <span className="text-xs text-ink-muted">保存しました</span>
         ) : null}
+        {/*
+          未保存であることの伝え方は、マスタ画面 (共通の帯) と同じ言葉・同じ位置に揃える。
+          画面ごとに言い回しが違うと、同じ状態なのか別の状態なのかを毎回読み解くことになる。
+        */}
         {dirty ? (
           <span className="text-xs font-semibold text-ink">
-            保存していない入力があります
+            未保存の入力があります
             {/* 下書きに退避してあることを添える。「消えるかもしれない」と思わせない */}
             {draftSavedAt !== null ? (
               <span className="num ml-1 font-normal text-ink-muted">
@@ -1556,6 +1561,17 @@ export function ManualEntryStepper({
           )}
         </div>
       </StickyActionBar>
+
+      {/*
+        保存しないまま対象年月を切り替えたり、タブを閉じようとしたときの確認。
+        マスタ画面と同じ共通部品を置くだけで、同じ確認が同じ言葉で出る。
+      */}
+      <UnsavedLeaveGuard dirty={dirty}>
+        <p>
+          保存していない入力があります。このまま移動すると、この画面で打った内容は失われます
+          {draftSavedAt !== null ? "(下書きは端末に残ります)" : ""}。
+        </p>
+      </UnsavedLeaveGuard>
     </form>
   );
 }

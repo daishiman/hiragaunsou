@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { StickyActionBar } from "../StickyActionBar";
 import { ConfirmDialog } from "../ConfirmDialog";
-import { requestLeave, setLeaveGuard } from "./navigationGuard";
+import { UnsavedLeaveGuard } from "./UnsavedLeaveGuard";
+import { requestLeave } from "./navigationGuard";
 
 /**
  * 「一覧を直してまとめて保存する」画面の共通の土台 — 画面の下に貼り付ける操作の帯。
@@ -52,34 +53,6 @@ export function UnsavedChangesBar({
 }) {
   const dirty = unsavedCount > 0;
   const [confirmReset, setConfirmReset] = useState(false);
-  const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null);
-  // 関所には常に最新の「保存していないか」を見せる必要がある。
-  // 登録した時点の値を閉じ込めると、直したあとも「離れてよい」と答えてしまう。
-  const dirtyRef = useRef(dirty);
-  useEffect(() => {
-    dirtyRef.current = dirty;
-  }, [dirty]);
-
-  /* 閉じる・再読込のときはブラウザ標準の確認に任せる (アプリ側では止められないため) */
-  useEffect(() => {
-    function onBeforeUnload(e: BeforeUnloadEvent) {
-      if (!dirtyRef.current) return;
-      e.preventDefault();
-      e.returnValue = "";
-    }
-    window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, []);
-
-  /* 対象年月の切り替えなど、アプリの中の移動はこちらで止めて確認を出す */
-  useEffect(() => {
-    setLeaveGuard((proceed) => {
-      if (!dirtyRef.current) return true;
-      setPendingLeave(() => proceed);
-      return false;
-    });
-    return () => setLeaveGuard(null);
-  }, []);
 
   return (
     <>
@@ -135,24 +108,12 @@ export function UnsavedChangesBar({
         </p>
       </ConfirmDialog>
 
-      <ConfirmDialog
-        open={pendingLeave !== null}
-        title="保存していない変更があります"
-        confirmLabel="変更を捨てて移動する"
-        cancelLabel="この画面に留まる"
-        tone="caution"
-        onCancel={() => setPendingLeave(null)}
-        onConfirm={() => {
-          const proceed = pendingLeave;
-          setPendingLeave(null);
-          proceed?.();
-        }}
-      >
+      <UnsavedLeaveGuard dirty={dirty}>
         <p>
           <span className="num">{unsavedCount}</span>
           件を保存していません。このまま移動すると、直した内容は失われます。
         </p>
-      </ConfirmDialog>
+      </UnsavedLeaveGuard>
     </>
   );
 }
