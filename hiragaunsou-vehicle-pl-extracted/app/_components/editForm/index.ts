@@ -20,6 +20,8 @@
  */
 export {
   normalizeFieldValue,
+  fieldKindOf,
+  fieldUnitOf,
   isFieldChanged,
   isUnreadableNumber,
   formatFieldValue,
@@ -42,3 +44,4 @@ export { EditFormActionBar } from "./EditFormActionBar";
 export { UnsavedChangesBar } from "./UnsavedChangesBar";
 export { requestLeave, setLeaveGuard, type LeaveGuard } from "./navigationGuard";
 export { saveMasterChanges } from "./submitMasterChanges";
+export { saveRateChanges } from "./submitRateChanges";

@@ -33,9 +33,13 @@ export interface EditableFieldDef<TRecord> {
   field: string;
   /** 画面と読み上げに出す項目名 */
   label: string;
-  kind: EditableFieldKind;
-  /** 欄の後ろに出す単位 (円・%・円/ℓ) */
-  unit?: string;
+  /**
+   * 値の種類。行によって変わる列 (率マスタの1列に % と 円 と 円/ℓ が混ざる) では
+   * 行を受け取って返す形も書ける。
+   */
+  kind: EditableFieldKind | ((record: TRecord) => EditableFieldKind);
+  /** 欄の後ろに出す単位 (円・%・円/ℓ)。こちらも行ごとに変えられる */
+  unit?: string | ((record: TRecord) => string);
   /** いま保存されている値の取り出し方。null は「値なし」 */
   read: (record: TRecord) => string | null;
   /** kind === "select" のときの選択肢。行ごとに変わる (けん引先は自分自身を除く) */
@@ -54,6 +58,19 @@ export interface EditableFieldDef<TRecord> {
   widthClass?: string;
   /** 欄の下に添える短い補足 */
   hint?: string;
+}
+
+/** その行でのこの項目の種類 (行ごとに変わる列に対応するため、必ずここを通して取り出す) */
+export function fieldKindOf<TRecord>(def: EditableFieldDef<TRecord>, record: TRecord) {
+  return typeof def.kind === "function" ? def.kind(record) : def.kind;
+}
+
+/** その行でのこの項目の単位 */
+export function fieldUnitOf<TRecord>(
+  def: EditableFieldDef<TRecord>,
+  record: TRecord,
+): string | undefined {
+  return typeof def.unit === "function" ? def.unit(record) : def.unit;
 }
 
 /**

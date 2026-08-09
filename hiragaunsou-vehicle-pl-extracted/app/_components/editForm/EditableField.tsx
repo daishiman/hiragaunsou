@@ -5,7 +5,13 @@ import { NumberEntryField } from "../NumberEntryField";
 import { TextEntryField } from "../TextEntryField";
 import { CHANGED_FIELD_CLASS, ChangedFieldBadge, OriginalValueNote } from "../ChangedFieldMark";
 import { parseAmountInput } from "../../_lib/numberEntry";
-import { formatFieldValue, isFieldChanged, type EditableFieldDef } from "./fieldDefs";
+import {
+  fieldKindOf,
+  fieldUnitOf,
+  formatFieldValue,
+  isFieldChanged,
+  type EditableFieldDef,
+} from "./fieldDefs";
 
 /**
  * 「一覧を直してまとめて保存する」画面の共通の土台 — 欄1つの描画。
@@ -39,11 +45,13 @@ function EditableFieldInner<TRecord>({
   ariaLabel,
 }: EditableFieldProps<TRecord>) {
   const current = def.read(record);
-  const label = ariaLabel ?? `${def.label}${def.unit ? `(${def.unit})` : ""}`;
+  const kind = fieldKindOf(def, record);
+  const unit = fieldUnitOf(def, record);
+  const label = ariaLabel ?? `${def.label}${unit ? `(${unit})` : ""}`;
   const emptyText = def.emptyText ?? "未入力";
 
   const field = (() => {
-    if (def.kind === "select") {
+    if (kind === "select") {
       return (
         <SelectEntryField
           draft={draft ?? null}
@@ -57,7 +65,7 @@ function EditableFieldInner<TRecord>({
         />
       );
     }
-    if (def.kind === "text") {
+    if (kind === "text") {
       return (
         <TextEntryField
           draft={draft ?? null}
@@ -83,7 +91,7 @@ function EditableFieldInner<TRecord>({
         ariaLabel={label}
         col={col}
         widthClass={def.widthClass ?? "w-28"}
-        showEcho={def.kind === "yen"}
+        showEcho={kind === "yen"}
         hints={def.hint ? <span>{def.hint}</span> : undefined}
       />
     );
@@ -150,7 +158,9 @@ function EditableRowCellsInner<TRecord>({
               error={fieldErrorOf(rowKey, def.field)}
               disabled={disabled}
               col={colOffset + index}
-              ariaLabel={`${rowLabel}の${def.label}${def.unit ? `(${def.unit})` : ""}`}
+              ariaLabel={`${rowLabel}の${def.label}${
+                fieldUnitOf(def, record) ? `(${fieldUnitOf(def, record)})` : ""
+              }`}
             />
           )}
         </td>
