@@ -5,6 +5,7 @@ const KIND_STYLE: Record<NavGroup["kind"], string> = {
   ops: "bg-accent/10 text-accent-deep",
   data: "bg-brand-soft text-brand-deep",
   analysis: "bg-brand-soft text-brand-deep",
+  master: "bg-subtle text-ink-muted",
   spec: "bg-subtle text-ink-muted",
   tool: "bg-subtle text-ink-muted",
 };
@@ -23,11 +24,17 @@ export function PageHead({
   action,
   help,
   showHomeLink,
+  note,
 }: {
   kind: NavGroup["kind"];
   title: string;
   lead?: string;
   action?: React.ReactNode;
+  /**
+   * 見出しの下に全幅で置く補足ブロック(役割ノート・工程の位置づけ)。
+   * ScreenHeader から渡す。ページ側が直接組み立てることは想定しない。
+   */
+  note?: React.ReactNode;
   /**
    * タイトルの横に出す「?」(HelpDrawer)。
    * この画面を初めて開いた人向けの長い説明は、本文に置かずここへ入れる。
@@ -37,7 +44,8 @@ export function PageHead({
   showHomeLink?: boolean;
 }) {
   return (
-    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mb-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
         {showHomeLink && (
           <Link
@@ -77,6 +85,8 @@ export function PageHead({
         </div>
       </div>
       {action && <div className="shrink-0">{action}</div>}
+      </div>
+      {note}
     </div>
   );
 }
