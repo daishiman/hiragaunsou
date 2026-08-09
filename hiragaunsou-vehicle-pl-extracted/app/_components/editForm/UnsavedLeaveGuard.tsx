@@ -46,7 +46,12 @@ export function UnsavedLeaveGuard({
   /* 対象年月の切り替えなど、アプリの中の移動はこちらで止めて確認を出す */
   useEffect(() => {
     setLeaveGuard((proceed) => {
-      if (!dirtyRef.current) return true;
+      // 直していないときは引き止めない。ここで proceed を呼ばずに true だけ返すと、
+      // 呼び出し側 (対象年月の切り替え) は「移動した」と思うのに実際は動かない。
+      if (!dirtyRef.current) {
+        proceed();
+        return true;
+      }
       setPendingLeave(() => proceed);
       return false;
     });

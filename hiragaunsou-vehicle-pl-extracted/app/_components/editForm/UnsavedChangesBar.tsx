@@ -77,7 +77,7 @@ export function UnsavedChangesBar({
 
         {/* 状態は色ではなく文字で出す。何件が保存待ちかを常に正直に置く */}
         {dirty ? (
-          <span className="text-xs font-semibold text-ink">
+          <span data-unsaved-count={unsavedCount} className="text-xs font-semibold text-ink">
             未保存 <span className="num">{unsavedCount}</span>件
           </span>
         ) : null}
