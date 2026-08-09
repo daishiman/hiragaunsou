@@ -29,13 +29,21 @@ async function getLocalEnv() {
  * getPlatformProxy から書き込むと SQLITE_BUSY で弾かれることがある。
  * 弾かれるのは一瞬の競合で、少し待てば必ず通る。ここで吸収しないと、
  * 準備・後片付けの失敗がテスト本体の失敗として報告されて原因を見失う。
+ *
+ * 同じ競合は `D1_ERROR: Failed to parse body as JSON, got: Error: internal error` の形でも
+ * 出る(miniflare が sqlite の失敗をD1のエラー本文として返せずに落ちる)。文言が違うだけで
+ * 待てば通る点は同じなので、こちらも待って作り直す。
  */
-async function withBusyRetry<T>(run: () => Promise<T>, attempts = 5): Promise<T> {
+export async function withBusyRetry<T>(run: () => Promise<T>, attempts = 5): Promise<T> {
   for (let i = 1; ; i += 1) {
     try {
       return await run();
     } catch (e) {
-      if (i >= attempts || !/SQLITE_BUSY|database is locked/i.test(String(e))) throw e;
+      const message = String(e);
+      const retryable =
+        /SQLITE_BUSY|database is locked/i.test(message) ||
+        /D1_ERROR|Failed to parse body as JSON|internal error/i.test(message);
+      if (i >= attempts || !retryable) throw e;
       await new Promise((r) => setTimeout(r, 150 * i));
     }
   }

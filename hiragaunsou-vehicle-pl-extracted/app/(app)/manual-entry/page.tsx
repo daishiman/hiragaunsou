@@ -12,6 +12,7 @@ import {
 import { D1VehiclePlRepository } from "../../../src/infrastructure/db/D1VehiclePlRepository";
 import { D1ImportBatchRepository } from "../../../src/infrastructure/db/D1ImportBatchRepository";
 import { D1ReviewFlagRepository } from "../../../src/infrastructure/db/D1ReviewFlagRepository";
+import { D1VehiclePlOverrideRepository } from "../../../src/infrastructure/db/D1VehiclePlOverrideRepository";
 import { D1DriverMasterRepository } from "../../../src/infrastructure/db/D1MasterRepository";
 import { GetPayrollDetailByVehicleUseCase } from "../../../src/usecase/steps/getPayrollDetailByVehicle";
 import { ConfirmMonthlyPlUseCase } from "../../../src/usecase/steps/confirmMonthlyPl";
@@ -69,6 +70,7 @@ export default async function ManualEntryPage({
       importBatchRepo,
       vehicleMasterRepo,
       driverMasterRepo,
+      new D1VehiclePlOverrideRepository(db),
     ).execute(yearMonth),
     rateMasterRepo.getRate(RATE_KEYS.tankPricePerLiter, previousYearMonth, 0),
     // 前月の実績。「先月の値を入れる」と、空欄のセルに出す「先月 ◯◯」のヒントに使う。
@@ -183,7 +185,8 @@ export default async function ManualEntryPage({
         }))}
         prefill={prefill}
         payrollStatus={payrollBatch}
-        payrollDetail={payrollDetail}
+        payrollDetail={payrollDetail.rows}
+        payrollSummary={payrollDetail.summary}
         initialWorkflowStep={step ?? null}
         autoValues={autoValues}
         tollDiscountRate={rates.tollDiscountRate}
