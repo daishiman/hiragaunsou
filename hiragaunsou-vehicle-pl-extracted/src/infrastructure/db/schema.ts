@@ -559,6 +559,141 @@ export const userInvitation = sqliteTable("user_invitation", {
 });
 
 /**
+ * マスタ(率・車両・運転者)を直した履歴。
+ *
+ * マスタは「間違っていれば後から直せる」ことが前提の場所なので、直した事実そのものを
+ * 残さないと、収支表の数字が変わった理由を誰も説明できなくなる。
+ * 元に戻す操作もここを起点にする (undoneAt が入った行は取り消し済み)。
+ *
+ * 値を文字列で持つのは、率(0.1748)・金額(120000)・運転者名・車番が同じ一覧に並ぶため。
+ * 型ごとに列を分けると、履歴を読む画面が値の種類だけ分岐を持つことになる。
+ */
+export const masterEditHistory = sqliteTable(
+  "master_edit_history",
+  {
+    id: text("id").primaryKey(),
+    /** rate / vehicle / driver */
+    targetKind: text("target_kind").notNull(),
+    /** 率: "キー|年月" / 車両: 車番 / 運転者: 社員コード */
+    targetKey: text("target_key").notNull(),
+    /** 対象が後で消えても履歴が読めるよう、表示名をそのとき固定して持つ */
+    targetLabel: text("target_label").notNull(),
+    field: text("field").notNull(),
+    fieldLabel: text("field_label").notNull(),
+    beforeValue: text("before_value"),
+    afterValue: text("after_value"),
+    /** 利用者を消しても履歴は残す (消えると誰が直したかを追えなくなる)。名前は下の列に残る */
+    editedBy: text("edited_by").references(() => user.id, { onDelete: "set null" }),
+    editedByName: text("edited_by_name").notNull().default(""),
+    editedAt: integer("edited_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    /** 元に戻した時刻。NULL は「生きている直し」 */
+    undoneAt: integer("undone_at", { mode: "timestamp_ms" }),
+    undoneBy: text("undone_by").references(() => user.id, { onDelete: "set null" }),
+  },
+  (table) => [
+    index("master_edit_history_at_idx").on(table.editedAt),
+    index("master_edit_history_target_idx").on(table.targetKind, table.targetKey),
+  ],
+);
+
+/**
+ * 確定済みの月へマスタの直しを反映した記録と、反映する直前の収支表の姿。
+ *
+ * 収支表は毎回まるごと作り直される作りなので、確定済みの月に作り直しを掛けると
+ * 反映前の数字を復元する手段がどこにも残らない。配布済みの表と食い違ったときに
+ * 戻せない状態では、反映ボタンを怖くて押せない。反映の直前に月まるごとを
+ * JSONで1行に固めて残し、取り消しはこれを書き戻すだけで済むようにする。
+ */
+export const confirmedMonthApplyLog = sqliteTable(
+  "confirmed_month_apply_log",
+  {
+    id: text("id").primaryKey(),
+    yearMonth: text("year_month").notNull(),
+    /** 画面に出す一言 (「4台の数字が変わりました」) */
+    summary: text("summary").notNull(),
+    /** 反映する直前の vehicle_pl 行 (JSON配列) */
+    snapshotJson: text("snapshot_json").notNull(),
+    appliedBy: text("applied_by").references(() => user.id, { onDelete: "set null" }),
+    appliedByName: text("applied_by_name").notNull().default(""),
+    appliedAt: integer("applied_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    /** 反映を取り消した時刻。NULL は「反映が生きている」 */
+    revertedAt: integer("reverted_at", { mode: "timestamp_ms" }),
+    revertedBy: text("reverted_by").references(() => user.id, { onDelete: "set null" }),
+  },
+  (table) => [index("confirmed_month_apply_log_ym_idx").on(table.yearMonth, table.appliedAt)],
+);
+
+/**
+ * 「前回と異なります」を出すための、前回時点の内容。
+ *
+ * 取込は既存のマスタを上書きしていくので、上書きした後では前回が残らない。
+ * 突き合わせに使う項目だけを種類ごとに1行のJSONで持ち、次の取込時の相手にする。
+ * 元データそのものの控えではなく、比較用の写しである点に注意。
+ */
+export const importCompareSnapshot = sqliteTable("import_compare_snapshot", {
+  /** "vehicle" | "driver" | "rate" */
+  targetKind: text("target_kind").primaryKey(),
+  /** ComparableRecord[] のJSON */
+  recordsJson: text("records_json").notNull(),
+  capturedAt: integer("captured_at", { mode: "timestamp_ms" })
+    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+    .notNull(),
+});
+
+/**
+ * 「確認済み」にしたアラート。
+ *
+ * 見て納得したものが毎回出続けると、次第に全部読まれなくなる。読まれないアラートは
+ * 無いのと同じなので、確認済みにしたものは以後出さない。
+ * 指紋(fingerprint)は対象・項目・変更前後の値から作るため、同じ箇所でも別の値に
+ * 変わればまた出る。「一度OKした」が「以後ずっとOK」にはならない。
+ */
+export const importDiffAck = sqliteTable(
+  "import_diff_ack",
+  {
+    fingerprint: text("fingerprint").primaryKey(),
+    targetKind: text("target_kind").notNull(),
+    targetLabel: text("target_label").notNull().default(""),
+    /** 画面に出していた一言。後から「何をOKしたか」を辿るため */
+    summary: text("summary").notNull().default(""),
+    ackedBy: text("acked_by").references(() => user.id, { onDelete: "set null" }),
+    ackedByName: text("acked_by_name").notNull().default(""),
+    ackedAt: integer("acked_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [index("import_diff_ack_kind_idx").on(table.targetKind, table.ackedAt)],
+);
+
+/**
+ * 表記のゆれとして自動で吸収した差分の控え。
+ *
+ * 画面には出さない。出すと本当に見るべきものが埋もれる。
+ * ただし「勝手に同じものとして扱った」事実が残らないと、後から突合が合わない理由を
+ * 追えなくなるので、裏側には必ず残す。
+ */
+export const importDiffAbsorbed = sqliteTable(
+  "import_diff_absorbed",
+  {
+    id: text("id").primaryKey(),
+    targetKind: text("target_kind").notNull(),
+    targetKey: text("target_key").notNull(),
+    targetLabel: text("target_label").notNull().default(""),
+    field: text("field").notNull(),
+    beforeValue: text("before_value").notNull().default(""),
+    afterValue: text("after_value").notNull().default(""),
+    absorbedAt: integer("absorbed_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [index("import_diff_absorbed_at_idx").on(table.absorbedAt)],
+);
+
+/**
  * 赤字車両(車番×年月)のAI要因分析結果。/deficit の「AI分析する」ボタンから
  * 月単位でバッチ生成し、ここに永続化して同月の再訪時はAIを再呼び出ししない(キャッシュ)。
  * factorsJson は DeficitFactorItem[] (科目名・向き・金額・説明) をJSON文字列で保持する。

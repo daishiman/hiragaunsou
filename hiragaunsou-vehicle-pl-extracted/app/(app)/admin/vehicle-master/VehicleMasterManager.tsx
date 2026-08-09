@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { VehicleMasterRecord } from "../../../../src/domain/repositories/MasterRepository";
@@ -16,6 +16,7 @@ import type { FileImportVerdict } from "../../../../src/domain/rules/fileImportC
 import { AlertPanel } from "../../../_components/AlertPanel";
 import { Disclosure } from "../../../_components/Disclosure";
 import { ImportCheckPanel } from "../../../_components/ImportCheckPanel";
+import { MasterFieldEditor } from "../../../_components/MasterFieldEditor";
 import { StepRail } from "../../../_components/StepRail";
 import { yen } from "../../../_lib/format";
 
@@ -34,6 +35,24 @@ const COST_CATEGORY_LABELS: Record<string, string> = {
   medium: "中型",
   trailer: "被けん引車(トレーラ)",
 };
+
+/**
+ * その場で直せる項目。
+ *
+ * けん引先は選択式の欄が表にあるので入れない。原価区分は決まった語しか受け付けられず、
+ * 自由入力にすると収支表の標準原価が黙って外れるため、ここには出さない
+ * (直したいときはファイルの入れ直しで行う)。
+ */
+const EDITABLE_VEHICLE_COLUMNS = [
+  { field: "vehicleType", label: "車種名" },
+  { field: "depot", label: "所属" },
+  { field: "insCompulsory", label: "自賠責" },
+  { field: "insVoluntary", label: "任意保険" },
+  { field: "taxAuto", label: "自動車税" },
+  { field: "taxWeight", label: "重量税" },
+  { field: "lease", label: "リース" },
+  { field: "installment", label: "割賦" },
+] as const;
 
 /**
  * けん引先に選べる車両。
@@ -103,6 +122,8 @@ export function VehicleMasterManager({
 
   const existingNos = useMemo(() => new Set(vehicles.map((v) => v.vehicleNo)), [vehicles]);
   const [towedBusy, setTowedBusy] = useState<string | null>(null);
+  /** 直す欄を開いている車番 (1台ずつだけ開く) */
+  const [editingVehicleNo, setEditingVehicleNo] = useState<string | null>(null);
 
   /**
    * トレーラのけん引先を設定・解除する。車両マスタを直したら収支表も作り直すので、
@@ -504,12 +525,14 @@ export function VehicleMasterManager({
                 <th className="py-2 pr-3">自動車税</th>
                 <th className="py-2 pr-3">重量税</th>
                 <th className="py-2 pr-3">リース</th>
-                <th className="py-2">割賦</th>
+                <th className="py-2 pr-3">割賦</th>
+                <th className="py-2" />
               </tr>
             </thead>
             <tbody>
               {vehicles.map((v) => (
-                <tr key={v.vehicleNo} className="border-b border-line last:border-b-0">
+                <Fragment key={v.vehicleNo}>
+                <tr className="border-b border-line last:border-b-0">
                   <td className="num py-2 pr-3">{v.vehicleNo}</td>
                   <td className="py-2 pr-3 text-ink-muted">{v.vehicleType}</td>
                   <td className="py-2 pr-3 text-ink-muted">
@@ -540,8 +563,48 @@ export function VehicleMasterManager({
                   <td className="num py-2 pr-3 text-ink-muted">{yen(v.taxAuto)}</td>
                   <td className="num py-2 pr-3 text-ink-muted">{yen(v.taxWeight)}</td>
                   <td className="num py-2 pr-3 text-ink-muted">{yen(v.lease)}</td>
-                  <td className="num py-2 text-ink-muted">{yen(v.installment)}</td>
+                  <td className="num py-2 pr-3 text-ink-muted">{yen(v.installment)}</td>
+                  <td className="py-2">
+                    <button
+                      type="button"
+                      className="text-xs underline text-brand-deep"
+                      onClick={() =>
+                        setEditingVehicleNo(editingVehicleNo === v.vehicleNo ? null : v.vehicleNo)
+                      }
+                    >
+                      {editingVehicleNo === v.vehicleNo ? "閉じる" : "直す"}
+                    </button>
+                  </td>
                 </tr>
+                {/*
+                  直す欄は押したときだけ出す。11列すべてに入力欄を常設すると、
+                  読むための表が入力フォームに見えてしまい、どこを見ればよいか分からなくなる。
+                */}
+                {editingVehicleNo === v.vehicleNo ? (
+                  <tr className="border-b border-line bg-subtle">
+                    <td colSpan={12} className="px-3 py-3">
+                      <p className="mb-2 text-xs text-ink-muted">
+                        車番 {v.vehicleNo} を直します。直すと、まだ締めていない月の収支表にその場で
+                        反映されます(締めた月はそのままです)。
+                      </p>
+                      <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                        {EDITABLE_VEHICLE_COLUMNS.map((c) => (
+                          <span key={c.field} className="inline-flex items-baseline gap-2">
+                            <span className="text-xs text-ink-muted">{c.label}</span>
+                            <MasterFieldEditor
+                              targetKind="vehicle"
+                              targetKey={v.vehicleNo}
+                              field={c.field}
+                              label={c.label}
+                              value={String((v as unknown as Record<string, unknown>)[c.field] ?? "")}
+                            />
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+                </Fragment>
               ))}
             </tbody>
           </table>

@@ -90,6 +90,21 @@ vi.mock("../../src/infrastructure/db/D1CleansingDecisionRepository", () => ({
   APP_SETTING_KEYS: { kirinTargetVehicleNos: "kirin_target_vehicle_nos" },
 }));
 
+/**
+ * 直しの履歴と「その月が締まっているか」を持つ表。
+ * 既定では 2026-05 は未確定 (24行中0行が確定) とし、直したらその場で作り直される状態にする。
+ */
+const { recordEditsMock, listMonthlyConfirmationsMock } = vi.hoisted(() => ({
+  recordEditsMock: vi.fn(),
+  listMonthlyConfirmationsMock: vi.fn(),
+}));
+vi.mock("../../src/infrastructure/db/D1MasterChangeRepository", () => ({
+  D1MasterChangeRepository: class {
+    recordEdits = recordEditsMock;
+    listMonthlyConfirmations = listMonthlyConfirmationsMock;
+  },
+}));
+
 const { finalizeExecuteMock } = vi.hoisted(() => ({ finalizeExecuteMock: vi.fn() }));
 vi.mock("../../src/usecase/steps/finalizeMonthlyPl", () => ({
   FinalizeMonthlyPlUseCase: class {
@@ -122,6 +137,10 @@ beforeEach(() => {
   findManualInputsMock.mockReset().mockResolvedValue([]);
   findDecisionsMock.mockReset().mockResolvedValue([]);
   finalizeExecuteMock.mockReset().mockResolvedValue({ vehicleCount: 24 });
+  recordEditsMock.mockReset().mockResolvedValue(undefined);
+  listMonthlyConfirmationsMock
+    .mockReset()
+    .mockResolvedValue([{ yearMonth: "2026-05", total: 24, confirmed: 0 }]);
 });
 
 describe("POST /api/vehicle-master/lease のガード", () => {
@@ -236,11 +255,44 @@ describe("POST /api/vehicle-master/lease の正常系", () => {
       overrides: [],
     });
 
+    // まだ締めていない月には反映し、確定済みの月は据え置く
     expect((await res.json()) as unknown).toEqual({
       yearMonth: "2026-05",
       vehicleNo: "4242",
-      vehicleCount: 24,
+      applied: ["2026-05"],
+      heldBack: [],
     });
+  });
+
+  it("確定済みの月は据え置き、作り直さない(配布済みの数字を勝手に変えない)", async () => {
+    listMonthlyConfirmationsMock.mockResolvedValue([
+      { yearMonth: "2026-04", total: 24, confirmed: 24 },
+      { yearMonth: "2026-05", total: 24, confirmed: 0 },
+    ]);
+
+    const res = await postLease({ yearMonth: "2026-05", vehicleNo: "4242", lease: 120000 });
+
+    expect(res.status).toBe(200);
+    expect((await res.json()) as { applied: string[]; heldBack: string[] }).toMatchObject({
+      applied: ["2026-05"],
+      heldBack: ["2026-04"],
+    });
+    // 確定済みの 2026-04 では作り直しが走らない
+    expect(finalizeExecuteMock.mock.calls.map((c) => (c[0] as { yearMonth: string }).yearMonth)).toEqual([
+      "2026-05",
+    ]);
+  });
+
+  it("直した内容は履歴に残る(あとから元に戻せるようにするため)", async () => {
+    await postLease({ yearMonth: "2026-05", vehicleNo: "4242", lease: 120000, installment: 55000 });
+
+    const [edits] = recordEditsMock.mock.calls.at(-1) as [
+      { field: string; afterValue: string | null }[],
+    ];
+    expect(edits.map((e) => [e.field, e.afterValue])).toEqual([
+      ["lease", "120000"],
+      ["installment", "55000"],
+    ]);
   });
 
   /**

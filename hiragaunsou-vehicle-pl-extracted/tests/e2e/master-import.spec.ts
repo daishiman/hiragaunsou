@@ -109,7 +109,8 @@ test.describe("マスタ管理: 社内Excelをそのまま取り込む", () => {
     await page.getByRole("button", { name: /名を取り込む/ }).click();
     await expect(page.getByText(/名を登録しました/)).toBeVisible();
     await expect(page.getByRole("heading", { name: /現在の運転者マスタ\(\d+名/ })).toBeVisible();
-    await expect(page.getByRole("cell", { name: "鈴木一郎", exact: true })).toBeVisible();
+    // 氏名のセルには「直す」の入口も入るので、完全一致では見ない
+    await expect(page.getByRole("cell", { name: /鈴木一郎/ })).toBeVisible();
   });
 
   /**

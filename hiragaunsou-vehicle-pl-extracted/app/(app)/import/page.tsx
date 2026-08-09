@@ -3,6 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../src/infrastructure/auth/accessControl";
 import { AccessDenied } from "../../_components/AccessDenied";
+import { ImportDiffAlertPanel } from "../../_components/ImportDiffAlertPanel";
 import { createDb } from "../../../src/infrastructure/db/client";
 import { D1ImportBatchRepository } from "../../../src/infrastructure/db/D1ImportBatchRepository";
 import { IMPORT_SOURCES } from "../../../src/domain/rules/importSources";
@@ -49,6 +50,11 @@ export default async function ImportPage({
         lead="業務フローのSTEP順に元データを取り込みます"
         showHomeLink
       />
+      {/*
+        取り込んだ内容が前回と違うときだけ、ここに1行ずつ出る。
+        違いが無ければ何も出ないので、ふだんの取込の邪魔にはならない。
+      */}
+      <ImportDiffAlertPanel className="mb-4" />
       <ImportForm
         key={yearMonth}
         yearMonth={yearMonth}

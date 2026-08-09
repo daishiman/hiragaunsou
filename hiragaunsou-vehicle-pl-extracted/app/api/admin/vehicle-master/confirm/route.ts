@@ -3,27 +3,14 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../../../src/infrastructure/auth/accessControl";
 import { createDb } from "../../../../../src/infrastructure/db/client";
-import {
-  D1VehicleMasterRepository,
-  D1DriverMasterRepository,
-  D1RateMasterRepository,
-} from "../../../../../src/infrastructure/db/D1MasterRepository";
+import { D1VehicleMasterRepository } from "../../../../../src/infrastructure/db/D1MasterRepository";
 import { D1AuditLogRepository } from "../../../../../src/infrastructure/db/D1AuditLogRepository";
-import { D1ImportBatchRepository } from "../../../../../src/infrastructure/db/D1ImportBatchRepository";
-import { D1VehiclePlRepository } from "../../../../../src/infrastructure/db/D1VehiclePlRepository";
-import { D1ManualInputRepository } from "../../../../../src/infrastructure/db/D1ManualInputRepository";
-import { D1VehiclePlOverrideRepository } from "../../../../../src/infrastructure/db/D1VehiclePlOverrideRepository";
-import {
-  D1AppSettingRepository,
-  D1CleansingDecisionRepository,
-} from "../../../../../src/infrastructure/db/D1CleansingDecisionRepository";
 import { ConfirmImportVehicleMasterUseCase } from "../../../../../src/usecase/steps/importVehicleMaster";
-import { FinalizeMonthlyPlUseCase } from "../../../../../src/usecase/steps/finalizeMonthlyPl";
-import { RecalculateMonthlyPlUseCase } from "../../../../../src/usecase/steps/recalculateMonthlyPl";
 import { STANDARD_COST_RATES } from "../../../../../src/domain/entities/VehiclePl";
 import type { VehicleMasterUpsertInput } from "../../../../../src/domain/repositories/MasterRepository";
 import { isSameOriginRequest } from "../../../../_lib/assertSameOrigin";
 import { recordFileImport } from "../../../../_lib/recordFileImport";
+import { importDiffDetector, masterChangeStack } from "../../../../_lib/masterChangeStack";
 
 /** 金額として受け付けられる値に整える (負値・非数は0にする) */
 function toAmount(value: unknown): number {
@@ -61,33 +48,6 @@ function toUpsertInput(value: unknown): VehicleMasterUpsertInput | null {
     lease: toAmount(r.lease),
     installment: toAmount(r.installment),
   };
-}
-
-/**
- * 収支表を作り直す。材料集めは RecalculateMonthlyPlUseCase に閉じているので年月だけ渡す。
- * 失敗しても呼び出し側の取込結果は返したいので、成否を真偽値で返す。
- */
-async function recalculate(db: ReturnType<typeof createDb>, yearMonth: string): Promise<boolean> {
-  const rateMasterRepo = new D1RateMasterRepository(db);
-  try {
-    await new RecalculateMonthlyPlUseCase(
-      new D1ManualInputRepository(db),
-      new D1CleansingDecisionRepository(db),
-      new D1AppSettingRepository(db),
-      rateMasterRepo,
-      new D1VehiclePlOverrideRepository(db),
-      new FinalizeMonthlyPlUseCase(
-        new D1ImportBatchRepository(db),
-        new D1VehicleMasterRepository(db),
-        new D1DriverMasterRepository(db),
-        rateMasterRepo,
-        new D1VehiclePlRepository(db),
-      ),
-    ).execute({ yearMonth });
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /** 車両マスタ取込の確定 (プレビューで確認した正常行のみが送られてくる)。 */
@@ -145,9 +105,25 @@ export async function POST(request: Request) {
     });
 
     const yearMonth = typeof body.yearMonth === "string" ? body.yearMonth : "";
-    const recalculated = yearMonth === "" ? false : await recalculate(db, yearMonth);
 
-    return NextResponse.json({ ...result, yearMonth, recalculated });
+    // まだ締めていない月には自動で反映し、確定済みの月は据え置く。
+    // 以前はいま見ている月だけを、確定済みかどうかに関わらず作り直していたため、
+    // 締めた月の数字が黙って変わり、しかも確定まで外れていた。
+    const actor = { id: session!.id, name: session!.name ?? "" };
+    const applied = await masterChangeStack(db, actor).applier.execute({ edits: [], actor });
+
+    // 前回の取込と何が変わったかを見つけて残す (画面のアラートはここが元になる)
+    const alert = await importDiffDetector(db).execute({ persist: true });
+
+    return NextResponse.json({
+      ...result,
+      yearMonth,
+      recalculated: applied.appliedYearMonths.includes(yearMonth),
+      applied: applied.appliedYearMonths,
+      heldBack: applied.heldBackYearMonths,
+      diffCount: alert.diffs.length,
+      criticalCount: alert.criticalCount,
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : "車両マスタの取込に失敗しました";
     return NextResponse.json({ error: message }, { status: 400 });
