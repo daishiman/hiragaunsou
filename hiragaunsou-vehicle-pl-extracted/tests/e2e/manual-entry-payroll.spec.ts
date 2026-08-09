@@ -72,7 +72,7 @@ async function seedPayroll(): Promise<void> {
   });
 }
 
-async function clearPayrollTestData(actorEmail: string): Promise<void> {
+async function clearPayrollTestData(): Promise<void> {
   await withLocalDb(async (DB) => {
     const nos = VEHICLE_NOS.map(() => "?").join(",");
     const codes = EMPLOYEE_CODES.map(() => "?").join(",");
@@ -86,10 +86,6 @@ async function clearPayrollTestData(actorEmail: string): Promise<void> {
         ...EMPLOYEE_CODES,
       ),
       DB.prepare(`DELETE FROM vehicle_master WHERE vehicle_no IN (${nos})`).bind(...VEHICLE_NOS),
-      // 監査ログは user への外部キーを持つので、テストユーザーを消す前に落とす。
-      DB.prepare(
-        "DELETE FROM admin_audit_log WHERE actor_id IN (SELECT id FROM user WHERE email = ?)",
-      ).bind(actorEmail),
     ]);
   });
 }
@@ -101,7 +97,7 @@ test.describe("手入力 STEP4: 人件費を確認して直す", () => {
 
   test.beforeAll(async ({ baseURL }) => {
     await clearRateLimits();
-    await clearPayrollTestData(email);
+    await clearPayrollTestData();
     await deleteTestUserByEmail(email);
     await createTestUser({ email, password, name: "E2E人件費担当", role: "admin" });
     cookie = await getSessionCookie(baseURL!, email, password);
@@ -109,7 +105,7 @@ test.describe("手入力 STEP4: 人件費を確認して直す", () => {
   });
 
   test.afterAll(async () => {
-    await clearPayrollTestData(email);
+    await clearPayrollTestData();
     await deleteTestUserByEmail(email);
   });
 
