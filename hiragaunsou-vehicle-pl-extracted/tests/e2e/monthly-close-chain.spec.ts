@@ -23,6 +23,12 @@ test.describe.configure({ mode: "serial" });
  *
  * そこでこのファイルだけは、ローカルD1に対して実際の画面を操作して通す。
  * どこか1工程でも次へつながらなくなったら、ここが落ちる。
+ *
+ * 実行方法(Workersランタイムを立ててから当てる):
+ *   pnpm run preview                       # http://localhost:8787
+ *   E2E_BASE_URL=http://localhost:8787 pnpm exec playwright test tests/e2e/monthly-close-chain.spec.ts
+ * 既定の :3000 (next dev) に当てるとログインが「Invalid origin」で 403 になる
+ * (.dev.vars の BETTER_AUTH_URL が :8787 のため)。
  */
 
 /**
