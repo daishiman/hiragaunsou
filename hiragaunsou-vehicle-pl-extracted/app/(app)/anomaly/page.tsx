@@ -46,9 +46,12 @@ export default async function AnomalyPage({
     new D1ReviewFlagRepository(db),
     new D1VehiclePlRepository(db),
   );
-  const [data, vehicles] = await Promise.all([
+  const [data, vehicles, plVehicleCount] = await Promise.all([
     useCase.execute(yearMonth),
     new D1VehicleMasterRepository(db).findAllActive(),
+    // 判定するものが無いとき、それが「全部終わった」のか「まだ何も作られていない」のかを
+    // 見分けるために必要。件数0という同じ見た目に、正反対の意味が乗ってしまうため。
+    new D1VehiclePlRepository(db).countByYearMonth(yearMonth),
   ]);
 
   return (
@@ -67,6 +70,7 @@ export default async function AnomalyPage({
         items={data.items}
         yearMonth={yearMonth}
         canApprove={checkAccess(session, "approve_anomaly")}
+        plVehicleCount={plVehicleCount}
       />
 
       <LeaseEditor
