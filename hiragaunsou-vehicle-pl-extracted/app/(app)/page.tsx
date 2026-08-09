@@ -22,6 +22,7 @@ import { EmptyState } from "../_components/EmptyState";
 import { StatTile } from "../_components/StatTile";
 import { Disclosure } from "../_components/Disclosure";
 import { YearMonthSelect } from "../_components/YearMonthSelect";
+import { WorkflowStepCard } from "../_components/WorkflowStepCard";
 
 /**
  * ホーム。
@@ -223,6 +224,23 @@ export default async function HomePage({
             </Link>
           </div>
         )}
+        {/*
+          8つの手順の全体像。ふだんは「次にやること」1つだけ見えていれば足りるので畳んでおく。
+          ただし「あと何が残っているのか」「さっきの手順に戻りたい」は必ず起きるため、
+          全部の手順とその進み具合をこの1箇所から開けるようにしておく。
+        */}
+        <Disclosure summary={`8つの手順を全部見る(${progress.doneCount} / ${progress.totalCount} 完了)`}>
+          <div className="flex flex-col gap-1.5">
+            {progress.steps.map((s) => (
+              <WorkflowStepCard
+                key={s.step.id}
+                progress={s}
+                isNext={false}
+                yearMonth={yearMonth}
+              />
+            ))}
+          </div>
+        </Disclosure>
       </section>
 
       {/* ダッシュボードは最上段のサマリに導線があるので、ここでは他の閲覧系画面だけを並べる */}

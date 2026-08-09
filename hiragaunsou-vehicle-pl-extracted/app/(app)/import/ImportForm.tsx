@@ -6,6 +6,7 @@ import { useState } from "react";
 import { IMPORT_SOURCES, type ImportSourceType } from "../../../src/domain/rules/importSources";
 import { MONTHLY_PL_WORKBOOK_SOURCE_TYPE } from "../../../src/usecase/steps/importMonthlyPlWorkbook";
 import { Disclosure } from "../../_components/Disclosure";
+import { StickyActionBar } from "../../_components/StickyActionBar";
 import { StickyStepHeader } from "../../_components/StickyStepHeader";
 import type { FileImportVerdict } from "../../../src/domain/rules/fileImportCheck";
 import { ImportCheckPanel } from "../../_components/ImportCheckPanel";
@@ -432,32 +433,6 @@ export function ImportForm({
           : "すべて取込済みです。内容を直したいときはタップして開けます。"}
       </p>
 
-      {/*
-        取込のあとに何をすればよいかの案内。
-        以前は売上モニタリストのカードの中にしか置いておらず、4つとも取り込むとそのカードが
-        畳まれて案内ごと消えていた(「全部入れたのに次が分からない」の直接の原因)。
-        カードの開閉と無関係な位置に、常に出す。
-      */}
-      {importsReady ? (
-        <section className="rounded-xl border border-brand bg-gradient-to-br from-white to-brand-soft p-5">
-          <p className="text-xs font-semibold text-ink-muted">この月の取込はここまでで大丈夫です</p>
-          <p className="mt-1 text-lg font-bold leading-relaxed text-ink">
-            次は<span className="num">{describeYearMonth(yearMonth)}</span>分のデータ整形(STEP2)へ進みます
-          </p>
-          <p className="mt-1 text-xs text-ink-muted">
-            傭車・2重計上・諸口を判断すると、月次収支表と年間集計に反映されます。
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Link href={`/cleansing?ym=${yearMonth}`} className="btn btn-primary pressable">
-              データ整形(STEP2)へ進む
-            </Link>
-            <Link href="/" className="btn btn-quiet pressable">
-              残りの手順をホームで確認する
-            </Link>
-          </div>
-        </section>
-      ) : null}
-
       {[...IMPORT_SOURCES].sort((a, b) => {
         if (!focusSourceType) return 0;
         if (a.sourceType === focusSourceType) return -1;
@@ -656,6 +631,35 @@ export function ImportForm({
         <Link href={`/grid?ym=${yearMonth}`} className="text-sm font-semibold text-brand-deep underline">
           {yearMonth} の車両別収支表を見る
         </Link>
+      ) : null}
+
+      {/*
+        取込のあとに何をすればよいかの案内。
+        以前は売上モニタリストのカードの中にしか置いておらず、4つとも取り込むとそのカードが
+        畳まれて案内ごと消えていた(「全部入れたのに次が分からない」の直接の原因)。
+        帳票の一覧は縦に長く、下まで見るころには上の案内が画面外に出てしまうので、
+        他の画面と同じ固定の操作バーに置いて、どこまでスクロールしても見える状態にする。
+      */}
+      {importsReady ? (
+        <StickyActionBar
+          notice={
+            <p className="text-sm font-bold text-ink">
+              この月の取込はここまでで大丈夫です。次は
+              <span className="num">{describeYearMonth(yearMonth)}</span>
+              分のデータ整形(STEP2)です
+            </p>
+          }
+        >
+          <Link href={`/cleansing?ym=${yearMonth}`} className="btn btn-primary pressable">
+            データ整形(STEP2)へ進む
+          </Link>
+          <Link href="/" className="btn btn-quiet pressable">
+            残りの手順をホームで確認する
+          </Link>
+          <span className="text-xs text-ink-muted">
+            傭車・2重計上・諸口を判断すると、月次収支表と年間集計に反映されます。
+          </span>
+        </StickyActionBar>
       ) : null}
     </div>
   );

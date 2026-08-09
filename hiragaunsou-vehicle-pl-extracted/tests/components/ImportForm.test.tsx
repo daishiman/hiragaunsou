@@ -307,6 +307,33 @@ describe("ImportForm", () => {
       await screen.findByText(/operation\.csv: 2026年5月分として取り込みました/),
     ).toBeInTheDocument();
   });
+
+  /*
+    「全部入れたのに次が分からない」への対応。案内は帳票カードの中ではなく、
+    どこまでスクロールしても見える固定の操作バーに置く。
+  */
+  it("運行実績と売上が揃うと、次の手順への導線が固定の操作バーに出る", () => {
+    const batch = [{ fileName: "a.csv", rowCount: 10, importedAt: Date.now() }];
+    render(
+      <ImportForm
+        yearMonth="2026-05"
+        imported={{ vehicle_operation: batch, sales_monitor: batch }}
+      />,
+    );
+
+    expect(screen.getByText(/この月の取込はここまでで大丈夫です/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "データ整形(STEP2)へ進む" })).toHaveAttribute(
+      "href",
+      "/cleansing?ym=2026-05",
+    );
+  });
+
+  it("運行実績だけでは次の手順への導線を出さない(収支表の下地が作れないため)", () => {
+    const batch = [{ fileName: "a.csv", rowCount: 10, importedAt: Date.now() }];
+    render(<ImportForm yearMonth="2026-05" imported={{ vehicle_operation: batch }} />);
+
+    expect(screen.queryByRole("link", { name: "データ整形(STEP2)へ進む" })).not.toBeInTheDocument();
+  });
 });
 
 /**
