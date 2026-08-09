@@ -547,6 +547,8 @@ export function ImportForm({
               <input
                 type="file"
                 accept={source.accept}
+                // 投入口が4つ並ぶので、読み上げでも「どの帳票の欄か」が分かる名前を付ける
+                aria-label={`${source.label}のファイルを選ぶ`}
                 disabled={pending !== null}
                 onChange={(event) => {
                   const file = event.target.files?.[0];
