@@ -43,6 +43,32 @@ describe("SCREENS の定義漏れ防止", () => {
     }
   });
 
+  /**
+   * 依頼者の指示 (2026-08-09): 画面に出る括弧は全角にそろえる。
+   * 半角括弧は前後の日本語と字間が詰まって読みにくく、画面ごとに混ざると落ち着かないため。
+   */
+  it("画面に出る文言に半角括弧を使わない", () => {
+    const halfWidth = /[()]/;
+    for (const g of SCREEN_GROUPS) {
+      expect(halfWidth.test(g.label), `group ${g.id}: ${g.label}`).toBe(false);
+    }
+    for (const s of SCREENS) {
+      for (const [field, value] of [
+        ["label", s.label],
+        ["title", s.title],
+        ["lead", s.lead],
+        ["does", s.does],
+        ["desc", s.desc],
+        ["notHere.text", s.notHere?.text],
+        ["next.text", s.next?.text],
+        ["notHere.linkLabel", s.notHere?.linkLabel],
+        ["next.linkLabel", s.next?.linkLabel],
+      ] as const) {
+        if (value) expect(halfWidth.test(value), `${s.href} ${field}: ${value}`).toBe(false);
+      }
+    }
+  });
+
   it("自分自身へは誘導しない(押しても何も起きないリンクを作らない)", () => {
     for (const s of SCREENS) {
       expect(s.notHere?.href).not.toBe(s.href);

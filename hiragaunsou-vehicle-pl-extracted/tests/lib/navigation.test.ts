@@ -12,18 +12,18 @@ describe("NAV_GROUPS / NAV_ITEMS", () => {
   it("分析グループが毎月の締めグループより前に来る(分析が主目的であるため)", () => {
     const labels = NAV_GROUPS.map((g) => g.label);
     expect(labels.indexOf("儲かっているかを見る")).toBeLessThan(
-      labels.indexOf("毎月の締め(この順に進む)"),
+      labels.indexOf("毎月の締め（この順に進む）"),
     );
   });
 
   it("「直した内容の反映」は一番最後のグループに単独で置く(マスタ登録とは性質が違うため)", () => {
     const last = NAV_GROUPS[NAV_GROUPS.length - 1];
-    expect(last.label).toBe("直した内容の反映(最後に確認)");
+    expect(last.label).toBe("直した内容の反映（最後に確認）");
     expect(last.items.map((i) => i.href)).toEqual(["/master-changes"]);
   });
 
   it("3つのマスタ画面は1グループにまとまっている", () => {
-    const master = NAV_GROUPS.find((g) => g.label === "計算の基準(先に登録しておく)");
+    const master = NAV_GROUPS.find((g) => g.label === "計算の基準（先に登録しておく）");
     expect(master?.items.map((i) => i.href)).toEqual([
       "/rate-settings",
       "/admin/vehicle-master",
@@ -32,7 +32,7 @@ describe("NAV_GROUPS / NAV_ITEMS", () => {
   });
 
   it("要確認の一覧は毎月の締めグループのチェックの直後に並ぶ(同じ内容の別表示であるため)", () => {
-    const monthly = NAV_GROUPS.find((g) => g.label === "毎月の締め(この順に進む)");
+    const monthly = NAV_GROUPS.find((g) => g.label === "毎月の締め（この順に進む）");
     const hrefs = monthly?.items.map((i) => i.href) ?? [];
     expect(hrefs.indexOf("/todo")).toBe(hrefs.indexOf("/anomaly") + 1);
   });

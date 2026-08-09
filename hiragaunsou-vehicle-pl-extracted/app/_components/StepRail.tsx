@@ -35,17 +35,31 @@ export function StepRail({
       flex-wrap にしていたときは幅によって「4枚 + 2枚」「5枚 + 1枚」と段が変わり、
       同じ画面を開くたびに札の位置が動いていた。位置が動くと現在地を目で探し直すことになる。
     */
-    <ol className="flex items-center gap-1.5 overflow-x-auto">
+    <ol
+      /*
+        押せる札(工程の切替)と、押せない札(いまの進み具合の表示)で読み上げ名を分ける。
+        見た目だけでなく名前でも区別が付くようにする。
+      */
+      aria-label={onSelect ? "工程の切り替え" : "いまの進み具合"}
+      className="flex items-center gap-1.5 overflow-x-auto"
+    >
       {steps.map((s, i) => {
         const state = i < currentIndex ? "done" : i === currentIndex ? "current" : "todo";
         const className = [
           // shrink-0: 幅が足りないときに札を潰して文字を割らない(横に流して読ませる)
-          "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 py-1.5 text-xs",
+          "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs",
           state === "current"
-            ? "border-brand bg-brand font-bold text-white"
+            ? "border border-brand bg-brand font-bold text-white"
             : state === "done"
-              ? "border-brand-soft bg-brand-soft font-semibold text-brand-deep"
-              : "border-line bg-white text-ink-muted",
+              ? "border border-brand-soft bg-brand-soft font-semibold text-brand-deep"
+              : /*
+                  これから進む札は、押せるとき(onSelectあり)だけ白い枠付きの札にする。
+                  押せない画面(取込・マスタ登録)で同じ枠を出すと「押せるのに反応しない」と読まれるため、
+                  枠と白背景を外して、進み具合の目盛りだと分かる見た目にする。
+                */
+                onSelect
+                ? "border border-line bg-white text-ink-muted"
+                : "border border-transparent text-ink-muted",
         ].join(" ");
         const inner = (
           <>
