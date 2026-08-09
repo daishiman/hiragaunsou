@@ -185,7 +185,7 @@ export function UsersManager({
 
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-line bg-white p-5">
+      <section className="card p-5">
         <div className="overflow-x-auto">
           <table className="data-table min-w-full text-sm">
             <thead>
@@ -270,7 +270,7 @@ export function UsersManager({
         </div>
       </section>
 
-      <section className="rounded-xl border border-line bg-white p-5">
+      <section className="card p-5">
         <h2 className="text-sm font-semibold text-ink">新しいユーザーを招待する</h2>
         <p className="mt-1 text-xs text-ink-muted">
           「Google」を選ぶと、招待したメールアドレスでGoogleサインインした時点で指定ロールが自動付与されます。

@@ -277,7 +277,7 @@ export default async function LogicPage() {
       <Disclosure summary="全体の考え方(3つの層)">
         <div className="grid gap-3 lg:grid-cols-3">
         {STEP_FLOW.map((s) => (
-          <div key={s.num} className="rounded-xl border border-line bg-white p-5">
+          <div key={s.num} className="card p-5">
             <p className="text-[11px] font-semibold text-brand-deep">{s.num}</p>
             <p className="mt-1.5 text-sm font-bold text-ink">{s.title}</p>
             <p className="mt-1 text-xs text-ink-muted">{s.desc}</p>

@@ -588,7 +588,7 @@ export function ImportForm({
 
         if (isFocused) {
           return (
-            <section key={source.sourceType} className="rounded-xl border border-line bg-white p-5">
+            <section key={source.sourceType} className="card p-5">
               {body}
             </section>
           );
@@ -614,7 +614,7 @@ export function ImportForm({
       })}
 
       {/* 毎回は読まない前提の説明。畳んで初見の情報量を下げる */}
-      <details className="rounded-xl border border-line bg-white px-5 py-4">
+      <details className="card px-5 py-4">
         <summary className="cursor-pointer text-sm font-bold text-ink">取込の扱い</summary>
         <ul className="mt-3 list-disc space-y-1 pl-5 text-xs leading-5 text-ink-muted">
           <li>車番「88888」は傭車として自動除外します。</li>

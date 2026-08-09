@@ -51,7 +51,7 @@ export default async function UsagePage() {
         表示金額はトークン数からの概算です。請求の正はAnthropicのコンソールを確認してください。現在、費用集計の対象はAnthropic(Claude)経由の呼び出しのみです(他プロバイダは未対応のため集計されません)。
       </div>
 
-      <section className="mt-6 rounded-xl border border-line bg-white p-5 text-center">
+      <section className="mt-6 card p-5 text-center">
         <p className="text-xs text-ink-muted">今月の概算費用(Anthropic/Claudeのみ集計)</p>
         <p className="num mt-1 text-4xl font-bold text-accent">
           ¥{Math.round(summary.totalCostJpy).toLocaleString("ja-JP")}
@@ -61,7 +61,7 @@ export default async function UsagePage() {
         </p>
       </section>
 
-      <section className="mt-6 rounded-xl border border-line bg-white p-5">
+      <section className="mt-6 card p-5">
         <h2 className="mb-3 text-sm font-bold text-ink">利用者別内訳</h2>
         {summary.byUser.length === 0 ? (
           <p className="text-sm text-ink-muted">今月の利用実績はまだありません。</p>
@@ -82,7 +82,7 @@ export default async function UsagePage() {
         )}
       </section>
 
-      <section className="mt-6 rounded-xl border border-line bg-white p-5">
+      <section className="mt-6 card p-5">
         <h2 className="mb-3 text-sm font-bold text-ink">最近のログ</h2>
         {summary.recent.length === 0 ? (
           <p className="text-sm text-ink-muted">ログはまだありません。</p>
@@ -117,7 +117,7 @@ export default async function UsagePage() {
       </section>
 
       {canManageApiKeys ? (
-        <section className="mt-6 rounded-xl border border-line bg-white p-5">
+        <section className="mt-6 card p-5">
           <h2 className="text-sm font-bold text-ink">APIキー・モデルの設定</h2>
           <p className="mt-1 text-xs text-ink-muted">
             AIプロバイダのAPIキー登録・モデル選択は「AI設定」ページで行えます(この画面は利用実績の閲覧に専念しています)。

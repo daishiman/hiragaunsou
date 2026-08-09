@@ -106,7 +106,7 @@ export function AiSettingsManager({
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-xl border border-line bg-white p-5">
+      <section className="card p-5">
         <h2 className="text-sm font-bold text-ink">APIキーを登録・上書きする</h2>
         <p className="mt-1 text-xs text-ink-muted">
           登録済みのプロバイダも、この画面から再入力すると丸ごと上書きされます(部分編集はできません)。
@@ -194,7 +194,7 @@ export function AiSettingsManager({
         </div>
       </section>
 
-      <section className="rounded-xl border border-line bg-white p-5">
+      <section className="card p-5">
         <h2 className="text-sm font-bold text-ink">登録済みのAPIキー</h2>
         {credentials.length === 0 ? (
           <p className="mt-2 text-sm text-ink-muted">まだ何も登録されていません。</p>

@@ -176,7 +176,7 @@ export default async function DeficitPage({
           description="月次データを取り込むと、赤字車両の分類が表示されます。"
         />
       ) : data.deficitCount === 0 ? (
-        <div className="rounded-xl border border-line bg-white px-6 py-12 text-center">
+        <div className="card px-6 py-12 text-center">
           <p className="text-sm font-semibold text-ink">赤字の車両はありません</p>
           <p className="mt-1 text-sm text-ink-muted">
             {yearMonthLabel(yearMonth)}は全車両が黒字です。
@@ -184,7 +184,7 @@ export default async function DeficitPage({
         </div>
       ) : (
         <>
-          <div className="rounded-xl border border-line bg-white p-4">
+          <div className="card p-4">
             <p className="text-xs text-ink-muted">赤字による損失合計</p>
             <p className="num mt-1 text-3xl font-bold text-danger">{man(data.lossTotal)}</p>
             <p className="mt-1 text-[11px] text-ink-muted">
@@ -199,7 +199,7 @@ export default async function DeficitPage({
               const top = group.vehicles.slice(0, TOP_N);
               const rest = group.vehicles.slice(TOP_N);
               return (
-                <section key={group.category} className="rounded-xl border border-line bg-white">
+                <section key={group.category} className="card">
                   <div className="border-b border-line p-5">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
                       <h2 className="text-sm font-bold text-ink">

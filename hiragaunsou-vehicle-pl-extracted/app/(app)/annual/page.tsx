@@ -189,7 +189,7 @@ export default async function AnnualPage({
             </Link>
           </div>
 
-          <section className="mt-4 rounded-xl border border-line bg-white p-5">
+          <section className="mt-4 card p-5">
             <h2 className="text-sm font-bold text-ink">損益の13ヶ月推移</h2>
             <div className="mt-3">
               <TrendBars
@@ -206,7 +206,7 @@ export default async function AnnualPage({
             </div>
           </section>
 
-          <section className="mt-4 rounded-xl border border-line bg-white p-5">
+          <section className="mt-4 card p-5">
             <h2 className="text-sm font-bold text-ink">売上の13ヶ月推移</h2>
             <div className="mt-3">
               <TrendBars
@@ -222,7 +222,7 @@ export default async function AnnualPage({
             </div>
           </section>
 
-          <section className="mt-4 rounded-xl border border-line bg-white p-5">
+          <section className="mt-4 card p-5">
             <div className="flex items-baseline justify-between gap-2">
               <h2 className="text-sm font-bold text-ink">年間の経費内訳</h2>
               <p className="num text-xs text-ink-muted">計 {man(data.total.expense)}</p>
@@ -239,7 +239,7 @@ export default async function AnnualPage({
           </section>
 
           {/* ここから下は「読む表」。既定で畳み、開く前に中身と件数が分かるようにする */}
-          <details className="group mt-4 rounded-xl border border-line bg-white">
+          <details className="group mt-4 card">
             <summary className="cursor-pointer list-none px-5 py-4 text-sm font-bold text-ink hover:bg-subtle">
               月別の明細を見る
               <span className="ml-2 text-xs font-normal text-ink-muted">
@@ -358,7 +358,7 @@ export default async function AnnualPage({
             </div>
           </details>
 
-          <details className="group mt-4 rounded-xl border border-line bg-white">
+          <details className="group mt-4 card">
             <summary className="cursor-pointer list-none px-5 py-4 text-sm font-bold text-ink hover:bg-subtle">
               前期との月別差額を見る
               <span className="ml-2 text-xs font-normal text-ink-muted">
@@ -414,7 +414,7 @@ export default async function AnnualPage({
           {/* 差がある月は初手で開く。「一致」の表は開かない (読む価値が無い) */}
           <details
             open={data.reconciliationGapCount > 0}
-            className="group mt-4 rounded-xl border border-line bg-white"
+            className="group mt-4 card"
           >
             <summary className="cursor-pointer list-none px-5 py-4 text-sm font-bold text-ink hover:bg-subtle">
               Excelとの差額を見る
