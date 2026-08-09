@@ -29,7 +29,7 @@ export default async function AdminUsersPage() {
   const invitations = await new ListInvitationsUseCase(new D1InvitationRepository(db)).execute();
 
   return (
-    <div className="max-w-4xl">
+    <div>
       <ScreenHeader screen="/admin/users" />
       <UsersManager
         initialUsers={users}

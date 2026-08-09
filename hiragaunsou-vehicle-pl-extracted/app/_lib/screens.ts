@@ -48,6 +48,19 @@ export type ScreenBadge = "anomaly";
  */
 export type ScreenPlacement = "sidebar" | "account";
 
+/**
+ * 本文の幅。**画面側で max-w-* を書かない**ための指定で、AppShell の <main> 1箇所に効く。
+ *
+ *   wide   — 既定。表・一覧・工程の画面。画面の幅いっぱいに広げる。
+ *            数字の桁が多い表を横スクロールさせないため、使える幅は全部使う。
+ *   narrow — 読むだけの画面と、1列に並ぶだけの設定フォーム。max-w-3xl。
+ *            全幅にすると1行が長くなりすぎて読みにくく、入力欄だけが横に伸びる。
+ *
+ * 「なぜこの画面だけ右が空いているのか」という迷いが出ないよう、幅は画面ごとの気分ではなく
+ * この2種類のどちらかで決める。判断基準は docs/design-system.md §11-11。
+ */
+export type ScreenWidth = "wide" | "narrow";
+
 /** 「ここでは見ないこと」「次にすること」で使う一言 + 行き先 */
 export interface ScreenPointer {
   /** 業務の言葉で書いた一文 */
@@ -77,6 +90,11 @@ export interface ScreenDef {
   next?: ScreenPointer;
   group: ScreenGroupId;
   kind: ScreenKind;
+  /**
+   * 本文の幅。省略時は wide (幅いっぱい)。
+   * ページ側に max-w-* を書かせないため、ここでだけ宣言する。
+   */
+  width?: ScreenWidth;
   /**
    * 毎月の締めの工程順 (1始まり)。持っている画面だけが
    * 「毎月の締め n/5」「前の工程 / 次の工程」の導線を出す。
@@ -190,6 +208,8 @@ export const SCREENS: readonly ScreenDef[] = [
     },
     group: "analysis",
     kind: "analysis",
+    // AIが書いた文章を読む画面。全幅にすると1行が長くなりすぎて読めない。
+    width: "narrow",
     permission: "report_settings",
   } as ScreenDef,
 
@@ -345,6 +365,27 @@ export const SCREENS: readonly ScreenDef[] = [
     permission: "view",
   },
   {
+    // 収支表から開く印刷用の記録。サイドバーには出さないが、幅の判断も含めて
+    // 画面の定義はここ1箇所に持つ (ページ側に max-w-* を書かせないため)。
+    href: "/grid/report",
+    label: "確認の記録（印刷）",
+    title: "収支表 確認の記録",
+    desc: "確定した月の収支表を、印刷して残せる形にする",
+    lead: "確定した月の内容を印刷用にまとめたものです。",
+    does: "月の確認結果を紙に残す",
+    notHere: {
+      text: "数字の直しはできません。直すのは月次収支表です。",
+      href: "/grid",
+      linkLabel: "月次収支表",
+    },
+    group: "result",
+    kind: "data",
+    // 紙に印刷することが前提の画面。全幅にすると紙に載らない。
+    width: "narrow",
+    permission: "view",
+    hiddenFromNav: true,
+  },
+  {
     href: "/annual",
     label: "年間集計（1年・月ごと）",
     title: "年間集計・対前年（1年ぶんを月ごとに見る）",
@@ -464,6 +505,8 @@ export const SCREENS: readonly ScreenDef[] = [
     },
     group: "spec",
     kind: "spec",
+    // 読むだけの説明書。
+    width: "narrow",
   },
 
   // ── アカウント・管理 ──────────────────────────────────
@@ -481,6 +524,8 @@ export const SCREENS: readonly ScreenDef[] = [
     },
     group: "account",
     kind: "tool",
+    // 自分の名前・メール・パスワードを1列に並べるだけのフォーム。
+    width: "narrow",
   },
   {
     href: "/usage",
@@ -512,6 +557,8 @@ export const SCREENS: readonly ScreenDef[] = [
     },
     group: "account",
     kind: "tool",
+    // APIキーを1本ずつ登録するだけのフォーム。
+    width: "narrow",
     permission: "manage_api_keys",
   },
   {

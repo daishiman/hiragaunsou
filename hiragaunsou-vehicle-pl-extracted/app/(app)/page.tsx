@@ -109,7 +109,6 @@ export default async function HomePage({
             title="まだ確定した収支データがありません"
             description="月次の締めが終わると、ここに経営サマリが表示されます。"
             actionHref="/import"
-            actionLabel="データ取込へ"
           />
         ) : (
           <section>

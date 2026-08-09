@@ -23,7 +23,7 @@ export default async function ReportPage() {
   const defaultYearMonth = await resolveWorkingYearMonth(createDb(env.DB));
 
   return (
-    <div className="max-w-3xl">
+    <div>
       <ScreenHeader screen="/report" />
       <ReportGenerator defaultYearMonth={defaultYearMonth} />
     </div>

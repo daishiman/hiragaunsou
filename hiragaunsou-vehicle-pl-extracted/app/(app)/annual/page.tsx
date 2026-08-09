@@ -97,7 +97,7 @@ export default async function AnnualPage({
       />
 
       <div className="-mt-3 mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-ink-muted">
-        <Link href={`/annual?ym=${prevFiscalAnchor}`} className="text-brand-deep hover:underline">
+        <Link href={`/annual?ym=${prevFiscalAnchor}`} className="btn btn-quiet btn-sm pressable">
           ← 前の期
         </Link>
         <span>
@@ -108,7 +108,7 @@ export default async function AnnualPage({
           </span>
           ヶ月
         </span>
-        <Link href={`/annual?ym=${nextFiscalAnchor}`} className="text-brand-deep hover:underline">
+        <Link href={`/annual?ym=${nextFiscalAnchor}`} className="btn btn-quiet btn-sm pressable">
           次の期 →
         </Link>
       </div>

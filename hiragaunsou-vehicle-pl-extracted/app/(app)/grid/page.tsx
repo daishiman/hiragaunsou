@@ -88,8 +88,7 @@ export default async function GridPage({
         ) : (
           <EmptyState
             title={`${yearMonthLabel(yearMonth)}のデータはまだありません`}
-            description="月次データ取込でExcel/CSVを取り込むと、ここに車両別の収支が表示されます。"
-            actionLabel="月次データ取込へ"
+            description="データ取込でExcel/CSVを取り込むと、ここに車両別の収支が表示されます。"
             actionHref={`/import?ym=${yearMonth}`}
           />
         )

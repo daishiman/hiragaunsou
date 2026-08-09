@@ -146,10 +146,30 @@ describe("サイドバーの表示・非表示", () => {
     expect(within(screen.getByRole("banner")).getByText("月次収支表（1か月・車両ごと）")).toBeInTheDocument();
   });
 
-  it("SPのオフキャンバス用ボタンは別に残っている（狭い画面の挙動を壊さない）", () => {
+  it("狭い画面用のオフキャンバス用ボタンは別に残っている（狭い画面の挙動を壊さない）", () => {
     renderShell();
-    const spButton = screen.getByRole("button", { name: "メニュー" });
+    const spButton = screen.getByRole("button", { name: "メニューを開く" });
     expect(spButton).toHaveAttribute("aria-controls", "app-sidebar");
     expect(spButton).toHaveAttribute("aria-expanded", "false");
+  });
+
+  /*
+    アイコンだけのボタンは、見た目から意味が読み取れない人が必ず出る。
+    名前(aria-label)と、ホバー/フォーカスで出る説明の2本立てで意味に辿り着けることを固定する。
+    「メニュー」のような名詞ではなく「メニューを隠す」という動作で名乗ること自体が要件。
+  */
+  it("アイコンのボタンは動作を表す名前を持ち、ホバーで同じ説明が出る", async () => {
+    const user = userEvent.setup();
+    renderShell();
+
+    const toggle = screen.getByRole("button", { name: "メニューを隠す" });
+    // 画面に文字としては出ていない（アイコンだけ）
+    expect(toggle).toHaveTextContent("");
+
+    await user.hover(toggle);
+    const tip = await screen.findByRole("tooltip");
+    expect(tip).toHaveTextContent("メニューを隠す");
+    // 読み上げでも説明に辿り着けるよう結び付いている
+    expect(toggle).toHaveAttribute("aria-describedby", tip.id);
   });
 });

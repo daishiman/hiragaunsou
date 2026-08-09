@@ -177,9 +177,9 @@ export function AnomalyQueue({
               type="button"
               onClick={undo}
               disabled={pending}
-              className="ml-2 font-semibold text-brand-deep underline-offset-2 hover:underline disabled:opacity-50"
+              className="btn btn-quiet btn-sm pressable ml-2"
             >
-              取り消す
+              この判定を取り消す
             </button>
           </p>
         )}
@@ -316,24 +316,28 @@ export function AnomalyQueue({
               type="button"
               onClick={undo}
               disabled={pending}
-              className="ml-2 font-semibold text-brand-deep underline-offset-2 hover:underline disabled:opacity-50"
+              className="btn btn-quiet btn-sm pressable ml-2"
             >
-              取り消す
+              この判定を取り消す
             </button>
           </p>
         )}
 
+        {/*
+          文の途中に置いた下線つきのボタンは、リンクと見分けがつかないうえ
+          「押すと何が起きるか」が文を最後まで読まないと分からなかった。
+          説明文とボタンを分け、ボタンは他の画面と同じ形にする。
+        */}
         <p className="mt-4 text-[11px] text-ink-muted">
-          判定した内容は
-          <button
-            type="button"
-            onClick={() => router.refresh()}
-            className="mx-1 font-semibold text-brand-deep underline-offset-2 hover:underline"
-          >
-            再読み込み
-          </button>
-          で最新の状態に反映されます。
+          判定した内容は、一覧を読み込み直すと最新の状態になります。
         </p>
+        <button
+          type="button"
+          onClick={() => router.refresh()}
+          className="btn btn-quiet btn-sm pressable mt-2"
+        >
+          一覧を読み込み直す
+        </button>
       </section>
 
       <aside className="card p-4">

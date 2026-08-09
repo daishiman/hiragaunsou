@@ -275,7 +275,7 @@ export function ProfileForm({
           type="button"
           onClick={handleSignOut}
           disabled={signingOut}
-          className="pressable mt-3 rounded-md border border-caution-border bg-caution-soft px-5 py-2 text-sm font-semibold text-danger disabled:opacity-50"
+          className="btn btn-danger pressable mt-3"
         >
           {signingOut ? "ログアウトしています…" : "ログアウトする"}
         </button>

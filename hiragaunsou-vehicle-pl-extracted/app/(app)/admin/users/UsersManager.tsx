@@ -241,21 +241,19 @@ export function UsersManager({
                           disabled={saving || isSelf}
                           onClick={() => void patchUser(u.id, { banned: !u.banned })}
                           className={[
-                            "pressable rounded-md border px-3 py-1 text-xs font-semibold disabled:opacity-50",
-                            u.banned
-                              ? "border-brand bg-brand-soft text-brand-deep"
-                              : "border-caution-border bg-caution-soft text-danger",
+                            "btn btn-sm pressable",
+                            u.banned ? "btn-secondary" : "btn-danger",
                           ].join(" ")}
                         >
-                          {u.banned ? "凍結を解除" : "凍結する"}
+                          {u.banned ? "このユーザーの凍結を解除する" : "このユーザーを凍結する"}
                         </button>
                         <button
                           type="button"
                           disabled={saving || isSelf}
                           onClick={() => setPendingDelete(u)}
-                          className="btn btn-quiet btn-sm pressable"
+                          className="btn btn-danger btn-sm pressable"
                         >
-                          削除
+                          このユーザーを削除する
                         </button>
                       </div>
                       {state.status === "error" ? (
@@ -393,7 +391,7 @@ export function UsersManager({
                             onClick={() => void revokeInvitation(inv.id)}
                             className="btn btn-quiet btn-sm pressable"
                           >
-                            取消
+                            この招待を取り消す
                           </button>
                         </div>
                         {state.status === "error" ? (

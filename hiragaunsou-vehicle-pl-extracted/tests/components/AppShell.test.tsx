@@ -156,7 +156,9 @@ describe("AppShell", () => {
     expect(screen.getByText("ここが本文")).toBeInTheDocument();
   });
 
-  it("SPのメニューボタンを押すとサイドバーの開閉状態(aria-expanded)が切り替わる", async () => {
+  // ボタンは見た目こそアイコンだが、名前は必ず「何が起きるか」を動詞で持つ。
+  // 名前で引けること自体が、読み上げ・ツールチップで意味に辿り着ける保証になる。
+  it("狭い画面のメニューボタンを押すと開閉状態(aria-expanded)が切り替わり、名前も入れ替わる", async () => {
     const user = userEvent.setup();
     render(
       <AppShell
@@ -168,10 +170,11 @@ describe("AppShell", () => {
         <p>本文</p>
       </AppShell>,
     );
-    const menuButton = screen.getByRole("button", { name: "メニュー" });
-    expect(menuButton).toHaveAttribute("aria-expanded", "false");
-    await user.click(menuButton);
-    expect(menuButton).toHaveAttribute("aria-expanded", "true");
+    const openButton = screen.getByRole("button", { name: "メニューを開く" });
+    expect(openButton).toHaveAttribute("aria-expanded", "false");
+    await user.click(openButton);
+    const closeButton = screen.getByRole("button", { name: "メニューを閉じる" });
+    expect(closeButton).toHaveAttribute("aria-expanded", "true");
   });
 
   it("ユーザー名はアカウントメニューを開くボタンになっている", () => {

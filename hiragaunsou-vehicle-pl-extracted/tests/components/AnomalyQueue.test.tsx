@@ -65,7 +65,7 @@ describe("AnomalyQueue", () => {
     });
     expect(screen.getByText(/直前: 車番 24 \/.*入力ミス — 直しに送る/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "取り消す" }));
+    await user.click(screen.getByRole("button", { name: "この判定を取り消す" }));
     expect(global.fetch).toHaveBeenLastCalledWith(
       "/api/todo/a/resolve",
       expect.objectContaining({ body: JSON.stringify({ action: "reopen" }) }),

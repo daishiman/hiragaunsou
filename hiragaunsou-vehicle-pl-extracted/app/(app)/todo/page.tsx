@@ -41,7 +41,7 @@ export default async function TodoPage({
   const todo = await useCase.execute(yearMonth);
 
   return (
-    <div className="max-w-3xl">
+    <div>
       <ScreenHeader
         screen="/todo"
         action={

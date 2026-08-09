@@ -1152,7 +1152,7 @@ function FinishedPanel({
                 <button
                   type="button"
                   onClick={() => onReopen(item)}
-                  className="font-semibold text-brand-deep hover:underline"
+                  className="btn btn-quiet btn-sm pressable"
                 >
                   車番 {item.row.vehicleNoLabel} / {labelOf(item.issue.field)}
                 </button>

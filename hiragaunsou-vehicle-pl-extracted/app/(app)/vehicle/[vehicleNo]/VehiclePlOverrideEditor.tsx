@@ -143,7 +143,7 @@ export function VehiclePlOverrideEditor({
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="text-xs text-brand-deep hover:underline"
+            className="btn btn-quiet btn-sm pressable"
           >
             {open ? "閉じる" : "直す"}
           </button>

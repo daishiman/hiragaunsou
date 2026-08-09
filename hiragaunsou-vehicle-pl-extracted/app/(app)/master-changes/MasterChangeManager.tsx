@@ -159,13 +159,13 @@ export function MasterChangeManager({
                 {a.revertedAt ? null : (
                   <button
                     type="button"
-                    className="shrink-0 underline disabled:opacity-50"
+                    className="btn btn-quiet btn-sm pressable shrink-0"
                     disabled={busy}
                     onClick={() =>
                       void undo({ applyId: a.id }, `${yearMonthLabel(a.yearMonth)} の反映`)
                     }
                   >
-                    取り消す
+                    この反映を取り消す
                   </button>
                 )}
               </li>
@@ -187,11 +187,11 @@ export function MasterChangeManager({
                 {e.undoneAt ? null : (
                   <button
                     type="button"
-                    className="shrink-0 underline disabled:opacity-50"
+                    className="btn btn-quiet btn-sm pressable shrink-0"
                     disabled={busy}
                     onClick={() => void undo({ editId: e.id }, `${e.targetLabel} の${e.fieldLabel}`)}
                   >
-                    元に戻す
+                    この直しを元に戻す
                   </button>
                 )}
               </li>

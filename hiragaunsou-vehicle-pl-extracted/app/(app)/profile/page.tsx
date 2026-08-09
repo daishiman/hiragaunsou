@@ -33,7 +33,7 @@ export default async function ProfilePage() {
   const hasPasswordCredential = credentialRows.length > 0;
 
   return (
-    <div className="max-w-xl">
+    <div>
       <ScreenHeader screen="/profile" />
       <ProfileForm
         userId={session.id}
