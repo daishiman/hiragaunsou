@@ -13,7 +13,14 @@ import { selectableYearMonths } from "../../_lib/yearMonth";
 
 type Batch = { fileName: string; rowCount: number; importedAt: number };
 
-type Result = { ok: boolean; fileName: string; message: string; basis?: string };
+type Result = {
+  ok: boolean;
+  fileName: string;
+  message: string;
+  basis?: string;
+  /** 取り込めたが先に進めない理由があるときの、直しに行く先。 */
+  fix?: { href: string; label: string };
+};
 
 type Conflict = {
   sourceType: ImportSourceType;
@@ -79,14 +86,34 @@ function describeResult(data: Record<string, unknown>): string {
  * 起きていた。取込のたびに下地を作り直すようにしたので、その結果まで画面に出して
  * 「取り込んだのに何も変わらない」という見え方を残さない。
  */
-function describePlRebuild(value: unknown): string {
-  if (typeof value !== "object" || value === null) return "";
+export function describePlRebuild(value: unknown): {
+  text: string;
+  fix?: { href: string; label: string };
+} {
+  if (typeof value !== "object" || value === null) return { text: "" };
   const r = value as { status?: string; vehicleCount?: number; reason?: string };
-  if (r.status === "built") return `。収支表の下地を ${r.vehicleCount ?? 0} 台分作りました`;
-  if (r.status !== "skipped") return "";
-  if (r.reason === "imports_incomplete") return "。収支表は運行実績と売上の両方が揃うと作られます";
-  if (r.reason === "confirmed") return "。この月は確定済みのため収支表は作り直していません";
-  return "。収支表の作り直しに失敗しました(手入力画面から作り直せます)";
+  if (r.status === "built") {
+    return { text: `。収支表の下地を ${r.vehicleCount ?? 0} 台分作りました` };
+  }
+  if (r.status !== "skipped") return { text: "" };
+  if (r.reason === "imports_incomplete") {
+    return { text: "。収支表は運行実績と売上の両方が揃うと作られます" };
+  }
+  if (r.reason === "confirmed") {
+    return { text: "。この月は確定済みのため収支表は作り直していません" };
+  }
+  if (r.reason === "no_vehicle_master") {
+    /*
+      収支表の行は車両マスタの車両から作られるので、マスタが空だと何度取り込んでも0台のまま。
+      ここで「0台分作りました」と言うと、利用者は取込をやり直す以外に打つ手が無くなる。
+      真因(車両マスタが空)を名指しし、直しに行く先まで出す。
+    */
+    return {
+      text: "。ただし車両マスタに車両が1台も登録されていないため、収支表はまだ作れません",
+      fix: { href: "/admin/vehicle-master", label: "車両マスタを登録する" },
+    };
+  }
+  return { text: "。収支表の作り直しに失敗しました(手入力画面から作り直せます)" };
 }
 
 /**
@@ -326,13 +353,15 @@ export function ImportForm({
         }));
         return;
       }
+      const rebuild = describePlRebuild(data.plRebuild);
       setResults((prev) => ({
         ...prev,
         [sourceType]: {
           ok: true,
           fileName: file.name,
-          message: `${describeYearMonth(targetYearMonth)}分として取り込みました（${describeResult(data)}）${describePlRebuild(data.plRebuild)}`,
+          message: `${describeYearMonth(targetYearMonth)}分として取り込みました（${describeResult(data)}）${rebuild.text}`,
           basis,
+          fix: rebuild.fix,
         },
       }));
       // 画面で見ている月と違う月に取り込んだときは、その月の取込状況へ切り替える。
@@ -566,6 +595,14 @@ export function ImportForm({
                 {/* どの根拠でその月と判定したかを残す。あとから「なぜこの月に入ったのか」を追える。 */}
                 {result.ok && result.basis ? (
                   <p className="text-xs leading-5 text-ink-muted">{result.basis}</p>
+                ) : null}
+                {result.fix ? (
+                  <Link
+                    href={result.fix.href}
+                    className="mt-1 inline-block text-xs font-semibold text-brand-deep underline"
+                  >
+                    {result.fix.label}
+                  </Link>
                 ) : null}
               </div>
             ) : null}

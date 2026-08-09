@@ -100,6 +100,24 @@ export async function clearMasterImportTestData(spec: {
         .run(),
     );
     const nos = spec.vehicleNos.map(() => "?").join(",");
+    /*
+      テスト用の車番は、実データを入れたローカルでは他の行から参照されていることがある
+      (運転者マスタの担当車両・トラクタのけん引先)。参照を残したまま消すと
+      FOREIGN KEY constraint failed で後片付けが落ちる。かといって参照元まで消すと
+      開発者がローカルに持っているデータを巻き込むので、参照だけを外して行は残す。
+    */
+    await withBusyRetry(() =>
+      env.DB.prepare(`UPDATE driver_master SET vehicle_no = NULL WHERE vehicle_no IN (${nos})`)
+        .bind(...spec.vehicleNos)
+        .run(),
+    );
+    await withBusyRetry(() =>
+      env.DB.prepare(
+        `UPDATE vehicle_master SET towed_by_vehicle_no = NULL WHERE towed_by_vehicle_no IN (${nos})`,
+      )
+        .bind(...spec.vehicleNos)
+        .run(),
+    );
     await withBusyRetry(() =>
       env.DB.prepare(`DELETE FROM vehicle_master WHERE vehicle_no IN (${nos})`)
         .bind(...spec.vehicleNos)

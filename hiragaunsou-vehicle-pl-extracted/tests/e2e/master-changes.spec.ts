@@ -44,11 +44,25 @@ test.describe("マスタの直しの反映(管理者)", () => {
     await expect(page.getByRole("heading", { name: "直した内容の反映" })).toBeVisible();
   });
 
-  test("食い違いが無いときは、そのことだけを書いて終わる", async ({ page }) => {
+  /*
+    食い違いが有るか無いかは、そのローカルD1に何を取り込んであるかで変わる(実データを
+    入れた環境では有る側になる)。データの中身に賭けたテストは、確認用に月次データを
+    入れただけで落ちて原因を探させるので、どちらの状態でも「空の枠だけが残っていないこと」
+    を見る形にする。
+  */
+  test("食い違いの有無どちらでも、空の枠や押せないボタンを残さない", async ({ page }) => {
     await page.goto("/master-changes");
-    await expect(page.getByText("いま食い違っている月はありません")).toBeVisible();
-    // 押せるものが無いのに操作ボタンだけ残っていると、押し先を探して迷う
-    await expect(page.getByRole("button", { name: "まとめて反映する" })).toHaveCount(0);
+    const empty = page.getByText("いま食い違っている月はありません");
+    const summary = page.getByText(/締めた月のうち \d+件が、いまのマスタと違います/);
+    await expect(empty.or(summary).first()).toBeVisible();
+
+    if (await empty.isVisible()) {
+      // 押せるものが無いのに操作ボタンだけ残っていると、押し先を探して迷う
+      await expect(page.getByRole("button", { name: "まとめて反映する" })).toHaveCount(0);
+      return;
+    }
+    // 並んでいるときは、月ごとに何をすればよいかが必ず添えてある
+    await expect(page.getByRole("button", { name: "この月に反映する" }).first()).toBeVisible();
   });
 
   test("運転者マスタの一覧から1件ずつ直せる", async ({ page }) => {

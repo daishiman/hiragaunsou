@@ -45,7 +45,22 @@ export function monthlyPlRecalculator(db: Db) {
 
 export type PostImportRebuildResult =
   | { status: "built"; vehicleCount: number }
-  | { status: "skipped"; reason: "imports_incomplete" | "confirmed" | "failed" };
+  | {
+      status: "skipped";
+      reason:
+        | "imports_incomplete"
+        /** 確定済みの月なので作り直さない */
+        | "confirmed"
+        /**
+         * 車両マスタに1台も居ないため、収支表の行を作りようがない。
+         *
+         * 「0台で成功」と混ぜてはいけない。0台で成功を返すと画面は「0台分作りました」としか
+         * 言えず、利用者は取込をやり直すしかなくなる(やり直しても何も変わらない)。
+         * 収支表の行は車両マスタの車両から作られるので、真因はいつでも車両マスタ側にある。
+         */
+        | "no_vehicle_master"
+        | "failed";
+    };
 
 /**
  * 取込のあとに収支表(vehicle_pl)の下地を作る。
@@ -82,6 +97,17 @@ export async function rebuildMonthlyPlAfterImport(
     if (!opBatch || !salesBatch) return { status: "skipped", reason: "imports_incomplete" };
     if (confirmation.total > 0 && confirmation.confirmed >= confirmation.total) {
       return { status: "skipped", reason: "confirmed" };
+    }
+
+    /*
+      収支表の行は車両マスタの車両から作る。マスタが空のまま作り直すと0行で「成功」し、
+      画面には「0台分作りました」としか出せない。利用者から見ると取込をやり直す以外に
+      打つ手が無く、やり直しても結果は変わらない(行き止まり)。
+      作り直す前にマスタを見て、真因を名指しできる形で返す。
+    */
+    const activeVehicles = await new D1VehicleMasterRepository(db).findAllActive();
+    if (activeVehicles.length === 0) {
+      return { status: "skipped", reason: "no_vehicle_master" };
     }
 
     const result = await monthlyPlRecalculator(db).execute({ yearMonth });
