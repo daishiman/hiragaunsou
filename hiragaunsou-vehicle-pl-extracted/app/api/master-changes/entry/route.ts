@@ -138,7 +138,20 @@ export async function POST(request: Request) {
       heldBack: applied.heldBackYearMonths,
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "直せませんでした";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: readableMessage(e) }, { status: 400 });
   }
+}
+
+/**
+ * 画面に出す言葉に直す。
+ * DBが返す "D1_ERROR: FOREIGN KEY constraint failed..." のような文をそのまま出すと、
+ * 読んだ人が何を直せばいいのか分からないまま手が止まる。
+ */
+function readableMessage(e: unknown): string {
+  const raw = e instanceof Error ? e.message : "";
+  if (raw === "") return "直せませんでした";
+  if (/D1_ERROR|SQLITE|constraint failed/i.test(raw)) {
+    return "この内容では保存できませんでした。入れた値が他のマスタにあるか確かめてください";
+  }
+  return raw;
 }

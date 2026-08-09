@@ -134,6 +134,14 @@ export class D1MasterValueWriter implements MasterValueWriter {
       next.driverName = name;
     } else {
       const no = (value ?? "").trim();
+      // 車両マスタに無い車番は保存できない (DBの参照の決まりで弾かれる)。
+      // そのまま任せるとDBの英語のエラーがそのまま画面に出てしまうので、ここで先に見て言葉で返す。
+      if (no !== "") {
+        const vehicles = await this.deps.vehicleMasterRepo.findAllActive();
+        if (!vehicles.some((v) => v.vehicleNo === no)) {
+          throw new Error(`車番 ${no} は車両マスタにありません。先に車両マスタへ登録してください`);
+        }
+      }
       // 空にすると未割当。給与がどの車にも乗らなくなるので、画面側でも警告を出す
       next.vehicleNo = no === "" ? null : no;
     }
