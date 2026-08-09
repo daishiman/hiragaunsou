@@ -305,6 +305,20 @@ main :where(details) > :where(:not(summary)) {
 .btn-quiet:hover:not(:disabled) {
   background: var(--subtle);
 }
+/*
+ * 消す・止めるなど、取り返しのつきにくい操作。
+ * 画面ごとに caution 色を手書きしていたため、同じ「削除」でも高さと丸みが違っていた。
+ * 目立たせるのではなく「他のボタンと違う」ことだけを示す (面は塗らない)。
+ */
+.btn-danger {
+  border-color: var(--caution-border);
+  background: var(--caution-soft);
+  color: var(--danger);
+}
+.btn-danger:hover:not(:disabled) {
+  background: var(--caution-soft);
+  border-color: var(--danger);
+}
 
 /*
  * 表の視線移動を減らすための共通指定。

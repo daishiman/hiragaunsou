@@ -221,9 +221,9 @@ export function AiSettingsManager({
                   type="button"
                   onClick={() => setPendingDelete(c.provider)}
                   disabled={deletingProvider === c.provider}
-                  className="pressable rounded-md border border-caution-border bg-caution-soft px-3 py-1.5 text-xs font-semibold text-danger disabled:opacity-50"
+                  className="btn btn-danger btn-sm pressable"
                 >
-                  {deletingProvider === c.provider ? "削除しています…" : "削除"}
+                  {deletingProvider === c.provider ? "削除しています…" : "この接続を削除する"}
                 </button>
               </div>
             ))}

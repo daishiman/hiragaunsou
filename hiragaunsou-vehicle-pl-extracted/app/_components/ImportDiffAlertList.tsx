@@ -73,7 +73,7 @@ export function ImportDiffAlertList({
                 <span>{describe(d)}</span>
                 <button
                   type="button"
-                  className="shrink-0 underline disabled:opacity-50"
+                  className="btn btn-quiet btn-sm pressable shrink-0"
                   disabled={busy}
                   onClick={() => void ack([d])}
                 >
@@ -92,7 +92,7 @@ export function ImportDiffAlertList({
                   <span>{describe(d)}</span>
                   <button
                     type="button"
-                    className="shrink-0 underline disabled:opacity-50"
+                    className="btn btn-quiet btn-sm pressable shrink-0"
                     disabled={busy}
                     onClick={() => void ack([d])}
                   >
@@ -103,7 +103,7 @@ export function ImportDiffAlertList({
             </ul>
             <button
               type="button"
-              className="mt-2 underline disabled:opacity-50"
+              className="btn btn-quiet btn-sm pressable mt-2"
               disabled={busy}
               onClick={() => void ack(caution)}
             >

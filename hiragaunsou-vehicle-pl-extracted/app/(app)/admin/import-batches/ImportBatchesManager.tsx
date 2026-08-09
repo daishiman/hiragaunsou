@@ -200,9 +200,9 @@ export function ImportBatchesManager({
                         type="button"
                         disabled={state.status === "deleting"}
                         onClick={() => setPendingBatch(b)}
-                        className="pressable rounded-md border border-caution-border bg-caution-soft px-3 py-1 text-xs font-semibold text-danger disabled:opacity-50"
+                        className="btn btn-danger btn-sm pressable"
                       >
-                        {state.status === "deleting" ? "削除中…" : "削除"}
+                        {state.status === "deleting" ? "削除中…" : "この取込を削除する"}
                       </button>
                       {state.status === "error" ? (
                         <p className="mt-1 text-[11px] text-danger">{state.message}</p>
