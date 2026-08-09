@@ -170,8 +170,15 @@ main :where(section, article, aside, div, dl, dd, dt, p, ul, ol, li, details, su
   min-width: 0;
 }
 
-/* 画像・埋め込み・整形済みテキストは、親より広くならない */
-main :where(img, svg, video, canvas, iframe, pre, table) {
+/*
+ * 画像・埋め込み・整形済みテキストは、親より広くならない。
+ *
+ * ここに table を入れてはいけない。収支表などの横長の表は、
+ * 外側の枠(overflow-x-auto)より広いままにして横スクロールさせる作りになっており
+ * (min-w-full / min-w-[36rem] / セルごとの min-w-*)、
+ * max-width:100% を掛けると列が潰れて読めなくなる。
+ */
+main :where(img, svg, video, canvas, iframe, pre) {
   max-width: 100%;
 }
 
@@ -194,8 +201,16 @@ main :where(input, select, textarea) {
   min-width: 0;
 }
 
-/* 長い説明文の器 (app/_components/Card.tsx の <Prose>)。 */
-.card > *,
+/*
+ * 長い説明文の器 (app/_components/Card.tsx の <Prose>)。
+ *
+ * カードの直下には表の外枠(横スクロールする箱)も入るため、
+ * ここで max-width を掛けない。掛けると横長の表が縮んで列が潰れる。
+ * 幅の下限を外すだけにとどめ、折り返しは .prose-note が受け持つ。
+ */
+:where(.card) > * {
+  min-width: 0;
+}
 .prose-note,
 .prose-note > * {
   min-width: 0;
@@ -210,10 +225,8 @@ main :where(input, select, textarea) {
  * 折りたたみ(details)の中身も同じ扱いにする。
  * 「どのファイルを選べばよいですか?」の本文はここに入る。
  */
-main :where(details) > :not(summary) {
+main :where(details) > :where(:not(summary)) {
   min-width: 0;
-  max-width: 100%;
-  overflow-wrap: anywhere;
 }
 
 /*

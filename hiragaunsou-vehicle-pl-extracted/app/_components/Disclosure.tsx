@@ -22,7 +22,7 @@ export function Disclosure({
 }) {
   return (
     <details
-      className={tone === "inline" ? "mt-2" : "card mt-3 rounded-md"}
+      className={tone === "inline" ? "mt-2" : "card mt-3"}
     >
       <summary
         className={
