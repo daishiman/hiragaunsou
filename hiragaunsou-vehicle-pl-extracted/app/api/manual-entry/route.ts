@@ -171,12 +171,19 @@ export async function POST(request: Request) {
     // 材料集めは RecalculateMonthlyPlUseCase に任せる。保存済みの全車両分の手入力・
     // STEP2の整形判断・キリン配賦をDBから読み直すので、今回の画面で触っていない
     // 車両の入力や、他の画面で入れた値が落ちることがない。
+    const overrideRepo = new D1VehiclePlOverrideRepository(db);
+    /*
+      「反映済み」の印は再計算を始める前の時刻で付ける (ApplyPendingOverridesUseCase と同じ理由)。
+      この画面の「収支表を作り直す」も上書きを読み込んで反映しているが、印を付けていなかったため、
+      STEP4 で人件費を直したあとに作り直しても収支表の画面には「反映待ち」が残り続けていた。
+    */
+    const recalculationStartedAt = new Date();
     const result = await new RecalculateMonthlyPlUseCase(
       manualInputRepo,
       new D1CleansingDecisionRepository(db),
       appSettingRepo,
       rateMasterRepo,
-      new D1VehiclePlOverrideRepository(db),
+      overrideRepo,
       new FinalizeMonthlyPlUseCase(
         new D1ImportBatchRepository(db),
         new D1VehicleMasterRepository(db),
@@ -185,6 +192,7 @@ export async function POST(request: Request) {
         new D1VehiclePlRepository(db),
       ),
     ).execute({ yearMonth: body.yearMonth });
+    await overrideRepo.markApplied(body.yearMonth, recalculationStartedAt);
     return NextResponse.json({
       yearMonth: result.yearMonth,
       vehicleCount: result.vehicleCount,

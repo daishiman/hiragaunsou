@@ -28,6 +28,13 @@ export interface VehiclePayrollAggregate {
   welfare: number;
   /** 乗務員数(賞与は1人あたりの支給額のため、2人乗務車両は2人分になる) */
   driverCount: number;
+  /**
+   * 割り当てられた乗務員のうち、給与集計表に社員Noが見つかった人数。
+   * driverCount と食い違うとき、その車両の給与は「運転者マスタには居るが給与データが無い」状態で
+   * 0円のまま集計されている。0円が「本当に0円」なのか「突合が外れている」のかを
+   * 金額だけからは区別できないため、人数として持ち出す。
+   */
+  payrollMatchedCount: number;
 }
 
 /**
@@ -56,6 +63,7 @@ export function aggregatePayrollByVehicle(
       salary: 0,
       welfare: 0,
       driverCount: 0,
+      payrollMatchedCount: 0,
     };
     result.set(driver.vehicleNo, {
       vehicleNo: driver.vehicleNo,
@@ -66,6 +74,7 @@ export function aggregatePayrollByVehicle(
       salary: existing.salary + (payroll?.totalPay ?? 0),
       welfare: existing.welfare + (payroll?.socialInsuranceTotal ?? 0),
       driverCount: existing.driverCount + 1,
+      payrollMatchedCount: existing.payrollMatchedCount + (payroll ? 1 : 0),
     });
   }
   return result;

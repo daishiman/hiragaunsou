@@ -4,6 +4,12 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "../../_components/EmptyState";
 import { ListToolbar } from "../../_components/ListToolbar";
+import {
+  PayrollStep,
+  type PayrollDetailRow,
+  type PayrollDetailSummary,
+  type PayrollStatus,
+} from "./PayrollStep";
 
 export interface VehicleRow {
   vehicleNo: string;
@@ -22,21 +28,7 @@ export interface PrefillValues {
   tankPricePerLiter: number;
 }
 
-export type PayrollStatus = {
-  fileName: string;
-  rowCount: number;
-  importedAt: number;
-} | null;
-
-export interface PayrollDetailRow {
-  vehicleNo: string;
-  vehicleType: string;
-  depot: string;
-  driverName: string | null;
-  driverCount: number;
-  salary: number;
-  welfare: number;
-}
+export type { PayrollDetailRow, PayrollDetailSummary, PayrollStatus } from "./PayrollStep";
 
 /**
  * 請求書・レシートを見て人が入力する項目。
@@ -302,6 +294,12 @@ export function ManualEntryStepper({
   prefill,
   payrollStatus,
   payrollDetail = [],
+  payrollSummary = {
+    payrollRowCount: 0,
+    driverMasterCount: 0,
+    assignedVehicleCount: 0,
+    payrollMissingVehicleCount: 0,
+  },
   initialWorkflowStep = null,
   autoValues = { tireActual: {}, tollActual: {} },
   tollDiscountRate = 0,
@@ -317,6 +315,8 @@ export function ManualEntryStepper({
   prefill: PrefillValues;
   payrollStatus: PayrollStatus;
   payrollDetail?: PayrollDetailRow[];
+  /** 0円が並ぶ理由(CSV未取込・運転者マスタ未登録・社員Noが突合しない)を名指しするための集計 */
+  payrollSummary?: PayrollDetailSummary;
   initialWorkflowStep?: string | null;
   /** 空欄にしたときに使われる自動計算の金額。規則を文章で説明せず、この数字をセルに出す */
   autoValues?: { tireActual: Record<string, number>; tollActual: Record<string, number> };
@@ -1363,81 +1363,13 @@ export function ManualEntryStepper({
         ) : null}
 
         {step === 2 ? (
-          <div>
-            <h2 className="text-sm font-bold text-ink">人件費(給与集計表)の取込確認</h2>
-            {/* 状態は文章ではなくバッジで。色だけに頼らず「取込済み / 未取込」の文字を必ず出す */}
-            {payrollStatus ? (
-              <>
-                <p className="mt-3">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-soft px-3 py-1 text-xs font-bold text-brand-deep">
-                    <span aria-hidden>✓</span>取込済み
-                  </span>
-                </p>
-                <dl className="mt-3 grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1.5 text-sm">
-                  <dt className="text-xs text-ink-muted">ファイル</dt>
-                  <dd className="truncate text-ink">{payrollStatus.fileName}</dd>
-                  <dt className="text-xs text-ink-muted">件数</dt>
-                  <dd className="num text-ink">{payrollStatus.rowCount}件</dd>
-                  <dt className="text-xs text-ink-muted">取込日時</dt>
-                  <dd className="num text-ink">
-                    {new Date(payrollStatus.importedAt).toLocaleString("ja-JP")}
-                  </dd>
-                </dl>
-              </>
-            ) : (
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-caution-border bg-caution-soft px-3 py-1 text-xs font-bold text-ink">
-                  <span aria-hidden>!</span>未取込
-                </span>
-                <Link
-                  href={`/import?step=4&ym=${yearMonth}`}
-                  className="pressable rounded-md border border-brand px-3 py-1.5 text-xs font-semibold text-brand-deep hover:bg-brand-soft"
-                >
-                  データ取込へ
-                </Link>
-              </div>
-            )}
-            {payrollDetail.length > 0 ? (
-              <div className="mt-4">
-                <h3 className="text-xs font-bold text-ink-muted">車両別内訳(社員コード→運転者マスタ→車両で集計)</h3>
-                <div className="mt-1.5 max-h-[40vh] overflow-y-auto rounded-md border border-line">
-                  <table className="min-w-full text-sm">
-                    <thead className="sticky top-0 bg-subtle">
-                      <tr>
-                        <th className="px-3 py-2 text-left text-xs font-bold text-ink-muted">車番</th>
-                        <th className="px-3 py-2 text-left text-xs font-bold text-ink-muted">運転者</th>
-                        <th className="px-3 py-2 text-right text-xs font-bold text-ink-muted">総支給額</th>
-                        <th className="px-3 py-2 text-right text-xs font-bold text-ink-muted">社保合計</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {payrollDetail.map((row) => (
-                        <tr key={row.vehicleNo} className="border-t border-line">
-                          <td className="px-3 py-2 num">{row.vehicleNo}</td>
-                          <td className="px-3 py-2">
-                            {row.driverName ?? <span className="text-danger">未割当</span>}
-                          </td>
-                          <td className="px-3 py-2 text-right num">
-                            {row.salary.toLocaleString("ja-JP")}円
-                          </td>
-                          <td className="px-3 py-2 text-right num">
-                            {row.welfare.toLocaleString("ja-JP")}円
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="mt-1.5 text-[11px] text-ink-muted">
-                  「未割当」は運転者マスタに給与データと一致する車両が見つからなかった車両です。取り漏れがないか確認してください。
-                </p>
-              </div>
-            ) : (
-              <p className="mt-4 text-xs text-ink-muted">
-                車両別の内訳は、運転者マスタ(社員コードと車番の対応)を登録すると出ます。
-              </p>
-            )}
-          </div>
+          <PayrollStep
+            yearMonth={yearMonth}
+            payrollStatus={payrollStatus}
+            rows={payrollDetail}
+            summary={payrollSummary}
+            canManageMasters={canManageVehicleMaster}
+          />
         ) : null}
 
         {step === 3 ? (
