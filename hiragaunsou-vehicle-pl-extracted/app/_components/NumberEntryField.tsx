@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { ENTRY_FIELD_ATTR, moveFocusOnEnter, parseAmountInput } from "../_lib/numberEntry";
+import { CHANGED_FIELD_CLASS, ChangedFieldBadge, OriginalValueNote } from "./ChangedFieldMark";
 
 /**
  * 手で数字を入れる欄。全画面共通。
@@ -81,6 +82,12 @@ export function NumberEntryField({
   const display = isAuto ? String(autoValue) : value;
   const parsed = touched ? parse(value) : null;
   const isInvalid = touched && parsed === null;
+  /**
+   * 元の値から変えたか。
+   * 「打った = 変えた」ではない。取込値と同じ数字を打ち直しただけの欄まで色が付くと、
+   * 保存前に何件直したのかを数えられなくなる。読み取った数で比べる。
+   */
+  const isChanged = touched && hasAuto && parsed !== null && parsed !== autoValue;
 
   /*
     印(「自動」「自動に戻す」)は欄の左隣に置く。
@@ -113,6 +120,8 @@ export function NumberEntryField({
   return (
     <div className="inline-flex flex-col items-end gap-0.5">
       <div className="flex items-center justify-end gap-1.5">
+        {/* 直した欄は、どの画面でも同じ札・同じ色にする (app/_components/ChangedFieldMark.tsx) */}
+        {isChanged ? <ChangedFieldBadge /> : null}
         {mark}
         <input
         {...{ [ENTRY_FIELD_ATTR]: "" }}
@@ -139,10 +148,10 @@ export function NumberEntryField({
           className={[
             "num rounded-md border px-2 py-1 text-right",
             widthClass,
-            isInvalid ? "border-danger" : "border-line",
+            isInvalid ? "border-danger" : isChanged ? CHANGED_FIELD_CLASS : "border-line",
             // 自動のままは薄い文字、人が入れた値は通常の濃い文字
             isAuto ? "text-ink-muted" : "text-ink",
-            disabled ? "bg-subtle" : "bg-white",
+            disabled ? "bg-subtle" : isChanged ? "" : "bg-white",
           ].join(" ")}
         />
       </div>
@@ -153,6 +162,10 @@ export function NumberEntryField({
       */}
       <div className="flex min-h-[1.0625rem] items-center justify-end gap-1.5 text-[11px] leading-none whitespace-nowrap text-ink-muted">
         {hints}
+        {/* 変えた欄には元の値を並べる。変更後の数字だけでは桁の間違いに気づけない */}
+        {isChanged ? (
+          <OriginalValueNote original={(autoValue as number).toLocaleString("ja-JP")} />
+        ) : null}
         {echo !== null ? <span className="num">{echo}</span> : null}
       </div>
 
