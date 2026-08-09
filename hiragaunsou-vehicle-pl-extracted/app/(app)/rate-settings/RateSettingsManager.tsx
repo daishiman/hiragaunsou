@@ -143,7 +143,7 @@ export function RateSettingsManager({
   function renderTable(definitions: readonly RateMasterKeyDef[], ariaLabel: string) {
     return (
       <div className="overflow-x-auto rounded-xl border border-line bg-white">
-        <table aria-label={ariaLabel} className="w-full min-w-max border-collapse text-xs">
+        <table aria-label={ariaLabel} className="data-table w-full min-w-max border-collapse text-xs">
           <thead>
             <tr className="border-b border-line bg-subtle text-ink-muted">
               <th className="px-3 py-2 text-left font-medium">項目</th>

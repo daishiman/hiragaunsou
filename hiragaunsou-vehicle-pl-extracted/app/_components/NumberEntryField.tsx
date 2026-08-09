@@ -82,9 +82,39 @@ export function NumberEntryField({
   const parsed = touched ? parse(value) : null;
   const isInvalid = touched && parsed === null;
 
+  /*
+    印(「自動」「自動に戻す」)は欄の左隣に置く。
+    欄の下に置いていたときは、車番 → 運転者 → 金額と横に流れていた視線が
+    行ごとに下へ折れ、しかも印の有無で行の高さが変わっていた。
+  */
+  const mark = isAuto ? (
+    <span className="shrink-0 rounded bg-subtle px-1 text-[10px] font-semibold whitespace-nowrap text-ink-muted">
+      {autoLabel}
+    </span>
+  ) : hasAuto && touched && resettable && !disabled ? (
+    <button
+      type="button"
+      onClick={() => onChange("")}
+      className="shrink-0 rounded px-1 text-[10px] font-semibold whitespace-nowrap text-brand-deep underline underline-offset-2 hover:bg-brand-soft"
+    >
+      {autoLabel}に戻す
+    </button>
+  ) : null;
+
+  /*
+    読めた金額・補足は1行にまとめ、その行の高さを常に確保する。
+    出たり消えたりで行の高さが変わると、打っている最中に下の行が上下にずれる。
+  */
+  const echo =
+    showEcho && parsed !== null && (value.includes("+") || value.includes("＋") || parsed >= 1000)
+      ? parsed.toLocaleString("ja-JP")
+      : null;
+
   return (
     <div className="inline-flex flex-col items-end gap-0.5">
-      <input
+      <div className="flex items-center justify-end gap-1.5">
+        {mark}
+        <input
         {...{ [ENTRY_FIELD_ATTR]: "" }}
         data-col={col}
         data-auto={isAuto ? "true" : undefined}
@@ -106,44 +136,29 @@ export function NumberEntryField({
         onFocus={(e) => {
           if (isAuto) e.currentTarget.select();
         }}
-        className={[
-          "num rounded-md border px-2 py-1 text-right",
-          widthClass,
-          isInvalid ? "border-danger" : "border-line",
-          // 自動のままは薄い文字、人が入れた値は通常の濃い文字
-          isAuto ? "text-ink-muted" : "text-ink",
-          disabled ? "bg-subtle" : "bg-white",
-        ].join(" ")}
-      />
-
-      {/* 自動のままなら小さな印。手で直したあとは自動へ戻す入口に変わる */}
-      {isAuto ? (
-        <span className="rounded bg-subtle px-1 text-[10px] font-semibold text-ink-muted">
-          {autoLabel}
-        </span>
-      ) : hasAuto && touched && resettable && !disabled ? (
-        <button
-          type="button"
-          onClick={() => onChange("")}
-          className="rounded px-1 text-[10px] font-semibold text-brand-deep underline underline-offset-2 hover:bg-brand-soft"
-        >
-          {autoLabel}に戻す
-        </button>
-      ) : null}
-
-      {hints}
+          className={[
+            "num rounded-md border px-2 py-1 text-right",
+            widthClass,
+            isInvalid ? "border-danger" : "border-line",
+            // 自動のままは薄い文字、人が入れた値は通常の濃い文字
+            isAuto ? "text-ink-muted" : "text-ink",
+            disabled ? "bg-subtle" : "bg-white",
+          ].join(" ")}
+        />
+      </div>
 
       {/*
-        桁を1つ間違えても数字だけでは気づけないので、読めた値をカンマ付きで返す。
-        足し算式のときは合計、そうでなければ4桁以上のときだけ (短い数字は冗長)。
+        読めた金額(桁を1つ間違えても数字だけでは気づけない)と補足を1行に置く。
+        中身が無くても高さを確保して、行がずれないようにする。
       */}
-      {showEcho &&
-      parsed !== null &&
-      (value.includes("+") || value.includes("＋") || parsed >= 1000) ? (
-        <p className="num text-[11px] text-ink-muted">{parsed.toLocaleString("ja-JP")}</p>
-      ) : null}
+      <div className="flex min-h-[1.0625rem] items-center justify-end gap-1.5 text-[11px] leading-none whitespace-nowrap text-ink-muted">
+        {hints}
+        {echo !== null ? <span className="num">{echo}</span> : null}
+      </div>
 
-      {isInvalid ? <p className="text-[11px] text-danger">{invalidMessage}</p> : null}
+      {isInvalid ? (
+        <p className="text-[11px] leading-tight text-danger">{invalidMessage}</p>
+      ) : null}
     </div>
   );
 }

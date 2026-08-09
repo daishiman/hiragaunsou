@@ -55,7 +55,7 @@ export function Drawer({
             ref={closeButtonRef}
             type="button"
             onClick={onClose}
-            className="pressable shrink-0 rounded-md border border-line px-3 py-1 text-xs font-semibold text-ink hover:bg-subtle"
+            className="btn btn-quiet btn-sm pressable shrink-0"
           >
             閉じる
           </button>

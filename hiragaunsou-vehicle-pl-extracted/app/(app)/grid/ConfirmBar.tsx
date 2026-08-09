@@ -73,7 +73,7 @@ export function ConfirmBar({
                 type="button"
                 disabled={pending}
                 onClick={() => toggle(false)}
-                className="pressable rounded-md border border-line bg-white px-4 py-1.5 text-sm text-ink hover:bg-subtle disabled:opacity-50"
+                className="btn btn-quiet pressable"
               >
                 {pending ? "処理中…" : "確定を取り消す"}
               </button>
@@ -82,7 +82,7 @@ export function ConfirmBar({
                 type="button"
                 disabled={pending || !state.canConfirm}
                 onClick={() => toggle(true)}
-                className="pressable rounded-md bg-accent px-5 py-1.5 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+                className="btn btn-primary pressable"
               >
                 {pending ? "確定中…" : "この月を確定する"}
               </button>

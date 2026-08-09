@@ -93,7 +93,7 @@ export function WorkflowStepCard({
         ) : (
           <Link
             href={withYm(step.href, yearMonth)}
-            className="pressable inline-block rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-deep"
+            className="btn btn-primary pressable inline-block"
           >
             この手順を開く
           </Link>
@@ -156,7 +156,7 @@ function CompactRow({
           ) : (
             <Link
               href={withYm(step.href, yearMonth)}
-              className="pressable inline-block rounded-md border border-line px-2.5 py-1 text-[11px] font-semibold text-ink hover:bg-subtle"
+              className="btn btn-quiet pressable inline-block text-[11px]"
             >
               {status === "done" ? "内容を見直す" : "この手順を開く"}
             </Link>

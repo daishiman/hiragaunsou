@@ -223,7 +223,7 @@ export function AppShell({ userName, userRole, role, badges, children }: AppShel
             type="button"
             onClick={() => void handleSignOut()}
             disabled={signingOut}
-            className="pressable mt-2 w-full rounded-md border border-line px-2 py-1.5 text-[11px] font-semibold text-ink-muted hover:bg-subtle disabled:opacity-50"
+            className="btn btn-quiet pressable mt-2 w-full text-[11px]"
           >
             {signingOut ? "ログアウトしています…" : "ログアウト"}
           </button>
@@ -241,7 +241,7 @@ export function AppShell({ userName, userRole, role, badges, children }: AppShel
             onClick={() => setNavOpen((v) => !v)}
             aria-expanded={navOpen}
             aria-controls="app-sidebar"
-            className="pressable rounded-md border border-line px-2.5 py-1.5 text-xs font-semibold text-ink lg:hidden"
+            className="btn btn-quiet btn-sm pressable lg:hidden"
           >
             メニュー
           </button>

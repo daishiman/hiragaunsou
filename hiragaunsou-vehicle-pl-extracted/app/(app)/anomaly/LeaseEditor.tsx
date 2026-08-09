@@ -117,7 +117,7 @@ export function LeaseEditor({
           />
 
           <div className="mt-3 overflow-x-auto">
-            <table className="w-full min-w-[36rem] text-sm">
+            <table className="data-table w-full min-w-[36rem] text-sm">
               <thead>
                 <tr className="border-b border-line text-xs font-medium text-ink-muted">
                   <th className="px-2 py-2 text-left">車番</th>
@@ -172,7 +172,7 @@ export function LeaseEditor({
                             type="button"
                             disabled={!canEdit || !dirty || savingNo === r.vehicleNo}
                             onClick={() => save(r)}
-                            className="pressable rounded-md border border-brand px-3 py-1 text-xs font-semibold text-brand-deep hover:bg-brand-soft disabled:border-line disabled:text-ink-muted disabled:opacity-60"
+                            className="btn btn-secondary btn-sm pressable"
                           >
                             {savingNo === r.vehicleNo ? "保存中…" : "保存する"}
                           </button>

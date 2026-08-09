@@ -55,7 +55,7 @@ export function ReportGenerator() {
           type="button"
           onClick={generate}
           disabled={state.status === "loading"}
-          className="pressable rounded-md bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+          className="btn btn-primary pressable"
         >
           {state.status === "loading" ? "レポートを作成しています…" : "レポートを作成する"}
         </button>

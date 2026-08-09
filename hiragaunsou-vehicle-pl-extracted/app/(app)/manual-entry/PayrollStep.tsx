@@ -286,7 +286,7 @@ export function PayrollStep({
             </span>
             <Link
               href={`/import?step=4&ym=${yearMonth}`}
-              className="pressable rounded-md border border-brand px-3 py-1.5 text-xs font-semibold text-brand-deep hover:bg-brand-soft"
+              className="btn btn-secondary btn-sm pressable"
             >
               データ取込へ
             </Link>
@@ -331,19 +331,25 @@ export function PayrollStep({
           </div>
 
           <div className="max-h-[56vh] min-h-[14rem] overflow-auto rounded-md border border-line">
-            <table className="min-w-full text-sm">
-              <thead className="sticky top-0 bg-subtle">
+            <table className="data-table min-w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-subtle">
                 <tr>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-ink-muted">車番</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-ink-muted">運転者</th>
-                  <th className="px-3 py-2 text-right text-xs font-bold text-ink-muted whitespace-nowrap">
+                  <th className="w-px px-3 py-2 text-left text-xs font-bold text-ink-muted">
+                    車番
+                  </th>
+                  <th className="w-px px-3 py-2 text-left text-xs font-bold text-ink-muted">
+                    運転者
+                  </th>
+                  <th className="w-px px-3 py-2 text-right text-xs font-bold text-ink-muted">
                     総支給額(円)
                     <span className="block text-[11px] font-normal">給与集計表CSV</span>
                   </th>
-                  <th className="px-3 py-2 text-right text-xs font-bold text-ink-muted whitespace-nowrap">
+                  <th className="w-px px-3 py-2 text-right text-xs font-bold text-ink-muted">
                     社保合計(円)
                     <span className="block text-[11px] font-normal">給与集計表CSV</span>
                   </th>
+                  {/* 余った幅を吸わせ、運転者名と金額欄を隣り合わせに保つ */}
+                  <th className="w-full" aria-hidden />
                 </tr>
               </thead>
               <tbody>
@@ -355,10 +361,10 @@ export function PayrollStep({
                       key={row.vehicleNo}
                       // 保存していない行は、表の中でも見つけられるようにしておく
                       // (表の下の操作パネルと行が離れていても、どの行の話か迷わない)
-                      className={`border-t border-line align-top ${dirty ? "bg-caution-soft" : ""}`}
+                      className={`border-t border-line ${dirty ? "bg-caution-soft" : ""}`}
                     >
                       <td className="num px-3 py-2 whitespace-nowrap">{row.vehicleNo}</td>
-                      <td className="px-3 py-2">
+                      <td className="max-w-[12rem] px-3 py-2 whitespace-nowrap">
                         {row.driverName ?? <span className="text-danger">未割当</span>}
                         {/*
                           運転者は割り当たっているのに給与が見つからない車両は、0円が正しいのか
@@ -384,6 +390,7 @@ export function PayrollStep({
                         overridden={row.welfareOverridden}
                         onChange={(v) => setEdit(row, { welfare: v })}
                       />
+                      <td aria-hidden />
                     </tr>
                   );
                 })}
@@ -433,14 +440,14 @@ export function PayrollStep({
                           type="button"
                           disabled={savingVehicleNo === row.vehicleNo}
                           onClick={() => void saveRow(row)}
-                          className="pressable rounded-md bg-accent px-4 py-1.5 text-xs font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+                          className="btn btn-primary btn-sm pressable"
                         >
                           {savingVehicleNo === row.vehicleNo ? "保存しています…" : "この車両を保存"}
                         </button>
                         <button
                           type="button"
                           onClick={() => cancelEdit(row)}
-                          className="pressable rounded-md border border-line bg-white px-4 py-1.5 text-xs text-ink hover:bg-subtle"
+                          className="btn btn-quiet btn-sm pressable"
                         >
                           やめる
                         </button>
@@ -449,7 +456,7 @@ export function PayrollStep({
                       <button
                         type="button"
                         onClick={() => revertToImported(row)}
-                        className="pressable rounded-md border border-brand bg-white px-4 py-1.5 text-xs font-semibold text-brand-deep hover:bg-brand-soft"
+                        className="btn btn-secondary btn-sm pressable"
                       >
                         取込値に戻す
                       </button>
@@ -581,7 +588,7 @@ function PayrollDiagnosis({
       {!problem.needsAdmin || canManageMasters ? (
         <Link
           href={problem.href}
-          className="pressable mt-3 inline-block rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-deep"
+          className="btn btn-primary pressable mt-3 inline-block"
         >
           {problem.linkLabel}
         </Link>

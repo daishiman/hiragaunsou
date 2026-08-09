@@ -113,7 +113,7 @@ export default async function VehicleDetailPage({
         action={
           <Link
             href={`/grid?ym=${yearMonth}`}
-            className="pressable inline-block rounded-md border border-line bg-white px-4 py-2 text-sm text-ink hover:bg-subtle"
+            className="btn btn-quiet pressable inline-block"
           >
             月次収支表へ戻る
           </Link>
@@ -237,7 +237,7 @@ export default async function VehicleDetailPage({
           )}
 
           <section className="mt-5 overflow-x-auto rounded-xl border border-line bg-white">
-            <table className="w-full min-w-max border-collapse text-xs">
+            <table className="data-table w-full min-w-max border-collapse text-xs">
               <thead>
                 <tr className="border-b border-line bg-subtle text-ink-muted">
                   <th className="px-3 py-2 text-left font-medium">月</th>

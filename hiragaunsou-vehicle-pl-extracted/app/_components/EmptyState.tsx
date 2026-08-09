@@ -19,7 +19,7 @@ export function EmptyState({
       <div className="mt-4">
         <Link
           href={actionHref}
-          className="pressable inline-block rounded-md bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent-deep"
+          className="btn btn-primary pressable inline-block"
         >
           {actionLabel}
         </Link>

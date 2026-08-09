@@ -361,7 +361,7 @@ export function DriverMasterManager({
           ) : null}
 
           <div className="mt-4 overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="data-table min-w-full text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-xs text-ink-muted">
                   <th className="py-2 pr-3">区分</th>
@@ -403,7 +403,7 @@ export function DriverMasterManager({
               type="button"
               disabled={busy || preview.valid.length === 0}
               onClick={() => void confirm()}
-              className="pressable rounded-md bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+              className="btn btn-primary pressable"
             >
               {busy ? "取り込んでいます…" : `${preview.valid.length}名を取り込む`}
             </button>
@@ -434,7 +434,7 @@ export function DriverMasterManager({
           </div>
         ) : (
           <div className="mt-3 overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="data-table min-w-full text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-xs text-ink-muted">
                   <th className="py-2 pr-3">社員No</th>

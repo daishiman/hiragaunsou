@@ -215,7 +215,7 @@ export default async function DashboardPage({
             <section className="mt-4 rounded-xl border border-line bg-white p-5">
               <h2 className="text-sm font-bold text-ink">営業所別</h2>
               <div className="mt-3 overflow-x-auto">
-                <table className="w-full min-w-[30rem] text-sm">
+                <table className="data-table w-full min-w-[30rem] text-sm">
                   <thead>
                     <tr className="border-b border-line text-xs font-medium text-ink-muted">
                       <th className="py-2 text-left">所属</th>

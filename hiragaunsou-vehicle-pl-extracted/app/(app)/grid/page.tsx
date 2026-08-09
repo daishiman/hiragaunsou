@@ -102,20 +102,21 @@ export default async function GridPage({
                 canConfirm={checkAccess(session, "input")}
                 postponedCount={grid.review.postponed}
               />
-              <a
-                href={`/api/export?yearMonth=${encodeURIComponent(yearMonth)}`}
-                className="pressable rounded border border-brand px-3 py-1.5 text-sm font-semibold text-brand-deep"
-              >
-                CSVで書き出す
-              </a>
               {/* 数字そのものではなく「確認の記録」を渡したい場面 (上長・経理への報告) の入口。
-                  CSVと並べて置く。どちらも「表を見終わったあとの出口」だから。 */}
+                  CSVと並べて置く。どちらも「表を見終わったあとの出口」だから。
+                  他の画面と同じく、副次の操作を左、強い操作を右に置く。 */}
               <Link
                 href={`/grid/report?ym=${encodeURIComponent(yearMonth)}`}
-                className="pressable rounded border border-line px-3 py-1.5 text-sm text-ink hover:bg-subtle"
+                className="btn btn-quiet pressable"
               >
                 確認の記録を印刷・共有
               </Link>
+              <a
+                href={`/api/export?yearMonth=${encodeURIComponent(yearMonth)}`}
+                className="btn btn-secondary pressable"
+              >
+                CSVで書き出す
+              </a>
             </StickyActionBar>
           }
         />

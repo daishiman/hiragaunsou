@@ -61,7 +61,7 @@ export function PasswordSignInForm() {
       <button
         type="submit"
         disabled={pending}
-        className="pressable mt-1 rounded-md border border-line bg-white px-4 py-2 text-sm font-semibold text-ink hover:bg-subtle disabled:opacity-50"
+        className="btn btn-quiet pressable mt-1"
       >
         {pending ? "サインインしています…" : "メールアドレスでサインインする"}
       </button>

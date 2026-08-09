@@ -155,13 +155,13 @@ export function AnomalyQueue({
         <div className="mt-4 flex justify-center gap-2">
           <Link
             href={`/dashboard?ym=${yearMonth}`}
-            className="pressable rounded-md bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent-deep"
+            className="btn btn-primary pressable"
           >
             ダッシュボードへ
           </Link>
           <Link
             href={`/grid?ym=${yearMonth}`}
-            className="pressable rounded-md border border-line bg-white px-4 py-2 text-sm text-ink hover:bg-subtle"
+            className="btn btn-quiet pressable"
           >
             月次収支表へ
           </Link>

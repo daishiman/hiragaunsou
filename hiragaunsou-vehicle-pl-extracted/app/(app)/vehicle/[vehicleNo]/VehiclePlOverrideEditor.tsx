@@ -164,7 +164,7 @@ export function VehiclePlOverrideEditor({
       {open ? (
         <>
           <div className="mt-4 overflow-x-auto">
-            <table className="min-w-full text-sm">
+            <table className="data-table min-w-full text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-xs text-ink-muted">
                   <th className="py-2 pr-3">項目</th>
@@ -235,7 +235,7 @@ export function VehiclePlOverrideEditor({
               type="button"
               disabled={busy || (!excluded && editedFields.length === 0)}
               onClick={() => void save()}
-              className="pressable rounded-md bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+              className="btn btn-primary pressable"
             >
               {busy ? "保存して再計算しています…" : "保存して収支表を作り直す"}
             </button>
@@ -244,7 +244,7 @@ export function VehiclePlOverrideEditor({
                 type="button"
                 disabled={busy}
                 onClick={() => void clear()}
-                className="pressable rounded-md border border-line bg-white px-5 py-2 text-sm text-ink hover:bg-subtle disabled:opacity-50"
+                className="btn btn-quiet pressable"
               >
                 上書きを取り消して元に戻す
               </button>

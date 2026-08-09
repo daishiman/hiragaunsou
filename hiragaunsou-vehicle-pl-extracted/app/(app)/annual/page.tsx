@@ -214,7 +214,7 @@ export default async function AnnualPage({
               </span>
             </summary>
             <div className="overflow-x-auto border-t border-line">
-              <table className="w-full min-w-max border-collapse text-xs">
+              <table className="data-table w-full min-w-max border-collapse text-xs">
                 <caption className="sr-only">月別の経費内訳明細 (円)</caption>
                 <thead>
                   <tr className="border-b border-line bg-subtle text-ink-muted">
@@ -338,7 +338,7 @@ export default async function AnnualPage({
               </p>
             ) : (
               <div className="overflow-x-auto border-t border-line">
-                <table className="w-full min-w-max border-collapse text-xs">
+                <table className="data-table w-full min-w-max border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-line bg-subtle text-ink-muted">
                       <th className="px-3 py-2 text-left font-medium">月</th>
@@ -395,7 +395,7 @@ export default async function AnnualPage({
               </p>
             ) : (
               <div className="overflow-x-auto border-t border-line">
-                <table className="w-full min-w-max border-collapse text-xs">
+                <table className="data-table w-full min-w-max border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-line bg-subtle text-ink-muted">
                       <th className="px-3 py-2 text-left font-medium">月</th>

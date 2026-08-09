@@ -69,7 +69,7 @@ export function TodoBoard({ initialCards }: { initialCards: ReviewFlagRecord[] }
               type="button"
               disabled={pendingId === card.id}
               onClick={() => resolve(card.id, "corrected")}
-              className="pressable rounded-md border border-brand px-4 py-2 text-sm font-semibold text-brand-deep hover:bg-brand-soft disabled:opacity-50"
+              className="btn btn-secondary pressable"
             >
               修正する
             </button>
@@ -77,7 +77,7 @@ export function TodoBoard({ initialCards }: { initialCards: ReviewFlagRecord[] }
               type="button"
               disabled={pendingId === card.id}
               onClick={() => resolve(card.id, "approved")}
-              className="pressable rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+              className="btn btn-primary pressable"
             >
               実績として承認する
             </button>

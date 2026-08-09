@@ -24,7 +24,7 @@ export function SignInButton() {
         type="button"
         onClick={handleClick}
         disabled={pending}
-        className="pressable flex items-center gap-3 rounded-md bg-accent px-6 py-3 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+        className="btn btn-primary pressable flex items-center gap-3"
       >
         {pending ? "サインインしています…" : "Googleでサインインする"}
       </button>

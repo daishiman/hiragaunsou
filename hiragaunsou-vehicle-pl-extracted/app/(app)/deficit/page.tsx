@@ -93,7 +93,7 @@ function GroupTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-max border-collapse text-xs">
+      <table className="data-table w-full min-w-max border-collapse text-xs">
         <thead>
           <tr className="border-b border-line bg-subtle text-ink-muted">
             <th className="px-3 py-2 text-left font-medium">車番</th>

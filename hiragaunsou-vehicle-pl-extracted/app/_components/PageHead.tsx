@@ -57,7 +57,23 @@ export function PageHead({
             <h1 className="text-xl font-bold text-ink">{title}</h1>
             {help}
           </div>
-          {lead && <p className="mt-1 max-w-2xl text-sm text-ink-muted">{lead}</p>}
+          {lead && (
+            <p className="mt-1 max-w-2xl text-sm text-ink-muted">
+              {/*
+                「。」で区切った1文を塊として折り返す。
+                そのまま流すと「Enterで次の / 欄へ」のように文の途中で折れて、
+                読み手は一度目を戻すことになる。文ごとなら次の行の頭から読める。
+              */}
+              {lead
+                .split(/(?<=。)/)
+                .filter((s) => s !== "")
+                .map((sentence, i) => (
+                  <span key={i} className="inline-block">
+                    {sentence}
+                  </span>
+                ))}
+            </p>
+          )}
         </div>
       </div>
       {action && <div className="shrink-0">{action}</div>}

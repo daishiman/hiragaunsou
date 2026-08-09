@@ -83,7 +83,7 @@ export function PeriodSelect({ basePath, from, to, presets, options }: PeriodSel
           </select>
           <button
             type="submit"
-            className="pressable rounded-md border border-brand px-3 py-1.5 text-xs font-semibold text-brand-deep hover:bg-brand-soft"
+            className="btn btn-secondary btn-sm pressable"
           >
             表示する
           </button>

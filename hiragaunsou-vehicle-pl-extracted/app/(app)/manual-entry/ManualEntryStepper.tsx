@@ -843,7 +843,7 @@ export function ManualEntryStepper({
                       setVehicleSearch("");
                       setEntryFilter("all");
                     }}
-                    className="pressable mt-4 rounded-md border border-brand px-4 py-2 text-sm font-semibold text-brand-deep hover:bg-brand-soft"
+                    className="btn btn-secondary pressable mt-4"
                   >
                     絞り込みを解除して全車両を表示
                   </button>
@@ -851,34 +851,47 @@ export function ManualEntryStepper({
               )}
             </div>
           ) : (
-            <table className="min-w-full text-sm">
-              <thead className="sticky top-0 bg-subtle">
+            <table className="data-table min-w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-subtle">
                 <tr>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-ink-muted">車番</th>
-                  <th className="px-3 py-2 text-left text-xs font-bold text-ink-muted">運転者</th>
+                  <th className="w-px px-3 py-2 text-left text-xs font-bold text-ink-muted">
+                    車番
+                  </th>
+                  <th className="w-px px-3 py-2 text-left text-xs font-bold text-ink-muted">
+                    運転者
+                  </th>
                   {fields.map((f) => (
                     <th
                       key={f.key}
-                      className="px-3 py-2 text-right text-xs font-bold text-ink-muted whitespace-nowrap"
+                      className="w-px px-3 py-2 text-right text-xs font-bold text-ink-muted"
                     >
                       {f.label}({f.unit})
                       {/* どの紙から写す欄かを、視線を動かさずに読める位置に常時置く */}
                       <span className="block text-[11px] font-normal">{f.source}</span>
                     </th>
                   ))}
+                  {/*
+                    余った幅はこの列が全部吸う。
+                    以前は各列が画面幅いっぱいに引き伸ばされ、運転者名と入力欄の間が
+                    数百px空いて、1行打つたびに視線が画面を横断していた。
+                  */}
+                  <th className="w-full" aria-hidden />
                 </tr>
               </thead>
               <tbody>
                 {filteredVehicles.map((v) => (
-                  <tr key={v.vehicleNo} className="border-t border-line align-top">
-                    <td className="px-3 py-2 num whitespace-nowrap">
+                  <tr key={v.vehicleNo} className="border-t border-line">
+                    <td className="num px-3 py-2 whitespace-nowrap">
                       {/* 入力済みかどうかは色ではなく記号でも分かるようにする */}
                       <span aria-hidden className="mr-1 text-ink-muted">
                         {isEntered(v.vehicleNo) ? "✓" : "○"}
                       </span>
                       {v.vehicleNo}
                     </td>
-                    <td className="px-3 py-2">{v.driver ?? "—"}</td>
+                    {/* 長い運転者名でも折り返さない(行の高さが1行だけ変わると縦の並びが崩れる) */}
+                    <td className="max-w-[10rem] truncate px-3 py-2 whitespace-nowrap">
+                      {v.driver ?? "—"}
+                    </td>
                     {fields.map((f, colIndex) => {
                       const raw = values[f.key][v.vehicleNo] ?? "";
                       const isCopied = copied.has(copiedKey(f.key, v.vehicleNo));
@@ -918,6 +931,7 @@ export function ManualEntryStepper({
                         </td>
                       );
                     })}
+                    <td aria-hidden />
                   </tr>
                 ))}
               </tbody>
@@ -977,7 +991,7 @@ export function ManualEntryStepper({
             <button
               type="button"
               onClick={() => copyFromPreviousMonth(stepFields)}
-              className="pressable rounded-md border border-line px-3 py-1.5 text-xs font-semibold text-ink hover:bg-subtle"
+              className="btn btn-quiet btn-sm pressable"
             >
               空欄に先月({previousYearMonth})の値を入れる
               <span className="num ml-1">{copyableCount(stepFields)}件</span>
@@ -994,7 +1008,7 @@ export function ManualEntryStepper({
               <button
                 type="button"
                 onClick={undoPaste}
-                className="pressable rounded-md border border-brand bg-white px-3 py-1 font-semibold text-brand-deep hover:bg-brand-soft"
+                className="btn btn-secondary pressable"
               >
                 元に戻す
               </button>
@@ -1008,7 +1022,7 @@ export function ManualEntryStepper({
               <button
                 type="button"
                 onClick={undoPaste}
-                className="pressable rounded-md border border-brand px-3 py-1 font-semibold text-brand-deep hover:bg-brand-soft"
+                className="btn btn-secondary pressable"
               >
                 貼り付けを取り消す
               </button>
@@ -1070,7 +1084,7 @@ export function ManualEntryStepper({
           {canManageVehicleMaster ? (
             <Link
               href="/admin/vehicle-master"
-              className="pressable mt-3 inline-block rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-deep"
+              className="btn btn-primary pressable mt-3 inline-block"
             >
               車両マスタの登録へ
             </Link>
@@ -1114,7 +1128,7 @@ export function ManualEntryStepper({
           <button
             type="button"
             onClick={discardDraft}
-            className="pressable rounded-md border border-brand bg-white px-3 py-1 font-semibold text-brand-deep hover:bg-brand-soft"
+            className="btn btn-secondary pressable"
           >
             下書きを破棄して保存済みの状態に戻す
           </button>
@@ -1240,7 +1254,7 @@ export function ManualEntryStepper({
                       setTankPriceRaw(String(prevTankPricePerLiter));
                       markDirty();
                     }}
-                    className="pressable mt-2 rounded-md border border-brand bg-white px-3 py-1.5 text-xs font-semibold text-brand-deep hover:bg-brand-soft"
+                    className="btn btn-secondary btn-sm pressable mt-2"
                   >
                     確認しました(先月と同じでよい)
                   </button>
@@ -1427,7 +1441,7 @@ export function ManualEntryStepper({
                 <p className="mt-1 text-xs text-ink-muted">続けて、収支表のチェック(STEP7)で異常値を確認してください</p>
                 <Link
                   href={`/anomaly?ym=${yearMonth}`}
-                  className="pressable mt-3 inline-block rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-deep"
+                  className="btn btn-primary pressable mt-3 inline-block"
                 >
                   次へ: 収支表のチェックに進む
                 </Link>
@@ -1455,14 +1469,14 @@ export function ManualEntryStepper({
                   setPendingRelease(null);
                   void post(kind === "save");
                 }}
-                className="pressable rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-deep"
+                className="btn btn-primary pressable"
               >
                 確定を解除して{pendingRelease === "save" ? "保存する" : "収支表を作り直す"}
               </button>
               <button
                 type="button"
                 onClick={() => setPendingRelease(null)}
-                className="pressable rounded-md border border-line bg-white px-4 py-2 text-sm text-ink hover:bg-subtle"
+                className="btn btn-quiet pressable"
               >
                 やめる
               </button>
@@ -1487,7 +1501,7 @@ export function ManualEntryStepper({
           type="button"
           disabled={step === 0}
           onClick={() => setStep((s) => Math.max(0, s - 1))}
-          className="pressable rounded-md border border-line bg-white px-4 py-2 text-sm text-ink hover:bg-subtle disabled:opacity-50"
+          className="btn btn-quiet pressable"
         >
           戻る
         </button>
@@ -1497,7 +1511,7 @@ export function ManualEntryStepper({
           type="button"
           disabled={saveState === "pending" || !hasVehicles}
           onClick={() => requestPost("save")}
-          className="pressable rounded-md border border-brand px-4 py-2 text-sm font-semibold text-brand-deep hover:bg-brand-soft disabled:opacity-50"
+          className="btn btn-secondary pressable"
         >
           {saveState === "pending" ? "保存しています…" : "ここまでを保存"}
         </button>
@@ -1522,7 +1536,7 @@ export function ManualEntryStepper({
             <button
               type="submit"
               disabled={submitState === "pending" || !hasVehicles}
-              className="pressable rounded-md bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+              className="btn btn-primary pressable"
             >
               {submitState === "pending" ? "計算しています…" : "収支表を作り直す"}
             </button>
@@ -1535,7 +1549,7 @@ export function ManualEntryStepper({
                 setEntryFilter("all");
                 setPasteResult("");
               }}
-              className="pressable rounded-md bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent-deep"
+              className="btn btn-primary pressable"
             >
               次へ
             </button>

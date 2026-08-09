@@ -30,11 +30,17 @@ export function StepRail({
   trailing?: ReactNode;
 }) {
   return (
-    <ol className="flex flex-wrap items-center gap-1.5">
+    /*
+      折り返さず、狭いときは横に流す。
+      flex-wrap にしていたときは幅によって「4枚 + 2枚」「5枚 + 1枚」と段が変わり、
+      同じ画面を開くたびに札の位置が動いていた。位置が動くと現在地を目で探し直すことになる。
+    */
+    <ol className="flex items-center gap-1.5 overflow-x-auto">
       {steps.map((s, i) => {
         const state = i < currentIndex ? "done" : i === currentIndex ? "current" : "todo";
         const className = [
-          "flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs",
+          // shrink-0: 幅が足りないときに札を潰して文字を割らない(横に流して読ませる)
+          "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 py-1.5 text-xs",
           state === "current"
             ? "border-brand bg-brand font-bold text-white"
             : state === "done"
@@ -50,7 +56,7 @@ export function StepRail({
           </>
         );
         return (
-          <li key={s.label}>
+          <li key={s.label} className="shrink-0">
             {onSelect ? (
               <button
                 type="button"
@@ -68,7 +74,11 @@ export function StepRail({
           </li>
         );
       })}
-      {trailing ? <li className="num ml-auto text-xs text-ink-muted">{trailing}</li> : null}
+      {trailing ? (
+        <li className="num ml-auto shrink-0 pl-2 text-xs whitespace-nowrap text-ink-muted">
+          {trailing}
+        </li>
+      ) : null}
     </ol>
   );
 }

@@ -33,7 +33,7 @@ export function HelpDrawer({
         onClick={() => setOpen(true)}
         aria-label={label}
         title={label}
-        className="pressable inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-line bg-white text-xs font-bold text-ink-muted hover:border-brand hover:bg-brand-soft hover:text-brand-deep"
+        className="btn btn-quiet btn-sm pressable inline-flex h-6 w-6 shrink-0 items-center justify-center"
       >
         ?
       </button>

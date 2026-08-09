@@ -176,7 +176,7 @@ export default async function HomePage() {
             <p className="num mt-2 text-xs text-ink-muted">{next.detail}</p>
             <Link
               href={withYm(next.step.href, yearMonth)}
-              className="pressable mt-5 inline-block rounded-md bg-accent px-6 py-3 text-base font-bold text-white hover:bg-accent-deep"
+              className="btn btn-primary pressable mt-5 inline-block"
             >
               STEP {next.step.id} を開く
             </Link>
@@ -187,7 +187,7 @@ export default async function HomePage() {
             <p className="mt-1.5 text-sm text-ink-muted">月次収支表・年間集計は最新です</p>
             <Link
               href={withYm("/grid", yearMonth)}
-              className="pressable mt-5 inline-block rounded-md border border-brand bg-white px-6 py-3 text-base font-bold text-brand-deep hover:bg-brand-soft"
+              className="btn btn-secondary pressable mt-5 inline-block"
             >
               月次収支表を見る
             </Link>
@@ -206,7 +206,7 @@ export default async function HomePage() {
             <Link
               key={l.href}
               href={l.href}
-              className="pressable rounded-lg border border-line px-4 py-3 hover:bg-subtle"
+              className="btn btn-quiet pressable"
             >
               <p className="text-sm font-semibold text-ink">{l.label}</p>
               <p className="mt-0.5 text-xs text-ink-muted">{l.desc}</p>
