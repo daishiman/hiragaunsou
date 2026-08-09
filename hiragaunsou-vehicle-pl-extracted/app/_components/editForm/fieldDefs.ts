@@ -42,6 +42,13 @@ export interface EditableFieldDef<TRecord> {
   options?: (record: TRecord) => readonly EditableSelectOption[];
   /** 空のまま保存できないか。既定は空も許す */
   required?: boolean;
+  /**
+   * その行でこの項目を直せるか (けん引先はトレーラの行にしか無い)。
+   * 省略すると全部の行で直せる。行によって入力欄を出し分ける処理を画面に書かせないための宣言。
+   */
+  enabled?: (record: TRecord) => boolean;
+  /** enabled が false の行のセルに出す文字。既定は「—」 */
+  disabledText?: string;
   /** 値が空のときに「元 ○○」で出す言葉 */
   emptyText?: string;
   widthClass?: string;

@@ -116,6 +116,7 @@ function EditableRowCellsInner<TRecord>({
   disabled = false,
   rowLabel,
   cellClassName = "px-3 py-2",
+  colOffset = 0,
 }: {
   record: TRecord;
   rowKey: string;
@@ -127,21 +128,31 @@ function EditableRowCellsInner<TRecord>({
   /** 読み上げ用の行の名前 (「車番24」「社員No1002 平田」) */
   rowLabel: string;
   cellClassName?: string;
+  /**
+   * 1行を複数のかたまりに分けて置くときの、列番号のずれ。
+   * Enterで「同じ列の次の行」へ進む仕組みが列番号を見ているので、
+   * 2つ目のかたまりには前のかたまりの項目数を渡す。
+   */
+  colOffset?: number;
 }) {
   return (
     <>
       {fields.map((def, index) => (
         <td key={def.field} className={cellClassName}>
-          <EditableField
-            def={def}
-            record={record}
-            draft={draft?.[def.field]}
-            onChange={(field, value) => onChange(rowKey, field, value)}
-            error={fieldErrorOf(rowKey, def.field)}
-            disabled={disabled}
-            col={index}
-            ariaLabel={`${rowLabel}の${def.label}${def.unit ? `(${def.unit})` : ""}`}
-          />
+          {def.enabled && !def.enabled(record) ? (
+            <span className="text-[11px] text-ink-muted">{def.disabledText ?? "—"}</span>
+          ) : (
+            <EditableField
+              def={def}
+              record={record}
+              draft={draft?.[def.field]}
+              onChange={(field, value) => onChange(rowKey, field, value)}
+              error={fieldErrorOf(rowKey, def.field)}
+              disabled={disabled}
+              col={colOffset + index}
+              ariaLabel={`${rowLabel}の${def.label}${def.unit ? `(${def.unit})` : ""}`}
+            />
+          )}
         </td>
       ))}
     </>
