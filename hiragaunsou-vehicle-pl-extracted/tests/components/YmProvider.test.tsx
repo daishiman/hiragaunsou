@@ -48,7 +48,7 @@ describe("YmProvider + AppShell", () => {
 
   it("対象月を持たない画面へのリンクにはymを付けない", () => {
     renderShell();
-    expect(mainNav().getByRole("link", { name: "ダッシュボード" })).toHaveAttribute(
+    expect(mainNav().getByRole("link", { name: /^ダッシュボード/ })).toHaveAttribute(
       "href",
       "/dashboard",
     );

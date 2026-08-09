@@ -34,7 +34,7 @@ describe("AppShell のサイドバーグループ開閉", () => {
 
   it("各グループが開閉ボタンになっており、既定では開いている", () => {
     renderShell();
-    const toggle = mainNav().getByRole("button", { name: /補助ツール/ });
+    const toggle = mainNav().getByRole("button", { name: /アカウント・管理/ });
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     expect(mainNav().getByRole("link", { name: "AI設定" })).toBeInTheDocument();
   });
@@ -43,9 +43,9 @@ describe("AppShell のサイドバーグループ開閉", () => {
     const user = userEvent.setup();
     renderShell();
 
-    await user.click(mainNav().getByRole("button", { name: /補助ツール/ }));
+    await user.click(mainNav().getByRole("button", { name: /アカウント・管理/ }));
 
-    expect(mainNav().getByRole("button", { name: /補助ツール/ })).toHaveAttribute(
+    expect(mainNav().getByRole("button", { name: /アカウント・管理/ })).toHaveAttribute(
       "aria-expanded",
       "false",
     );
@@ -56,20 +56,20 @@ describe("AppShell のサイドバーグループ開閉", () => {
     const user = userEvent.setup();
     renderShell();
 
-    await user.click(mainNav().getByRole("button", { name: /補助ツール/ }));
+    await user.click(mainNav().getByRole("button", { name: /アカウント・管理/ }));
 
-    expect(mainNav().getByRole("button", { name: /補助ツール/ })).toBeVisible();
+    expect(mainNav().getByRole("button", { name: /アカウント・管理/ })).toBeVisible();
   });
 
   it("閉じた状態を localStorage に保存し、次回訪問時も維持する", async () => {
     const user = userEvent.setup();
     const { unmount } = renderShell();
 
-    await user.click(mainNav().getByRole("button", { name: /補助ツール/ }));
+    await user.click(mainNav().getByRole("button", { name: /アカウント・管理/ }));
     unmount();
 
     renderShell();
-    expect(mainNav().getByRole("button", { name: /補助ツール/ })).toHaveAttribute(
+    expect(mainNav().getByRole("button", { name: /アカウント・管理/ })).toHaveAttribute(
       "aria-expanded",
       "false",
     );
@@ -79,18 +79,18 @@ describe("AppShell のサイドバーグループ開閉", () => {
   it("現在地を含むグループは保存された閉じ状態を無視して常に開く", () => {
     window.localStorage.setItem(
       "hiragaunsou:sidebar-collapsed-groups",
-      JSON.stringify(["分析", "補助ツール"]),
+      JSON.stringify(["儲かっているかを見る", "アカウント・管理"]),
     );
     mockPathname = "/dashboard";
     renderShell();
 
-    const analysis = mainNav().getByRole("button", { name: /分析/ });
+    const analysis = mainNav().getByRole("button", { name: /儲かっているかを見る/ });
     expect(analysis).toHaveAttribute("aria-expanded", "true");
     // 見失わないよう畳めないようにする
     expect(analysis).toBeDisabled();
-    expect(mainNav().getByRole("link", { name: "ダッシュボード" })).toBeInTheDocument();
+    expect(mainNav().getByRole("link", { name: /^ダッシュボード/ })).toBeInTheDocument();
     // 現在地を含まないグループは保存どおり閉じたまま
-    expect(mainNav().getByRole("button", { name: /補助ツール/ })).toHaveAttribute(
+    expect(mainNav().getByRole("button", { name: /アカウント・管理/ })).toHaveAttribute(
       "aria-expanded",
       "false",
     );
@@ -100,7 +100,7 @@ describe("AppShell のサイドバーグループ開閉", () => {
     window.localStorage.setItem("hiragaunsou:sidebar-collapsed-groups", "{壊れたJSON");
     renderShell();
 
-    expect(mainNav().getByRole("button", { name: /補助ツール/ })).toHaveAttribute(
+    expect(mainNav().getByRole("button", { name: /アカウント・管理/ })).toHaveAttribute(
       "aria-expanded",
       "true",
     );

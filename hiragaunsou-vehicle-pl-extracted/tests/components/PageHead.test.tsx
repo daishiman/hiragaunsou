@@ -12,7 +12,7 @@ describe("PageHead", () => {
 
   it("kindが異なれば異なるバッジ文言になる", () => {
     render(<PageHead kind="data" title="月次収支表" />);
-    expect(screen.getByText("現状データ")).toBeInTheDocument();
+    expect(screen.getByText("できあがった収支表")).toBeInTheDocument();
     expect(screen.queryByText("毎月の締め")).not.toBeInTheDocument();
   });
 

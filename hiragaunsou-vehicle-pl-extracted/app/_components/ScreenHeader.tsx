@@ -69,7 +69,7 @@ function ScreenRoleNote({ def, ym }: { def: ScreenDef; ym: string | null }) {
   return (
     <section
       aria-label="この画面の役割"
-      className="mt-4 rounded-xl border border-line bg-white px-4 py-3"
+      className="card prose-note mt-4 px-4 py-3"
     >
       {flow && (
         <p className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line pb-2 text-xs text-ink-muted">
