@@ -415,8 +415,13 @@ flex / grid の子要素は既定が `min-width: auto` で、**中の一番長�
 そのため画面ごとにパッチを当てず、`globals.css` で以下をまとめて効かせている。
 
 - `main` 配下の面（`section` / `div` / `dl` / `details` など）に `min-width: 0`
-- 画像・表・`pre`・入力欄に `max-width: 100%`
-- `.card` とその直下、`.prose-note` に `min-width: 0` / `max-width: 100%`
+- 画像・埋め込み・`pre`・入力欄に `max-width: 100%`
+- `.card` とその直下に `min-width: 0`、`.prose-note` に `min-width: 0` / `max-width: 100%`
+
+**`table` に `max-width: 100%` を掛けてはいけない。** 収支表などの横長の表は、外側の枠
+（`overflow-x-auto`）より広いままにして横スクロールさせる作りになっており（`min-w-full` /
+`min-w-[36rem]` / セルごとの `min-w-*`）、上限を掛けると列が潰れて読めなくなる。
+同じ理由で `.card > *` にも上限を掛けない（カードの直下には表の外枠が入るため）。
 
 いずれも `:where()` で書いており詳細度は0。Tailwind の `min-w-full` などを個別に当てれば勝てるので、
 表を横スクロールさせたい箇所は今まで通り書ける。
