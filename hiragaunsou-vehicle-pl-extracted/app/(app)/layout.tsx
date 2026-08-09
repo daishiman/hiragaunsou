@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../src/infrastructure/auth/session";
 import { createDb } from "../../src/infrastructure/db/client";
-import { D1VehiclePlRepository } from "../../src/infrastructure/db/D1VehiclePlRepository";
 import { D1ReviewFlagRepository } from "../../src/infrastructure/db/D1ReviewFlagRepository";
 import { AppShell } from "../_components/AppShell";
 import { YmProvider } from "../_components/YmProvider";
@@ -24,10 +23,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // 「取り込んだのに何も入っていない」と受け取られてしまう。
   const yearMonth = await resolveWorkingYearMonth(db);
 
-  const [registration, anomalyFlags] = await Promise.all([
-    new D1VehiclePlRepository(db).countByYearMonth(yearMonth),
-    new D1ReviewFlagRepository(db).findOpenByYearMonth(yearMonth),
-  ]);
+  // サイドバーに出す数字は「未判定の件数」だけ。
+  // かつて出していた登録台数は、見ても次にやることが変わらないので数えるのをやめた。
+  const anomalyFlags = await new D1ReviewFlagRepository(db).findOpenByYearMonth(yearMonth);
 
   return (
     <YmProvider>
@@ -36,7 +34,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         userRole={session.role}
         role={session.role}
         badges={{
-          registration,
           anomaly: anomalyFlags.filter((f) => f.status === "open").length,
         }}
       >
