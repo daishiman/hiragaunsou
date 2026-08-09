@@ -17,6 +17,7 @@ import { yearMonthLabel } from "../../_lib/format";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
 import { PageHead } from "../../_components/PageHead";
 import { EmptyState } from "../../_components/EmptyState";
+import { RebuildPanel } from "./RebuildPanel";
 import { ConfirmMonthlyPlUseCase } from "../../../src/usecase/steps/confirmMonthlyPl";
 import { GridTable } from "./GridTable";
 import { D1VehiclePlOverrideRepository } from "../../../src/infrastructure/db/D1VehiclePlOverrideRepository";
@@ -55,6 +56,18 @@ export default async function GridPage({
     new ConfirmMonthlyPlUseCase(plRepo, flagRepo).status(yearMonth),
     new GetExcelReconciliationUseCase(plRepo, new D1ImportBatchRepository(db)).execute(yearMonth),
   ]);
+  /*
+    表が空のときに何を出すかは「取込がまだ」か「取込はあるのに収支表が無い」かで変わる。
+    後者で「データ取込へ」だけを出すと、取り込んだ本人には同じファイルを入れ直す以外の
+    道が見えない。判断材料はここで取っておく。
+  */
+  const importBatchRepo = new D1ImportBatchRepository(db);
+  const [opBatch, salesBatch] = await Promise.all([
+    importBatchRepo.findLatestBatch(yearMonth, "vehicle_operation"),
+    importBatchRepo.findLatestBatch(yearMonth, "sales_monitor"),
+  ]);
+  const canRebuild = Boolean(opBatch && salesBatch);
+
   const grid = await new GetMonthlyGridUseCase(
     plRepo,
     flagRepo,
@@ -73,12 +86,16 @@ export default async function GridPage({
       />
 
       {grid.isEmpty ? (
-        <EmptyState
-          title={`${yearMonthLabel(yearMonth)}のデータはまだありません`}
-          description="月次データ取込でExcel/CSVを取り込むと、ここに車両別の収支が表示されます。"
-          actionLabel="月次データ取込へ"
-          actionHref="/import"
-        />
+        canRebuild && checkAccess(session, "input") ? (
+          <RebuildPanel yearMonth={yearMonth} />
+        ) : (
+          <EmptyState
+            title={`${yearMonthLabel(yearMonth)}のデータはまだありません`}
+            description="月次データ取込でExcel/CSVを取り込むと、ここに車両別の収支が表示されます。"
+            actionLabel="月次データ取込へ"
+            actionHref={`/import?ym=${yearMonth}`}
+          />
+        )
       ) : (
         <GridTable
           rows={grid.rows}
