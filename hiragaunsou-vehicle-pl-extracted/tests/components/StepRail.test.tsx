@@ -36,6 +36,26 @@ describe("StepRail", () => {
     expect(onSelect).toHaveBeenCalledWith(2);
   });
 
+  /**
+   * 依頼者から「マスタ管理の『内容を確認する』『取り込む』が押せない」と指摘があった箇所。
+   * 実際には押せなくて正しい(進み具合の表示)ので、押せる札と見た目・名前で区別する。
+   */
+  it("押せない札は白い枠の札にせず、進み具合の目盛りだと分かる見た目にする", () => {
+    const { rerender } = render(<StepRail steps={STEPS} currentIndex={0} />);
+    expect(screen.getByText("取り込む").parentElement?.className).toContain("border-transparent");
+
+    rerender(<StepRail steps={STEPS} currentIndex={0} onSelect={() => {}} />);
+    expect(screen.getByText("取り込む").closest("button")?.className).toContain("border-line");
+  });
+
+  it("押せるかどうかで読み上げ名を変える", () => {
+    const { rerender } = render(<StepRail steps={STEPS} currentIndex={0} />);
+    expect(screen.getByRole("list", { name: "いまの進み具合" })).toBeInTheDocument();
+
+    rerender(<StepRail steps={STEPS} currentIndex={0} onSelect={() => {}} />);
+    expect(screen.getByRole("list", { name: "工程の切り替え" })).toBeInTheDocument();
+  });
+
   it("trailingに渡した補足(年月など)を右端に出す", () => {
     render(<StepRail steps={STEPS} currentIndex={0} trailing="2026年5月度" />);
     expect(screen.getByText("2026年5月度")).toBeInTheDocument();

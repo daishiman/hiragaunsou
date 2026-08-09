@@ -145,7 +145,7 @@ export function AnomalyQueue({
   */
   if (plVehicleCount === 0) {
     return (
-      <div className="rounded-xl border border-line bg-white px-6 py-12 text-center">
+      <div className="card px-6 py-12 text-center">
         <p className="text-sm font-semibold text-ink">この月の収支表がまだありません</p>
         <p className="mt-1 text-sm text-ink-muted">
           チェックする中身が無いため、判定はまだ始められません。月次収支表で、何が足りないかを確認してください。
@@ -164,7 +164,7 @@ export function AnomalyQueue({
 
   if (!current) {
     return (
-      <div className="rounded-xl border border-line bg-white px-6 py-12 text-center">
+      <div className="card px-6 py-12 text-center">
         <p className="text-sm font-semibold text-ink">この月の異常値はすべて判定済みです</p>
         <p className="mt-1 text-sm text-ink-muted">
           締めの結果はダッシュボードと月次収支表で確認できます。
@@ -177,9 +177,9 @@ export function AnomalyQueue({
               type="button"
               onClick={undo}
               disabled={pending}
-              className="ml-2 font-semibold text-brand-deep underline-offset-2 hover:underline disabled:opacity-50"
+              className="btn btn-quiet btn-sm pressable ml-2"
             >
-              取り消す
+              この判定を取り消す
             </button>
           </p>
         )}
@@ -206,7 +206,7 @@ export function AnomalyQueue({
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_18rem]">
-      <section className="rounded-xl border border-line bg-white p-5">
+      <section className="card p-5">
         <div className="flex items-baseline justify-between gap-3">
           <p className="num text-xs text-ink-muted">
             {index + 1} / {items.length} 件目
@@ -316,27 +316,31 @@ export function AnomalyQueue({
               type="button"
               onClick={undo}
               disabled={pending}
-              className="ml-2 font-semibold text-brand-deep underline-offset-2 hover:underline disabled:opacity-50"
+              className="btn btn-quiet btn-sm pressable ml-2"
             >
-              取り消す
+              この判定を取り消す
             </button>
           </p>
         )}
 
+        {/*
+          文の途中に置いた下線つきのボタンは、リンクと見分けがつかないうえ
+          「押すと何が起きるか」が文を最後まで読まないと分からなかった。
+          説明文とボタンを分け、ボタンは他の画面と同じ形にする。
+        */}
         <p className="mt-4 text-[11px] text-ink-muted">
-          判定した内容は
-          <button
-            type="button"
-            onClick={() => router.refresh()}
-            className="mx-1 font-semibold text-brand-deep underline-offset-2 hover:underline"
-          >
-            再読み込み
-          </button>
-          で最新の状態に反映されます。
+          判定した内容は、一覧を読み込み直すと最新の状態になります。
         </p>
+        <button
+          type="button"
+          onClick={() => router.refresh()}
+          className="btn btn-quiet btn-sm pressable mt-2"
+        >
+          一覧を読み込み直す
+        </button>
       </section>
 
-      <aside className="rounded-xl border border-line bg-white p-4">
+      <aside className="card p-4">
         <p className="text-xs font-semibold text-ink">残りの待ち行列({remaining.length}件)</p>
         <div className="mt-2">
           <ListToolbar

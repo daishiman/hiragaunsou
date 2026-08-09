@@ -369,7 +369,7 @@ export function ReviewWizard({
   }
 
   return (
-    <section className="rounded-xl border border-line bg-white p-5" aria-label="指摘の確認">
+    <section className="card p-5" aria-label="指摘の確認">
       <ProgressHeader
         done={done}
         total={items.length}
@@ -1152,7 +1152,7 @@ function FinishedPanel({
                 <button
                   type="button"
                   onClick={() => onReopen(item)}
-                  className="font-semibold text-brand-deep hover:underline"
+                  className="btn btn-quiet btn-sm pressable"
                 >
                   車番 {item.row.vehicleNoLabel} / {labelOf(item.issue.field)}
                 </button>

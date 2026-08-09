@@ -4,7 +4,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../src/infrastructure/auth/session";
 import { createDb } from "../../../src/infrastructure/db/client";
 import { account } from "../../../src/infrastructure/db/auth-schema";
-import { PageHead } from "../../_components/PageHead";
+import { ScreenHeader } from "../../_components/ScreenHeader";
 import { ProfileForm } from "./ProfileForm";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -33,8 +33,8 @@ export default async function ProfilePage() {
   const hasPasswordCredential = credentialRows.length > 0;
 
   return (
-    <div className="max-w-xl">
-      <PageHead kind="tool" title="マイページ" lead="ログイン中のアカウント情報を確認・編集します。" />
+    <div>
+      <ScreenHeader screen="/profile" />
       <ProfileForm
         userId={session.id}
         name={session.name}

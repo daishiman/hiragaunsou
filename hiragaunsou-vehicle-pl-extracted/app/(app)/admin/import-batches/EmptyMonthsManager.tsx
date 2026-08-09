@@ -65,7 +65,7 @@ export function EmptyMonthsManager({
   }
 
   return (
-    <section className="mt-8 rounded-xl border border-line bg-white p-5">
+    <section className="mt-8 card p-5">
       <h2 className="text-base font-bold text-ink">ファイルを取り込んでいないのに収支表がある月</h2>
       <p className="mt-1 text-sm leading-6 text-ink-muted">
         この月の収支表は、走行も売上も入っていないまま固定費だけが計上されています。ホームの経営サマリや年間集計に実態のない赤字として混ざるため、心当たりが無ければ消してください。消すと元に戻せません。

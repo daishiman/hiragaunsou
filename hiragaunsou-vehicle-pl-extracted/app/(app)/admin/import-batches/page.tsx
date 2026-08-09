@@ -16,7 +16,7 @@ import {
   ListMonthlyPlDeletionLogUseCase,
   ListMonthsWithoutImportsUseCase,
 } from "../../../../src/usecase/steps/manageMonthlyPlData";
-import { PageHead } from "../../../_components/PageHead";
+import { ScreenHeader } from "../../../_components/ScreenHeader";
 import { ImportBatchesManager } from "./ImportBatchesManager";
 import { EmptyMonthsManager } from "./EmptyMonthsManager";
 
@@ -50,12 +50,8 @@ export default async function AdminImportBatchesPage() {
   ).execute();
 
   return (
-    <div className="max-w-5xl">
-      <PageHead
-        kind="tool"
-        title="取込データ管理"
-        lead="全期間・全帳票種別の取込バッチを確認し、誤って取り込まれたデータを削除します。削除は取り消せません。"
-      />
+    <div>
+      <ScreenHeader screen="/admin/import-batches" />
       <ImportBatchesManager
         initialBatches={batches}
         initialDeletionLog={deletionLog}

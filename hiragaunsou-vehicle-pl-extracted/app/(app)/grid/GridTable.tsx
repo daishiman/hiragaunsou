@@ -851,7 +851,7 @@ export function GridTable({
         </div>
       ) : null}
 
-      <div className="overflow-x-auto rounded-xl border border-line bg-white">
+      <div className="overflow-x-auto card">
         <table className="data-table min-w-max border-collapse text-xs">
           <thead>
             <tr className="border-b border-line bg-subtle text-ink-muted">
@@ -1122,7 +1122,7 @@ function OpeningGuide({
   ];
 
   return (
-    <section className="mb-4 rounded-xl border border-line bg-white px-5 py-4">
+    <section className="mb-4 card px-5 py-4">
       {openIssueCount > 0 ? (
         <>
           <h2 className="text-xl font-bold text-ink">
@@ -1484,7 +1484,7 @@ function IssuePanel({
   onClose: () => void;
 }) {
   return (
-    <div className="mt-3 rounded-xl border border-line bg-white p-4">
+    <div className="mt-3 card p-4">
       <div className="flex flex-wrap items-start gap-3">
         <h3 className="text-sm font-bold text-ink">
           車番 {vehicleNo} ／ {FIELD_LABELS[field as VehiclePlField] ?? field}

@@ -5,7 +5,7 @@ import { checkAccess } from "../../../../src/infrastructure/auth/accessControl";
 import { createDb } from "../../../../src/infrastructure/db/client";
 import { D1VehicleMasterRepository } from "../../../../src/infrastructure/db/D1MasterRepository";
 import { AccessDenied } from "../../../_components/AccessDenied";
-import { PageHead } from "../../../_components/PageHead";
+import { ScreenHeader } from "../../../_components/ScreenHeader";
 import { SourceDataNote } from "../../../_components/SourceDataNote";
 import { isYearMonth } from "../../../_lib/yearMonth";
 import { resolveWorkingYearMonth } from "../../../_lib/workingYearMonth";
@@ -42,11 +42,9 @@ export default async function AdminVehicleMasterPage({
   const yearMonth = isYearMonth(ym) ? ym : await resolveWorkingYearMonth(db);
 
   return (
-    <div className="max-w-5xl">
-      <PageHead
-        kind="tool"
-        title="車両マスタ管理"
-        lead="車番・車種・保険・税・リース料の登録先です。"
+    <div>
+      <ScreenHeader
+        screen="/admin/vehicle-master"
         help={
           <SourceDataNote sourceFile="★車両別収支計算用2026年5月.xlsx">
             <p>

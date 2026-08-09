@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { VehicleMasterRecord } from "../../../../src/domain/repositories/MasterRepository";
@@ -16,9 +16,15 @@ import type { FileImportVerdict } from "../../../../src/domain/rules/fileImportC
 import { AlertPanel } from "../../../_components/AlertPanel";
 import { Disclosure } from "../../../_components/Disclosure";
 import { ImportCheckPanel } from "../../../_components/ImportCheckPanel";
-import { MasterFieldEditor } from "../../../_components/MasterFieldEditor";
 import { StickyActionBar } from "../../../_components/StickyActionBar";
 import { StickyStepHeader } from "../../../_components/StickyStepHeader";
+import {
+  EditableRowCells,
+  EditFormActionBar,
+  saveMasterChanges,
+  useEditableRecords,
+  type EditableFieldDef,
+} from "../../../_components/editForm";
 import { yen } from "../../../_lib/format";
 
 /** 取込の3手順。手入力画面と同じ札を出し、いまどこにいるかを一目で分かるようにする。 */
@@ -38,15 +44,11 @@ const COST_CATEGORY_LABELS: Record<string, string> = {
 };
 
 /**
- * その場で直せる項目。
- *
- * けん引先は選択式の欄が表にあるので入れない。原価区分は決まった語しか受け付けられず、
- * 自由入力にすると収支表の標準原価が黙って外れるため、ここには出さない
- * (直したいときはファイルの入れ直しで行う)。
+ * 直せる金額の項目。
+ * 原価区分は決まった語しか受け付けられず、自由入力にすると収支表の標準原価が黙って外れるため
+ * ここには出さない (直したいときはファイルの入れ直しで行う)。
  */
-const EDITABLE_VEHICLE_COLUMNS = [
-  { field: "vehicleType", label: "車種名" },
-  { field: "depot", label: "所属" },
+const VEHICLE_MONEY_FIELDS = [
   { field: "insCompulsory", label: "自賠責" },
   { field: "insVoluntary", label: "任意保険" },
   { field: "taxAuto", label: "自動車税" },
@@ -122,44 +124,86 @@ export function VehicleMasterManager({
   const [contentHash, setContentHash] = useState<string | null>(null);
 
   const existingNos = useMemo(() => new Set(vehicles.map((v) => v.vehicleNo)), [vehicles]);
-  const [towedBusy, setTowedBusy] = useState<string | null>(null);
-  /** 直す欄を開いている車番 (1台ずつだけ開く) */
-  const [editingVehicleNo, setEditingVehicleNo] = useState<string | null>(null);
 
   /**
-   * トレーラのけん引先を設定・解除する。車両マスタを直したら収支表も作り直すので、
-   * 表と土台がずれた状態は残らない (再計算はAPI側が受け持つ)。
+   * 直せる項目の宣言。入力欄・変更の色分け・未保存件数・まとめて保存・離れるときの確認は
+   * 共通の土台 (app/_components/editForm) が受け持つので、画面はこの宣言だけを持つ。
+   *
+   * けん引先は「トレーラの行だけ直せる」。トラクタの行に出すと、選べてしまった時点で
+   * 収支表の合算先が二重になり、どこで足されたのかを追えなくなる。
    */
-  async function saveTowedBy(vehicleNo: string, towedByVehicleNo: string | null) {
-    setTowedBusy(vehicleNo);
-    setError(null);
-    setDone(null);
-    try {
-      const res = await fetch("/api/vehicle-master/towed-by", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ yearMonth, vehicleNo, towedByVehicleNo }),
-      });
-      const data = (await res.json().catch(() => null)) as { error?: string } | null;
-      if (!res.ok) {
-        setError(data?.error ?? "けん引先の更新に失敗しました");
-        return;
-      }
-      setVehicles((prev) =>
-        prev.map((v) => (v.vehicleNo === vehicleNo ? { ...v, towedByVehicleNo } : v)),
-      );
-      setDone(
-        towedByVehicleNo
-          ? `車番${vehicleNo}を車番${towedByVehicleNo}の行に合算するようにしました(収支表を作り直しました)`
-          : `車番${vehicleNo}のけん引先を解除しました(収支表を作り直しました)`,
-      );
-      router.refresh();
-    } catch {
-      setError("通信エラーが発生しました");
-    } finally {
-      setTowedBusy(null);
-    }
+  const vehicleFields = useMemo<EditableFieldDef<VehicleMasterRecord>[]>(
+    () => [
+      {
+        field: "vehicleType",
+        label: "車種名",
+        kind: "text",
+        widthClass: "w-32",
+        emptyText: "未入力",
+        read: (v) => v.vehicleType,
+      },
+      {
+        field: "towedByVehicleNo",
+        label: "けん引先",
+        kind: "select",
+        widthClass: "w-44",
+        emptyText: "単独で表に出す",
+        enabled: (v) => v.costCategory === "trailer",
+        read: (v) => v.towedByVehicleNo ?? null,
+        options: (v) => [
+          { value: "", label: "単独で表に出す" },
+          ...tractorCandidates(vehicles, v).map((t) => ({
+            value: t.vehicleNo,
+            label: `${t.vehicleNo}(${t.vehicleType})`,
+          })),
+        ],
+      },
+      {
+        field: "depot",
+        label: "所属",
+        kind: "text",
+        widthClass: "w-24",
+        emptyText: "未入力",
+        read: (v) => v.depot,
+      },
+      ...VEHICLE_MONEY_FIELDS.map(
+        (c): EditableFieldDef<VehicleMasterRecord> => ({
+          field: c.field,
+          label: c.label,
+          kind: "yen",
+          unit: "円",
+          widthClass: "w-28",
+          read: (v) => {
+            const raw = (v as unknown as Record<string, unknown>)[c.field];
+            return raw === null || raw === undefined ? null : String(raw);
+          },
+        }),
+      ),
+    ],
+    [vehicles],
+  );
+
+  async function reloadVehicles() {
+    const listRes = await fetch("/api/admin/vehicle-master");
+    const listData = (await listRes.json().catch(() => null)) as {
+      vehicles?: VehicleMasterRecord[];
+    } | null;
+    if (listRes.ok && listData?.vehicles) setVehicles(listData.vehicles);
   }
+
+  const form = useEditableRecords<VehicleMasterRecord>({
+    records: vehicles,
+    rowKey: (v) => v.vehicleNo,
+    fields: vehicleFields,
+    submit: async (changes) => {
+      const result = await saveMasterChanges<VehicleMasterRecord>("vehicle")(changes);
+      if (!result.error) {
+        await reloadVehicles();
+        router.refresh();
+      }
+      return result;
+    },
+  });
 
   /**
    * ファイルを選んだ直後の下読み。名前ではなく中身から「何のファイルか」「必要な列が揃っているか」
@@ -288,7 +332,7 @@ export function VehicleMasterManager({
     <div className="space-y-6">
       <StickyStepHeader steps={IMPORT_STEPS} currentIndex={done ? 2 : check || preview ? 1 : 0} />
 
-      <section className="rounded-xl border border-line bg-white p-5">
+      <section className="card p-5">
         <h2 className="text-sm font-bold text-ink">ファイルを取り込む</h2>
         <input
           ref={fileInputRef}
@@ -359,7 +403,7 @@ export function VehicleMasterManager({
       </section>
 
       {preview ? (
-        <section className="rounded-xl border border-line bg-white p-5">
+        <section className="card p-5">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-sm font-bold text-ink">取込内容の確認({preview.fileName})</h2>
             <p className="num text-xs text-ink-muted">
@@ -463,7 +507,7 @@ export function VehicleMasterManager({
         </section>
       ) : null}
 
-      <section className="rounded-xl border border-line bg-white p-5">
+      <section className="card p-5">
         <h2 className="text-sm font-bold text-ink">現在の車両マスタ({vehicles.length}台)</h2>
         {/*
           けん引先の仕組みの説明は、一覧を見るたびに読むものではない。常時出すと一覧より先に
@@ -515,103 +559,65 @@ export function VehicleMasterManager({
           </div>
         ) : null}
 
-        <div className={`mt-3 overflow-x-auto ${vehicles.length === 0 ? "hidden" : ""}`}>
-          <table className="data-table min-w-full text-sm">
-            <thead>
-              <tr className="border-b border-line text-left text-xs text-ink-muted">
-                <th className="py-2 pr-3">車番</th>
-                <th className="py-2 pr-3">車種名</th>
-                <th className="py-2 pr-3">原価区分</th>
-                <th className="py-2 pr-3">けん引先</th>
-                <th className="py-2 pr-3">所属</th>
-                <th className="py-2 pr-3">自賠責</th>
-                <th className="py-2 pr-3">任意保険</th>
-                <th className="py-2 pr-3">自動車税</th>
-                <th className="py-2 pr-3">重量税</th>
-                <th className="py-2 pr-3">リース</th>
-                <th className="py-2 pr-3">割賦</th>
-                <th className="py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {vehicles.map((v) => (
-                <Fragment key={v.vehicleNo}>
-                <tr className="border-b border-line last:border-b-0">
-                  <td className="num py-2 pr-3">{v.vehicleNo}</td>
-                  <td className="py-2 pr-3 text-ink-muted">{v.vehicleType}</td>
-                  <td className="py-2 pr-3 text-ink-muted">
-                    {COST_CATEGORY_LABELS[v.costCategory] ?? v.costCategory}
-                  </td>
-                  <td className="py-2 pr-3">
-                    {v.costCategory === "trailer" ? (
-                      <select
-                        value={v.towedByVehicleNo ?? ""}
-                        disabled={towedBusy !== null}
-                        onChange={(e) => void saveTowedBy(v.vehicleNo, e.target.value || null)}
-                        className="num rounded-md border border-line px-2 py-1 text-xs disabled:opacity-50"
-                      >
-                        <option value="">単独で表に出す</option>
-                        {tractorCandidates(vehicles, v).map((t) => (
-                          <option key={t.vehicleNo} value={t.vehicleNo}>
-                            {t.vehicleNo}({t.vehicleType})
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="text-[11px] text-ink-muted">—</span>
-                    )}
-                  </td>
-                  <td className="py-2 pr-3 text-ink-muted">{v.depot}</td>
-                  <td className="num py-2 pr-3 text-ink-muted">{yen(v.insCompulsory)}</td>
-                  <td className="num py-2 pr-3 text-ink-muted">{yen(v.insVoluntary)}</td>
-                  <td className="num py-2 pr-3 text-ink-muted">{yen(v.taxAuto)}</td>
-                  <td className="num py-2 pr-3 text-ink-muted">{yen(v.taxWeight)}</td>
-                  <td className="num py-2 pr-3 text-ink-muted">{yen(v.lease)}</td>
-                  <td className="num py-2 pr-3 text-ink-muted">{yen(v.installment)}</td>
-                  <td className="py-2">
-                    <button
-                      type="button"
-                      className="text-xs underline text-brand-deep"
-                      onClick={() =>
-                        setEditingVehicleNo(editingVehicleNo === v.vehicleNo ? null : v.vehicleNo)
-                      }
-                    >
-                      {editingVehicleNo === v.vehicleNo ? "閉じる" : "直す"}
-                    </button>
-                  </td>
+        <div className={vehicles.length === 0 ? "hidden" : ""}>
+          <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+            直したいところを打ち替えて、画面の下の「保存する」を押してください。打ち替えた欄には
+            「変更」の札と元の値が出ます。Enterを押すと同じ列の次の行へ進みます。
+          </p>
+          <div className="mt-3 overflow-x-auto">
+            <table className="data-table min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-xs text-ink-muted">
+                  <th className="py-2 pr-3">車番</th>
+                  <th className="py-2 pr-3">原価区分</th>
+                  <th className="py-2 pr-3">車種名</th>
+                  <th className="py-2 pr-3">けん引先</th>
+                  <th className="py-2 pr-3">所属</th>
+                  <th className="py-2 pr-3">自賠責</th>
+                  <th className="py-2 pr-3">任意保険</th>
+                  <th className="py-2 pr-3">自動車税</th>
+                  <th className="py-2 pr-3">重量税</th>
+                  <th className="py-2 pr-3">リース</th>
+                  <th className="py-2 pr-3">割賦</th>
                 </tr>
-                {/*
-                  直す欄は押したときだけ出す。11列すべてに入力欄を常設すると、
-                  読むための表が入力フォームに見えてしまい、どこを見ればよいか分からなくなる。
-                */}
-                {editingVehicleNo === v.vehicleNo ? (
-                  <tr className="border-b border-line bg-subtle">
-                    <td colSpan={12} className="px-3 py-3">
-                      <p className="mb-2 text-xs text-ink-muted">
-                        車番 {v.vehicleNo} を直します。直すと、まだ締めていない月の収支表にその場で
-                        反映されます(締めた月はそのままです)。
-                      </p>
-                      <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-                        {EDITABLE_VEHICLE_COLUMNS.map((c) => (
-                          <span key={c.field} className="inline-flex items-baseline gap-2">
-                            <span className="text-xs text-ink-muted">{c.label}</span>
-                            <MasterFieldEditor
-                              targetKind="vehicle"
-                              targetKey={v.vehicleNo}
-                              field={c.field}
-                              label={c.label}
-                              value={String((v as unknown as Record<string, unknown>)[c.field] ?? "")}
-                            />
-                          </span>
-                        ))}
-                      </div>
+              </thead>
+              <tbody>
+                {vehicles.map((v) => (
+                  <tr key={v.vehicleNo} className="border-b border-line last:border-b-0">
+                    <td className="num py-2 pr-3 align-top">{v.vehicleNo}</td>
+                    {/* 原価区分は直せない (決まった語しか受け付けられないため) ので読むだけの欄 */}
+                    <td className="py-2 pr-3 align-top text-ink-muted">
+                      {COST_CATEGORY_LABELS[v.costCategory] ?? v.costCategory}
                     </td>
+                    <EditableRowCells
+                      record={v}
+                      rowKey={v.vehicleNo}
+                      fields={vehicleFields}
+                      draft={form.draftOf(v.vehicleNo)}
+                      onChange={form.setField}
+                      fieldErrorOf={form.fieldErrorOf}
+                      rowLabel={`車番${v.vehicleNo}`}
+                      cellClassName="py-2 pr-3 align-top"
+                    />
                   </tr>
-                ) : null}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* 保存の入口・未保存件数・離れるときの確認は共通の帯に任せる */}
+          <EditFormActionBar
+            form={form}
+            variant="card"
+            saveLabel="車両マスタを保存する"
+            notice={
+              form.changedCount > 0 ? (
+                <p className="text-xs text-ink-muted">
+                  保存すると、まだ締めていない月の収支表にその場で反映されます(締めた月はそのままです)。
+                </p>
+              ) : null
+            }
+          />
         </div>
       </section>
     </div>

@@ -12,7 +12,7 @@ import type { DeficitFactorCategory } from "../../../../src/domain/repositories/
 import { GetVehicleHistoryUseCase } from "../../../../src/usecase/steps/getVehicleHistory";
 import { resolveWorkingYearMonth } from "../../../_lib/workingYearMonth";
 import { kmPriceLabel, num, yen, yearMonthLabel } from "../../../_lib/format";
-import { PageHead } from "../../../_components/PageHead";
+import { ScreenHeader } from "../../../_components/ScreenHeader";
 import { EmptyState } from "../../../_components/EmptyState";
 import { BarRow } from "../../../_components/BarRow";
 import { D1VehiclePlOverrideRepository } from "../../../../src/infrastructure/db/D1VehiclePlOverrideRepository";
@@ -100,8 +100,8 @@ export default async function VehicleDetailPage({
 
   return (
     <>
-      <PageHead
-        kind="data"
+      <ScreenHeader
+        screen="/vehicle"
         title={`車番 ${vehicleNoLabel}`}
         lead={
           current
@@ -134,15 +134,15 @@ export default async function VehicleDetailPage({
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <div className="rounded-xl border border-line bg-white p-4">
+            <div className="card p-4">
               <p className="text-xs text-ink-muted">売上</p>
               <p className="num mt-1 text-xl font-bold text-ink">{yen(current?.sales)}</p>
             </div>
-            <div className="rounded-xl border border-line bg-white p-4">
+            <div className="card p-4">
               <p className="text-xs text-ink-muted">経費計</p>
               <p className="num mt-1 text-xl font-bold text-ink">{yen(current?.expense)}</p>
             </div>
-            <div className="rounded-xl border border-line bg-white p-4">
+            <div className="card p-4">
               <p className="text-xs text-ink-muted">損益</p>
               <p
                 className={`num mt-1 text-xl font-bold ${(current?.profit ?? 0) < 0 ? "text-danger" : "text-accent"}`}
@@ -150,7 +150,7 @@ export default async function VehicleDetailPage({
                 {yen(current?.profit)}
               </p>
             </div>
-            <div className="rounded-xl border border-line bg-white p-4">
+            <div className="card p-4">
               <p className="text-xs text-ink-muted">実力損益</p>
               <p
                 className={`num mt-1 text-xl font-bold ${(data.normalizedProfit ?? 0) < 0 ? "text-danger" : "text-ink"}`}
@@ -164,7 +164,7 @@ export default async function VehicleDetailPage({
           </div>
 
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
-            <section className="rounded-xl border border-line bg-white p-5">
+            <section className="card p-5">
               <h2 className="text-sm font-bold text-ink">経費の内訳({yearMonthLabel(yearMonth)})</h2>
               <div className="mt-3">
                 {data.costBreakdown.map((c) => (
@@ -180,7 +180,7 @@ export default async function VehicleDetailPage({
               </div>
             </section>
 
-            <section className="rounded-xl border border-line bg-white p-5">
+            <section className="card p-5">
               <h2 className="text-sm font-bold text-ink">損益の12ヶ月推移</h2>
               <p className="mt-1 text-xs text-ink-muted">
                 棒の長さは各月の損益の絶対値(最大月を100%とした比較)。
@@ -201,7 +201,7 @@ export default async function VehicleDetailPage({
           </div>
 
           {isDeficit && (
-            <section className="mt-5 rounded-xl border border-line bg-white p-5">
+            <section className="mt-5 card p-5">
               <h2 className="text-sm font-bold text-ink">AI要因分析({yearMonthLabel(yearMonth)})</h2>
               {analysis ? (
                 <>
@@ -238,7 +238,7 @@ export default async function VehicleDetailPage({
             </section>
           )}
 
-          <section className="mt-5 overflow-x-auto rounded-xl border border-line bg-white">
+          <section className="mt-5 overflow-x-auto card">
             <table className="data-table w-full min-w-max border-collapse text-xs">
               <thead>
                 <tr className="border-b border-line bg-subtle text-ink-muted">

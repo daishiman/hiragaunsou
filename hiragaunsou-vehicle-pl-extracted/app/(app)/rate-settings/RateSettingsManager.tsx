@@ -1,17 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   RATE_MASTER_CATALOG,
-  validateRateValue,
   type RateMasterKeyDef,
   type RateValueKind,
 } from "../../../src/domain/rules/rateMasterCatalog";
 import type { RateMasterEntry } from "../../../src/infrastructure/db/D1MasterRepository";
 import { Disclosure } from "../../_components/Disclosure";
-import { NumberEntryField } from "../../_components/NumberEntryField";
 import { parseAmountInput } from "../../_lib/numberEntry";
 import { StagePanel } from "../../_components/StagePanel";
+import {
+  EditableRowCells,
+  EditFormActionBar,
+  saveRateChanges,
+  useEditableRecords,
+  type EditableFieldDef,
+} from "../../_components/editForm";
 
 const KIND_UNIT: Record<RateValueKind, string> = {
   rate: "%",
@@ -46,12 +51,6 @@ function fromDisplay(kind: RateValueKind, text: string): number {
 
 type Scope = "common" | "monthly";
 
-type SaveState =
-  | { status: "idle" }
-  | { status: "saving" }
-  | { status: "done"; message: string }
-  | { status: "error"; message: string };
-
 function findEntry(
   entries: RateMasterEntry[],
   key: string,
@@ -66,7 +65,7 @@ function findEntry(
 export function RateSettingsManager({
   yearMonth,
   initialEntries,
-  resolved,
+  resolved: initialResolved,
 }: {
   yearMonth: string;
   initialEntries: RateMasterEntry[];
@@ -74,76 +73,80 @@ export function RateSettingsManager({
   resolved: Record<string, number>;
 }) {
   const [entries, setEntries] = useState(initialEntries);
-  const [editing, setEditing] = useState<{ key: string; scope: Scope } | null>(null);
-  const [draft, setDraft] = useState("");
-  const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
+  const [resolved, setResolved] = useState(initialResolved);
 
-  function startEdit(def: RateMasterKeyDef, scope: Scope) {
-    const entry = findEntry(entries, def.key, scope, yearMonth);
-    const current = entry?.value ?? resolved[camelKey(def.key)] ?? 0;
-    setEditing({ key: def.key, scope });
-    setDraft(toDisplay(def.kind, current));
-    setSaveState({ status: "idle" });
-  }
-
-  async function handleSave(def: RateMasterKeyDef, scope: Scope) {
-    const value = fromDisplay(def.kind, draft.trim());
-    const validation = validateRateValue(def, value);
-    if (!validation.ok) {
-      setSaveState({ status: "error", message: validation.error });
-      return;
-    }
-
-    setSaveState({ status: "saving" });
-    try {
-      const res = await fetch("/api/rate-master", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          key: def.key,
-          yearMonth: scope === "common" ? null : yearMonth,
-          value,
-          // 保存しただけで表を作り直さないと、画面の率と表の数字が食い違ったまま残る
-          recalculateYearMonth: yearMonth,
-        }),
-      });
-      const data = (await res.json().catch(() => null)) as {
-        error?: string;
-        recalculated?: { vehicleCount: number } | null;
-      } | null;
-      if (!res.ok) {
-        setSaveState({ status: "error", message: data?.error ?? "保存に失敗しました" });
-        return;
-      }
-
-      setEntries((prev) => [
-        ...prev.filter(
-          (e) => !(e.key === def.key && e.yearMonth === (scope === "common" ? null : yearMonth)),
-        ),
-        {
-          key: def.key,
-          yearMonth: scope === "common" ? null : yearMonth,
-          value,
-          updatedAt: Date.now(),
-          updatedBy: null,
+  /**
+   * 直せる項目の宣言。1行 = 1つの率で、直せる欄は「全期間共通」と「この月のみ」の2つ。
+   * 入力欄・変更の色分け・未保存件数・まとめて保存・離れるときの確認は
+   * 共通の土台 (app/_components/editForm) が受け持つ。
+   */
+  const rateFields = useMemo<EditableFieldDef<RateMasterKeyDef>[]>(
+    () => [
+      {
+        field: "common",
+        label: "全期間共通",
+        // 同じ列に % と 円 と 円/ℓ が混ざるので、行ごとに種類を返す。
+        // 金額だけ桁区切りで読み合わせ、率・単価は桁区切りをしない。
+        kind: (def) => (def.kind === "yen" ? "yen" : "number"),
+        unit: (def) => KIND_UNIT[def.kind],
+        widthClass: "w-24",
+        emptyText: "未設定",
+        read: (def) => {
+          const e = findEntry(entries, def.key, "common", yearMonth);
+          return e ? toDisplay(def.kind, e.value) : null;
         },
-      ]);
-      setEditing(null);
-      setSaveState({
-        status: "done",
-        message: data?.recalculated
-          ? `保存しました。${yearMonth}の収支表 ${data.recalculated.vehicleCount}台を再計算しました`
-          : "保存しました",
-      });
-    } catch {
-      setSaveState({ status: "error", message: "通信エラーが発生しました" });
+      },
+      {
+        field: "monthly",
+        label: `${yearMonth}のみ`,
+        kind: (def) => (def.kind === "yen" ? "yen" : "number"),
+        unit: (def) => KIND_UNIT[def.kind],
+        widthClass: "w-24",
+        emptyText: "未設定",
+        read: (def) => {
+          const e = findEntry(entries, def.key, "monthly", yearMonth);
+          return e ? toDisplay(def.kind, e.value) : null;
+        },
+      },
+    ],
+    [entries, yearMonth],
+  );
+
+  async function reloadEntries() {
+    const res = await fetch(`/api/rate-master?ym=${yearMonth}`);
+    const data = (await res.json().catch(() => null)) as {
+      entries?: RateMasterEntry[];
+      resolved?: Record<string, number>;
+    } | null;
+    if (res.ok && data?.entries) {
+      setEntries(data.entries);
+      if (data.resolved) setResolved(data.resolved);
     }
   }
+
+  const form = useEditableRecords<RateMasterKeyDef>({
+    records: RATE_MASTER_CATALOG,
+    rowKey: (def) => def.key,
+    fields: rateFields,
+    submit: async (changes) => {
+      const result = await saveRateChanges(yearMonth, (def, display) =>
+        fromDisplay(def.kind, display),
+      )(changes);
+      if (!result.error) await reloadEntries();
+      return result;
+    },
+  });
+
+  /** いま直している欄の名前。折りたたみの中を直しても気づけるように帯へ出す。 */
+  const changedLabels = form.changes.map((c) => `${c.record.label}の${c.def.label}`);
 
   function renderTable(definitions: readonly RateMasterKeyDef[], ariaLabel: string) {
     return (
-      <div className="overflow-x-auto rounded-xl border border-line bg-white">
-        <table aria-label={ariaLabel} className="data-table w-full min-w-max border-collapse text-xs">
+      <div className="overflow-x-auto card">
+        <table
+          aria-label={ariaLabel}
+          className="data-table w-full min-w-max border-collapse text-xs"
+        >
           <thead>
             <tr className="border-b border-line bg-subtle text-ink-muted">
               <th className="px-3 py-2 text-left font-medium">項目</th>
@@ -165,6 +168,7 @@ export function RateSettingsManager({
                   */}
                   <td className="px-3 py-2">
                     <p className="font-semibold text-ink">{def.label}</p>
+                    <p className="mt-0.5 text-[10px] text-ink-muted">{KIND_UNIT[def.kind]}で入力</p>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right">
                     <span className="font-mono text-sm font-bold text-ink">
@@ -174,23 +178,28 @@ export function RateSettingsManager({
                     <p className="mt-0.5 text-[10px] text-ink-muted">
                       {monthly ? "月別値" : common ? "全期間共通値" : "未設定(既定値)"}
                     </p>
+                    {/*
+                      どちらの欄を直しているのかを取り違えると、直したのに数字が動かない。
+                      月別値がある行では「共通を直してもこの月は変わらない」ことをその場に書く。
+                    */}
+                    {monthly ? (
+                      <p className="mt-0.5 text-[10px] leading-tight text-ink-muted">
+                        全期間共通を直しても
+                        <br />
+                        この月は変わりません
+                      </p>
+                    ) : null}
                   </td>
-                  {(["common", "monthly"] as const).map((scope) => (
-                    <td key={scope} className="px-3 py-2">
-                      <ScopeCell
-                        def={def}
-                        scope={scope}
-                        entry={scope === "common" ? common : monthly}
-                        isEditing={editing?.key === def.key && editing.scope === scope}
-                        draft={draft}
-                        saveState={saveState}
-                        onDraftChange={setDraft}
-                        onStart={() => startEdit(def, scope)}
-                        onCancel={() => setEditing(null)}
-                        onSave={() => handleSave(def, scope)}
-                      />
-                    </td>
-                  ))}
+                  <EditableRowCells
+                    record={def}
+                    rowKey={def.key}
+                    fields={rateFields}
+                    draft={form.draftOf(def.key)}
+                    onChange={form.setField}
+                    fieldErrorOf={form.fieldErrorOf}
+                    rowLabel={def.label}
+                    cellClassName="px-3 py-2"
+                  />
                 </tr>
               );
             })}
@@ -202,11 +211,10 @@ export function RateSettingsManager({
 
   return (
     <div className="space-y-4">
-      {saveState.status === "done" && (
-        <p className="rounded-lg border border-line bg-subtle px-4 py-2 text-xs text-ink">
-          {saveState.message}
-        </p>
-      )}
+      <p className="text-xs leading-relaxed text-ink-muted">
+        直したい率を打ち替えて、画面の下の「保存する」を押してください。打ち替えた欄には「変更」の札と
+        元の値が出ます。保存すると{yearMonth}の収支表も作り直します(締めた月はそのままです)。
+      </p>
 
       <section aria-labelledby="frequently-changed-rates" className="space-y-2">
         <div>
@@ -232,6 +240,17 @@ export function RateSettingsManager({
         {renderTable(RARELY_CHANGED, "めったに変えない項目")}
       </StagePanel>
 
+      {/* 保存の入口・未保存件数・離れるときの確認は共通の帯に任せる */}
+      <EditFormActionBar
+        form={form}
+        saveLabel="率を保存して収支表を作り直す"
+        notice={
+          changedLabels.length > 0 ? (
+            <p className="text-xs text-ink-muted">直している欄: {changedLabels.join("、")}</p>
+          ) : null
+        }
+      />
+
       <Disclosure summary="各項目の意味と、月別値・共通値の使い分けを見る">
         <p>
           月別値があれば全期間共通値より優先されます。「未設定(既定値)」はコード側の保険値で動いている状態で、
@@ -249,85 +268,6 @@ export function RateSettingsManager({
           ))}
         </dl>
       </Disclosure>
-    </div>
-  );
-}
-
-function ScopeCell({
-  def,
-  scope,
-  entry,
-  isEditing,
-  draft,
-  saveState,
-  onDraftChange,
-  onStart,
-  onCancel,
-  onSave,
-}: {
-  def: RateMasterKeyDef;
-  scope: Scope;
-  entry: RateMasterEntry | undefined;
-  isEditing: boolean;
-  draft: string;
-  saveState: SaveState;
-  onDraftChange: (v: string) => void;
-  onStart: () => void;
-  onCancel: () => void;
-  onSave: () => void;
-}) {
-  if (!isEditing) {
-    return (
-      <div className="flex items-baseline gap-2">
-        <span className="font-mono text-xs text-ink">
-          {entry ? `${toDisplay(def.kind, entry.value)}${KIND_UNIT[def.kind]}` : "—"}
-        </span>
-        <button
-          type="button"
-          onClick={onStart}
-          className="text-[11px] font-medium text-brand-deep underline underline-offset-2"
-        >
-          {entry ? "変更" : "設定"}
-        </button>
-        {def.scope === scope && !entry && (
-          <span className="text-[10px] text-ink-muted">推奨</span>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-1">
-        {/*
-          他の画面と同じ入力欄を使う。編集を始めた時点でいまの値が入っているので
-          自動値の印は要らないが、読み取り規則 (全角数字・カンマ) とEnterでの移動は揃う。
-        */}
-        <NumberEntryField
-          value={draft}
-          onChange={onDraftChange}
-          ariaLabel={`${def.label}の${scope === "common" ? "全期間共通値" : "月別値"}(${KIND_UNIT[def.kind]})`}
-          widthClass="w-24"
-          showEcho={false}
-        />
-        <span className="text-[11px] text-ink-muted">{KIND_UNIT[def.kind]}</span>
-      </div>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={saveState.status === "saving"}
-          className="rounded bg-brand-deep px-2 py-1 text-[11px] font-medium text-white disabled:opacity-50"
-        >
-          {saveState.status === "saving" ? "保存中…" : "保存して再計算"}
-        </button>
-        <button type="button" onClick={onCancel} className="text-[11px] text-ink-muted">
-          取消
-        </button>
-      </div>
-      {saveState.status === "error" && (
-        <p className="text-[11px] text-danger">{saveState.message}</p>
-      )}
     </div>
   );
 }

@@ -118,7 +118,7 @@ export function ProfileForm({
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-xl border border-line bg-white p-5">
+      <section className="card p-5">
         <h2 className="text-sm font-bold text-ink">アカウント情報</h2>
         <div className="mt-4 flex flex-col gap-4">
           <label className="flex flex-col gap-1 text-xs text-ink-muted">
@@ -166,7 +166,7 @@ export function ProfileForm({
       </section>
 
       {hasPasswordCredential ? (
-        <section className="rounded-xl border border-line bg-white p-5">
+        <section className="card p-5">
           <h2 className="text-sm font-bold text-ink">メールアドレスの変更</h2>
           <p className="mt-1 text-xs text-ink-muted">
             確認メールは送信されません。現在のパスワードを入力すると、その場で変更が反映されます
@@ -212,7 +212,7 @@ export function ProfileForm({
       ) : null}
 
       {hasPasswordCredential ? (
-        <section className="rounded-xl border border-line bg-white p-5">
+        <section className="card p-5">
           <h2 className="text-sm font-bold text-ink">パスワードの変更</h2>
           <p className="mt-1 text-xs text-ink-muted">
             メール/パスワードでサインインしているアカウントのパスワードを変更します。
@@ -268,14 +268,14 @@ export function ProfileForm({
         </section>
       ) : null}
 
-      <section className="rounded-xl border border-line bg-white p-5">
+      <section className="card p-5">
         <h2 className="text-sm font-bold text-ink">ログアウト</h2>
         <p className="mt-1 text-xs text-ink-muted">このデバイスでのログイン状態を終了します。</p>
         <button
           type="button"
           onClick={handleSignOut}
           disabled={signingOut}
-          className="pressable mt-3 rounded-md border border-caution-border bg-caution-soft px-5 py-2 text-sm font-semibold text-danger disabled:opacity-50"
+          className="btn btn-danger pressable mt-3"
         >
           {signingOut ? "ログアウトしています…" : "ログアウトする"}
         </button>

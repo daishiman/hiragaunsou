@@ -40,7 +40,9 @@ export function AlertPanel({
   return (
     <div className={`rounded-lg border px-4 py-3 ${TONE_CLASS[tone]}`} role="status">
       <p className={`text-sm font-bold ${TITLE_CLASS[tone]}`}>{title}</p>
-      {children ? <div className="mt-1.5 text-xs leading-relaxed text-ink">{children}</div> : null}
+      {children ? (
+        <div className="prose-note mt-1.5 text-xs leading-relaxed text-ink">{children}</div>
+      ) : null}
     </div>
   );
 }

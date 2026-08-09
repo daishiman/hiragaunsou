@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { ReviewFlagRecord } from "../../../src/usecase/steps/getTodoBoard";
+import { EmptyState } from "../../_components/EmptyState";
 
 const SEVERITY_LABEL: Record<string, string> = {
   critical: "重大",
@@ -37,9 +38,11 @@ export function TodoBoard({ initialCards }: { initialCards: ReviewFlagRecord[] }
 
   if (cards.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-line px-6 py-12 text-center">
-        <p className="text-sm font-semibold text-ink">今月の入力は完了しています</p>
-      </div>
+      <EmptyState
+        title="残っている確認はありません"
+        description="この月で判定が必要な項目は、すべて片付いています。"
+        actionHref="/grid"
+      />
     );
   }
 
@@ -51,7 +54,7 @@ export function TodoBoard({ initialCards }: { initialCards: ReviewFlagRecord[] }
         </div>
       ) : null}
       {cards.map((card) => (
-        <section key={card.id} className="rounded-xl border border-line bg-white p-4">
+        <section key={card.id} className="card p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
               <span className="inline-flex items-center whitespace-nowrap rounded-full border border-transparent bg-brand-soft px-2.5 py-0.5 text-xs font-medium text-brand-deep">

@@ -18,7 +18,7 @@ import { YmProvider } from "../../app/_components/YmProvider";
 function renderShell() {
   return render(
     <YmProvider>
-      <AppShell userName="今西さん" userRole="管理者" role="admin" badges={{ registration: 0, anomaly: 0 }}>
+      <AppShell userName="今西さん" userRole="管理者" role="admin" badges={{ anomaly: 0 }}>
         <p>本文</p>
       </AppShell>
     </YmProvider>,
@@ -48,7 +48,7 @@ describe("YmProvider + AppShell", () => {
 
   it("対象月を持たない画面へのリンクにはymを付けない", () => {
     renderShell();
-    expect(mainNav().getByRole("link", { name: "ダッシュボード" })).toHaveAttribute(
+    expect(mainNav().getByRole("link", { name: /^ダッシュボード/ })).toHaveAttribute(
       "href",
       "/dashboard",
     );

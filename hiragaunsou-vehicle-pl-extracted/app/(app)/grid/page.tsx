@@ -15,7 +15,7 @@ import { selectableYearMonths } from "../../_lib/yearMonth";
 import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { yearMonthLabel } from "../../_lib/format";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
-import { PageHead } from "../../_components/PageHead";
+import { ScreenHeader } from "../../_components/ScreenHeader";
 import { EmptyState } from "../../_components/EmptyState";
 import { RebuildPanel } from "./RebuildPanel";
 import { ConfirmMonthlyPlUseCase } from "../../../src/usecase/steps/confirmMonthlyPl";
@@ -77,11 +77,8 @@ export default async function GridPage({
 
   return (
     <>
-      <PageHead
-        kind="data"
-        title="月次収支表(業務フロー STEP8)"
-        lead="車両別の収支。転記は不要で、CSVで書き出せます"
-        showHomeLink
+      <ScreenHeader
+        screen="/grid"
         action={<YearMonthSelect basePath="/grid" value={yearMonth} options={selectableYearMonths(13)} />}
       />
 
@@ -91,8 +88,7 @@ export default async function GridPage({
         ) : (
           <EmptyState
             title={`${yearMonthLabel(yearMonth)}のデータはまだありません`}
-            description="月次データ取込でExcel/CSVを取り込むと、ここに車両別の収支が表示されます。"
-            actionLabel="月次データ取込へ"
+            description="データ取込でExcel/CSVを取り込むと、ここに車両別の収支が表示されます。"
             actionHref={`/import?ym=${yearMonth}`}
           />
         )

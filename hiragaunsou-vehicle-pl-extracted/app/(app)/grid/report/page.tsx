@@ -143,7 +143,8 @@ export default async function ReviewReportPage({
   });
 
   return (
-    <div className="mx-auto max-w-4xl">
+    // 幅は app/_lib/screens.ts の /grid/report (width: narrow) が決める。ここでは指定しない。
+    <div>
       <div className="mb-4 flex flex-wrap items-start gap-3">
         <div className="min-w-0">
           <h1 className="text-lg font-bold text-ink">
@@ -157,7 +158,7 @@ export default async function ReviewReportPage({
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <Link
             href={`/grid?ym=${encodeURIComponent(yearMonth)}`}
-            className="no-print pressable rounded-md border border-line bg-white px-4 py-1.5 text-sm text-ink hover:bg-subtle"
+            className="btn btn-quiet pressable no-print"
           >
             収支表に戻る
           </Link>

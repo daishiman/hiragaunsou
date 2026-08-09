@@ -16,9 +16,15 @@ import type { FileImportVerdict } from "../../../../src/domain/rules/fileImportC
 import { AlertPanel } from "../../../_components/AlertPanel";
 import { Disclosure } from "../../../_components/Disclosure";
 import { ImportCheckPanel } from "../../../_components/ImportCheckPanel";
-import { MasterFieldEditor } from "../../../_components/MasterFieldEditor";
 import { StickyActionBar } from "../../../_components/StickyActionBar";
 import { StickyStepHeader } from "../../../_components/StickyStepHeader";
+import {
+  EditableRowCells,
+  EditFormActionBar,
+  saveMasterChanges,
+  useEditableRecords,
+  type EditableFieldDef,
+} from "../../../_components/editForm";
 
 /**
  * 取込の3段階。手入力画面と同じ「札で現在地を出す」作りに揃える。
@@ -87,6 +93,66 @@ export function DriverMasterManager({
   const existingCodes = useMemo(() => new Set(drivers.map((d) => d.employeeCode)), [drivers]);
   const knownVehicleNos = useMemo(() => new Set(vehicleNos), [vehicleNos]);
   const unassigned = drivers.filter((d) => !d.vehicleNo).length;
+
+  /**
+   * 直せる項目の宣言。入力欄・変更の色分け・未保存件数・まとめて保存は
+   * 共通の土台 (app/_components/editForm) が受け持つので、画面はこの宣言だけを持つ。
+   *
+   * 車番は自由入力ではなく選択にする。車両マスタに無い車番を打つと、
+   * 「登録したのに給与が乗らない」という一番追いにくい壊れ方になるため、打てないようにする。
+   */
+  const driverFields = useMemo<EditableFieldDef<DriverMasterRecord>[]>(
+    () => [
+      {
+        field: "driverName",
+        label: "氏名",
+        kind: "text",
+        required: true,
+        emptyText: "氏名なし",
+        widthClass: "w-40",
+        read: (d) => d.driverName,
+      },
+      {
+        field: "vehicleNo",
+        label: "車番",
+        kind: "select",
+        emptyText: "未割当",
+        widthClass: "w-44",
+        read: (d) => d.vehicleNo,
+        options: (d) => [
+          { value: "", label: "未割当(給与は乗りません)" },
+          ...vehicleNos.map((no) => ({ value: no, label: no })),
+          // いまの車番が車両マスタから消えている場合でも、選び直すまでは表示できるようにする
+          ...(d.vehicleNo && !knownVehicleNos.has(d.vehicleNo)
+            ? [{ value: d.vehicleNo, label: `${d.vehicleNo}(車両マスタに無し)` }]
+            : []),
+        ],
+      },
+    ],
+    [vehicleNos, knownVehicleNos],
+  );
+
+  async function reloadDrivers() {
+    const listRes = await fetch("/api/admin/driver-master");
+    const listData = (await listRes.json().catch(() => null)) as {
+      drivers?: DriverMasterRecord[];
+    } | null;
+    if (listRes.ok && listData?.drivers) setDrivers(listData.drivers);
+  }
+
+  const form = useEditableRecords<DriverMasterRecord>({
+    records: drivers,
+    rowKey: (d) => d.employeeCode,
+    fields: driverFields,
+    submit: async (changes) => {
+      const result = await saveMasterChanges<DriverMasterRecord>("driver")(changes);
+      if (!result.error) {
+        await reloadDrivers();
+        router.refresh();
+      }
+      return result;
+    },
+  });
 
   /**
    * ファイルを選んだ直後の下読み。名前ではなく中身から「何のファイルか」「必要な列が揃っているか」
@@ -207,7 +273,7 @@ export function DriverMasterManager({
     <div className="space-y-6">
       <StickyStepHeader steps={IMPORT_STEPS} currentIndex={done ? 2 : preview ? 1 : 0} />
 
-      <section className="rounded-xl border border-line bg-white p-5">
+      <section className="card p-5">
         <h2 className="text-sm font-bold text-ink">ファイルを取り込む</h2>
         <input
           ref={fileInputRef}
@@ -302,7 +368,7 @@ export function DriverMasterManager({
       </section>
 
       {preview ? (
-        <section className="rounded-xl border border-line bg-white p-5">
+        <section className="card p-5">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-sm font-bold text-ink">取込内容の確認({preview.fileName})</h2>
             <p className="num text-xs text-ink-muted">
@@ -411,7 +477,7 @@ export function DriverMasterManager({
         </section>
       ) : null}
 
-      <section className="rounded-xl border border-line bg-white p-5">
+      <section className="card p-5">
         <h2 className="text-sm font-bold text-ink">
           現在の運転者マスタ({drivers.length}名
           {unassigned > 0 ? ` / うち車番未割当${unassigned}名` : ""})
@@ -433,45 +499,54 @@ export function DriverMasterManager({
             </AlertPanel>
           </div>
         ) : (
-          <div className="mt-3 overflow-x-auto">
-            <table className="data-table min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-line text-left text-xs text-ink-muted">
-                  <th className="py-2 pr-3">社員No</th>
-                  <th className="py-2 pr-3">氏名</th>
-                  <th className="py-2">車番</th>
-                </tr>
-              </thead>
-              <tbody>
-                {drivers.map((d) => (
-                  <tr key={d.employeeCode} className="border-b border-line last:border-b-0">
-                    <td className="num py-2 pr-3">{d.employeeCode}</td>
-                    <td className="py-2 pr-3 text-ink-muted">
-                      <MasterFieldEditor
-                        targetKind="driver"
-                        targetKey={d.employeeCode}
-                        field="driverName"
-                        label="氏名"
-                        value={d.driverName}
-                        emptyText="氏名なし"
-                      />
-                    </td>
-                    <td className="num py-2 text-ink-muted">
-                      <MasterFieldEditor
-                        targetKind="driver"
-                        targetKey={d.employeeCode}
-                        field="vehicleNo"
-                        label="車番"
-                        value={d.vehicleNo}
-                        emptyText="未割当"
-                        placeholder="車番"
-                      />
-                    </td>
+          <>
+            <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+              直したいところを打ち替えて、画面の下の「保存する」を押してください。打ち替えた欄には
+              「変更」の札と元の値が出ます。Enterを押すと同じ列の次の行へ進みます。
+            </p>
+            <div className="mt-3 overflow-x-auto">
+              <table className="data-table min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-line text-left text-xs text-ink-muted">
+                    <th className="py-2 pr-3">社員No</th>
+                    <th className="py-2 pr-3">氏名</th>
+                    <th className="py-2">車番</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {drivers.map((d) => (
+                    <tr key={d.employeeCode} className="border-b border-line last:border-b-0">
+                      <td className="num py-2 pr-3 align-top">{d.employeeCode}</td>
+                      <EditableRowCells
+                        record={d}
+                        rowKey={d.employeeCode}
+                        fields={driverFields}
+                        draft={form.draftOf(d.employeeCode)}
+                        onChange={form.setField}
+                        fieldErrorOf={form.fieldErrorOf}
+                        rowLabel={`社員No${d.employeeCode} ${d.driverName}`}
+                        cellClassName="py-2 pr-3 align-top"
+                      />
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* 保存の入口・未保存件数・離れるときの確認は共通の帯に任せる */}
+            <EditFormActionBar
+              form={form}
+              variant="card"
+              saveLabel="運転者マスタを保存する"
+              notice={
+                form.changedCount > 0 ? (
+                  <p className="text-xs text-ink-muted">
+                    保存すると、まだ締めていない月の収支表にその場で反映されます(締めた月はそのままです)。
+                  </p>
+                ) : null
+              }
+            />
+          </>
         )}
       </section>
     </div>

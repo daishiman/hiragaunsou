@@ -20,7 +20,7 @@ export default async function SignInPage({
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-5 py-10">
-      <section className="w-full rounded-xl border border-line bg-white p-8 text-center">
+      <section className="w-full card p-8 text-center">
         <h1 className="text-sm font-bold text-ink">車両別収支表</h1>
         <p className="mt-1 text-xs text-ink-muted">平賀運送 — 月次車両別P&amp;L自動化</p>
 

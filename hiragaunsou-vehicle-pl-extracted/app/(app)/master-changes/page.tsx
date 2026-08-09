@@ -6,7 +6,7 @@ import { checkAccess } from "../../../src/infrastructure/auth/accessControl";
 import { createDb } from "../../../src/infrastructure/db/client";
 import { AccessDenied } from "../../_components/AccessDenied";
 import { ImportDiffAlertPanel } from "../../_components/ImportDiffAlertPanel";
-import { PageHead } from "../../_components/PageHead";
+import { ScreenHeader } from "../../_components/ScreenHeader";
 import { SourceDataNote } from "../../_components/SourceDataNote";
 import { masterChangeStack } from "../../_lib/masterChangeStack";
 import { MasterChangeManager } from "./MasterChangeManager";
@@ -40,11 +40,9 @@ export default async function MasterChangesPage() {
   }
 
   return (
-    <div className="max-w-4xl">
-      <PageHead
-        kind="tool"
-        title="直した内容の反映"
-        lead="締めた月とマスタが食い違っていないかを確認します。"
+    <div>
+      <ScreenHeader
+        screen="/master-changes"
         help={
           <SourceDataNote>
             <p>

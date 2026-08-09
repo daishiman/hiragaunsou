@@ -46,7 +46,7 @@ function okFetch(body: Record<string, unknown> = {}) {
 
 /** 取込値のまま(＝人がまだ触っていない)の欄。読み上げにも「取込値」と分かるようになっている。 */
 function importedField(label: string): HTMLInputElement {
-  return screen.getByLabelText(`${label}(取込値の値です)`) as HTMLInputElement;
+  return screen.getByLabelText(`${label}(取込値です)`) as HTMLInputElement;
 }
 
 /**

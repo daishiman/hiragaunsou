@@ -12,6 +12,7 @@ import {
 import { yen } from "../../_lib/format";
 import { withYm } from "../../_lib/withYm";
 import { ListToolbar, type SortOption } from "../../_components/ListToolbar";
+import { EmptyState } from "../../_components/EmptyState";
 
 type SortKey = "default" | "loadDateDesc" | "vehicleNoAsc";
 
@@ -236,16 +237,11 @@ export function CleansingQueue({
 
   if (notImported) {
     return (
-      <div className="rounded-lg border border-line bg-white p-6">
-        <p className="text-sm font-semibold text-ink">売上モニタリストが未取込です</p>
-        <p className="mt-1 text-sm text-ink-muted">取り込むと確認が必要な伝票をここに出します</p>
-        <Link
-          href={`/import?ym=${yearMonth}`}
-          className="pressable mt-4 inline-block rounded bg-brand px-4 py-2 text-sm font-semibold text-white"
-        >
-          データ取込へ進む
-        </Link>
-      </div>
+      <EmptyState
+        title="売上モニタリストが未取込です"
+        description="取り込むと、確認が必要な伝票をここに出します。"
+        actionHref={`/import?ym=${yearMonth}`}
+      />
     );
   }
 

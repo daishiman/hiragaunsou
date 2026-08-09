@@ -17,7 +17,7 @@ import { isYearMonth, selectableYearMonths } from "../_lib/yearMonth";
 import { resolveOverviewYearMonth, resolveWorkingYearMonth } from "../_lib/workingYearMonth";
 import { yearMonthLabel, man, num, kmPriceLabel, pct } from "../_lib/format";
 import { withYm } from "../_lib/withYm";
-import { PageHead } from "../_components/PageHead";
+import { ScreenHeader } from "../_components/ScreenHeader";
 import { EmptyState } from "../_components/EmptyState";
 import { StatTile } from "../_components/StatTile";
 import { Disclosure } from "../_components/Disclosure";
@@ -94,7 +94,7 @@ export default async function HomePage({
   return (
     <>
       {/* 氏名・権限はサイドバー下部に常時出ているので、ここで繰り返さない */}
-      <PageHead kind="analysis" title="ホーム" lead="儲かっているかの確認と、今月の入力作業をここから" />
+      <ScreenHeader screen="/" />
 
       {/*
         主役: 直近で締めた月の経営サマリ。「儲かっているか」に画面を開いた瞬間に答える。
@@ -109,7 +109,6 @@ export default async function HomePage({
             title="まだ確定した収支データがありません"
             description="月次の締めが終わると、ここに経営サマリが表示されます。"
             actionHref="/import"
-            actionLabel="データ取込へ"
           />
         ) : (
           <section>

@@ -118,7 +118,7 @@ export function VehiclePlOverrideEditor({
   }
 
   return (
-    <section className="mt-5 rounded-xl border border-line bg-white p-5">
+    <section className="mt-5 card p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-bold text-ink">この車両だけ数字を直す</h2>
@@ -143,7 +143,7 @@ export function VehiclePlOverrideEditor({
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="text-xs text-brand-deep hover:underline"
+            className="btn btn-quiet btn-sm pressable"
           >
             {open ? "閉じる" : "直す"}
           </button>

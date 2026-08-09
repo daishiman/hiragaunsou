@@ -17,7 +17,7 @@ import { selectableYearMonths } from "../../_lib/yearMonth";
 import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { kmPriceLabel, man, num, pct, yen } from "../../_lib/format";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
-import { PageHead } from "../../_components/PageHead";
+import { ScreenHeader } from "../../_components/ScreenHeader";
 import { EmptyState } from "../../_components/EmptyState";
 import { StatTile } from "../../_components/StatTile";
 import { TrendBars } from "../../_components/charts/TrendBars";
@@ -89,16 +89,15 @@ export default async function AnnualPage({
 
   return (
     <>
-      <PageHead
-        kind="data"
-        title="年間集計・対前年"
+      <ScreenHeader
+        screen="/annual"
         action={
           <YearMonthSelect basePath="/annual" value={yearMonth} options={selectableYearMonths(25)} />
         }
       />
 
       <div className="-mt-3 mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-ink-muted">
-        <Link href={`/annual?ym=${prevFiscalAnchor}`} className="text-brand-deep hover:underline">
+        <Link href={`/annual?ym=${prevFiscalAnchor}`} className="btn btn-quiet btn-sm pressable">
           ← 前の期
         </Link>
         <span>
@@ -109,7 +108,7 @@ export default async function AnnualPage({
           </span>
           ヶ月
         </span>
-        <Link href={`/annual?ym=${nextFiscalAnchor}`} className="text-brand-deep hover:underline">
+        <Link href={`/annual?ym=${nextFiscalAnchor}`} className="btn btn-quiet btn-sm pressable">
           次の期 →
         </Link>
       </div>
@@ -190,7 +189,7 @@ export default async function AnnualPage({
             </Link>
           </div>
 
-          <section className="mt-4 rounded-xl border border-line bg-white p-5">
+          <section className="mt-4 card p-5">
             <h2 className="text-sm font-bold text-ink">損益の13ヶ月推移</h2>
             <div className="mt-3">
               <TrendBars
@@ -207,7 +206,7 @@ export default async function AnnualPage({
             </div>
           </section>
 
-          <section className="mt-4 rounded-xl border border-line bg-white p-5">
+          <section className="mt-4 card p-5">
             <h2 className="text-sm font-bold text-ink">売上の13ヶ月推移</h2>
             <div className="mt-3">
               <TrendBars
@@ -223,7 +222,7 @@ export default async function AnnualPage({
             </div>
           </section>
 
-          <section className="mt-4 rounded-xl border border-line bg-white p-5">
+          <section className="mt-4 card p-5">
             <div className="flex items-baseline justify-between gap-2">
               <h2 className="text-sm font-bold text-ink">年間の経費内訳</h2>
               <p className="num text-xs text-ink-muted">計 {man(data.total.expense)}</p>
@@ -240,7 +239,7 @@ export default async function AnnualPage({
           </section>
 
           {/* ここから下は「読む表」。既定で畳み、開く前に中身と件数が分かるようにする */}
-          <details className="group mt-4 rounded-xl border border-line bg-white">
+          <details className="group mt-4 card">
             <summary className="cursor-pointer list-none px-5 py-4 text-sm font-bold text-ink hover:bg-subtle">
               月別の明細を見る
               <span className="ml-2 text-xs font-normal text-ink-muted">
@@ -359,7 +358,7 @@ export default async function AnnualPage({
             </div>
           </details>
 
-          <details className="group mt-4 rounded-xl border border-line bg-white">
+          <details className="group mt-4 card">
             <summary className="cursor-pointer list-none px-5 py-4 text-sm font-bold text-ink hover:bg-subtle">
               前期との月別差額を見る
               <span className="ml-2 text-xs font-normal text-ink-muted">
@@ -415,7 +414,7 @@ export default async function AnnualPage({
           {/* 差がある月は初手で開く。「一致」の表は開かない (読む価値が無い) */}
           <details
             open={data.reconciliationGapCount > 0}
-            className="group mt-4 rounded-xl border border-line bg-white"
+            className="group mt-4 card"
           >
             <summary className="cursor-pointer list-none px-5 py-4 text-sm font-bold text-ink hover:bg-subtle">
               Excelとの差額を見る

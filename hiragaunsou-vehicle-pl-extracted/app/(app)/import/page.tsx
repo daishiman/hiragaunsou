@@ -7,7 +7,7 @@ import { ImportDiffAlertPanel } from "../../_components/ImportDiffAlertPanel";
 import { createDb } from "../../../src/infrastructure/db/client";
 import { D1ImportBatchRepository } from "../../../src/infrastructure/db/D1ImportBatchRepository";
 import { IMPORT_SOURCES } from "../../../src/domain/rules/importSources";
-import { PageHead } from "../../_components/PageHead";
+import { ScreenHeader } from "../../_components/ScreenHeader";
 import { isYearMonth } from "../../_lib/yearMonth";
 import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { ImportForm } from "./ImportForm";
@@ -51,13 +51,8 @@ export default async function ImportPage({
   );
 
   return (
-    <div className="max-w-3xl">
-      <PageHead
-        kind="ops"
-        title="月次データ取込"
-        lead="業務フローのSTEP順に元データを取り込みます"
-        showHomeLink
-      />
+    <div>
+      <ScreenHeader screen="/import" />
       {/*
         取り込んだ内容が前回と違うときだけ、ここに1行ずつ出る。
         違いが無ければ何も出ないので、ふだんの取込の邪魔にはならない。

@@ -132,7 +132,7 @@ export function ImportBatchesManager({
 
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-line bg-white p-5">
+      <section className="card p-5">
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-xs text-ink-muted">
             年月で絞り込み
@@ -200,9 +200,9 @@ export function ImportBatchesManager({
                         type="button"
                         disabled={state.status === "deleting"}
                         onClick={() => setPendingBatch(b)}
-                        className="pressable rounded-md border border-caution-border bg-caution-soft px-3 py-1 text-xs font-semibold text-danger disabled:opacity-50"
+                        className="btn btn-danger btn-sm pressable"
                       >
-                        {state.status === "deleting" ? "削除中…" : "削除"}
+                        {state.status === "deleting" ? "削除中…" : "この取込を削除する"}
                       </button>
                       {state.status === "error" ? (
                         <p className="mt-1 text-[11px] text-danger">{state.message}</p>
@@ -223,7 +223,7 @@ export function ImportBatchesManager({
         </div>
       </section>
 
-      <section className="rounded-xl border border-line bg-white p-5">
+      <section className="card p-5">
         <h2 className="text-sm font-bold text-ink">取り込んだファイルの記録({fileLog.length}件)</h2>
         <p className="mt-1 text-xs leading-relaxed text-ink-muted">
           どの画面で・いつ・どのファイルを取り込んだかの記録です。同じファイルをもう一度選んだときに
@@ -277,7 +277,7 @@ export function ImportBatchesManager({
         )}
       </section>
 
-      <section className="rounded-xl border border-line bg-white p-5">
+      <section className="card p-5">
         <h2 className="text-sm font-bold text-ink">削除履歴(直近{deletionLog.length}件)</h2>
         <p className="mt-1 text-xs text-ink-muted">
           いつ・誰が・何を削除したかの記録です。監査用に残ります。

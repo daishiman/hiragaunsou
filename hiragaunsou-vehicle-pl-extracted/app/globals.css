@@ -150,6 +150,112 @@ span:where([class~="rounded-full"]) {
 }
 
 /*
+ * ─────────────────────────────────────────────────────────────
+ * カードからのはみ出しを根から止める。
+ *
+ * 「車両マスタ管理の説明文がカードの枠外へ出る」という不具合が出た。
+ * 原因は画面ごとの書き方ではなく、面(カード)の中身に幅の下限が残っていたこと。
+ * flex/grid の子要素は既定で min-width:auto になり、
+ * 中の一番長い塊(折り返せない札・表・入力欄・長い英数字)より縮まない。
+ * その結果、親の幅を無視して横へ伸び、白い面の外へ文章が流れる。
+ *
+ * 画面ごとに overflow-wrap を足して回ると、次に足す画面でまた同じことが起きる。
+ * min-width の下限を本文領域まるごとで外し、ここ1箇所だけで面倒を見る。
+ *
+ * :where() は詳細度0なので、幅を意図して指定している箇所
+ * (表の min-w-full など Tailwind のユーティリティ) は従来どおり勝つ。
+ * ─────────────────────────────────────────────────────────────
+ */
+main :where(section, article, aside, div, dl, dd, dt, p, ul, ol, li, details, summary, figure) {
+  min-width: 0;
+}
+
+/*
+ * 画像・埋め込み・整形済みテキストは、親より広くならない。
+ *
+ * ここに table を入れてはいけない。収支表などの横長の表は、
+ * 外側の枠(overflow-x-auto)より広いままにして横スクロールさせる作りになっており
+ * (min-w-full / min-w-[36rem] / セルごとの min-w-*)、
+ * max-width:100% を掛けると列が潰れて読めなくなる。
+ */
+main :where(img, svg, video, canvas, iframe, pre) {
+  max-width: 100%;
+}
+
+/*
+ * 入力欄も親より広くならない。ファイル選択の欄は選んだファイル名の長さで
+ * 内側の幅が決まるため、w-full を指定していてもカードの外へ出ることがある。
+ */
+main :where(input, select, textarea) {
+  max-width: 100%;
+}
+
+/*
+ * 白カードの共通クラス。画面側は <Card> を使い、この見た目を直接書かない。
+ * (app/_components/Card.tsx)
+ */
+.card {
+  border-radius: var(--radius-card);
+  border: 1px solid var(--line);
+  background: #fff;
+  min-width: 0;
+}
+
+/*
+ * 長い説明文の器 (app/_components/Card.tsx の <Prose>)。
+ *
+ * カードの直下には表の外枠(横スクロールする箱)も入るため、
+ * ここで max-width を掛けない。掛けると横長の表が縮んで列が潰れる。
+ * 幅の下限を外すだけにとどめ、折り返しは .prose-note が受け持つ。
+ */
+:where(.card) > * {
+  min-width: 0;
+}
+.prose-note,
+.prose-note > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.prose-note {
+  overflow-wrap: anywhere;
+  word-break: auto-phrase;
+  line-break: strict;
+}
+/*
+ * 読み幅の上限。
+ *
+ * ページ全体を狭めるのはやめた。カード・フォーム・表は横に伸びても読みにくくならないのに、
+ * ページごと止めると広い画面で右半分が丸ごと空き、表示が壊れて見える(依頼者の指摘)。
+ * 読み幅を制限してよいのは「続けて読む文章」だけなので、**箱ではなく行**に掛ける。
+ *
+ * 単位は ch ではなく em。ch は欧文の「0」の字幅が基準で、全角の日本語では
+ * 想定より広くなる。全角1字 = 1em なので、em ならそのまま「1行あたりの字数」になる。
+ * 42em ≒ 42字。日本語で読みやすいとされる40〜50字の下寄りを取っている
+ * (この文章群は text-xs = 12px と小さく、行が長いほど次の行頭を見失いやすいため)。
+ *
+ * 箱ではなく行に掛けるのが要点。.prose-note は ScreenHeader の役割カードのように
+ * 「文章ではない面」にも付いており、箱ごと狭めるとその面まで縮んでしまう。
+ */
+.prose-note :where(p, li) {
+  max-width: 42em;
+}
+/*
+ * .prose-note の外にある長文(AIが書いた要約など)に手で付ける。
+ * 付ける対象は「途切れずに続く文章」だけ。見出し・数字・ラベルには付けない。
+ */
+.readable {
+  max-width: 42em;
+}
+
+/*
+ * 折りたたみ(details)の中身も同じ扱いにする。
+ * 「どのファイルを選べばよいですか?」の本文はここに入る。
+ */
+main :where(details) > :where(:not(summary)) {
+  min-width: 0;
+}
+
+/*
  * 押せるもの・入力できるものは形で分かるようにする(色だけに頼らない)。
  * 読むだけの欄は面を沈め、枠を消す。
  */
@@ -224,6 +330,20 @@ span:where([class~="rounded-full"]) {
 }
 .btn-quiet:hover:not(:disabled) {
   background: var(--subtle);
+}
+/*
+ * 消す・止めるなど、取り返しのつきにくい操作。
+ * 画面ごとに caution 色を手書きしていたため、同じ「削除」でも高さと丸みが違っていた。
+ * 目立たせるのではなく「他のボタンと違う」ことだけを示す (面は塗らない)。
+ */
+.btn-danger {
+  border-color: var(--caution-border);
+  background: var(--caution-soft);
+  color: var(--danger);
+}
+.btn-danger:hover:not(:disabled) {
+  background: var(--caution-soft);
+  border-color: var(--danger);
 }
 
 /*

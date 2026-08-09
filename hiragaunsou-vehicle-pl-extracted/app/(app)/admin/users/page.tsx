@@ -8,7 +8,7 @@ import { D1UserRepository } from "../../../../src/infrastructure/db/D1UserReposi
 import { D1InvitationRepository } from "../../../../src/infrastructure/db/D1InvitationRepository";
 import { ListUsersUseCase } from "../../../../src/usecase/steps/manageUsers";
 import { ListInvitationsUseCase } from "../../../../src/usecase/steps/manageInvitations";
-import { PageHead } from "../../../_components/PageHead";
+import { ScreenHeader } from "../../../_components/ScreenHeader";
 import { UsersManager } from "./UsersManager";
 
 /**
@@ -29,12 +29,8 @@ export default async function AdminUsersPage() {
   const invitations = await new ListInvitationsUseCase(new D1InvitationRepository(db)).execute();
 
   return (
-    <div className="max-w-4xl">
-      <PageHead
-        kind="tool"
-        title="ユーザー管理"
-        lead="全ユーザーのロール変更・アカウント凍結(ログイン禁止)・新規ユーザーの招待を行います。"
-      />
+    <div>
+      <ScreenHeader screen="/admin/users" />
       <UsersManager
         initialUsers={users}
         initialInvitations={invitations}

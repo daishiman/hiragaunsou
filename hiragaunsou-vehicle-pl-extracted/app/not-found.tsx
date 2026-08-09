@@ -10,7 +10,7 @@ import Link from "next/link";
 export default function NotFound() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-subtle px-6">
-      <div className="w-full max-w-md rounded-xl border border-line bg-white px-6 py-10 text-center">
+      <div className="w-full max-w-md card px-6 py-10 text-center">
         <p className="text-sm font-semibold text-ink">このページは見つかりませんでした</p>
         <p className="mt-1 text-sm text-ink-muted">
           URLが変わったか、削除された可能性があります。

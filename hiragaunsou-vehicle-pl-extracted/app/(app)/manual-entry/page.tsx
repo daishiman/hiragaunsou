@@ -19,7 +19,7 @@ import { ConfirmMonthlyPlUseCase } from "../../../src/usecase/steps/confirmMonth
 import { STANDARD_COST_RATES } from "../../../src/domain/entities/VehiclePl";
 import { monthsBefore, selectableYearMonths } from "../../_lib/yearMonth";
 import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
-import { PageHead } from "../../_components/PageHead";
+import { ScreenHeader } from "../../_components/ScreenHeader";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
 import { ManualEntryStepper, type PrefillValues } from "./ManualEntryStepper";
 
@@ -169,12 +169,9 @@ export default async function ManualEntryPage({
 
   return (
     // 1台1行に燃料4項目・経費4項目を並べるため、他の入力画面より広く取る
-    <div className="max-w-5xl">
-      <PageHead
-        kind="ops"
-        title="手入力(業務フロー STEP2・3・5・6)"
-        lead="請求書から入力する項目だけをステップ順に。Enterで次の欄へ"
-        showHomeLink
+    <div>
+      <ScreenHeader
+        screen="/manual-entry"
         action={
           <YearMonthSelect
             basePath="/manual-entry"

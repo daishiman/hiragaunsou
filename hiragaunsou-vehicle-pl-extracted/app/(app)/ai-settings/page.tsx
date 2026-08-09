@@ -6,7 +6,7 @@ import { AccessDenied } from "../../_components/AccessDenied";
 import { createDb } from "../../../src/infrastructure/db/client";
 import { D1AiProviderCredentialRepository } from "../../../src/infrastructure/db/D1AiProviderCredentialRepository";
 import { ListAiProviderCredentialsUseCase } from "../../../src/usecase/steps/manageAiProviderCredentials";
-import { PageHead } from "../../_components/PageHead";
+import { ScreenHeader } from "../../_components/ScreenHeader";
 import { AiSettingsManager } from "./AiSettingsManager";
 
 /**
@@ -29,12 +29,8 @@ export default async function AiSettingsPage() {
   ).execute();
 
   return (
-    <div className="max-w-3xl">
-      <PageHead
-        kind="tool"
-        title="AI設定"
-        lead="AI要因分析などに使う外部AIプロバイダのAPIキーを管理します。キーは暗号化して保存し、この画面の管理者だけが登録・削除できます。"
-      />
+    <div>
+      <ScreenHeader screen="/ai-settings" />
       <AiSettingsManager initialCredentials={credentials} />
     </div>
   );
