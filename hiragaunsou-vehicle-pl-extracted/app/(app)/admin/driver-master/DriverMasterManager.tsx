@@ -16,6 +16,7 @@ import type { FileImportVerdict } from "../../../../src/domain/rules/fileImportC
 import { AlertPanel } from "../../../_components/AlertPanel";
 import { Disclosure } from "../../../_components/Disclosure";
 import { ImportCheckPanel } from "../../../_components/ImportCheckPanel";
+import { MasterFieldEditor } from "../../../_components/MasterFieldEditor";
 import { StepRail } from "../../../_components/StepRail";
 
 /**
@@ -441,9 +442,26 @@ export function DriverMasterManager({
                 {drivers.map((d) => (
                   <tr key={d.employeeCode} className="border-b border-line last:border-b-0">
                     <td className="num py-2 pr-3">{d.employeeCode}</td>
-                    <td className="py-2 pr-3 text-ink-muted">{d.driverName}</td>
+                    <td className="py-2 pr-3 text-ink-muted">
+                      <MasterFieldEditor
+                        targetKind="driver"
+                        targetKey={d.employeeCode}
+                        field="driverName"
+                        label="氏名"
+                        value={d.driverName}
+                        emptyText="氏名なし"
+                      />
+                    </td>
                     <td className="num py-2 text-ink-muted">
-                      {d.vehicleNo ?? <span className="text-ink-muted">未割当</span>}
+                      <MasterFieldEditor
+                        targetKind="driver"
+                        targetKey={d.employeeCode}
+                        field="vehicleNo"
+                        label="車番"
+                        value={d.vehicleNo}
+                        emptyText="未割当"
+                        placeholder="車番"
+                      />
                     </td>
                   </tr>
                 ))}

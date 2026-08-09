@@ -80,6 +80,8 @@ export interface MasterChangeHistoryRepository {
 export interface ApplyMasterChangeResult {
   /** 実際に作り直した月 */
   appliedYearMonths: string[];
+  /** 作り直した月と、その月で作り直した台数 (画面の「○台を再計算しました」に使う) */
+  applied: { yearMonth: string; vehicleCount: number }[];
   /** 据え置いた月 (確定済み) */
   heldBackYearMonths: string[];
 }
@@ -111,11 +113,13 @@ export class ApplyMasterChangeUseCase {
 
     // 月をまたいで並列に作り直すと、同じ D1 に対する書き込みが重なる。
     // 月数は多くても年度1本ぶんなので、素直に順番に流す。
+    const applied: { yearMonth: string; vehicleCount: number }[] = [];
     for (const yearMonth of autoApply) {
-      await this.rebuilder.execute({ yearMonth });
+      const result = await this.rebuilder.execute({ yearMonth });
+      applied.push({ yearMonth, vehicleCount: result.vehicleCount });
     }
 
-    return { appliedYearMonths: autoApply, heldBackYearMonths: heldBack };
+    return { appliedYearMonths: autoApply, applied, heldBackYearMonths: heldBack };
   }
 }
 

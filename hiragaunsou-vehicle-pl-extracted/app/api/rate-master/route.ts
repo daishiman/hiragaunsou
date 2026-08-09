@@ -142,9 +142,8 @@ export async function POST(request: Request) {
       applied: applied.appliedYearMonths,
       heldBack: applied.heldBackYearMonths,
       // 画面の互換のため、いま見ている月が作り直されたかどうかも返す
-      recalculated: applied.appliedYearMonths.includes(body?.recalculateYearMonth ?? "")
-        ? { yearMonth: body?.recalculateYearMonth, vehicleCount: null }
-        : null,
+      recalculated:
+        applied.applied.find((a) => a.yearMonth === (body?.recalculateYearMonth ?? "")) ?? null,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "率の保存に失敗しました";
