@@ -87,6 +87,21 @@ vi.mock("../../src/infrastructure/db/D1CleansingDecisionRepository", () => ({
   APP_SETTING_KEYS: { kirinTargetVehicleNos: "kirin_target_vehicle_nos" },
 }));
 
+/**
+ * 直しの履歴と「その月が締まっているか」を持つ表。
+ * 既定では 2026-05 は未確定 (101行中0行が確定) とし、直したらその場で作り直される状態にする。
+ */
+const { recordEditsMock, listMonthlyConfirmationsMock } = vi.hoisted(() => ({
+  recordEditsMock: vi.fn(),
+  listMonthlyConfirmationsMock: vi.fn(),
+}));
+vi.mock("../../src/infrastructure/db/D1MasterChangeRepository", () => ({
+  D1MasterChangeRepository: class {
+    recordEdits = recordEditsMock;
+    listMonthlyConfirmations = listMonthlyConfirmationsMock;
+  },
+}));
+
 const { finalizeExecuteMock } = vi.hoisted(() => ({ finalizeExecuteMock: vi.fn() }));
 vi.mock("../../src/usecase/steps/finalizeMonthlyPl", () => ({
   FinalizeMonthlyPlUseCase: class {
@@ -123,6 +138,10 @@ beforeEach(() => {
   sessionRef.current = adminSession;
   setRateMock.mockReset().mockResolvedValue(undefined);
   finalizeExecuteMock.mockReset().mockResolvedValue({ vehicleCount: 101 });
+  recordEditsMock.mockReset().mockResolvedValue(undefined);
+  listMonthlyConfirmationsMock
+    .mockReset()
+    .mockResolvedValue([{ yearMonth: "2026-05", total: 101, confirmed: 0 }]);
 });
 
 describe("POST /api/rate-master のガード", () => {
@@ -207,11 +226,46 @@ describe("POST /api/rate-master の保存と再計算", () => {
     expect(setRateMock).toHaveBeenCalledWith("admin_fee_rate", "2026-05", 0.1748, "user-admin");
   });
 
-  it("再計算対象月の指定が無ければ保存だけして再計算しない", async () => {
+  /**
+   * recalculateYearMonth は「いま画面で見ている月」を伝えるだけの表示用になった。
+   * 全期間に効く率を直したら、まだ締めていない月はすべて作り直す必要がある
+   * (指定が無いことを理由に作り直しを止めると、他の月が古い率のまま置き去りになる)。
+   */
+  it("見ている月の指定が無くても、まだ締めていない月は作り直す", async () => {
     const res = await postRate({ ...validBody, recalculateYearMonth: undefined });
     expect(res.status).toBe(200);
     expect(setRateMock).toHaveBeenCalled();
-    expect(finalizeExecuteMock).not.toHaveBeenCalled();
+    expect(finalizeExecuteMock).toHaveBeenCalledTimes(1);
+    expect(await res.json()).toMatchObject({ applied: ["2026-05"], recalculated: null });
+  });
+
+  it("確定済みの月は据え置く(配布済みの収支表の数字を勝手に変えない)", async () => {
+    listMonthlyConfirmationsMock.mockResolvedValue([
+      { yearMonth: "2026-04", total: 101, confirmed: 101 },
+      { yearMonth: "2026-05", total: 101, confirmed: 0 },
+    ]);
+
+    const res = await postRate(validBody);
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ applied: ["2026-05"], heldBack: ["2026-04"] });
+    expect(finalizeExecuteMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("直した内容は履歴に残る(あとから元に戻せるようにするため)", async () => {
+    listRatesMock.mockResolvedValueOnce([{ key: "admin_fee_rate", yearMonth: null, value: 0.15 }]);
+
+    await postRate(validBody);
+
+    const [edits] = recordEditsMock.mock.calls.at(-1) as [
+      { targetKind: string; beforeValue: string | null; afterValue: string | null }[],
+    ];
+    expect(edits).toHaveLength(1);
+    expect(edits[0]).toMatchObject({
+      targetKind: "rate",
+      beforeValue: "0.15",
+      afterValue: "0.1748",
+    });
   });
 });
 

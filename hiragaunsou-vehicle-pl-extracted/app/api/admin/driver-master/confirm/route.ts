@@ -12,6 +12,7 @@ import { ConfirmImportDriverMasterUseCase } from "../../../../../src/usecase/ste
 import type { DriverMasterUpsertInput } from "../../../../../src/domain/repositories/MasterRepository";
 import { isSameOriginRequest } from "../../../../_lib/assertSameOrigin";
 import { recordFileImport } from "../../../../_lib/recordFileImport";
+import { importDiffDetector, masterChangeStack } from "../../../../_lib/masterChangeStack";
 
 /**
  * プレビュー結果はブラウザを経由して戻ってくるため、確定側でも形を検証し直す。
@@ -75,7 +76,23 @@ export async function POST(request: Request) {
       rowCount: records.length,
       session: session!,
     });
-    return NextResponse.json(result);
+
+    // 運転者の車番が変わると、給与がどの車に乗るかが変わる。取込だけして収支表を
+    // そのままにすると、手入力画面の「未割当」表示と収支表の人件費が食い違う。
+    // まだ締めていない月には自動で反映し、確定済みの月は据え置く。
+    const actor = { id: session!.id, name: session!.name ?? "" };
+    const applied = await masterChangeStack(db, actor).applier.execute({ edits: [], actor });
+
+    // 前回の取込と何が変わったかを見つけて残す (画面のアラートはここが元になる)
+    const alert = await importDiffDetector(db).execute({ persist: true });
+
+    return NextResponse.json({
+      ...result,
+      applied: applied.appliedYearMonths,
+      heldBack: applied.heldBackYearMonths,
+      diffCount: alert.diffs.length,
+      criticalCount: alert.criticalCount,
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : "運転者マスタの取込に失敗しました";
     return NextResponse.json({ error: message }, { status: 400 });

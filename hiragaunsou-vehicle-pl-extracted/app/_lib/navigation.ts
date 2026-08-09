@@ -155,6 +155,12 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         permission: "manage_imports",
       },
       {
+        href: "/master-changes",
+        label: "直した内容の反映",
+        desc: "締めた月とマスタの食い違いを確認し、反映するかどうかを決める",
+        permission: "manage_imports",
+      },
+      {
         href: "/admin/driver-master",
         label: "運転者マスタ管理",
         desc: "社員Noと車番の対応をCSVで登録する(給与を車両へ紐づける土台)",
