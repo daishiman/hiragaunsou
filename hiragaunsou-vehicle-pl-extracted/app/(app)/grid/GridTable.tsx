@@ -232,6 +232,7 @@ export function GridTable({
   lockedReason,
   header,
   footer,
+  actionBar,
 }: {
   rows: GridRow[];
   yearMonth: string;
@@ -248,6 +249,12 @@ export function GridTable({
    */
   header?: React.ReactNode;
   footer?: React.ReactNode;
+  /**
+   * 画面の下端に貼り付けておく操作 (確定・書き出し)。
+   * 表は車両の台数だけ縦に伸びるので、出口が表の上にあると下まで見た人には見えなくなる。
+   * 集中モード中は header/footer と同じく出さない。
+   */
+  actionBar?: React.ReactNode;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"summary" | "full">("summary");
@@ -1065,6 +1072,8 @@ export function GridTable({
           )}
 
       {footer}
+
+      {actionBar}
     </>
   );
 }

@@ -231,7 +231,11 @@ export function AppShell({ userName, userRole, role, badges, children }: AppShel
       </aside>
 
       <div className="flex min-h-screen min-w-0 flex-col">
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-line bg-white/95 px-4 py-3 backdrop-blur lg:px-6">
+        {/*
+          高さを固定する。下に貼り付ける工程タブ (StickyStepHeader) が
+          この高さを基準に位置を決めるため、中身によって伸び縮みすると重なる。
+        */}
+        <header className="sticky top-0 z-30 flex h-[var(--app-header-h)] items-center gap-3 border-b border-line bg-white/95 px-4 backdrop-blur lg:px-6">
           <button
             type="button"
             onClick={() => setNavOpen((v) => !v)}

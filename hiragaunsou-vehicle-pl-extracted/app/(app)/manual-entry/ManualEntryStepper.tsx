@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "../../_components/EmptyState";
 import { ListToolbar } from "../../_components/ListToolbar";
+import { NumberEntryField } from "../../_components/NumberEntryField";
+import { StickyActionBar } from "../../_components/StickyActionBar";
+import { StickyStepHeader } from "../../_components/StickyStepHeader";
+import { parseAmountInput, parsePastedRows } from "../../_lib/numberEntry";
 import {
   PayrollStep,
   type PayrollDetailRow,
@@ -107,84 +111,13 @@ function toRawMap(source: Record<string, number>): Record<string, string> {
 }
 
 /**
- * 「1200+340+560」のような足し算式を受け付けて合計を返す。
- *
- * 業務フロー STEP6 の「請求書に割引額の合計が載っていないため個別の割引額を合算する」に対応する。
- * 電卓に持ち替えずその場で足せることが目的なので、全角数字・カンマ・空白も受ける(ポステルの法則)。
- * 数値として読めないときは null を返し、確定させない。
+ * 金額の読み取り・Excel貼り付けの分解・Enterでの移動は、この画面だけの決まりごとではなく
+ * 全画面共通の作法として app/_lib/numberEntry.ts に置いた。
+ * 既存の呼び出し元 (テストを含む) が壊れないよう、名前だけここから出し直す。
  */
-export function parseSumExpression(raw: string): number | null {
-  const normalized = raw
-    .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
-    .replace(/＋/g, "+")
-    .replace(/．/g, ".")
-    .replace(/[,\s、]/g, "");
-  if (normalized === "") return null;
-  if (!/^[0-9.+]+$/.test(normalized)) return null;
-  const parts = normalized.split("+").filter((p) => p !== "");
-  if (parts.length === 0) return null;
-  let sum = 0;
-  for (const p of parts) {
-    const n = Number(p);
-    if (!Number.isFinite(n)) return null;
-    sum += n;
-  }
-  return sum;
-}
-
-/**
- * 請求書のExcelから「車番 金額」を範囲コピーして貼り付けた文字列を行に分解する。
- *
- * 元のExcel業務が「ピボットの結果を範囲コピーして貼る」だったので、同じ操作を残す。
- * 区切りはタブ優先。金額の桁区切りカンマを壊さないため、カンマでは分割しない。
- */
-export interface PastedRow {
-  vehicleNo: string;
-  values: string[];
-}
-
-export function parsePastedRows(text: string): PastedRow[] {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line !== "")
-    .map((line) => {
-      const cells = (line.includes("\t") ? line.split("\t") : line.split(/[\s、]+/)).map((c) =>
-        c.trim(),
-      );
-      return { vehicleNo: cells[0] ?? "", values: cells.slice(1) };
-    })
-    .filter((row) => row.vehicleNo !== "" && row.values.length > 0);
-}
-
-/**
- * IME確定中のEnterでは送らず、通常のEnterは次の欄へ移動する(誤送信防止・design-system規律)。
- *
- * 表の中では「同じ列の次の車両」へ進む。請求書は1種類の金額が縦に並んでいるので、
- * 紙を上から順に読みながら1列を打ち切れる。列の最後まで来たら次の列の先頭へ折り返す。
- */
-function handleEnterMovesNext(e: React.KeyboardEvent<HTMLInputElement>) {
-  if (e.key !== "Enter") return;
-  if (e.nativeEvent.isComposing) return;
-  e.preventDefault();
-  const form = e.currentTarget.form;
-  if (!form) return;
-  const inputs = Array.from(form.querySelectorAll<HTMLInputElement>("input[data-step-field]"));
-  const col = e.currentTarget.dataset.col;
-  if (col === undefined) {
-    const next = inputs[inputs.indexOf(e.currentTarget) + 1];
-    if (next) next.focus();
-    return;
-  }
-  const sameColumn = inputs.filter((el) => el.dataset.col === col);
-  const nextInColumn = sameColumn[sameColumn.indexOf(e.currentTarget) + 1];
-  if (nextInColumn) {
-    nextInColumn.focus();
-    return;
-  }
-  const nextColumn = inputs.find((el) => el.dataset.col === String(Number(col) + 1));
-  if (nextColumn) nextColumn.focus();
-}
+export const parseSumExpression = parseAmountInput;
+export { parsePastedRows };
+export type { PastedRow } from "../../_lib/numberEntry";
 
 /** 「24,300」「24 300」「24、300」いずれの書き方でも車番の並びとして受ける */
 function parseVehicleNoList(raw: string): string[] {
@@ -249,8 +182,8 @@ function draftStorageKey(yearMonth: string): string {
 interface EntryDraft {
   savedAt: number;
   values: FieldValues;
-  tankPrice: number;
-  tankPriceCarried: boolean;
+  /** 人が打った単価の文字列。空文字なら「先月の単価のまま」 */
+  tankPriceRaw: string;
   kirinTransport: string;
   kirinManagement: string;
   kirinTargets: string;
@@ -261,13 +194,23 @@ function loadDraft(yearMonth: string): EntryDraft | null {
   try {
     const raw = window.localStorage.getItem(draftStorageKey(yearMonth));
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<EntryDraft>;
+    // 単価を「数値 + 先月のままの印」で持っていた頃の下書きも読めるようにする
+    const parsed = JSON.parse(raw) as Partial<EntryDraft> & {
+      tankPrice?: number;
+      tankPriceCarried?: boolean;
+    };
     if (typeof parsed?.savedAt !== "number" || typeof parsed.values !== "object") return null;
     return {
       savedAt: parsed.savedAt,
       values: { ...emptyFieldValues(), ...parsed.values },
-      tankPrice: typeof parsed.tankPrice === "number" ? parsed.tankPrice : 0,
-      tankPriceCarried: parsed.tankPriceCarried === true,
+      tankPriceRaw:
+        typeof parsed.tankPriceRaw === "string"
+          ? parsed.tankPriceRaw
+          : parsed.tankPriceCarried !== true &&
+              typeof parsed.tankPrice === "number" &&
+              parsed.tankPrice > 0
+            ? String(parsed.tankPrice)
+            : "",
       kirinTransport: parsed.kirinTransport ?? "",
       kirinManagement: parsed.kirinManagement ?? "",
       kirinTargets: parsed.kirinTargets ?? "",
@@ -354,14 +297,14 @@ export function ManualEntryStepper({
   /*
     インタンク単価は月ごとの設定値で、初期値が入っていない。毎月0から始まると、
     給油量を全部入力しても軽油代が全車0円になる(数量は入っているので異常値チェックにも掛からない)。
-    今月が未設定なら先月の単価を入れた状態で開く。ただし黙って埋めると実績値と区別が付かないので、
-    本人が確認するまで「先月の値です」の印を外さない (ux-design §5-3 自動でやる・見せる・戻せる)。
+    今月が未設定なら先月の単価を欄に入れた状態で開く。
+
+    持つのは「人が打った文字列」だけにする。数値そのものを持つと、画面に出ている
+    単価が「先月のまま」なのか「今月そう決めた」のか区別できなくなる。
+    表の各欄と同じ考え方 (NumberEntryField の autoValue) で揃える。
   */
-  const [tankPrice, setTankPrice] = useState(
-    prefill.tankPricePerLiter || (prevTankPricePerLiter > 0 ? prevTankPricePerLiter : 0),
-  );
-  const [tankPriceCarried, setTankPriceCarried] = useState(
-    prefill.tankPricePerLiter === 0 && prevTankPricePerLiter > 0,
+  const [tankPriceRaw, setTankPriceRaw] = useState(
+    prefill.tankPricePerLiter > 0 ? String(prefill.tankPricePerLiter) : "",
   );
   /** 先月からコピーしたまま、まだ人が見ていないセル */
   const [copied, setCopied] = useState<Set<string>>(() => new Set());
@@ -387,6 +330,13 @@ export function ManualEntryStepper({
   const [pasteUndo, setPasteUndo] = useState<FieldValues | null>(null);
   const [dirty, setDirty] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+
+  /** 人が単価を打っていないときに欄へ出す値 (先月の単価)。無ければ null = 空欄のまま */
+  const carriedTankPrice = prevTankPricePerLiter > 0 ? prevTankPricePerLiter : null;
+  /** 実際に計算へ使う単価。人が打った値 → 先月の単価 → 0 の順に決まる */
+  const tankPrice = parseAmountInput(tankPriceRaw) ?? carriedTankPrice ?? 0;
+  /** 先月の単価がそのまま入っていて、まだ本人が確かめていない状態 */
+  const tankPriceCarried = tankPriceRaw.trim() === "" && carriedTankPrice !== null;
 
   const isLast = step === STEPS.length - 1;
   const current = STEPS[step] ?? STEPS[0]!;
@@ -541,8 +491,7 @@ export function ManualEntryStepper({
           const draft = isConfirmed ? null : loadDraft(yearMonth);
           if (draft) {
             setValues(draft.values);
-            setTankPrice(draft.tankPrice);
-            setTankPriceCarried(draft.tankPriceCarried);
+            setTankPriceRaw(draft.tankPriceRaw);
             setKirinTransport(draft.kirinTransport);
             setKirinManagement(draft.kirinManagement);
             if (draft.kirinTargets) setKirinTargets(draft.kirinTargets);
@@ -584,8 +533,7 @@ export function ManualEntryStepper({
       const draft: EntryDraft = {
         savedAt: Date.now(),
         values,
-        tankPrice,
-        tankPriceCarried,
+        tankPriceRaw,
         kirinTransport,
         kirinManagement,
         kirinTargets,
@@ -604,8 +552,7 @@ export function ManualEntryStepper({
     isConfirmed,
     dirty,
     values,
-    tankPrice,
-    tankPriceCarried,
+    tankPriceRaw,
     kirinTransport,
     kirinManagement,
     kirinTargets,
@@ -866,7 +813,7 @@ export function ManualEntryStepper({
   function renderFieldTable(fields: readonly FieldDef[]) {
     return (
       <div className="rounded-md border border-line">
-        <div className="max-h-[50vh] overflow-auto" onPaste={handlePaste}>
+        <div className="max-h-[56vh] min-h-[14rem] overflow-auto" onPaste={handlePaste}>
           {filteredVehicles.length === 0 ? (
             <div className="p-4">
               {!hasVehicles ? (
@@ -922,7 +869,7 @@ export function ManualEntryStepper({
                 </tr>
               </thead>
               <tbody>
-                {filteredVehicles.map((v, rowIndex) => (
+                {filteredVehicles.map((v) => (
                   <tr key={v.vehicleNo} className="border-t border-line align-top">
                     <td className="px-3 py-2 num whitespace-nowrap">
                       {/* 入力済みかどうかは色ではなく記号でも分かるようにする */}
@@ -934,63 +881,40 @@ export function ManualEntryStepper({
                     <td className="px-3 py-2">{v.driver ?? "—"}</td>
                     {fields.map((f, colIndex) => {
                       const raw = values[f.key][v.vehicleNo] ?? "";
-                      const sum = parseSumExpression(raw);
-                      const isInvalid = raw.trim() !== "" && sum === null;
-                      const auto = raw.trim() === "" ? autoAmount(f.key, v.vehicleNo) : null;
                       const isCopied = copied.has(copiedKey(f.key, v.vehicleNo));
                       // 空欄のときだけ先月の値を出す。入力済みのセルに別の数字を並べても迷うだけ。
                       const prevValue =
                         raw.trim() === "" ? previousMonthValues[f.key]?.[v.vehicleNo] : undefined;
                       return (
                         <td key={f.key} className="px-3 py-2 text-right">
-                          <input
-                            data-step-field
-                            data-col={colIndex}
-                            data-row={rowIndex}
-                            type="text"
-                            inputMode="decimal"
-                            aria-label={`${v.vehicleNo}番の${f.label}(${f.unit})`}
+                          <NumberEntryField
                             value={raw}
-                            onChange={(e) => setValue(f.key, v.vehicleNo, e.target.value)}
-                            onKeyDown={handleEnterMovesNext}
-                            className={`num w-32 rounded-md border px-2 py-1 text-right ${
-                              isInvalid
-                                ? "border-danger"
-                                : isCopied
-                                  ? "border-caution-border bg-caution-soft"
-                                  : "border-line"
-                            }`}
+                            onChange={(next) => setValue(f.key, v.vehicleNo, next)}
+                            /*
+                              空欄のまま確定したときに使われる金額を、欄の中に初期値として出す。
+                              「空欄は自動計算されます」と説明する代わりに、いくらになるかを読ませる。
+                              薄い文字のままなら誰も触っていない = 保存時も未入力(null)として送る。
+                            */
+                            autoValue={autoAmount(f.key, v.vehicleNo)}
+                            ariaLabel={`${v.vehicleNo}番の${f.label}(${f.unit})`}
+                            col={colIndex}
+                            hints={
+                              <>
+                                {/* 先月の値のままであることを、色だけでなく文字でも出す */}
+                                {isCopied ? (
+                                  <span className="rounded bg-caution-soft px-1 text-[10px] font-semibold text-ink">
+                                    先月の値
+                                  </span>
+                                ) : null}
+                                {/* 空欄のセルには先月いくらだったかを出す(思い出させず、見て決められるように) */}
+                                {prevValue !== undefined ? (
+                                  <p className="num text-[11px] text-ink-muted">
+                                    先月 {prevValue.toLocaleString("ja-JP")}
+                                  </p>
+                                ) : null}
+                              </>
+                            }
                           />
-                          {/* 先月の値のままであることを、色だけでなく文字でも出す */}
-                          {isCopied ? (
-                            <p className="mt-0.5 text-[11px] font-semibold text-ink">先月の値</p>
-                          ) : null}
-                          {/* 空欄のセルには先月いくらだったかを出す(思い出させず、見て決められるように) */}
-                          {prevValue !== undefined ? (
-                            <p className="num mt-0.5 text-[11px] text-ink-muted">
-                              先月 {prevValue.toLocaleString("ja-JP")}
-                            </p>
-                          ) : null}
-                          {/*
-                            桁を1つ間違えても数字だけでは気づけないので、読めた値をカンマ付きで返す。
-                            足し算式のときは合計、そうでなければ4桁以上のときだけ(短い数字は冗長)。
-                          */}
-                          {sum !== null && (raw.includes("+") || raw.includes("＋") || sum >= 1000) ? (
-                            <p className="num mt-0.5 text-[11px] text-ink-muted">
-                              {sum.toLocaleString("ja-JP")}
-                            </p>
-                          ) : null}
-                          {/* 空欄のままなら何円になるか。文章で規則を説明する代わりに結果を出す */}
-                          {auto !== null ? (
-                            <p className="num mt-0.5 text-[11px] text-ink-muted">
-                              自動 {auto.toLocaleString("ja-JP")}
-                            </p>
-                          ) : null}
-                          {isInvalid ? (
-                            <p className="mt-0.5 text-[11px] text-danger">
-                              数字と + だけで入力してください
-                            </p>
-                          ) : null}
                         </td>
                       );
                     })}
@@ -1010,6 +934,16 @@ export function ManualEntryStepper({
             <p>割引額は「1200+340」のように足し算のまま書けます(電卓は不要です)。</p>
           ) : null}
           {fields.every((f) => !f.keepsBlank) ? <p>空欄の車両は0円として確定します。</p> : null}
+          {/*
+            自動計算の金額は欄の中に薄い文字で入っている。触らなければその金額で確定する。
+            どの欄でも同じ作法にしたので、説明は表の下に1行だけ置く。
+          */}
+          {fields.some((f) => f.keepsBlank) ? (
+            <p>
+              薄い文字に「自動」と付いている欄は、システムが計算した金額です。そのままでよければ
+              触らずに進めます。手で直すと文字が濃くなり、「自動に戻す」で元に戻せます。
+            </p>
+          ) : null}
         </div>
       </div>
     );
@@ -1101,43 +1035,24 @@ export function ManualEntryStepper({
         ステップを移ったら絞り込みは解除する。前のステップの検索語が残っていると、
         次の表が理由なく数行しか出ず「表が壊れた」ように見えるため。
       */}
-      <ol className="flex flex-wrap items-center gap-1.5">
-        {STEPS.map((s, i) => {
-          const state = i < step ? "done" : i === step ? "current" : "todo";
-          return (
-            <li key={s.label}>
-              <button
-                type="button"
-                onClick={() => {
-                  setStep(i);
-                  setVehicleSearch("");
-                  setEntryFilter("all");
-                  setPasteResult("");
-                }}
-                aria-current={state === "current" ? "step" : undefined}
-                className={[
-                  "pressable flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs",
-                  state === "current"
-                    ? "border-brand bg-brand font-bold text-white"
-                    : state === "done"
-                      ? "border-brand-soft bg-brand-soft font-semibold text-brand-deep"
-                      : "border-line bg-white text-ink-muted hover:bg-subtle",
-                ].join(" ")}
-              >
-                {/*
-                  番号は業務フロー docx の STEP 番号に揃える。画面独自の通し番号を併記すると
-                  「STEP5 なのに 4番目」のように2つの番号が食い違い、現在地が分からなくなる。
-                */}
-                <span className="num" aria-hidden>
-                  {state === "done" ? "✓" : (s.workflowId ?? "最後")}
-                </span>
-                <span>{s.label}</span>
-              </button>
-            </li>
-          );
-        })}
-        <li className="num ml-auto text-xs text-ink-muted">{yearMonth}</li>
-      </ol>
+      <StickyStepHeader
+        steps={STEPS.map((s) => ({
+          label: s.label,
+          /*
+            番号は業務フロー docx の STEP 番号に揃える。画面独自の通し番号を併記すると
+            「STEP5 なのに 4番目」のように2つの番号が食い違い、現在地が分からなくなる。
+          */
+          badge: s.workflowId ?? "最後",
+        }))}
+        currentIndex={step}
+        onSelect={(i) => {
+          setStep(i);
+          setVehicleSearch("");
+          setEntryFilter("all");
+          setPasteResult("");
+        }}
+        trailing={yearMonth}
+      />
 
       {/*
         車両が0台のときは、入力しても収支表に1行も反映されない。
@@ -1211,36 +1126,31 @@ export function ManualEntryStepper({
           <div>
             <h2 className="text-sm font-bold text-ink">キリンの輸送協力金・経営支援金</h2>
             <div className="mt-3 grid gap-4 sm:grid-cols-2">
-              <label className="flex flex-col gap-1 text-xs text-ink">
+              {/* 他のステップの欄と同じ部品・同じ作法にする(この2つに自動計算の値は無い) */}
+              <div className="flex flex-col gap-1 text-xs text-ink">
                 輸送協力金(円)
-                <input
-                  data-step-field
-                  type="text"
-                  inputMode="decimal"
+                <NumberEntryField
                   value={kirinTransport}
-                  onChange={(e) => {
-                    setKirinTransport(e.target.value);
+                  onChange={(next) => {
+                    setKirinTransport(next);
                     markDirty();
                   }}
-                  onKeyDown={handleEnterMovesNext}
-                  className="num rounded-md border border-line px-3 py-2 text-right text-lg"
+                  ariaLabel="輸送協力金(円)"
+                  widthClass="w-44"
                 />
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-ink">
+              </div>
+              <div className="flex flex-col gap-1 text-xs text-ink">
                 経営支援金(円)
-                <input
-                  data-step-field
-                  type="text"
-                  inputMode="decimal"
+                <NumberEntryField
                   value={kirinManagement}
-                  onChange={(e) => {
-                    setKirinManagement(e.target.value);
+                  onChange={(next) => {
+                    setKirinManagement(next);
                     markDirty();
                   }}
-                  onKeyDown={handleEnterMovesNext}
-                  className="num rounded-md border border-line px-3 py-2 text-right text-lg"
+                  ariaLabel="経営支援金(円)"
+                  widthClass="w-44"
                 />
-              </label>
+              </div>
             </div>
             {/* 説明文ではなく「結果の数字」で何が起きるかを見せる (このステップの主役) */}
             <div className="mt-4 rounded-lg bg-brand-soft px-4 py-3">
@@ -1286,30 +1196,27 @@ export function ManualEntryStepper({
           <div className="flex flex-col gap-4">
             <h2 className="text-sm font-bold text-ink">燃料費</h2>
             <div>
-              <label className="flex flex-col gap-1 text-xs text-ink">
+              {/*
+                表の欄と同じ部品にする。先月の単価は「自動で入っている値」として
+                薄い文字で欄の中に出し、手で直せば濃い文字に変わる。
+              */}
+              <div className="flex flex-col gap-1 text-xs text-ink">
                 インタンク単価(円/ℓ)
-                <input
-                  data-step-field
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  value={tankPrice}
-                  onChange={(e) => {
-                    setTankPrice(Number(e.target.value) || 0);
-                    setTankPriceCarried(false);
+                <NumberEntryField
+                  value={tankPriceRaw}
+                  onChange={(next) => {
+                    setTankPriceRaw(next);
                     markDirty();
                   }}
-                  onKeyDown={handleEnterMovesNext}
-                  className={`num w-40 rounded-md border px-3 py-2 text-right text-lg ${
-                    tankPrice === 0 || tankPriceCarried
-                      ? "border-caution-border bg-caution-soft"
-                      : "border-line"
-                  }`}
+                  autoValue={carriedTankPrice}
+                  autoLabel={`先月(${previousYearMonth})の単価`}
+                  ariaLabel="インタンク単価(円/ℓ)"
+                  widthClass="w-40"
                 />
                 <span className="text-[11px] text-ink-muted">
                   給油量 × この単価 で全車の軽油代を計算します
                 </span>
-              </label>
+              </div>
               {/*
                 単価は月ごとに設定する値で、初期値が入っていない。
                 0のまま進むと給油量を全部入力しても軽油代が全車0円になり、
@@ -1328,7 +1235,11 @@ export function ManualEntryStepper({
                   </p>
                   <button
                     type="button"
-                    onClick={() => setTankPriceCarried(false)}
+                    onClick={() => {
+                      // 「確認した」= 今月の単価として本人が決めた、なので人が入れた値に変える
+                      setTankPriceRaw(String(prevTankPricePerLiter));
+                      markDirty();
+                    }}
                     className="pressable mt-2 rounded-md border border-brand bg-white px-3 py-1.5 text-xs font-semibold text-brand-deep hover:bg-brand-soft"
                   >
                     確認しました(先月と同じでよい)
@@ -1566,7 +1477,12 @@ export function ManualEntryStepper({
         ) : null}
       </section>
 
-      <div className="flex flex-wrap items-center gap-3">
+      {/*
+        「戻る」「ここまでを保存」「次へ」は画面の下に貼り付けておく。
+        車両が何十台も並ぶ表を下まで見ていくと、以前は操作列が画面の外に出てしまい、
+        保存できることに気づかないまま閉じられていた。
+      */}
+      <StickyActionBar>
         <button
           type="button"
           disabled={step === 0}
@@ -1625,7 +1541,7 @@ export function ManualEntryStepper({
             </button>
           )}
         </div>
-      </div>
+      </StickyActionBar>
     </form>
   );
 }

@@ -25,6 +25,36 @@
   --caution-border: #e6c96a;
 
   --font-num: "Helvetica Neue", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+
+  /*
+   * 常に見えている部分(アプリのヘッダー・工程タブ・操作列)の高さ。
+   * 貼り付け位置・重なり順・フォーカス移動の逃げ幅を、この3つの値だけで決める。
+   * 各画面が独自に px を書き始めると、1画面直すたびに他の画面がずれる。
+   */
+  --app-header-h: 3.25rem;
+  --screen-step-header-h: 3.25rem;
+  --screen-action-bar-h: 4rem;
+}
+
+/*
+ * ノートPCのように画面の縦が狭いときは、常に見えている帯を薄くして本文の見える範囲を確保する。
+ * 帯の高さはこの変数だけで決まるので、画面ごとの調整は要らない。
+ */
+@media (max-height: 760px) {
+  :root {
+    --app-header-h: 2.75rem;
+    --screen-step-header-h: 2.75rem;
+    --screen-action-bar-h: 3.25rem;
+  }
+}
+
+/*
+ * Tabキーでフォーカスを送ったとき、上下に貼り付いた帯の下へ隠れないようにする。
+ * 画面ごとに書くと必ず抜けが出るので、ここ1箇所で操作できる要素すべてに効かせる。
+ */
+:where(a, button, input, select, textarea, summary, [tabindex]) {
+  scroll-margin-top: calc(var(--app-header-h) + var(--screen-step-header-h) + 0.5rem);
+  scroll-margin-bottom: calc(var(--screen-action-bar-h) + 0.5rem);
 }
 
 @theme inline {
@@ -97,7 +127,10 @@ body {
   aside,
   header,
   footer,
-  .no-print {
+  .no-print,
+  /* 貼り付いた工程タブ・操作列は操作するためのものなので、紙には残さない */
+  .screen-step-header,
+  .screen-action-bar {
     display: none !important;
   }
   main {

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { IMPORT_SOURCES, type ImportSourceType } from "../../../src/domain/rules/importSources";
 import { Disclosure } from "../../_components/Disclosure";
-import { StepRail } from "../../_components/StepRail";
+import { StickyStepHeader } from "../../_components/StickyStepHeader";
 import type { FileImportVerdict } from "../../../src/domain/rules/fileImportCheck";
 import { ImportCheckPanel } from "../../_components/ImportCheckPanel";
 import { selectableYearMonths } from "../../_lib/yearMonth";
@@ -354,7 +354,7 @@ export function ImportForm({
       </section>
 
       {/* どの帳票まで進んだかを、手入力画面と同じステップ札で示す */}
-      <StepRail
+      <StickyStepHeader
         steps={IMPORT_SOURCES.map((s) => ({ label: s.label, badge: s.step }))}
         currentIndex={
           nextIncompleteSource

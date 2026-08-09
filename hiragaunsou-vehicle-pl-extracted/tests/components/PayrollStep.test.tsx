@@ -44,6 +44,23 @@ function okFetch(body: Record<string, unknown> = {}) {
   return vi.fn().mockResolvedValue({ ok: true, json: async () => body } as Response);
 }
 
+/** 取込値のまま(＝人がまだ触っていない)の欄。読み上げにも「取込値」と分かるようになっている。 */
+function importedField(label: string): HTMLInputElement {
+  return screen.getByLabelText(`${label}(取込値の値です)`) as HTMLInputElement;
+}
+
+/**
+ * 欄に入ると値は全選択されるので、そのまま打てば置き換わる。
+ * clear してから打つと「取込値に戻る → その後ろに打ち足す」になり、実際の操作と食い違う。
+ */
+async function retype(
+  user: ReturnType<typeof userEvent.setup>,
+  el: HTMLInputElement,
+  text: string,
+) {
+  await user.type(el, text, { initialSelectionStart: 0, initialSelectionEnd: el.value.length });
+}
+
 describe("parseYen", () => {
   it("カンマ・全角数字を金額として読み、数字以外は読まない", () => {
     expect(parseYen("663,820")).toBe(663820);
@@ -70,8 +87,10 @@ describe("PayrollStep", () => {
       />,
     );
 
-    expect(screen.getByLabelText("101番の総支給額(円)")).toHaveValue("300000");
-    expect(screen.getByLabelText("101番の社保合計(円)")).toHaveValue("40000");
+    // 他のタブと同じ作法: 既定値(取込値)は欄の中に薄く入り、印で「取込値のまま」と分かる
+    expect(importedField("101番の総支給額(円)")).toHaveValue("300000");
+    expect(importedField("101番の社保合計(円)")).toHaveValue("40000");
+    expect(importedField("101番の総支給額(円)").className).toContain("text-ink-muted");
   });
 
   describe("人件費の手修正", () => {
@@ -90,9 +109,7 @@ describe("PayrollStep", () => {
         />,
       );
 
-      const salary = screen.getByLabelText("101番の総支給額(円)");
-      await user.clear(salary);
-      await user.type(salary, "250000");
+      await retype(user, importedField("101番の総支給額(円)"), "250000");
       await user.type(screen.getByLabelText(/直した理由/), "月中に車両を乗り換えたため按分");
       await user.click(screen.getByRole("button", { name: "この車両を保存" }));
 
@@ -113,9 +130,11 @@ describe("PayrollStep", () => {
         deferRecalculation: true,
         expectedUpdatedAt: null,
       });
-      // 保存後は「手修正」と取込値が並び、どちらの数字を見ているか分かる
+      // 保存後は「手修正」の印が付き、直した値が濃い文字で欄に残る
       expect(await screen.findByText("手修正")).toBeInTheDocument();
-      expect(screen.getByText("取込 300,000")).toBeInTheDocument();
+      expect(screen.getByLabelText("101番の総支給額(円)")).toHaveValue("250000");
+      // 取込値へ戻す入口は行ごとに1つだけ (欄ごとに同じ文言を並べない)
+      expect(screen.getAllByRole("button", { name: "取込値に戻す" })).toHaveLength(1);
     });
 
     it("他の画面で入れた直し(走行距離など)を消さずに持ち回す", async () => {
@@ -129,9 +148,7 @@ describe("PayrollStep", () => {
         />,
       );
 
-      const welfare = screen.getByLabelText("101番の社保合計(円)");
-      await user.clear(welfare);
-      await user.type(welfare, "38000");
+      await retype(user, importedField("101番の社保合計(円)"), "38000");
       await user.type(screen.getByLabelText(/直した理由/), "社保の訂正通知があったため");
       await user.click(screen.getByRole("button", { name: "この車両を保存" }));
 
@@ -159,9 +176,7 @@ describe("PayrollStep", () => {
         />,
       );
 
-      const salary = screen.getByLabelText("101番の総支給額(円)");
-      await user.clear(salary);
-      await user.type(salary, "250000");
+      await retype(user, importedField("101番の総支給額(円)"), "250000");
       await user.click(screen.getByRole("button", { name: "この車両を保存" }));
 
       expect(global.fetch).not.toHaveBeenCalled();
@@ -197,7 +212,7 @@ describe("PayrollStep", () => {
       // 直しが1つも残らないので、上書きのレコードごと消す
       expect(url).toContain("/api/vehicle-pl/override?yearMonth=2026-05&vehicleNo=101");
       expect(init.method).toBe("DELETE");
-      expect(screen.getByLabelText("101番の総支給額(円)")).toHaveValue("300000");
+      expect(importedField("101番の総支給額(円)")).toHaveValue("300000");
     });
 
     it("先に別の人が直していたら、上書きせずに開き直すよう伝える", async () => {
@@ -215,9 +230,7 @@ describe("PayrollStep", () => {
         />,
       );
 
-      const salary = screen.getByLabelText("101番の総支給額(円)");
-      await user.clear(salary);
-      await user.type(salary, "250000");
+      await retype(user, importedField("101番の総支給額(円)"), "250000");
       await user.type(screen.getByLabelText(/直した理由/), "按分");
       await user.click(screen.getByRole("button", { name: "この車両を保存" }));
 

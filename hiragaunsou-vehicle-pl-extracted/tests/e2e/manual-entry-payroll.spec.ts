@@ -133,17 +133,21 @@ test.describe("手入力 STEP4: 人件費を確認して直す", () => {
     await page.getByRole("button", { name: "この車両を保存" }).click();
     await expect(page.getByText("保存しました")).toBeVisible();
 
-    // 開き直しても直した金額のまま。取込値も並べて残るので、どちらを見ているか分かる。
+    // 開き直しても直した金額のまま。他の欄と同じ作法で「取込値のまま」と見分けられる。
     await page.goto(`/manual-entry?ym=${YEAR_MONTH}&step=4`);
     await page.getByPlaceholder("車番・運転者で検索").fill(VEHICLE_NOS[0]);
-    await expect(page.getByLabel(`${VEHICLE_NOS[0]}番の総支給額(円)`)).toHaveValue("250000");
+    const edited = page.getByLabel(`${VEHICLE_NOS[0]}番の総支給額(円)`);
+    await expect(edited).toHaveValue("250000");
+    // 人が直した欄なので、取込値のままを表す印は付かない。
+    await expect(edited).not.toHaveAttribute("data-auto", "true");
     // 「手修正 1台」の件数表示ではなく、セルに添えた印であることまで確かめる。
     await expect(page.getByText("手修正", { exact: true })).toBeVisible();
-    await expect(page.getByText("取込 300,000")).toBeVisible();
 
     // 直していない車両は取込値のまま(1台直すと他が巻き込まれる、が起きない)。
     await page.getByPlaceholder("車番・運転者で検索").fill(VEHICLE_NOS[1]);
-    await expect(page.getByLabel(`${VEHICLE_NOS[1]}番の総支給額(円)`)).toHaveValue("310000");
+    const untouched = page.getByLabel(`${VEHICLE_NOS[1]}番の総支給額(円)`);
+    await expect(untouched).toHaveValue("310000");
+    await expect(untouched).toHaveAttribute("data-auto", "true");
   });
 
   test("取込値に戻すと元の金額に戻る", async ({ page }) => {

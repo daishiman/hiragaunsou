@@ -17,7 +17,8 @@ import { AlertPanel } from "../../../_components/AlertPanel";
 import { Disclosure } from "../../../_components/Disclosure";
 import { ImportCheckPanel } from "../../../_components/ImportCheckPanel";
 import { MasterFieldEditor } from "../../../_components/MasterFieldEditor";
-import { StepRail } from "../../../_components/StepRail";
+import { StickyActionBar } from "../../../_components/StickyActionBar";
+import { StickyStepHeader } from "../../../_components/StickyStepHeader";
 
 /**
  * 取込の3段階。手入力画面と同じ「札で現在地を出す」作りに揃える。
@@ -204,7 +205,7 @@ export function DriverMasterManager({
 
   return (
     <div className="space-y-6">
-      <StepRail steps={IMPORT_STEPS} currentIndex={done ? 2 : preview ? 1 : 0} />
+      <StickyStepHeader steps={IMPORT_STEPS} currentIndex={done ? 2 : preview ? 1 : 0} />
 
       <section className="rounded-xl border border-line bg-white p-5">
         <h2 className="text-sm font-bold text-ink">ファイルを取り込む</h2>
@@ -396,14 +397,17 @@ export function DriverMasterManager({
             </table>
           </div>
 
-          <button
-            type="button"
-            disabled={busy || preview.valid.length === 0}
-            onClick={() => void confirm()}
-            className="pressable mt-4 rounded-md bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
-          >
-            {busy ? "取り込んでいます…" : `${preview.valid.length}名を取り込む`}
-          </button>
+          {/* 一覧が長くても取り込みの入口が画面外に出ないよう、カードの下端に貼り付ける */}
+          <StickyActionBar variant="card">
+            <button
+              type="button"
+              disabled={busy || preview.valid.length === 0}
+              onClick={() => void confirm()}
+              className="pressable rounded-md bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+            >
+              {busy ? "取り込んでいます…" : `${preview.valid.length}名を取り込む`}
+            </button>
+          </StickyActionBar>
         </section>
       ) : null}
 

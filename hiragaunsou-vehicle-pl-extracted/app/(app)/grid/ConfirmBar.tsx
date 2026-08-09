@@ -49,7 +49,8 @@ export function ConfirmBar({
 
   return (
     <div
-      className={`mb-4 rounded-lg border px-4 py-3 ${
+      /* 画面下端の操作帯の中に置くので、外側の余白は帯側が持つ。横は余った幅いっぱいに広げる。 */
+      className={`min-w-[18rem] flex-1 rounded-lg border px-4 py-2 ${
         state.isConfirmed ? "border-brand bg-brand-soft" : "border-line bg-white"
       }`}
     >
