@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { IMPORT_SOURCES, type ImportSourceType } from "../../../src/domain/rules/importSources";
+import { MONTHLY_PL_WORKBOOK_SOURCE_TYPE } from "../../../src/usecase/steps/importMonthlyPlWorkbook";
 import { Disclosure } from "../../_components/Disclosure";
 import { StickyStepHeader } from "../../_components/StickyStepHeader";
 import type { FileImportVerdict } from "../../../src/domain/rules/fileImportCheck";
@@ -132,9 +133,16 @@ export function ImportForm({
   const nextIncompleteSource = IMPORT_SOURCES.find(
     (source) => (imported[source.sourceType] ?? []).length === 0,
   );
-  const lastSource = IMPORT_SOURCES[IMPORT_SOURCES.length - 1]!;
+  /*
+    全部取り込み終えたときの主役。一覧の最後は「答え合わせ用Excel」で、これは業務ステップでは
+    無い(取り込んでも収支表の数値は1つも変わらない)。そこへ主役が落ちると、締め作業が
+    終わっていないのに「次は答え合わせ」に見えてしまうので、最後の業務帳票(給与集計表)に留める。
+  */
+  const lastWorkflowSource =
+    [...IMPORT_SOURCES].reverse().find((s) => s.sourceType !== MONTHLY_PL_WORKBOOK_SOURCE_TYPE) ??
+    IMPORT_SOURCES[0]!;
   const focusSourceType =
-    explicitFocusSourceType ?? nextIncompleteSource?.sourceType ?? lastSource.sourceType;
+    explicitFocusSourceType ?? nextIncompleteSource?.sourceType ?? lastWorkflowSource.sourceType;
 
   /**
    * ファイルを選んだ直後の下読み。ファイル名ではなく中身から
@@ -360,8 +368,12 @@ export function ImportForm({
             ))}
           </select>
         </label>
+        {/*
+          「4 / 4 完了」とだけ出すと、締め作業そのものが終わったように読める。
+          ここで数えているのは取り込むファイルの数だけなので、そう書く。
+        */}
         <p className="text-sm font-semibold text-brand-deep">
-          {doneCount} / {IMPORT_SOURCES.length} 完了
+          取り込むファイル {doneCount} / {IMPORT_SOURCES.length} 件
         </p>
         {/*
           取込のときに何が起きるかの説明。毎月同じ文章を読む必要は無いので、

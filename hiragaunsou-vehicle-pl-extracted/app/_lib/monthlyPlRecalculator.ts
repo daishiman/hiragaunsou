@@ -91,3 +91,32 @@ export async function rebuildMonthlyPlAfterImport(
     return { status: "skipped", reason: "failed" };
   }
 }
+
+/**
+ * 取込はあるのに収支表が1行も無い月を、まとめて作り直す。
+ *
+ * 収支表の行は車両マスタの車両から作られる。そのため車両マスタが空のまま取り込むと
+ * 0台で「成功」し、あとから車両マスタを登録しても作り直しの対象にならなかった
+ * (作り直す月の一覧を vehicle_pl から作っていたため、0行の月は「存在しない月」だった)。
+ * 「収支表が無いから作れない、作らないから収支表が無い」の行き止まりを、ここで開ける。
+ *
+ * 既に1行でもある月には触らない。確定済み・入力途中の月を、マスタを直したついでに
+ * 黙って作り直すのは別の話(ApplyMasterChangeUseCase の担当)なので混ぜない。
+ */
+export async function rebuildMonthsWithoutPl(db: Db): Promise<string[]> {
+  try {
+    const months = await new D1ImportBatchRepository(db).listYearMonths(24);
+    const vehiclePlRepo = new D1VehiclePlRepository(db);
+    const built: string[] = [];
+    for (const yearMonth of months) {
+      const confirmation = await vehiclePlRepo.getConfirmation(yearMonth);
+      if (confirmation.total > 0) continue;
+      const result = await rebuildMonthlyPlAfterImport(db, yearMonth);
+      if (result.status === "built" && result.vehicleCount > 0) built.push(yearMonth);
+    }
+    return built;
+  } catch (e) {
+    console.error("rebuild months without PL failed", { error: e });
+    return [];
+  }
+}

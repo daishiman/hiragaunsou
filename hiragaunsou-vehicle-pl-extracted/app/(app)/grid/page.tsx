@@ -11,7 +11,8 @@ import { D1ReviewFlagRepository } from "../../../src/infrastructure/db/D1ReviewF
 import { D1ImportBatchRepository } from "../../../src/infrastructure/db/D1ImportBatchRepository";
 import { GetMonthlyGridUseCase } from "../../../src/usecase/steps/getMonthlyGrid";
 import { GetExcelReconciliationUseCase } from "../../../src/usecase/steps/getExcelReconciliation";
-import { currentYearMonth, selectableYearMonths } from "../../_lib/yearMonth";
+import { selectableYearMonths } from "../../_lib/yearMonth";
+import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { yearMonthLabel } from "../../_lib/format";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
 import { PageHead } from "../../_components/PageHead";
@@ -37,10 +38,16 @@ export default async function GridPage({
   }
 
   const { ym } = await searchParams;
-  const yearMonth = ym || currentYearMonth();
 
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);
+
+  /*
+    対象月の既定は「まだ締めていない、取込のある最も新しい月」に揃える(app/_lib/workingYearMonth.ts)。
+    以前は画面ごとに当月・前月とバラバラで、取込画面で5月分を取り込んでから移ると
+    別の月の空っぽの画面が出て「取り込んだのに反映されていない」ように見えていた。
+  */
+  const yearMonth = ym || (await resolveWorkingYearMonth(db));
   const plRepo = new D1VehiclePlRepository(db);
   const flagRepo = new D1ReviewFlagRepository(db);
   // Excelとの差もセルの所見として表に出すため、突合を先に済ませてからグリッドを組む。
