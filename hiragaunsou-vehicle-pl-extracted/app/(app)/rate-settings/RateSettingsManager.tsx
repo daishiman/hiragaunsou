@@ -142,7 +142,7 @@ export function RateSettingsManager({
 
   function renderTable(definitions: readonly RateMasterKeyDef[], ariaLabel: string) {
     return (
-      <div className="overflow-x-auto rounded-xl border border-line bg-white">
+      <div className="overflow-x-auto card">
         <table
           aria-label={ariaLabel}
           className="data-table w-full min-w-max border-collapse text-xs"

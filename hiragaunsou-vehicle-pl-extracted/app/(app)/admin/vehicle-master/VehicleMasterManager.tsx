@@ -332,7 +332,7 @@ export function VehicleMasterManager({
     <div className="space-y-6">
       <StickyStepHeader steps={IMPORT_STEPS} currentIndex={done ? 2 : check || preview ? 1 : 0} />
 
-      <section className="rounded-xl border border-line bg-white p-5">
+      <section className="card p-5">
         <h2 className="text-sm font-bold text-ink">ファイルを取り込む</h2>
         <input
           ref={fileInputRef}
@@ -403,7 +403,7 @@ export function VehicleMasterManager({
       </section>
 
       {preview ? (
-        <section className="rounded-xl border border-line bg-white p-5">
+        <section className="card p-5">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-sm font-bold text-ink">取込内容の確認({preview.fileName})</h2>
             <p className="num text-xs text-ink-muted">
@@ -507,7 +507,7 @@ export function VehicleMasterManager({
         </section>
       ) : null}
 
-      <section className="rounded-xl border border-line bg-white p-5">
+      <section className="card p-5">
         <h2 className="text-sm font-bold text-ink">現在の車両マスタ({vehicles.length}台)</h2>
         {/*
           けん引先の仕組みの説明は、一覧を見るたびに読むものではない。常時出すと一覧より先に

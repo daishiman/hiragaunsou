@@ -273,7 +273,7 @@ export function DriverMasterManager({
     <div className="space-y-6">
       <StickyStepHeader steps={IMPORT_STEPS} currentIndex={done ? 2 : preview ? 1 : 0} />
 
-      <section className="rounded-xl border border-line bg-white p-5">
+      <section className="card p-5">
         <h2 className="text-sm font-bold text-ink">ファイルを取り込む</h2>
         <input
           ref={fileInputRef}
@@ -368,7 +368,7 @@ export function DriverMasterManager({
       </section>
 
       {preview ? (
-        <section className="rounded-xl border border-line bg-white p-5">
+        <section className="card p-5">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-sm font-bold text-ink">取込内容の確認({preview.fileName})</h2>
             <p className="num text-xs text-ink-muted">
@@ -477,7 +477,7 @@ export function DriverMasterManager({
         </section>
       ) : null}
 
-      <section className="rounded-xl border border-line bg-white p-5">
+      <section className="card p-5">
         <h2 className="text-sm font-bold text-ink">
           現在の運転者マスタ({drivers.length}名
           {unassigned > 0 ? ` / うち車番未割当${unassigned}名` : ""})

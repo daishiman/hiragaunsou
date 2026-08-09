@@ -1136,7 +1136,7 @@ export function ManualEntryStepper({
         </div>
       ) : null}
 
-      <section className="rise-in rounded-xl border border-line bg-white p-5">
+      <section className="rise-in card p-5">
         {step === 0 ? (
           <div>
             <h2 className="text-sm font-bold text-ink">キリンの輸送協力金・経営支援金</h2>
