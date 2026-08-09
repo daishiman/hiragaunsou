@@ -133,4 +133,78 @@ describe("editDistanceWithin", () => {
     expect(editDistanceWithin("abcdef", "abcdeX", 1)).toBe(true);
     expect(editDistanceWithin("abcdef", "abXdeY", 1)).toBe(false);
   });
+
+  it("長さが違いすぎるものは、中身を見るまでもなく false", () => {
+    expect(editDistanceWithin("田中", "田中一郎太郎", 2)).toBe(false);
+  });
+});
+
+/*
+  以下は「読めなかった」「値が無い」といった端のケース。
+  ここを取りこぼすと、読めなかったものが 0 や空文字として静かに通り、
+  取込の差分が嘘になる。
+*/
+describe("値が無い・読めないときの扱い", () => {
+  it("null や undefined は空のキーになる (別物として扱わない)", () => {
+    expect(normalizeIdKey(null)).toBe("");
+    expect(normalizeIdKey(undefined)).toBe("");
+    expect(normalizeCompareKey(null)).toBe("");
+    expect(normalizeCompareKey(undefined)).toBe("");
+  });
+
+  it("年月が無い・空・読めない形は null", () => {
+    expect(normalizeYearMonth(null)).toBeNull();
+    expect(normalizeYearMonth(undefined)).toBeNull();
+    expect(normalizeYearMonth("   ")).toBeNull();
+    expect(normalizeYearMonth("来月")).toBeNull();
+    expect(normalizeYearMonth("2026-00")).toBeNull();
+  });
+
+  it("西暦としてあり得ない年は読めなかったことにする", () => {
+    expect(normalizeYearMonth("1800年5月")).toBeNull();
+    expect(normalizeYearMonth("3100/5")).toBeNull();
+  });
+
+  it("数値がそのまま来たときはそのまま金額として読む", () => {
+    expect(parseAmountLoose(1234)).toEqual({ value: 1234, blank: false });
+    expect(parseAmountLoose(Number.NaN)).toEqual({ value: null, blank: false });
+  });
+
+  it("金額が無い・記号だけのときは空欄として返す", () => {
+    expect(parseAmountLoose(null)).toEqual({ value: null, blank: true });
+    expect(parseAmountLoose(undefined)).toEqual({ value: null, blank: true });
+    expect(parseAmountLoose("   ")).toEqual({ value: null, blank: true });
+    // 記号を外すと何も残らないものは「入っていない」扱い
+    expect(parseAmountLoose("¥")).toEqual({ value: null, blank: true });
+    expect(parseAmountLoose("()")).toEqual({ value: null, blank: true });
+  });
+
+  it("金額として読めない文字は、空欄ではなく読めなかったこととして返す", () => {
+    expect(parseAmountLoose("約10万")).toEqual({ value: null, blank: false });
+  });
+
+  it("小数の金額も読む(単価は小数で来ることがある)", () => {
+    expect(parseAmountLoose("120.5").value).toBe(120.5);
+    expect(parseAmountLoose("(120.5)").value).toBe(-120.5);
+  });
+
+  it("文字化けの判定は、値が無ければ false", () => {
+    expect(looksLikeMojibake(null)).toBe(false);
+    expect(looksLikeMojibake(undefined)).toBe(false);
+    expect(looksLikeMojibake("")).toBe(false);
+    // 記号が1つ混ざるだけの外国語表記は化けているとみなさない
+    expect(looksLikeMojibake("Café 田中運送")).toBe(false);
+  });
+
+  it("どちらも空なら same (どちらも未入力を差分にしない)", () => {
+    expect(compareValues(null, undefined)).toBe("same");
+    expect(compareValues("", null, { kind: "id" })).toBe("same");
+  });
+
+  it("種類を指定しなければ、ふつうの文字列として突き合わせる", () => {
+    expect(compareValues("大型 トラクタ", "大型トラクタ")).toBe("same_after_normalize");
+    expect(compareValues("大型トラクタ", "セミトレーラ")).toBe("different");
+    // 1文字違いは自動で同じにせず、人に見せる側に倒す
+    expect(compareValues("大型", "小型")).toBe("near");
+  });
 });
