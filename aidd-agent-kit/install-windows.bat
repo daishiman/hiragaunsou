@@ -4,7 +4,7 @@ setlocal enabledelayedexpansion
 title AI開発エージェントキット インストーラー (Windows)
 cd /d "%~dp0"
 
-set "KIT_VERSION=1.4.0"
+set "KIT_VERSION=1.5.0"
 set "CLAUDE_DIR=%USERPROFILE%\.claude"
 rem このキットが「自分で入れたもの」を記録するファイル。
 rem 次回の更新時に、新しいキットに含まれなくなったものだけを安全に整理するために使う。
