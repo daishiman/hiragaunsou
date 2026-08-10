@@ -11,7 +11,7 @@ $ARGUMENTS
 
 ## 実行ルール
 
-- 取り消しは必ず `git revert` で行う。**`git reset --hard` と `push --force` は使用禁止**(履歴を消すと二度と戻せなくなるため)。
+- 取り消しは必ず `git revert` で行う。**`git reset --hard` と `push --force` は使用禁止**(履歴を消すと二度と戻せなくなるため)。詳細は Skill `solo-git-flow` §7。
 - 手順: (1) `git log --oneline` とタグで「どこまで戻すか」を特定 → (2) 対象コミットを revert → (3) `pnpm run preview` で戻った状態を確認 → (4) main に反映して `wrangler deploy` → (5) 本番URLで確認。
 - DBのスキーマを変えた変更を戻す場合: コードの revert だけでは戻らない。直前の `wrangler d1 export` バックアップの有無を確認し、データ復旧が必要ならユーザーに「データも戻すか、画面だけ戻すか」を選択式で確認する。
 - どこまで戻すか曖昧な場合は、直近のコミットを日本語1行(「〜を追加」等)で3件以内の選択式にしてユーザーに確認する。
