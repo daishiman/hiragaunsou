@@ -45,4 +45,22 @@ describe("RateSettingsManager の更新頻度別表示", () => {
     expect(within(rareTable).getByText("高速組合割引率")).toBeInTheDocument();
     expect(within(rareTable).getByText("賞与 年額")).toBeInTheDocument();
   });
+
+  /**
+   * 下に貼り付く保存の帯は「画面の最後の要素」である前提で下余白を打ち消している。
+   * 後ろに要素が続くと、その要素が帯の下へ食い込んで読めなくなる
+   * (「率を保存して収支表を作り直す」と「各項目の意味と…」の折りたたみが重なった)。
+   */
+  it("保存の帯を画面の最後に置き、説明の折りたたみを帯の後ろに残さない", () => {
+    const { container } = render(
+      <RateSettingsManager yearMonth="2026-08" initialEntries={[]} resolved={RESOLVED} />,
+    );
+
+    const bar = container.querySelector(".screen-action-bar")!;
+    expect(bar).toBeInTheDocument();
+    expect(bar.parentElement!.lastElementChild).toBe(bar);
+    // 説明の折りたたみは帯より前にあること
+    const disclosure = screen.getByText("各項目の意味と、月別値・共通値の使い分けを見る");
+    expect(bar.compareDocumentPosition(disclosure) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+  });
 });
