@@ -13,11 +13,16 @@ import { yen } from "../../_lib/format";
 import { withYm } from "../../_lib/withYm";
 import { ListToolbar, type SortOption } from "../../_components/ListToolbar";
 import { EmptyState } from "../../_components/EmptyState";
+import { AlertPanel } from "../../_components/AlertPanel";
+import { Badge } from "../../_components/Badge";
+import { StickyFilterBar } from "../../_components/StickyFilterBar";
+import { Disclosure } from "../../_components/Disclosure";
+import { FIELD_CLASS } from "../../_components/formStyles";
 
 type SortKey = "default" | "loadDateDesc" | "vehicleNoAsc";
 
 const SORT_OPTIONS: SortOption[] = [
-  { value: "default", label: "未判断・金額が大きい順(既定)" },
+  { value: "default", label: "未判断・金額が大きい順（既定）" },
   { value: "loadDateDesc", label: "積荷日が新しい順" },
   { value: "vehicleNoAsc", label: "車番順" },
 ];
@@ -33,11 +38,14 @@ const DECISION_HINT: Record<CleansingDecisionType, string> = {
   keep: "問題なしとしてこのまま残します",
 };
 
-const DECISION_STYLE: Record<CleansingDecisionType, string> = {
-  delete: "border-danger text-danger",
-  correct: "border-accent text-accent-deep",
-  keep: "border-brand text-brand-deep",
-};
+/*
+  選んだ判定は「選ばれているもの」なので brand の面 (btn-primary) で示し、
+  選んでいないものは静かな枠 (btn-quiet) にする。判定ごとに色を変えると、
+  1画面の色相が増えるうえ「赤いから危ない」と読めてしまう (design-system §2)。
+*/
+function decisionButtonClass(selected: boolean): string {
+  return `btn btn-sm pressable ${selected ? "btn-primary" : "btn-quiet"}`;
+}
 
 interface LocalState {
   decision: CleansingDecisionType | null;
@@ -53,6 +61,10 @@ interface LocalState {
  *   - なぜフラグが立ったかを文章でその場に出す(別画面を見に行かせない)
  *   - 前月に同じ伝票へ下した判断を提案として出し、同意なら1クリックで済ませる
  *   - 判断はすぐ保存し、押し間違えたら別の判断を押すだけで上書きできる(確認ダイアログを出さない)
+ *
+ * 表かカードか (T7 §4-1)。ここで利用者がするのは「伝票どうしの値を列で見比べる」ことではなく、
+ * 1件の中身(なぜフラグが立ったか・前月はどう判断したか)を読んで扱いを決めること。
+ * よってカードで出す (T7 §4-3 で「データ整形」はカードと決まっている)。
  */
 export function CleansingQueue({
   yearMonth,
@@ -296,7 +308,7 @@ export function CleansingQueue({
     return (
       <div
         key={item.rowKey}
-        className={`rounded-lg border bg-white p-4 ${compact ? "" : local.decision ? "border-line opacity-80" : "border-accent/40"}`}
+        className={`card p-4 ${compact ? "" : local.decision ? "opacity-80" : "border-accent/40"}`}
       >
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <span className="text-base font-bold text-ink">車番 {item.vehicleNo || "—"}</span>
@@ -309,9 +321,7 @@ export function CleansingQueue({
         <ul className="mt-3 flex flex-col gap-1">
           {item.flags.map((flag) => (
             <li key={flag.type} className="text-sm text-ink">
-              <span className="mr-2 inline-block rounded bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent-deep">
-                {FLAG_LABELS[flag.type]}
-              </span>
+              <Badge tone="caution" className="mr-2">{FLAG_LABELS[flag.type]}</Badge>
               {flag.reason}
             </li>
           ))}
@@ -332,9 +342,7 @@ export function CleansingQueue({
                   disabled={pending !== null}
                   aria-pressed={local.decision === d}
                   title={DECISION_HINT[d]}
-                  className={`pressable rounded border px-3 py-1.5 text-sm font-semibold disabled:opacity-50 ${
-                    local.decision === d ? `${DECISION_STYLE[d]} bg-subtle` : "border-line text-ink-muted"
-                  }`}
+                  className={decisionButtonClass(local.decision === d)}
                 >
                   {DECISION_LABELS[d]}
                 </button>
@@ -360,11 +368,11 @@ export function CleansingQueue({
                     }
                     onBlur={() => saveDetail(item)}
                     placeholder="例: 24"
-                    className="num mt-1 w-32 rounded border border-line px-2 py-1 text-right text-ink"
+                    className={`${FIELD_CLASS} num mt-1 w-32 text-right`}
                   />
                 </label>
                 <label className="flex min-w-60 flex-1 flex-col text-sm text-ink-muted">
-                  メモ(任意)
+                  メモ（任意）
                   <input
                     type="text"
                     value={local.note}
@@ -373,7 +381,7 @@ export function CleansingQueue({
                     }
                     onBlur={() => saveDetail(item)}
                     placeholder="請求書発行担当に確認済み など"
-                    className="mt-1 rounded border border-line px-2 py-1 text-ink"
+                    className={`${FIELD_CLASS} mt-1`}
                   />
                 </label>
               </div>
@@ -400,26 +408,22 @@ export function CleansingQueue({
     return (
       <div
         key={groupKey}
-        className={`rounded-lg border bg-white p-4 ${groupDecision ? "border-line opacity-80" : "border-accent/40"}`}
+        className={`card p-4 ${groupDecision ? "opacity-80" : "border-accent/40"}`}
       >
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <span className="text-base font-bold text-ink">車番 {first.vehicleNo || "—"}</span>
           <span className="text-sm text-ink-muted">運転者 {first.driverName || "—"}</span>
           <span className="text-sm text-ink-muted">荷主 {first.customerName || "—"}</span>
-          <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent-deep">
-            同じ内容の伝票が{items.length}件
-          </span>
+          <Badge tone="caution">同じ内容の伝票が{items.length}件</Badge>
           <span className="num ml-auto text-sm font-semibold text-ink">
-            {yen(items.reduce((sum, i) => sum + i.amount, 0))} 円(合計)
+            {yen(items.reduce((sum, i) => sum + i.amount, 0))} 円（合計）
           </span>
         </div>
 
         <ul className="mt-3 flex flex-col gap-1">
           {first.flags.map((flag) => (
             <li key={flag.type} className="text-sm text-ink">
-              <span className="mr-2 inline-block rounded bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent-deep">
-                {FLAG_LABELS[flag.type]}
-              </span>
+              <Badge tone="caution" className="mr-2">{FLAG_LABELS[flag.type]}</Badge>
               {flag.reason}
             </li>
           ))}
@@ -436,11 +440,9 @@ export function CleansingQueue({
                   disabled={pending !== null}
                   aria-pressed={groupDecision === d}
                   title={`${items.length}件すべてに適用: ${DECISION_HINT[d]}`}
-                  className={`pressable rounded border px-3 py-1.5 text-sm font-semibold disabled:opacity-50 ${
-                    groupDecision === d ? `${DECISION_STYLE[d]} bg-subtle` : "border-line text-ink-muted"
-                  }`}
+                  className={decisionButtonClass(groupDecision === d)}
                 >
-                  {DECISION_LABELS[d]}({items.length}件)
+                  {DECISION_LABELS[d]}（{items.length}件）
                 </button>
               ))}
               {isGroupPending && <span className="self-center text-sm text-ink-muted">保存しています…</span>}
@@ -449,7 +451,7 @@ export function CleansingQueue({
             {groupDecision === "correct" && (
               <div className="mt-3 flex flex-wrap items-end gap-3">
                 <label className="flex flex-col text-sm text-ink-muted">
-                  正しい車番(全{items.length}件に反映)
+                  正しい車番（全{items.length}件に反映）
                   <input
                     type="text"
                     inputMode="numeric"
@@ -457,18 +459,18 @@ export function CleansingQueue({
                     onChange={(e) => updateGroupField(items, "correctedVehicleNo", e.target.value)}
                     onBlur={() => saveGroupDetail(items)}
                     placeholder="例: 24"
-                    className="num mt-1 w-32 rounded border border-line px-2 py-1 text-right text-ink"
+                    className={`${FIELD_CLASS} num mt-1 w-32 text-right`}
                   />
                 </label>
                 <label className="flex min-w-60 flex-1 flex-col text-sm text-ink-muted">
-                  メモ(任意)
+                  メモ（任意）
                   <input
                     type="text"
                     value={groupLocal.note}
                     onChange={(e) => updateGroupField(items, "note", e.target.value)}
                     onBlur={() => saveGroupDetail(items)}
                     placeholder="請求書発行担当に確認済み など"
-                    className="mt-1 rounded border border-line px-2 py-1 text-ink"
+                    className={`${FIELD_CLASS} mt-1`}
                   />
                 </label>
               </div>
@@ -478,14 +480,13 @@ export function CleansingQueue({
           <p className="mt-3 text-sm text-ink-muted">判断の権限がありません。</p>
         )}
 
-        <details className="mt-3">
-          <summary className="cursor-pointer text-xs font-semibold text-ink-muted">
-            1件ずつ確認する(まとめた判断と違う対応が必要な伝票があれば、ここで個別に変更できます)
-          </summary>
-          <div className="mt-3 flex flex-col gap-3 border-t border-line pt-3">
-            {items.map((item) => renderItemCard(item, true))}
-          </div>
-        </details>
+        <div className="mt-3">
+          <Disclosure summary="1件ずつ確認する（まとめた判断と違う対応が必要な伝票があれば、ここで個別に変更できます）">
+            <div className="flex flex-col gap-3">
+              {items.map((item) => renderItemCard(item, true))}
+            </div>
+          </Disclosure>
+        </div>
       </div>
     );
   }
@@ -493,60 +494,52 @@ export function CleansingQueue({
   return (
     <div className="flex flex-col gap-4">
       {/*
-        この画面の主役は「あと何件判断すればいいか」の1数字。
-        取込件数・傭車除外件数は判断に使わない背景情報なので、小さく脇に置く。
+        この画面の主役は「あと何件判定すればいいか」の1数字。
+        取込件数・傭車除外件数は判定に使わない背景情報なので、小さく脇に置く。
+        下までスクロールしても残り件数と絞り込みの条件が消えないように、帯として貼り付ける
+        (T7 §2-2)。この画面には工程の帯が無いので below は既定の header のまま。
       */}
-      <div className="rounded-lg border border-line bg-white p-4">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-xs text-ink-muted">未判断</p>
-            <p
-              className={`num text-4xl font-bold ${pendingCount > 0 ? "text-ink" : "text-ink-muted"}`}
-            >
-              {pendingCount}
-              <span className="ml-0.5 text-base font-semibold text-ink-muted">
-                / {initialItems.length}件
-              </span>
-            </p>
-          </div>
-          <p className="num text-xs text-ink-muted">
-            取込 {totalRows}件 ・ 傭車除外 {charteredExcluded}件
-          </p>
-        </div>
+      <StickyFilterBar
+        summary={
+          <span className="num">
+            未判断 {pendingCount} / {initialItems.length}件 ・ 取込 {totalRows}件 ・ 傭車除外{" "}
+            {charteredExcluded}件
+          </span>
+        }
+      >
+        <label className="flex items-center gap-2 text-xs text-ink-muted">
+          <input
+            type="checkbox"
+            checked={showDecided}
+            onChange={(e) => setShowDecided(e.target.checked)}
+          />
+          判断済みも表示する
+        </label>
+      </StickyFilterBar>
 
-        {pendingCount === 0 && (
-          <p className="mt-3 flex flex-wrap items-center gap-3 rounded bg-brand-soft px-3 py-2 text-sm font-semibold text-brand-deep">
-            <span>✓ すべて判断済み</span>
-            <Link
-              href={withYm("/manual-entry?step=2", yearMonth)}
-              className="underline underline-offset-2"
-            >
-              次のステップへ進む
-            </Link>
-          </p>
-        )}
+      {pendingCount === 0 && (
+        <AlertPanel tone="success" title="✓ すべて判断済み">
+          <Link
+            href={withYm("/manual-entry?step=2", yearMonth)}
+            className="underline underline-offset-2"
+          >
+            次のステップへ進む
+          </Link>
+        </AlertPanel>
+      )}
 
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          {canDecide && suggestable.length > 0 && (
-            <button
-              type="button"
-              onClick={applyAllSuggestions}
-              disabled={pending !== null}
-              className="btn btn-secondary pressable"
-            >
-              前月と同じ判断をまとめて適用({suggestable.length}件)
-            </button>
-          )}
-          <label className="flex items-center gap-2 text-sm text-ink-muted">
-            <input
-              type="checkbox"
-              checked={showDecided}
-              onChange={(e) => setShowDecided(e.target.checked)}
-            />
-            判断済みも表示する
-          </label>
+      {canDecide && suggestable.length > 0 && (
+        <div>
+          <button
+            type="button"
+            onClick={applyAllSuggestions}
+            disabled={pending !== null}
+            className="btn btn-secondary pressable"
+          >
+            前月と同じ判断をまとめて適用（{suggestable.length}件）
+          </button>
         </div>
-      </div>
+      )}
 
       <ListToolbar
         searchValue={search}
@@ -564,15 +557,23 @@ export function CleansingQueue({
       />
 
       {error && (
-        <p role="alert" className="rounded border border-danger bg-danger/5 px-3 py-2 text-sm text-danger">
-          {error}
-        </p>
+        // 失敗はその場で気づける必要があるので、読み上げの割り込み (role="alert") は残す
+        <div role="alert">
+          <AlertPanel tone="danger" title={error}>
+            もう一度押すとやり直せます。何度も失敗するときは、時間をおいてから開き直してください。
+          </AlertPanel>
+        </div>
       )}
 
       {visible.length === 0 && (
-        <p className="rounded-lg border border-line bg-white p-6 text-sm text-ink-muted">
-          表示する伝票はありません。
-        </p>
+        <div className="card p-6 text-sm text-ink-muted">
+          <p className="font-semibold text-ink">表示する伝票はありません</p>
+          <p className="mt-1">
+            {initialItems.length === 0
+              ? "この月は、確認が要る伝票が1件もありませんでした。次は手入力へ進んでください。"
+              : "いまの絞り込みに合う伝票がありません。検索の言葉を消すか、上の「判断済みも表示する」を入れると出ます。"}
+          </p>
+        </div>
       )}
 
       {groups.map((g) => (g.kind === "cluster" ? renderClusterCard(g.items) : renderItemCard(g.item, false)))}

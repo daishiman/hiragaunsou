@@ -48,6 +48,22 @@ export function yearMonthLabel(yearMonth: string): string {
 }
 
 /**
+ * 記録の日時 (2026/08/11 09:30)。
+ *
+ * 同じ画面の中で formatDateTime() と toLocaleString("ja-JP") が混ざり、
+ * 秒のある表記と無い表記が並んでいた。日時の書き方はここ1箇所だけが持つ。
+ */
+export function dateTimeLabel(ms: number): string {
+  return new Date(ms).toLocaleString("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/**
  * 推移グラフの目盛りラベル。「8月」だけだと複数年にまたがる期間で年が分からなくなるため、
  * 先頭の点と年が変わる1月だけ年を添える (毎回付けると目盛りが読みにくくなる)。
  */

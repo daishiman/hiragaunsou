@@ -21,6 +21,9 @@ import { OVERRIDABLE_FIELD_META } from "../../../../src/domain/rules/vehiclePlOv
 import { resolveWorkingYearMonth } from "../../../_lib/workingYearMonth";
 import { num, yearMonthLabel } from "../../../_lib/format";
 import { FIELD_LABELS } from "../../../_lib/fieldLabels";
+import { severityLabel } from "../../../_lib/severity";
+import { DataTable, type DataTableColumn } from "../../../_components/DataTable";
+import { StatTile } from "../../../_components/StatTile";
 import { PrintActions } from "./PrintActions";
 
 /**
@@ -29,6 +32,15 @@ import { PrintActions } from "./PrintActions";
  * 確認画面は「いま何を判断するか」の画面なので、終わった後の記録は残らない。
  * 月次の締めでは「何を直して、何をこのままでよいと決めたか」を上長・経理に渡す必要があるため、
  * 判断の結果だけを時系列でも表でもなく「種類ごと」に並べた紙をここで作る。
+ *
+ * ■ 表か、カードか (T7 §4-1 の質問への回答)
+ * ここで人がやりたいのは「何台ぶん・何件ぶんの判断があったかを行をまたいで見比べ、
+ * 紙に残すこと」なので表にする。ただし紙で読むため高さの上限 (maxHeight) は付けない。
+ * 上限を付けると印刷時に見えている分しか出ず、記録として欠ける。
+ * 先頭の5つの数字は「見比べる」ではなく「1つの数字を読む」ものなので StatTile を使う。
+ *
+ * この画面だけ ScreenHeader を使わないのは意図的 (design-system §11-2 の例外)。
+ * 印刷レイアウトなので、画面の役割ノートや業務フローの帯は紙に不要。
  */
 
 function fieldLabel(field: string): string {
@@ -46,44 +58,60 @@ function stamp(ms: number | null): string {
   });
 }
 
-const SEVERITY_LABEL = { blocking: "要修正", warning: "要確認", info: "参考" } as const;
-
-/** 判断の一覧。紙で読むので、色ではなく文字で種類が分かるようにする。 */
+/**
+ * 判断の一覧。紙で読むので、色ではなく文字で種類が分かるようにする。
+ * 種類の日本語は app/_lib/severity.ts の1か所だけで決める (T7 §1-3)。
+ */
 function JudgementTable({
   items,
   showJudge,
+  caption,
+  empty,
 }: {
   items: ReviewReportJudgement[];
   showJudge: boolean;
+  caption: string;
+  empty: React.ReactNode;
 }) {
+  const columns: DataTableColumn<ReviewReportJudgement>[] = [
+    {
+      key: "vehicle",
+      header: "車番",
+      cell: (item) => <span className="num">{item.vehicleNoLabel}</span>,
+    },
+    { key: "field", header: "項目", cell: (item) => fieldLabel(item.field) },
+    { key: "severity", header: "種類", cell: (item) => severityLabel(item.severity) },
+    {
+      key: "title",
+      header: "内容",
+      cellClassName: "wrap",
+      cell: (item) => (
+        <>
+          {item.title}
+          {item.note && <span className="block text-ink-muted">メモ: {item.note}</span>}
+        </>
+      ),
+    },
+  ];
+  if (showJudge) {
+    columns.push(
+      { key: "judgedBy", header: "判断した人", cell: (item) => item.judgedByName ?? "—" },
+      {
+        key: "judgedAt",
+        header: "判断した日時",
+        cell: (item) => <span className="num">{stamp(item.judgedAt)}</span>,
+      },
+    );
+  }
+
   return (
-    <table className="w-full border-collapse text-xs">
-      <thead>
-        <tr className="border-b border-line text-left text-ink-muted">
-          <th className="py-1.5 pr-3 font-medium">車番</th>
-          <th className="py-1.5 pr-3 font-medium">項目</th>
-          <th className="py-1.5 pr-3 font-medium">種類</th>
-          <th className="py-1.5 pr-3 font-medium">内容</th>
-          {showJudge && <th className="py-1.5 pr-3 font-medium">判断した人</th>}
-          {showJudge && <th className="py-1.5 font-medium">判断した日時</th>}
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((item) => (
-          <tr key={`${item.vehicleNo}::${item.field}::${item.code}`} className="border-b border-line align-top">
-            <td className="num py-1.5 pr-3">{item.vehicleNoLabel}</td>
-            <td className="py-1.5 pr-3">{fieldLabel(item.field)}</td>
-            <td className="py-1.5 pr-3">{SEVERITY_LABEL[item.severity]}</td>
-            <td className="py-1.5 pr-3">
-              {item.title}
-              {item.note && <span className="block text-ink-muted">メモ: {item.note}</span>}
-            </td>
-            {showJudge && <td className="py-1.5 pr-3">{item.judgedByName ?? "—"}</td>}
-            {showJudge && <td className="num py-1.5">{stamp(item.judgedAt)}</td>}
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <DataTable
+      columns={columns}
+      rows={items}
+      rowKey={(item) => `${item.vehicleNo}::${item.field}::${item.code}`}
+      caption={caption}
+      empty={empty}
+    />
   );
 }
 
@@ -166,100 +194,119 @@ export default async function ReviewReportPage({
         </div>
       </div>
 
-      <div className="print-block mb-6 grid grid-cols-2 gap-3 rounded-lg border border-line bg-white px-4 py-4 sm:grid-cols-5">
+      <div className="print-block mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
         {[
           { label: "対象車両", value: report.summary.vehicles, unit: "台" },
           { label: "指摘なし", value: report.summary.cleanVehicles, unit: "台" },
           { label: "数字を直した", value: report.summary.fixedVehicles, unit: "台" },
-          { label: "問題なしと判断", value: report.summary.ok, unit: "件" },
-          { label: "未確認・後回し", value: report.summary.open + report.summary.postponed, unit: "件" },
+          { label: "このままでよいと判断", value: report.summary.ok, unit: "件" },
+          {
+            label: "未確認・あとで見る",
+            value: report.summary.open + report.summary.postponed,
+            unit: "件",
+          },
         ].map((tile) => (
-          <div key={tile.label}>
-            <p className="text-xs text-ink-muted">{tile.label}</p>
-            <p className="num-display text-2xl text-ink">
-              {num(tile.value)}
-              <span className="ml-0.5 text-xs font-normal text-ink-muted">{tile.unit}</span>
-            </p>
-          </div>
+          <StatTile key={tile.label} label={tile.label} value={num(tile.value)} unit={tile.unit} />
         ))}
       </div>
 
       <Section
-        title={`直した数字 (${report.fixes.length}台)`}
+        title={`直した数字（${report.fixes.length}台）`}
         lead="人が値を書き換えた車両です。直した理由もそのまま残しています。"
       >
-        {report.fixes.length === 0 ? (
-          <p className="text-xs text-ink-muted">この月は数字を直した車両はありません。</p>
-        ) : (
-          <table className="w-full border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-line text-left text-ink-muted">
-                <th className="py-1.5 pr-3 font-medium">車番</th>
-                <th className="py-1.5 pr-3 font-medium">直した内容</th>
-                <th className="py-1.5 pr-3 font-medium">理由</th>
-                <th className="py-1.5 pr-3 font-medium">直した人</th>
-                <th className="py-1.5 font-medium">日時</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.fixes.map((fix) => (
-                <tr key={fix.vehicleNo} className="border-b border-line align-top">
-                  <td className="num py-1.5 pr-3">{fix.vehicleNoLabel}</td>
-                  <td className="py-1.5 pr-3">
-                    {fix.excluded && <span className="block">この月の収支表から外す</span>}
-                    {fix.entries.map((entry) => (
-                      <span key={entry.field} className="block">
-                        {OVERRIDABLE_FIELD_META[entry.field].label}: {num(entry.value)}
-                        {OVERRIDABLE_FIELD_META[entry.field].unit}
-                      </span>
-                    ))}
-                    {fix.pending && (
-                      <span className="block text-ink-muted">
-                        ※まだ収支表に反映していません
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-1.5 pr-3">{fix.reason || "—"}</td>
-                  <td className="py-1.5 pr-3">{fix.updatedByName ?? "—"}</td>
-                  <td className="num py-1.5">{stamp(fix.updatedAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <DataTable
+          columns={[
+            {
+              key: "vehicle",
+              header: "車番",
+              cell: (fix) => <span className="num">{fix.vehicleNoLabel}</span>,
+            },
+            {
+              key: "content",
+              header: "直した内容",
+              cellClassName: "wrap",
+              cell: (fix) => (
+                <>
+                  {fix.excluded && <span className="block">この月の収支表から外す</span>}
+                  {fix.entries.map((entry) => (
+                    <span key={entry.field} className="block">
+                      {OVERRIDABLE_FIELD_META[entry.field].label}: {num(entry.value)}
+                      {OVERRIDABLE_FIELD_META[entry.field].unit}
+                    </span>
+                  ))}
+                  {fix.pending && (
+                    <span className="block text-ink-muted">
+                      ※この直しはまだ収支表を作り直していません
+                    </span>
+                  )}
+                </>
+              ),
+            },
+            { key: "reason", header: "理由", cellClassName: "wrap", cell: (fix) => fix.reason || "—" },
+            { key: "by", header: "直した人", cell: (fix) => fix.updatedByName ?? "—" },
+            {
+              key: "at",
+              header: "日時",
+              cell: (fix) => <span className="num">{stamp(fix.updatedAt)}</span>,
+            },
+          ]}
+          rows={report.fixes}
+          rowKey={(fix) => fix.vehicleNo}
+          caption={`${yearMonthLabel(yearMonth)} に人が値を直した車両の一覧`}
+          empty={
+            <p className="text-xs text-ink-muted">
+              この月は数字を直した車両はありません。直す必要が出たら「収支表のチェック」で直してください。
+            </p>
+          }
+        />
       </Section>
 
       <Section
-        title={`このままでよいと判断した指摘 (${report.okItems.length}件)`}
+        title={`このままでよいと判断した指摘（${report.okItems.length}件）`}
         lead="見たうえで直さないと決めたものです。誰がいつ決めたかを残しています。"
       >
-        {report.okItems.length === 0 ? (
-          <p className="text-xs text-ink-muted">まだ1件も判断していません。</p>
-        ) : (
-          <JudgementTable items={report.okItems} showJudge />
-        )}
+        <JudgementTable
+          items={report.okItems}
+          showJudge
+          caption="このままでよいと判断した指摘の一覧"
+          empty={
+            <p className="text-xs text-ink-muted">
+              まだ1件も判断していません。「収支表のチェック」で1件ずつ見て判断してください。
+            </p>
+          }
+        />
       </Section>
 
       <Section
-        title={`あとで見る (後回し) のまま残っている指摘 (${report.postponedItems.length}件)`}
+        title={`「あとで見る」のまま残っている指摘（${report.postponedItems.length}件）`}
         lead="判断を保留しているものです。締める前にここが0件になっているか確認してください。"
       >
-        {report.postponedItems.length === 0 ? (
-          <p className="text-xs text-ink-muted">後回しにしている指摘はありません。</p>
-        ) : (
-          <JudgementTable items={report.postponedItems} showJudge />
-        )}
+        <JudgementTable
+          items={report.postponedItems}
+          showJudge
+          caption="「あとで見る」のまま残っている指摘の一覧"
+          empty={
+            <p className="text-xs text-ink-muted">
+              「あとで見る」にした指摘はありません。この月の保留はもう残っていません。
+            </p>
+          }
+        />
       </Section>
 
       <Section
-        title={`まだ確認していない指摘 (${report.openItems.length}件)`}
+        title={`まだ確認していない指摘（${report.openItems.length}件）`}
         lead="誰もまだ見ていないものです。0件になっていれば、この月の確認は一通り終わっています。"
       >
-        {report.openItems.length === 0 ? (
-          <p className="text-xs text-ink-muted">未確認の指摘はありません。</p>
-        ) : (
-          <JudgementTable items={report.openItems} showJudge={false} />
-        )}
+        <JudgementTable
+          items={report.openItems}
+          showJudge={false}
+          caption="まだ確認していない指摘の一覧"
+          empty={
+            <p className="text-xs text-ink-muted">
+              未確認の指摘はありません。この月の確認は一通り終わっています。
+            </p>
+          }
+        />
       </Section>
     </div>
   );

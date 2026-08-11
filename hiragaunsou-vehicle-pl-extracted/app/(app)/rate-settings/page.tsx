@@ -10,7 +10,9 @@ import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { AccessDenied } from "../../_components/AccessDenied";
 import { ScreenHeader } from "../../_components/ScreenHeader";
 import { SourceDataNote } from "../../_components/SourceDataNote";
+import { StickyFilterBar } from "../../_components/StickyFilterBar";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
+import { RATE_MASTER_CATALOG } from "../../../src/domain/rules/rateMasterCatalog";
 import { RateSettingsManager } from "./RateSettingsManager";
 
 /**
@@ -63,7 +65,7 @@ export default async function RateSettingsPage({
             <p>
               この画面の率・単価だけは、ファイルの取込ではなくここでの手入力で決まります。
               社内Excel「★車両別収支計算用」の計算式に埋め込まれている率にあたるもので、
-              改定があったときにここを書き換えます(保存すると対象月の収支表を作り直します)。
+              改定があったときにここを書き換えます（保存すると対象月の収支表を作り直します）。
             </p>
             <p>
               車番・保険・税は
@@ -74,7 +76,7 @@ export default async function RateSettingsPage({
               <Link href="/admin/driver-master" className="underline">
                 運転者マスタ管理
               </Link>
-              で、同じ社内Excel(名前の例:「★車両別収支計算用2026年5月.xlsx」)から取り込みます。
+              で、同じ社内Excel（名前の例:「★車両別収支計算用2026年5月.xlsx」）から取り込みます。
             </p>
             <p>
               どの数字がどのファイルから来るかの全体像は
@@ -86,13 +88,17 @@ export default async function RateSettingsPage({
           </SourceDataNote>
         }
       />
-      <div className="mb-4">
+      {/*
+        「どの月の率を見ているか」は表を下まで見ても要る前提なので、上に貼り付ける
+        （T7 §2-3）。この画面に工程タブは無いので below は既定の "header" のまま。
+      */}
+      <StickyFilterBar summary={`率${RATE_MASTER_CATALOG.length}件`}>
         <YearMonthSelect
           basePath="/rate-settings"
           value={yearMonth}
           options={selectableYearMonths(13)}
         />
-      </div>
+      </StickyFilterBar>
       <RateSettingsManager
         yearMonth={yearMonth}
         initialEntries={entries}

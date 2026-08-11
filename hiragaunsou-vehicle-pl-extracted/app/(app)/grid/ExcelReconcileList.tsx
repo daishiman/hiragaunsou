@@ -10,6 +10,13 @@ const TOP_VEHICLES = 5;
  * 差はExcel上の手作業(列の入れ違い・二重入力・ブック間の不整合)で生じており、
  * システムはヘッダー定義どおりに計算する(Excelには合わせない)方針。
  * ただし画面では原因を断定せず、差がある事実だけを中立に提示して判断は人に委ねる。
+ *
+ * ■ 表か、カードか (T7 §4-1 の質問への回答)
+ * ここで人がやりたいのは「Excelの値とシステムの値と差額を横に並べて見比べること」なので表にする。
+ * 共通の DataTable ではなく素の table のままにしているのは、1台に複数項目がぶら下がる形を
+ * 車番の rowSpan でまとめているため (DataTable は1行1レコードで rowSpan を表せない)。
+ * 「残りN台」は行数が読めないので、T7 §2-1 に従い箱に高さの上限を与えて縦スクロールにし、
+ * 列見出しを固定する (overflow-x だけの箱では sticky が効かないため、高さの上限が要る)。
  */
 export function ExcelReconcileList({ result }: { result: ExcelReconcileResult }) {
   if (!result.hasExcel) return null;
@@ -31,7 +38,12 @@ export function ExcelReconcileList({ result }: { result: ExcelReconcileResult })
       </p>
 
       {result.vehicles.length === 0 ? (
-        <p className="mt-3 text-sm font-bold text-ink">全{num(result.comparedCount)}台が一致</p>
+        <p className="mt-3 text-sm text-ink">
+          <span className="font-bold">全{num(result.comparedCount)}台が一致</span>
+          <span className="ml-2 text-xs text-ink-muted">
+            Excelと突き合わせた項目に差はありません。このまま下の「この月を確定する」へ進めます。
+          </span>
+        </p>
       ) : (
         <>
           <div className="mt-3 overflow-x-auto">
@@ -43,8 +55,11 @@ export function ExcelReconcileList({ result }: { result: ExcelReconcileResult })
                 残り<span className="num">{num(rest.length)}</span>台を見る
                 <span className="ml-2 text-xs font-normal text-ink-muted">差額の小さい順に続きます</span>
               </summary>
-              <div className="overflow-x-auto border-t border-line">
-                <MismatchTable vehicles={rest} />
+              <div
+                className="overflow-auto border-t border-line"
+                style={{ maxHeight: "min(50vh, 24rem)" }}
+              >
+                <MismatchTable vehicles={rest} stickyHead />
               </div>
             </details>
           )}
@@ -54,24 +69,31 @@ export function ExcelReconcileList({ result }: { result: ExcelReconcileResult })
       {(result.excelOnlyCount > 0 || result.systemOnlyCount > 0) && (
         <p className="num mt-2 text-xs text-ink-muted">
           Excelにのみある車両 {num(result.excelOnlyCount)}台 / システムにのみある車両{" "}
-          {num(result.systemOnlyCount)}台(突合対象外)
+          {num(result.systemOnlyCount)}台（突合対象外）
         </p>
       )}
     </section>
   );
 }
 
-function MismatchTable({ vehicles }: { vehicles: ExcelReconcileVehicle[] }) {
+function MismatchTable({
+  vehicles,
+  stickyHead = false,
+}: {
+  vehicles: ExcelReconcileVehicle[];
+  stickyHead?: boolean;
+}) {
+  const headCell = `px-3 py-2 font-medium${stickyHead ? " sticky top-0 z-10 bg-subtle" : ""}`;
   return (
     <table className="w-full min-w-max border-collapse text-xs">
-      <caption className="sr-only">Excelとシステムで値が異なる車番別の金額 (円)</caption>
+      <caption className="sr-only">Excelとシステムで値が異なる車番別の金額（円）</caption>
       <thead>
         <tr className="border-b border-line bg-subtle text-ink-muted">
-          <th className="px-3 py-2 text-left font-medium">車番</th>
-          <th className="px-3 py-2 text-left font-medium">項目</th>
-          <th className="px-3 py-2 text-right font-medium">Excel(円)</th>
-          <th className="px-3 py-2 text-right font-medium">システム(円)</th>
-          <th className="px-3 py-2 text-right font-medium">差(円)</th>
+          <th className={`${headCell} text-left`}>車番</th>
+          <th className={`${headCell} text-left`}>項目</th>
+          <th className={`${headCell} text-right`}>Excel（円）</th>
+          <th className={`${headCell} text-right`}>システム（円）</th>
+          <th className={`${headCell} text-right`}>差（円）</th>
         </tr>
       </thead>
       <tbody>

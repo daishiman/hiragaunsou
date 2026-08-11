@@ -41,10 +41,11 @@ export function DeficitAnalysisButton({ yearMonth }: { yearMonth: string }) {
         type="button"
         onClick={handleClick}
         disabled={state.status === "loading"}
-        className="rounded-md bg-brand-deep px-4 py-2 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
+        className="btn btn-primary btn-sm pressable"
       >
         {state.status === "loading" ? "AI分析中…" : "AI分析する"}
       </button>
+      {/* 失敗の理由は必ず文字で出す。押せなかった/効かなかった画面は問い合わせを生む */}
       {state.status === "error" && (
         <p className="max-w-xs text-right text-[11px] text-danger">{state.message}</p>
       )}

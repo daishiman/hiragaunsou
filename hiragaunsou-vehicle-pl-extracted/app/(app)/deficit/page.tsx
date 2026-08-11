@@ -16,71 +16,66 @@ import {
 } from "../../../src/usecase/steps/getDeficitAnalysis";
 import { selectableYearMonths } from "../../_lib/yearMonth";
 import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
-import { kmPriceLabel, man, num, yen, yearMonthLabel } from "../../_lib/format";
+import { man, num, yen, yearMonthLabel } from "../../_lib/format";
+import { factorCategoryLabel } from "../../_lib/factorLabels";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
 import { ScreenHeader } from "../../_components/ScreenHeader";
 import { EmptyState } from "../../_components/EmptyState";
+import { StatTile } from "../../_components/StatTile";
+import { StickyFilterBar } from "../../_components/StickyFilterBar";
+import { AlertPanel } from "../../_components/AlertPanel";
+import { Badge } from "../../_components/Badge";
+import { DataTable, type DataTableColumn } from "../../_components/DataTable";
 import { DeficitAnalysisButton } from "./DeficitAnalysisButton";
 
 /** 各分類で最初から見せる件数。残りは折りたたみ(段階的開示)。 */
 const TOP_N = 5;
 
+/**
+ * 分類ごとの追加列の見出しと単位。
+ *
+ * ユースケース側の extraColumnLabel は単位込みの1文字列 (「修理費(実費)」「km単価」) で、
+ * 単位を列見出しに出しセルに入れない作法 (T7 §4-4) と、用語統一 (km単価 → 1kmあたり売上) に
+ * 合わない。ユースケースの文字列はテストで固定されているため、画面側で言い換える。
+ */
+const EXTRA_COLUMN: Record<DeficitGroupResult["category"], { header: string; unit: string }> = {
+  repair: { header: "修理費（実費）", unit: "円" },
+  price: { header: "1kmあたり売上", unit: "円" },
+  idle: { header: "固定費の流出", unit: "円" },
+};
+
+/** 追加列の値。単位は列見出しが持つので、ここでは付けない */
 function extraValue(group: DeficitGroupResult, v: DeficitVehicle): string {
-  if (group.category === "repair") return `${yen(v.repair)}円`;
-  if (group.category === "price") return kmPriceLabel(v.kmPrice);
-  return `${yen(v.fixed)}円`;
+  if (group.category === "repair") return yen(v.repair);
+  if (group.category === "price") return num(v.kmPrice, 1);
+  return yen(v.fixed);
 }
 
+/**
+ * AIが出した赤字の要因。
+ * 分類は内部で sales / fuelTotal のような英語のキーで持っているので、
+ * 画面に出すときは必ず factorLabels.ts で日本語に訳す (T7 §1-3)。
+ */
 function AnalysisBadge({ record }: { record: DeficitFactorAnalysisRecord | undefined }) {
   if (!record) {
     return <span className="text-ink-muted">未分析</span>;
   }
   const top = record.factors[0];
   return (
-    <span className="inline-flex max-w-[16rem] items-center gap-1 truncate rounded-full bg-brand-soft px-2 py-0.5 text-[11px] text-brand-deep">
-      {top ? `${top.category}が${top.direction === "high" ? "高い" : "低い"}` : record.summary}
-    </span>
+    <Badge tone="brand" className="max-w-[16rem] truncate">
+      {top
+        ? `${factorCategoryLabel(top.category)}が${top.direction === "high" ? "高い" : "低い"}`
+        : record.summary}
+    </Badge>
   );
 }
 
-function VehicleRows({
-  group,
-  vehicles,
-  yearMonth,
-  analysisByVehicle,
-}: {
-  group: DeficitGroupResult;
-  vehicles: DeficitVehicle[];
-  yearMonth: string;
-  analysisByVehicle: Record<string, DeficitFactorAnalysisRecord>;
-}) {
-  return (
-    <>
-      {vehicles.map((v) => (
-        <tr key={v.vehicleNo} className="border-b border-line last:border-b-0 hover:bg-subtle">
-          <td className="px-3 py-2">
-            <Link
-              href={`/vehicle/${encodeURIComponent(v.vehicleNo)}?ym=${yearMonth}`}
-              className="num font-semibold text-brand-deep hover:underline"
-            >
-              {v.vehicleNo}
-            </Link>
-          </td>
-          <td className="whitespace-nowrap px-3 py-2 text-ink-muted">{v.type}</td>
-          <td className="whitespace-nowrap px-3 py-2 text-ink-muted">{v.depot}</td>
-          <td className="whitespace-nowrap px-3 py-2 text-ink-muted">{v.driver ?? "—"}</td>
-          <td className="num px-3 py-2 text-right">{yen(v.sales)}</td>
-          <td className="num px-3 py-2 text-right font-bold text-danger">{yen(v.profit)}</td>
-          <td className="num px-3 py-2 text-right">{extraValue(group, v)}</td>
-          <td className="px-3 py-2">
-            <AnalysisBadge record={analysisByVehicle[v.vehicleNo]} />
-          </td>
-        </tr>
-      ))}
-    </>
-  );
-}
-
+/**
+ * 分類ごとの車両一覧。
+ *
+ * 器の判定 (T7 §4-1): この画面でやりたいのは「車両を損失の大きい順に見比べること」なので表のまま。
+ * 20行を超えうるので maxHeight を渡し、列見出しを固定する。
+ */
 function GroupTable({
   group,
   vehicles,
@@ -92,31 +87,75 @@ function GroupTable({
   yearMonth: string;
   analysisByVehicle: Record<string, DeficitFactorAnalysisRecord>;
 }) {
+  const extra = EXTRA_COLUMN[group.category];
+  const columns: readonly DataTableColumn<DeficitVehicle>[] = [
+    {
+      key: "vehicleNo",
+      header: "車番",
+      cell: (v) => (
+        <Link
+          href={`/vehicle/${encodeURIComponent(v.vehicleNo)}?ym=${yearMonth}`}
+          className="num font-semibold text-brand-deep hover:underline"
+        >
+          {v.vehicleNo}
+        </Link>
+      ),
+    },
+    {
+      key: "type",
+      header: "車種",
+      priority: "low",
+      cellClassName: "whitespace-nowrap text-ink-muted",
+      cell: (v) => v.type,
+    },
+    {
+      key: "depot",
+      header: "所属",
+      priority: "low",
+      cellClassName: "whitespace-nowrap text-ink-muted",
+      cell: (v) => v.depot,
+    },
+    {
+      key: "driver",
+      header: "運転者",
+      priority: "low",
+      cellClassName: "whitespace-nowrap text-ink-muted",
+      cell: (v) => v.driver ?? "—",
+    },
+    { key: "sales", header: "売上", unit: "円", align: "right", cell: (v) => yen(v.sales) },
+    {
+      key: "profit",
+      header: "損益",
+      unit: "円",
+      align: "right",
+      cell: (v) => <span className="font-bold text-danger">{yen(v.profit)}</span>,
+    },
+    {
+      key: "extra",
+      header: extra?.header ?? group.extraColumnLabel,
+      unit: extra?.unit,
+      align: "right",
+      cell: (v) => extraValue(group, v),
+    },
+    {
+      key: "analysis",
+      header: "AI要因分析",
+      cell: (v) => <AnalysisBadge record={analysisByVehicle[v.vehicleNo]} />,
+    },
+  ];
+
   return (
-    <div className="overflow-x-auto">
-      <table className="data-table w-full min-w-max border-collapse text-xs">
-        <thead>
-          <tr className="border-b border-line bg-subtle text-ink-muted">
-            <th className="px-3 py-2 text-left font-medium">車番</th>
-            <th className="px-3 py-2 text-left font-medium">車種</th>
-            <th className="px-3 py-2 text-left font-medium">所属</th>
-            <th className="px-3 py-2 text-left font-medium">運転者</th>
-            <th className="px-3 py-2 text-right font-medium">売上(円)</th>
-            <th className="px-3 py-2 text-right font-medium">損益(円)</th>
-            <th className="px-3 py-2 text-right font-medium">{group.extraColumnLabel}</th>
-            <th className="px-3 py-2 text-left font-medium">AI要因分析</th>
-          </tr>
-        </thead>
-        <tbody>
-          <VehicleRows
-            group={group}
-            vehicles={vehicles}
-            yearMonth={yearMonth}
-            analysisByVehicle={analysisByVehicle}
-          />
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      caption={`${group.title}の車両一覧`}
+      columns={columns}
+      rows={vehicles}
+      rowKey={(v) => v.vehicleNo}
+      maxHeight="30rem"
+      rowClassName={() => "hover:bg-subtle"}
+      empty={
+        <p className="px-5 py-6 text-xs text-ink-muted">この分類に該当する車両はありません。</p>
+      }
+    />
   );
 }
 
@@ -162,13 +201,22 @@ export default async function DeficitPage({
       <ScreenHeader
         screen="/deficit"
         lead={`赤字 ${data.deficitCount}台を、原因の違いで3つに分けています。`}
-        action={
-          <div className="flex flex-wrap items-center gap-3">
-            <YearMonthSelect basePath="/deficit" value={yearMonth} options={selectableYearMonths(13)} />
-            {canAnalyze && data.deficitCount > 0 && <DeficitAnalysisButton yearMonth={yearMonth} />}
-          </div>
-        }
       />
+
+      {/*
+        対象年月と赤字の台数は、下に並ぶどの数字にも掛かる前提なので帯に貼る (T7 §2-3)。
+        工程タブの無い画面なので below は既定の "header"。
+      */}
+      <StickyFilterBar
+        summary={
+          <>
+            赤字 <span className="num">{data.deficitCount}</span>台
+          </>
+        }
+      >
+        <YearMonthSelect basePath="/deficit" value={yearMonth} options={selectableYearMonths(13)} />
+        {canAnalyze && data.deficitCount > 0 && <DeficitAnalysisButton yearMonth={yearMonth} />}
+      </StickyFilterBar>
 
       {data.isEmpty ? (
         <EmptyState
@@ -176,23 +224,23 @@ export default async function DeficitPage({
           description="月次データを取り込むと、赤字車両の分類が表示されます。"
         />
       ) : data.deficitCount === 0 ? (
-        <div className="card px-6 py-12 text-center">
-          <p className="text-sm font-semibold text-ink">赤字の車両はありません</p>
-          <p className="mt-1 text-sm text-ink-muted">
-            {yearMonthLabel(yearMonth)}は全車両が黒字です。
-          </p>
-        </div>
+        /* 0件でも「なぜ空か」と「次にどこを見るか」を必ず出す (T7 §4-4) */
+        <EmptyState
+          title="赤字の車両はありません"
+          description={`${yearMonthLabel(yearMonth)}は全車両が黒字なので、分類する車両がありません。1台ごとの数字は月次収支表で確認できます。`}
+          actionHref="/grid"
+        />
       ) : (
         <>
-          <div className="card p-4">
-            <p className="text-xs text-ink-muted">赤字による損失合計</p>
-            <p className="num mt-1 text-3xl font-bold text-danger">{man(data.lossTotal)}</p>
-            <p className="mt-1 text-[11px] text-ink-muted">
-              判定閾値: 売上 {num(data.thresholds.idleSales)}円未満=遊休・低稼働型 / 修理費{" "}
-              {num(data.thresholds.repairSpike)}円以上=突発修繕型 / 損益分岐{" "}
-              {num(data.thresholds.breakEvenKmPrice)}円/km
-            </p>
-          </div>
+          {/* 結論の数字は1つ。器は要約カードに揃える (T7 §4-1) */}
+          <StatTile
+            label="赤字による損失合計"
+            value={man(data.lossTotal)}
+            negative
+            sub={`判定閾値: 売上 ${num(data.thresholds.idleSales)}円未満=遊休・低稼働型 / 修理費 ${num(
+              data.thresholds.repairSpike,
+            )}円以上=突発修繕型 / 損益分岐 ${num(data.thresholds.breakEvenKmPrice)}円/km`}
+          />
 
           <div className="mt-5 space-y-5">
             {data.groups.map((group) => {
@@ -211,13 +259,17 @@ export default async function DeficitPage({
                       </p>
                     </div>
                     <p className="mt-1.5 text-xs text-ink-muted">{group.description}</p>
-                    <p className="mt-2 rounded-md border border-caution-border bg-caution-soft px-3 py-2 text-xs leading-relaxed text-ink">
-                      打ち手: {group.action}
-                    </p>
+                    <div className="mt-2">
+                      <AlertPanel tone="caution" title="打ち手">
+                        {group.action}
+                      </AlertPanel>
+                    </div>
                   </div>
 
                   {group.vehicles.length === 0 ? (
-                    <p className="px-5 py-6 text-xs text-ink-muted">この分類に該当する車両はありません。</p>
+                    <p className="px-5 py-6 text-xs text-ink-muted">
+                      この分類に該当する車両はありません。ほかの2分類か、月次収支表で1台ずつ確認してください。
+                    </p>
                   ) : (
                     <>
                       <GroupTable
@@ -229,7 +281,7 @@ export default async function DeficitPage({
                       {rest.length > 0 && (
                         <details className="border-t border-line">
                           <summary className="cursor-pointer px-5 py-3 text-xs font-semibold text-brand-deep">
-                            残り{rest.length}台を表示
+                            残り{rest.length}台を見る
                           </summary>
                           <GroupTable
                             group={group}

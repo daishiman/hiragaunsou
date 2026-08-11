@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertPanel } from "../../_components/AlertPanel";
+import { DataTable, type DataTableColumn } from "../../_components/DataTable";
+import { DefinitionList } from "../../_components/DefinitionList";
+import { Disclosure } from "../../_components/Disclosure";
 import { EmptyState } from "../../_components/EmptyState";
+import { StickyFilterBar } from "../../_components/StickyFilterBar";
+import { FIELD_CLASS } from "../../_components/formStyles";
 import { ListToolbar } from "../../_components/ListToolbar";
 import { NumberEntryField } from "../../_components/NumberEntryField";
 import { StickyActionBar } from "../../_components/StickyActionBar";
@@ -810,134 +816,153 @@ export function ManualEntryStepper({
     return null;
   }
 
-  /** 請求書から書き写す欄の表。1台1行で、Enterを押すと同じ列の次の車両へ進む。 */
+  /**
+   * 請求書から書き写す欄の表。1台1行で、Enterを押すと同じ列の次の車両へ進む。
+   *
+   * 表かカードか (T7 §4-1)。ここは「同じ項目を100台ぶん、列をそろえて突き合わせる」作業なので表。
+   * 100台を超えるため高さを止めて見出しを貼り付ける (T7 §2-1・§4-4)。
+   * 見出しの貼り付けは自前の sticky thead をやめ、共通の DataTable に任せる。
+   */
   function renderFieldTable(fields: readonly FieldDef[]) {
+    const emptyBody = (
+      <div className="p-4">
+        {!hasVehicles ? (
+          <EmptyState
+            title="入力できる車両がまだありません"
+            description={
+              canManageVehicleMaster
+                ? "車両マスタが未登録のため、車両の一覧を作れません。車両マスタを取り込むと、ここに全車両が並びます。"
+                : "車両マスタが未登録のため、車両の一覧を作れません。管理者に車両マスタの登録を依頼してください。"
+            }
+            actionHref="/admin/vehicle-master"
+            actionLabel="車両マスタの登録へ"
+          />
+        ) : (
+          <div className="rounded-xl border border-dashed border-line bg-white px-6 py-10 text-center">
+            <p className="text-sm font-semibold text-ink">
+              {vehicleSearch.trim() !== ""
+                ? `「${vehicleSearch.trim()}」に一致する車両がありません`
+                : "条件に合う車両がありません"}
+            </p>
+            <p className="mt-1 text-sm text-ink-muted">
+              車番・運転者名のどちらでも探せます。全角でも半角でも構いません。
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setVehicleSearch("");
+                setEntryFilter("all");
+              }}
+              className="btn btn-secondary pressable mt-4"
+            >
+              絞り込みを解除して全車両を表示
+            </button>
+          </div>
+        )}
+      </div>
+    );
+
+    const columns: DataTableColumn<VehicleRow>[] = [
+      {
+        key: "vehicleNo",
+        header: "車番",
+        headClassName: "w-px",
+        cellClassName: "num whitespace-nowrap",
+        cell: (v) => (
+          <>
+            {/* 入力済みかどうかは色ではなく記号でも分かるようにする */}
+            <span aria-hidden className="mr-1 text-ink-muted">
+              {isEntered(v.vehicleNo) ? "✓" : "○"}
+            </span>
+            {v.vehicleNo}
+          </>
+        ),
+      },
+      {
+        key: "driver",
+        header: "運転者",
+        headClassName: "w-px",
+        // 長い運転者名でも折り返さない (行の高さが1行だけ変わると縦の並びが崩れる)
+        cellClassName: "max-w-[10rem] truncate whitespace-nowrap",
+        cell: (v) => v.driver ?? "—",
+      },
+      ...fields.map((f, colIndex) => ({
+        key: f.key,
+        header: (
+          <>
+            {f.label}
+            {/* どの紙から写す欄かを、視線を動かさずに読める位置に常時置く */}
+            <span className="block text-[11px] font-normal">{f.source}</span>
+          </>
+        ),
+        unit: f.unit,
+        align: "right" as const,
+        headClassName: "w-px",
+        cell: (v: VehicleRow) => {
+          const raw = values[f.key][v.vehicleNo] ?? "";
+          const isCopied = copied.has(copiedKey(f.key, v.vehicleNo));
+          // 空欄のときだけ先月の値を出す。入力済みのセルに別の数字を並べても迷うだけ。
+          const prevValue =
+            raw.trim() === "" ? previousMonthValues[f.key]?.[v.vehicleNo] : undefined;
+          return (
+            <NumberEntryField
+              value={raw}
+              onChange={(next) => setValue(f.key, v.vehicleNo, next)}
+              /*
+                空欄のまま確定したときに使われる金額を、欄の中に初期値として出す。
+                「空欄は自動計算されます」と説明する代わりに、いくらになるかを読ませる。
+                薄い文字のままなら誰も触っていない = 保存時も未入力(null)として送る。
+              */
+              autoValue={autoAmount(f.key, v.vehicleNo)}
+              ariaLabel={`${v.vehicleNo}番の${f.label}(${f.unit})`}
+              col={colIndex}
+              hints={
+                <>
+                  {/* 先月の値のままであることを、色だけでなく文字でも出す */}
+                  {isCopied ? (
+                    <span className="rounded bg-caution-soft px-1 text-[10px] font-semibold text-ink">
+                      先月の値
+                    </span>
+                  ) : null}
+                  {/* 空欄のセルには先月いくらだったかを出す (思い出させず、見て決められるように) */}
+                  {prevValue !== undefined ? (
+                    <p className="num text-[11px] text-ink-muted">
+                      先月 {prevValue.toLocaleString("ja-JP")}
+                    </p>
+                  ) : null}
+                </>
+              }
+            />
+          );
+        },
+      })),
+      {
+        /*
+          余った幅はこの列が全部吸う。
+          以前は各列が画面幅いっぱいに引き伸ばされ、運転者名と入力欄の間が
+          数百px空いて、1行打つたびに視線が画面を横断していた。
+        */
+        key: "spacer",
+        header: <span aria-hidden />,
+        headClassName: "w-full",
+        cell: () => null,
+      },
+    ];
+
     return (
       <div className="rounded-md border border-line">
-        <div className="max-h-[56vh] min-h-[14rem] overflow-auto" onPaste={handlePaste}>
-          {filteredVehicles.length === 0 ? (
-            <div className="p-4">
-              {!hasVehicles ? (
-                <EmptyState
-                  title="入力できる車両がまだありません"
-                  description={
-                    canManageVehicleMaster
-                      ? "車両マスタが未登録のため、車両の一覧を作れません。車両マスタを取り込むと、ここに全車両が並びます。"
-                      : "車両マスタが未登録のため、車両の一覧を作れません。管理者に車両マスタの登録を依頼してください。"
-                  }
-                  actionHref="/admin/vehicle-master"
-                  actionLabel="車両マスタの登録へ"
-                />
-              ) : (
-                <div className="rounded-xl border border-dashed border-line bg-white px-6 py-10 text-center">
-                  <p className="text-sm font-semibold text-ink">
-                    {vehicleSearch.trim() !== ""
-                      ? `「${vehicleSearch.trim()}」に一致する車両がありません`
-                      : "条件に合う車両がありません"}
-                  </p>
-                  <p className="mt-1 text-sm text-ink-muted">
-                    車番・運転者名のどちらでも探せます。全角でも半角でも構いません。
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setVehicleSearch("");
-                      setEntryFilter("all");
-                    }}
-                    className="btn btn-secondary pressable mt-4"
-                  >
-                    絞り込みを解除して全車両を表示
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <table className="data-table min-w-full text-sm">
-              <thead className="sticky top-0 z-10 bg-subtle">
-                <tr>
-                  <th className="w-px px-3 py-2 text-left text-xs font-bold text-ink-muted">
-                    車番
-                  </th>
-                  <th className="w-px px-3 py-2 text-left text-xs font-bold text-ink-muted">
-                    運転者
-                  </th>
-                  {fields.map((f) => (
-                    <th
-                      key={f.key}
-                      className="w-px px-3 py-2 text-right text-xs font-bold text-ink-muted"
-                    >
-                      {f.label}({f.unit})
-                      {/* どの紙から写す欄かを、視線を動かさずに読める位置に常時置く */}
-                      <span className="block text-[11px] font-normal">{f.source}</span>
-                    </th>
-                  ))}
-                  {/*
-                    余った幅はこの列が全部吸う。
-                    以前は各列が画面幅いっぱいに引き伸ばされ、運転者名と入力欄の間が
-                    数百px空いて、1行打つたびに視線が画面を横断していた。
-                  */}
-                  <th className="w-full" aria-hidden />
-                </tr>
-              </thead>
-              <tbody>
-                {filteredVehicles.map((v) => (
-                  <tr key={v.vehicleNo} className="border-t border-line">
-                    <td className="num px-3 py-2 whitespace-nowrap">
-                      {/* 入力済みかどうかは色ではなく記号でも分かるようにする */}
-                      <span aria-hidden className="mr-1 text-ink-muted">
-                        {isEntered(v.vehicleNo) ? "✓" : "○"}
-                      </span>
-                      {v.vehicleNo}
-                    </td>
-                    {/* 長い運転者名でも折り返さない(行の高さが1行だけ変わると縦の並びが崩れる) */}
-                    <td className="max-w-[10rem] truncate px-3 py-2 whitespace-nowrap">
-                      {v.driver ?? "—"}
-                    </td>
-                    {fields.map((f, colIndex) => {
-                      const raw = values[f.key][v.vehicleNo] ?? "";
-                      const isCopied = copied.has(copiedKey(f.key, v.vehicleNo));
-                      // 空欄のときだけ先月の値を出す。入力済みのセルに別の数字を並べても迷うだけ。
-                      const prevValue =
-                        raw.trim() === "" ? previousMonthValues[f.key]?.[v.vehicleNo] : undefined;
-                      return (
-                        <td key={f.key} className="px-3 py-2 text-right">
-                          <NumberEntryField
-                            value={raw}
-                            onChange={(next) => setValue(f.key, v.vehicleNo, next)}
-                            /*
-                              空欄のまま確定したときに使われる金額を、欄の中に初期値として出す。
-                              「空欄は自動計算されます」と説明する代わりに、いくらになるかを読ませる。
-                              薄い文字のままなら誰も触っていない = 保存時も未入力(null)として送る。
-                            */
-                            autoValue={autoAmount(f.key, v.vehicleNo)}
-                            ariaLabel={`${v.vehicleNo}番の${f.label}(${f.unit})`}
-                            col={colIndex}
-                            hints={
-                              <>
-                                {/* 先月の値のままであることを、色だけでなく文字でも出す */}
-                                {isCopied ? (
-                                  <span className="rounded bg-caution-soft px-1 text-[10px] font-semibold text-ink">
-                                    先月の値
-                                  </span>
-                                ) : null}
-                                {/* 空欄のセルには先月いくらだったかを出す(思い出させず、見て決められるように) */}
-                                {prevValue !== undefined ? (
-                                  <p className="num text-[11px] text-ink-muted">
-                                    先月 {prevValue.toLocaleString("ja-JP")}
-                                  </p>
-                                ) : null}
-                              </>
-                            }
-                          />
-                        </td>
-                      );
-                    })}
-                    <td aria-hidden />
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+        {/* 貼り付けは表のどこで起きても拾う (イベントは親まで上がる) */}
+        <div onPaste={handlePaste}>
+          <DataTable
+            caption="車両ごとの入力欄"
+            columns={columns}
+            rows={filteredVehicles}
+            rowKey={(v) => String(v.vehicleNo)}
+            /* 100台を超えるので高さを止める。これで列見出しが上に貼り付く */
+            maxHeight="56vh"
+            className="min-h-[14rem]"
+            empty={emptyBody}
+          />
         </div>
         <div className="border-t border-line bg-subtle px-3 py-2 text-[11px] leading-relaxed text-ink-muted">
           <p>請求書のExcelから範囲コピーして、この表に貼り付けるとまとめて入力できます。</p>
@@ -964,10 +989,22 @@ export function ManualEntryStepper({
     );
   }
 
-  /** 検索・絞り込みと「表示◯台 / 全◯台」。0行のときも母数が読めるので、検索の不具合と取り違えない。 */
-  function renderToolbar() {
+  /**
+   * 検索・絞り込みと「表示◯台 / 全◯台」。0行のときも母数が読めるので、検索の不具合と取り違えない。
+   *
+   * 100台の表を下までスクロールすると、いま何で絞っているかも母数も画面から消えていた。
+   * 工程の帯 (StickyStepHeader) の下に貼り付ける (T7 §2-2)。
+   */
+  function renderFilterBar() {
     return (
-      <div className="flex flex-col gap-2">
+      <StickyFilterBar
+        below="stepHeader"
+        summary={
+          <span className="num">
+            表示 {filteredVehicles.length}台 / 全 {vehicles.length}台 ・ 入力済み {enteredCount}台
+          </span>
+        }
+      >
         <ListToolbar
           searchValue={vehicleSearch}
           onSearchChange={setVehicleSearch}
@@ -980,9 +1017,14 @@ export function ManualEntryStepper({
             setEntryFilter((prev) => (prev === key ? "all" : (key as EntryFilter)))
           }
         />
-        <p className="num text-xs text-ink-muted">
-          表示 {filteredVehicles.length}台 / 全 {vehicles.length}台 ・ 入力済み {enteredCount}台
-        </p>
+      </StickyFilterBar>
+    );
+  }
+
+  /** 先月の値のまとめ入れと、その結果の知らせ。表のすぐ上に置く (帯には入れない)。 */
+  function renderCopyTools() {
+    return (
+      <div className="flex flex-col gap-2">
         {/*
           先月の値をまとめて入れる。空欄のセルにしか入らないので、押し間違えても
           いま入力した数字は消えない。入れた件数を必ず言い、取り消せる状態にしておく。
@@ -1003,32 +1045,22 @@ export function ManualEntryStepper({
           </div>
         ) : null}
         {copyResult ? (
-          <div className="flex flex-wrap items-center gap-3 rounded-md border border-caution-border bg-caution-soft px-3 py-2 text-xs text-ink">
-            <span>{copyResult}</span>
+          <AlertPanel tone="caution" title={copyResult}>
             {pasteUndo ? (
-              <button
-                type="button"
-                onClick={undoPaste}
-                className="btn btn-secondary pressable"
-              >
+              <button type="button" onClick={undoPaste} className="btn btn-secondary btn-sm pressable">
                 元に戻す
               </button>
             ) : null}
-          </div>
+          </AlertPanel>
         ) : null}
         {pasteResult ? (
-          <div className="flex flex-wrap items-center gap-3 rounded-md border border-line bg-subtle px-3 py-2 text-xs text-ink">
-            <span>{pasteResult}</span>
+          <AlertPanel tone="info" title={pasteResult}>
             {pasteUndo ? (
-              <button
-                type="button"
-                onClick={undoPaste}
-                className="btn btn-secondary pressable"
-              >
+              <button type="button" onClick={undoPaste} className="btn btn-secondary btn-sm pressable">
                 貼り付けを取り消す
               </button>
             ) : null}
-          </div>
+          </AlertPanel>
         ) : null}
       </div>
     );
@@ -1070,13 +1102,18 @@ export function ManualEntryStepper({
       />
 
       {/*
+        車両ごとの表を出すステップだけ、絞り込みと母数の帯を工程の帯の下に貼り付ける。
+        キリン・給与・確認のステップには絞り込む表が無いので出さない。
+      */}
+      {step === 1 || step === 3 || step === 4 ? renderFilterBar() : null}
+
+      {/*
         車両が0台のときは、入力しても収支表に1行も反映されない。
         黙って空の表を出すと「検索が壊れている」と読まれるので、先に理由と次の一手を出す。
       */}
       {!hasVehicles ? (
-        <div className="rounded-md border border-caution-border bg-caution-soft px-4 py-3">
-          <p className="text-sm font-bold text-ink">この月に入力できる車両がありません</p>
-          <p className="mt-1 text-xs leading-relaxed text-ink">
+        <AlertPanel tone="caution" title="この月に入力できる車両がありません">
+          <p>
             車両マスタが1台も登録されていないため、入力しても収支表には反映されません。
             {operatedVehicleCount > 0
               ? `この月の運行実績には${operatedVehicleCount}台の車番が記録されています。`
@@ -1090,17 +1127,13 @@ export function ManualEntryStepper({
               車両マスタの登録へ
             </Link>
           ) : (
-            <p className="mt-2 text-xs font-semibold text-ink">
-              管理者に車両マスタの登録を依頼してください。
-            </p>
+            <p className="mt-2 font-semibold text-ink">管理者に車両マスタの登録を依頼してください。</p>
           )}
-        </div>
+        </AlertPanel>
       ) : null}
 
       {restored ? (
-        <p className="rounded-md border border-line bg-subtle px-4 py-2 text-xs text-ink-muted">
-          保存した入力を読み込みました。続きから入力できます。
-        </p>
+        <AlertPanel tone="info" title="保存した入力を読み込みました。続きから入力できます。" />
       ) : null}
 
       {/*
@@ -1108,32 +1141,26 @@ export function ManualEntryStepper({
         いままでは保存すると黙って確定が解除されていた (残課題10)。
       */}
       {isConfirmed ? (
-        <div className="rounded-md border border-caution-border bg-caution-soft px-4 py-3">
-          <p className="text-sm font-bold text-ink">この月は確定済みです</p>
-          <p className="mt-1 text-xs leading-relaxed text-ink">
+        <AlertPanel tone="caution" title="この月は確定済みです">
+          <p>
             ここで保存すると収支表を作り直すため、確定が解除されます。直したあとに、
             もう一度収支表の画面で確定し直してください。入力途中の下書きも、この月では保存しません。
           </p>
-        </div>
+        </AlertPanel>
       ) : null}
 
       {/*
         下書きの復元は黙ってやらない。いつ時点の下書きかを出し、破棄できるようにする (ux-design §4-1)。
       */}
       {draftRestoredAt !== null ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-md border border-line bg-subtle px-4 py-2 text-xs text-ink">
-          <span>
-            <span className="num">{draftStamp(draftRestoredAt)}</span>{" "}
-            時点の入力途中(まだ保存していないもの)を読み込みました。
-          </span>
-          <button
-            type="button"
-            onClick={discardDraft}
-            className="btn btn-secondary pressable"
-          >
+        <AlertPanel
+          tone="info"
+          title={`${draftStamp(draftRestoredAt)} 時点の入力途中(まだ保存していないもの)を読み込みました。`}
+        >
+          <button type="button" onClick={discardDraft} className="btn btn-secondary btn-sm pressable">
             下書きを破棄して保存済みの状態に戻す
           </button>
-        </div>
+        </AlertPanel>
       ) : null}
 
       <section className="rise-in card p-5">
@@ -1183,27 +1210,26 @@ export function ManualEntryStepper({
               <p className="mt-0.5 text-[11px] text-ink-muted">端数は先頭の車番へ</p>
             </div>
 
-            <details className="mt-3 rounded-md border border-line bg-subtle px-3 py-2">
-              <summary className="cursor-pointer text-xs font-semibold text-ink">
-                配分先の車番を変える(いまは {parseVehicleNoList(kirinTargets).join("・") || "未設定"})
-              </summary>
-              <label className="mt-2 flex flex-col gap-1 text-xs text-ink">
-                専属車両の車番(カンマ区切り)
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={kirinTargets}
-                  onChange={(e) => {
-                    setKirinTargets(e.target.value);
-                    markDirty();
-                  }}
-                  className="num w-40 rounded-md border border-line bg-white px-3 py-2"
-                />
-              </label>
+            <Disclosure
+              summary={`配分先の車番を変える（いまは ${parseVehicleNoList(kirinTargets).join("・") || "未設定"}）`}
+            >
+                <label className="flex flex-col gap-1 text-xs text-ink">
+                  専属車両の車番（カンマ区切り）
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={kirinTargets}
+                    onChange={(e) => {
+                      setKirinTargets(e.target.value);
+                      markDirty();
+                    }}
+                    className={`${FIELD_CLASS} num w-40`}
+                  />
+                </label>
               <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
                 設定は保存され、翌月以降もこの車番に配分されます。他の車両のキリン配送はスポット運行のため対象外です。
               </p>
-            </details>
+            </Disclosure>
           </div>
         ) : null}
 
@@ -1239,38 +1265,39 @@ export function ManualEntryStepper({
                 ここで気づけるようにし、前月の単価をワンタップで引き継げるようにする。
               */}
               {tankPriceCarried ? (
-                <div className="mt-2 rounded-md border border-caution-border bg-caution-soft px-3 py-2">
-                  <p className="text-xs font-bold text-ink">
-                    先月({previousYearMonth})の単価をそのまま入れています
-                  </p>
-                  <p className="mt-1 text-xs leading-relaxed text-ink">
-                    今月まだ単価を決めていないため、先月の
-                    <span className="num">{prevTankPricePerLiter.toLocaleString("ja-JP")}</span>
-                    円/ℓ を入れた状態にしています。今月の仕入単価を確認してください。
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // 「確認した」= 今月の単価として本人が決めた、なので人が入れた値に変える
-                      setTankPriceRaw(String(prevTankPricePerLiter));
-                      markDirty();
-                    }}
-                    className="btn btn-secondary btn-sm pressable mt-2"
+                <div className="mt-2">
+                  <AlertPanel
+                    tone="caution"
+                    title={`先月(${previousYearMonth})の単価をそのまま入れています`}
                   >
-                    確認しました(先月と同じでよい)
-                  </button>
+                    <p>
+                      今月まだ単価を決めていないため、先月の
+                      <span className="num">{prevTankPricePerLiter.toLocaleString("ja-JP")}</span>
+                      円/ℓ を入れた状態にしています。今月の仕入単価を確認してください。
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // 「確認した」= 今月の単価として本人が決めた、なので人が入れた値に変える
+                        setTankPriceRaw(String(prevTankPricePerLiter));
+                        markDirty();
+                      }}
+                      className="btn btn-secondary btn-sm pressable mt-2"
+                    >
+                      確認しました(先月と同じでよい)
+                    </button>
+                  </AlertPanel>
                 </div>
               ) : null}
               {tankPrice === 0 ? (
-                <div className="mt-2 rounded-md border border-caution-border bg-caution-soft px-3 py-2">
-                  <p className="text-xs font-bold text-ink">
-                    単価が0のままだと、全車の軽油代が0円になります
-                  </p>
-                  <p className="mt-1 text-xs text-ink">
-                    {prevTankPricePerLiter > 0
-                      ? `先月(${previousYearMonth})は ${prevTankPricePerLiter.toLocaleString("ja-JP")} 円/ℓ でした。今月の仕入単価を入力してください。`
-                      : "先月の単価が記録されていないため、今月の仕入単価を入力してください。"}
-                  </p>
+                <div className="mt-2">
+                  <AlertPanel tone="caution" title="単価が0のままだと、全車の軽油代が0円になります">
+                    <p>
+                      {prevTankPricePerLiter > 0
+                        ? `先月(${previousYearMonth})は ${prevTankPricePerLiter.toLocaleString("ja-JP")} 円/ℓ でした。今月の仕入単価を入力してください。`
+                        : "先月の単価が記録されていないため、今月の仕入単価を入力してください。"}
+                    </p>
+                  </AlertPanel>
                 </div>
               ) : null}
               {/*
@@ -1283,7 +1310,7 @@ export function ManualEntryStepper({
                 デジタコの総給油量は取り込んでいますが、この計算には使っていません。
               </p>
             </div>
-            {renderToolbar()}
+            {renderCopyTools()}
             {renderFieldTable(FUEL_FIELDS)}
           </div>
         ) : null}
@@ -1301,7 +1328,7 @@ export function ManualEntryStepper({
         {step === 3 ? (
           <div className="flex flex-col gap-4">
             <h2 className="text-sm font-bold text-ink">修繕費・タイヤ</h2>
-            {renderToolbar()}
+            {renderCopyTools()}
             {renderFieldTable(EXPENSE_FIELDS)}
           </div>
         ) : null}
@@ -1309,7 +1336,7 @@ export function ManualEntryStepper({
         {step === 4 ? (
           <div className="flex flex-col gap-4">
             <h2 className="text-sm font-bold text-ink">高速料金</h2>
-            {renderToolbar()}
+            {renderCopyTools()}
             {renderFieldTable(TOLL_FIELDS)}
           </div>
         ) : null}
@@ -1324,62 +1351,88 @@ export function ManualEntryStepper({
               台数だけ出しても「請求書と合っているか」は確かめられない。
               入力した金額を項目ごとに合計して、紙の合計欄と突き合わせられるようにする。
             */}
-            <table className="mt-4 min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-line">
-                  <th className="py-1.5 text-left text-xs font-bold text-ink-muted">項目</th>
-                  <th className="py-1.5 text-right text-xs font-bold text-ink-muted">入力した合計</th>
-                  <th className="py-1.5 text-right text-xs font-bold text-ink-muted">入力した台数</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...FUEL_FIELDS, ...EXPENSE_FIELDS, ...TOLL_FIELDS].map((f) => {
-                  const total = summary[f.key];
-                  return (
-                    <tr key={f.key} className="border-b border-line">
-                      <td className="py-1.5 text-ink">
+            {/*
+              表かカードか (T7 §4-1)。項目ごとの合計を紙の請求書と縦に突き合わせるので表。
+              行数は入力項目の数 (十数行) で固定なので高さは止めない。
+            */}
+            <div className="mt-4">
+              <DataTable
+                caption="入力した金額の項目ごとの合計"
+                columns={[
+                  {
+                    key: "label",
+                    header: "項目",
+                    cell: (f: FieldDef) => (
+                      <>
                         {f.label}
-                        <span className="ml-1 text-xs text-ink-muted">({f.unit})</span>
-                      </td>
-                      <td className="num py-1.5 text-right font-semibold text-ink">
-                        {total.sum.toLocaleString("ja-JP")}
-                      </td>
-                      <td className="num py-1.5 text-right text-ink-muted">
-                        {total.count}台
-                        {f.keepsBlank && total.count < vehicles.length ? (
+                        <span className="ml-1 text-ink-muted">（{f.unit}）</span>
+                      </>
+                    ),
+                  },
+                  {
+                    key: "sum",
+                    header: "入力した合計",
+                    align: "right",
+                    cellClassName: "font-semibold text-ink",
+                    cell: (f: FieldDef) => summary[f.key].sum.toLocaleString("ja-JP"),
+                  },
+                  {
+                    key: "count",
+                    header: "入力した台数",
+                    unit: "台",
+                    align: "right",
+                    cellClassName: "text-ink-muted",
+                    cell: (f: FieldDef) => (
+                      <>
+                        {summary[f.key].count}
+                        {f.keepsBlank && summary[f.key].count < vehicles.length ? (
                           <span className="ml-1">
-                            (残り{vehicles.length - total.count}台は自動計算)
+                            （残り{vehicles.length - summary[f.key].count}台は自動計算）
                           </span>
                         ) : null}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <dl className="mt-4 grid grid-cols-[10rem_1fr] gap-2 text-sm">
-              <dt className="text-xs text-ink-muted">対象車両</dt>
-              <dd className="num text-ink">{vehicles.length}台</dd>
-              <dt className="text-xs text-ink-muted">インタンク単価</dt>
-              <dd className="num text-ink">
-                {tankPrice.toLocaleString("ja-JP")}円/ℓ
-                {tankPrice === 0 ? (
-                  <span className="ml-2 text-xs font-bold text-danger">
-                    0のままです。全車の軽油代が0円になります
-                  </span>
-                ) : null}
-              </dd>
-              <dt className="text-xs text-ink-muted">キリンの配分</dt>
-              <dd className="num text-ink">
-                {(
-                  (parseSumExpression(kirinTransport) ?? 0) +
-                  (parseSumExpression(kirinManagement) ?? 0)
-                ).toLocaleString("ja-JP")}
-                円 を {parseVehicleNoList(kirinTargets).join("・") || "—"}番へ
-              </dd>
-              <dt className="text-xs text-ink-muted">給与取込</dt>
-              <dd className="text-ink">{payrollStatus ? "取込済み" : "未取込"}</dd>
-            </dl>
+                      </>
+                    ),
+                  },
+                ]}
+                rows={[...FUEL_FIELDS, ...EXPENSE_FIELDS, ...TOLL_FIELDS]}
+                rowKey={(f) => f.key}
+                empty={
+                  <p className="text-xs text-ink-muted">
+                    集計する入力項目がありません。前のステップに戻って入力してください。
+                  </p>
+                }
+              />
+            </div>
+            {/* 1件ぶんの前提を読むだけの並びなので、表ではなく項目と値の対にする (T7 §4-1) */}
+            <DefinitionList
+              className="mt-4"
+              items={[
+                { term: "対象車両", value: <span className="num">{vehicles.length}台</span> },
+                {
+                  term: "インタンク単価",
+                  value: <span className="num">{tankPrice.toLocaleString("ja-JP")}円/ℓ</span>,
+                  note:
+                    tankPrice === 0 ? (
+                      <span className="font-bold text-danger">
+                        0のままです。全車の軽油代が0円になります
+                      </span>
+                    ) : undefined,
+                },
+                {
+                  term: "キリンの配分",
+                  value: (
+                    <span className="num">
+                      {(
+                        (parseSumExpression(kirinTransport) ?? 0) +
+                        (parseSumExpression(kirinManagement) ?? 0)
+                      ).toLocaleString("ja-JP")}
+                      円 を {parseVehicleNoList(kirinTargets).join("・") || "—"}番へ
+                    </span>
+                  ),
+                },
+                { term: "給与取込", value: payrollStatus ? "取込済み" : "未取込" },
+              ]}
+            />
 
             {/*
               確定の直前に、人がまだ見ていない数字をもう一度数える。
@@ -1387,9 +1440,9 @@ export function ManualEntryStepper({
               ここで数え直さないと確認されないまま締まる。
             */}
             {tankPriceCarried || copied.size > 0 || unenteredRepairCount > 0 ? (
-              <div className="mt-4 rounded-md border border-caution-border bg-caution-soft px-4 py-3">
-                <p className="text-sm font-bold text-ink">確定の前に見ておいてほしいもの</p>
-                <ul className="mt-1.5 flex list-disc flex-col gap-1 pl-4 text-xs leading-relaxed text-ink">
+              <div className="mt-4">
+                <AlertPanel tone="caution" title="確定の前に見ておいてほしいもの">
+                <ul className="flex list-disc flex-col gap-1 pl-4">
                   {tankPriceCarried ? (
                     <li>
                       インタンク単価が先月({previousYearMonth})のままです(
@@ -1411,6 +1464,7 @@ export function ManualEntryStepper({
                     </li>
                   ) : null}
                 </ul>
+                </AlertPanel>
               </div>
             ) : null}
 
@@ -1427,25 +1481,30 @@ export function ManualEntryStepper({
               成功として見せると、前に入っていた古い表がそのまま残っていることに気づけない。
             */}
             {submitState === "done" && savedVehicleCount === 0 ? (
-              <div className="mt-3 rounded-md border border-caution-border bg-caution-soft px-4 py-3">
-                <p className="text-sm font-bold text-ink">収支表は1行も作られませんでした</p>
-                <p className="mt-1 text-xs leading-relaxed text-ink">
-                  車両マスタが未登録のため、計算の起点になる車両がありません。表示されている収支表は以前のデータのままです。
-                </p>
+              <div className="mt-3">
+                <AlertPanel tone="caution" title="収支表は1行も作られませんでした">
+                  <p>
+                    車両マスタが未登録のため、計算の起点になる車両がありません。表示されている収支表は以前のデータのままです。
+                  </p>
+                </AlertPanel>
               </div>
             ) : null}
             {submitState === "done" && (savedVehicleCount ?? 0) > 0 ? (
-              <div className="mt-3 rounded-md border border-brand bg-brand-soft px-4 py-3">
-                <p className="text-sm font-semibold text-ink">
-                  {`収支表を作り直しました(${savedVehicleCount}台)。月次収支表に反映されています。`}
-                </p>
-                <p className="mt-1 text-xs text-ink-muted">続けて、収支表のチェック(STEP7)で異常値を確認してください</p>
-                <Link
-                  href={`/anomaly?ym=${yearMonth}`}
-                  className="btn btn-primary pressable mt-3 inline-block"
+              <div className="mt-3">
+                <AlertPanel
+                  tone="success"
+                  title={`収支表を作り直しました(${savedVehicleCount}台)。月次収支表に反映されています。`}
                 >
-                  次へ: 収支表のチェックに進む
-                </Link>
+                  <p className="text-ink-muted">
+                    続けて、収支表のチェック（STEP7）で異常値を確認してください
+                  </p>
+                  <Link
+                    href={`/anomaly?ym=${yearMonth}`}
+                    className="btn btn-primary pressable mt-3 inline-block"
+                  >
+                    次へ: 収支表のチェックに進む
+                  </Link>
+                </AlertPanel>
               </div>
             ) : null}
           </div>
@@ -1456,9 +1515,9 @@ export function ManualEntryStepper({
           押した時点では何もしていないので、「やめる」でそのまま入力に戻れる。
         */}
         {pendingRelease !== null ? (
-          <div className="mt-4 rounded-md border border-caution-border bg-caution-soft px-4 py-3">
-            <p className="text-sm font-bold text-ink">確定を解除して保存しますか?</p>
-            <p className="mt-1 text-xs leading-relaxed text-ink">
+          <div className="mt-4">
+            <AlertPanel tone="caution" title="確定を解除して保存しますか?">
+            <p>
               この月は確定済みです。保存すると収支表を作り直すため、確定は解除されます。
               直したあとに、収支表の画面でもう一度確定してください。
             </p>
@@ -1482,12 +1541,13 @@ export function ManualEntryStepper({
                 やめる
               </button>
             </div>
+            </AlertPanel>
           </div>
         ) : null}
 
         {errorMessage ? (
-          <div className="mt-3 rounded-md border border-caution-border bg-caution-soft px-4 py-3 text-xs">
-            {errorMessage}
+          <div className="mt-3">
+            <AlertPanel tone="danger" title={errorMessage} />
           </div>
         ) : null}
       </section>

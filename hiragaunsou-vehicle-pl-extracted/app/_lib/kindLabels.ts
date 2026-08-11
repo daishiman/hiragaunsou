@@ -25,9 +25,26 @@ const SOURCE_TYPE_LABELS: Record<string, string> = {
   payroll: "給与集計表（日給者）",
   monthly_pl_workbook: "★車両別収支計算用",
   manual_entry: "手入力",
+  // マスタ取込の記録も同じ一覧に並ぶ。ここに無いとキーがそのまま画面に出る。
+  vehicle_master: "車両マスタ",
+  driver_master: "運転者マスタ",
   unknown: "判別できない帳票",
 };
 
 export function sourceTypeLabel(sourceType: string): string {
   return SOURCE_TYPE_LABELS[sourceType] ?? sourceType;
+}
+
+/**
+ * 取込の状態 (import_batch.status)。
+ * DBには "completed" のような英語が入っているので、画面に出す前にここで訳す。
+ */
+const IMPORT_BATCH_STATUS_LABELS: Record<string, string> = {
+  completed: "取込済み",
+  failed: "失敗",
+  partial: "一部だけ取込済み",
+};
+
+export function importBatchStatusLabel(status: string): string {
+  return IMPORT_BATCH_STATUS_LABELS[status] ?? status;
 }

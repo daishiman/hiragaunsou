@@ -8,12 +8,19 @@ import {
 } from "../../../src/domain/repositories/AiProviderCredentialRepository";
 import { MODEL_CATALOG, defaultModelId } from "../../../src/domain/rules/aiModelCatalog";
 import { ConfirmDialog } from "../../_components/ConfirmDialog";
+import { AlertPanel } from "../../_components/AlertPanel";
+import { Card, Prose } from "../../_components/Card";
+import { FIELD_CLASS, FIELD_LABEL_CLASS } from "../../_components/formStyles";
 
+/**
+ * 呼び方は「プロバイダ」で統一する（長音を付けない・T7 §1-1）。
+ * 括弧は全角（）を使う（T7 §1-4）。
+ */
 const PROVIDER_LABELS: Record<AiProvider, string> = {
-  anthropic: "Anthropic (Claude)",
-  openai: "OpenAI (ChatGPT) (未対応)",
-  google: "Google (Gemini) (未対応)",
-  xai: "xAI (Grok) (未対応)",
+  anthropic: "Anthropic（Claude）",
+  openai: "OpenAI（ChatGPT）（未対応）",
+  google: "Google（Gemini）（未対応）",
+  xai: "xAI（Grok）（未対応）",
 };
 
 /**
@@ -104,21 +111,27 @@ export function AiSettingsManager({
     }
   }
 
+  /*
+    T7 §4-1 の質問への答え。
+      APIキーの登録 — 1件を読んで直す作業。列をまたいで見比べる場面ではないので
+        表にせず、項目名と入力欄を縦に並べる。
+      登録済みのAPIキー — プロバイダは最大4件で、1件ずつ「消すかどうか」を判断する。
+        見比べる表ではなくカード（1件ずつの操作付き）にする。
+  */
   return (
     <div className="flex flex-col gap-6">
-      <section className="card p-5">
-        <h2 className="text-sm font-bold text-ink">APIキーを登録・上書きする</h2>
-        <p className="mt-1 text-xs text-ink-muted">
-          登録済みのプロバイダも、この画面から再入力すると丸ごと上書きされます(部分編集はできません)。
-        </p>
+      <Card title="APIキーを登録・上書きする">
+        <Prose>
+          登録済みのプロバイダも、この画面から再入力すると丸ごと上書きされます（部分編集はできません）。
+        </Prose>
 
         <div className="mt-4 flex flex-col gap-4">
-          <label className="flex flex-col gap-1 text-xs text-ink-muted">
-            プロバイダ
+          <label className="flex flex-col gap-1">
+            <span className={FIELD_LABEL_CLASS}>プロバイダ</span>
             <select
               value={provider}
               onChange={(e) => handleProviderChange(e.target.value as AiProvider)}
-              className="rounded-md border border-line bg-white px-2 py-1.5 text-sm text-ink"
+              className={FIELD_CLASS}
             >
               {AI_PROVIDERS.map((p) => (
                 <option key={p} value={p}>
@@ -129,10 +142,10 @@ export function AiSettingsManager({
           </label>
 
           {UNSUPPORTED_PROVIDERS.has(provider) ? (
-            <div className="rounded-md border border-caution-border bg-caution-soft px-4 py-3 text-xs leading-relaxed">
-              現在このプロバイダーは未対応です(近日対応予定)。APIキーを保存すること自体は可能ですが、
+            <AlertPanel tone="caution" title="このプロバイダはまだ使われません">
+              現在このプロバイダは未対応です（近日対応予定）。APIキーを保存すること自体は可能ですが、
               AI要因分析などの機能からはまだ呼び出されず、保存しても利用されません。
-            </div>
+            </AlertPanel>
           ) : null}
 
           <p className="text-xs text-ink-muted">
@@ -147,25 +160,21 @@ export function AiSettingsManager({
             </a>
           </p>
 
-          <label className="flex flex-col gap-1 text-xs text-ink-muted">
-            APIキー
+          <label className="flex flex-col gap-1">
+            <span className={FIELD_LABEL_CLASS}>APIキー</span>
             <input
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder={existing ? `登録済み(末尾 ${existing.apiKeyLast4})を上書きする場合のみ入力` : "sk-..."}
+              placeholder={existing ? `登録済み（末尾 ${existing.apiKeyLast4}）を上書きする場合のみ入力` : "sk-..."}
               autoComplete="off"
-              className="rounded-md border border-line bg-white px-2 py-1.5 text-sm text-ink"
+              className={FIELD_CLASS}
             />
           </label>
 
-          <label className="flex flex-col gap-1 text-xs text-ink-muted">
-            モデル
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className="rounded-md border border-line bg-white px-2 py-1.5 text-sm text-ink"
-            >
+          <label className="flex flex-col gap-1">
+            <span className={FIELD_LABEL_CLASS}>モデル</span>
+            <select value={model} onChange={(e) => setModel(e.target.value)} className={FIELD_CLASS}>
               {MODEL_CATALOG[provider].map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.label}
@@ -177,10 +186,11 @@ export function AiSettingsManager({
             </span>
           </label>
 
+          {/* 失敗は注意(caution)ではなく danger で出す。色は意味にだけ使う。 */}
           {saveState.status === "error" ? (
-            <div className="rounded-md border border-caution-border bg-caution-soft px-4 py-3 text-xs">
+            <AlertPanel tone="danger" title="保存できませんでした">
               {saveState.message}
-            </div>
+            </AlertPanel>
           ) : null}
 
           <button
@@ -192,24 +202,26 @@ export function AiSettingsManager({
             {saveState.status === "saving" ? "保存しています…" : "保存する"}
           </button>
         </div>
-      </section>
+      </Card>
 
-      <section className="card p-5">
-        <h2 className="text-sm font-bold text-ink">登録済みのAPIキー</h2>
+      <Card title="登録済みのAPIキー">
         {credentials.length === 0 ? (
-          <p className="mt-2 text-sm text-ink-muted">まだ何も登録されていません。</p>
+          <Prose>
+            APIキーがまだ1件も登録されていないため、一覧は空です。
+            上の「APIキーを登録・上書きする」でプロバイダとキーを入れると、ここに出ます。
+          </Prose>
         ) : (
-          <div className="mt-3 flex flex-col">
+          <div className="flex flex-col">
             {credentials.map((c) => (
               <div
                 key={c.provider}
                 className="flex items-center justify-between gap-3 border-b border-line py-3 text-sm last:border-b-0"
               >
-                <div>
+                <div className="min-w-0">
                   <p className="font-semibold text-ink">{PROVIDER_LABELS[c.provider]}</p>
                   <p className="text-xs text-ink-muted">
                     末尾 {c.apiKeyLast4} / {c.model} / 更新: {new Date(c.updatedAt).toLocaleString("ja-JP")}
-                    {c.updatedBy ? ` (${c.updatedBy})` : ""}
+                    {c.updatedBy ? `（${c.updatedBy}）` : ""}
                   </p>
                   {UNSUPPORTED_PROVIDERS.has(c.provider) ? (
                     <p className="mt-0.5 text-[11px] text-danger">
@@ -229,7 +241,7 @@ export function AiSettingsManager({
             ))}
           </div>
         )}
-      </section>
+      </Card>
 
       <ConfirmDialog
         open={pendingDelete !== null}

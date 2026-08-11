@@ -17,8 +17,13 @@ import { ScreenHeader } from "../../_components/ScreenHeader";
 import { EmptyState } from "../../_components/EmptyState";
 import { PeriodSelect } from "../../_components/PeriodSelect";
 import { StatTile } from "../../_components/StatTile";
+import { StickyFilterBar } from "../../_components/StickyFilterBar";
+import { AlertPanel } from "../../_components/AlertPanel";
+import { DataTable, type DataTableColumn } from "../../_components/DataTable";
 import { TrendBars } from "../../_components/charts/TrendBars";
 import { ShareBars } from "../../_components/charts/ShareBars";
+import { findScreen } from "../../_lib/screens";
+import type { DepotAggregate } from "../../../src/domain/rules/periodAggregation";
 
 /**
  * 経営ダッシュボード。
@@ -26,7 +31,44 @@ import { ShareBars } from "../../_components/charts/ShareBars";
  * この画面の目的は1つ:「この期間、儲かっているか。どこが食っているか」。
  * 主役は期間損益の1数字で、それ以外はすべて脇役として静かに置く。
  * 説明文は書かず、推移・構成比・ランキングの図が直接答える形にしている。
+ *
+ * 器の判定 (T7 §4-1): 会社全体の結論は「1件を読む」なので要約カード(StatTile)と図に任せる。
+ * ただし営業所別だけは「所属をまたいで損益を見比べる」ので表 (DataTable) のままにする。
  */
+
+/** 営業所別の列。数字は右揃え・単位は見出しに出し、セルには入れない (T7 §4-4) */
+const DEPOT_COLUMNS: readonly DataTableColumn<DepotAggregate>[] = [
+  { key: "depot", header: "所属", cell: (d) => d.depot },
+  { key: "cars", header: "台数", unit: "台", align: "right", priority: "low", cell: (d) => num(d.cars) },
+  {
+    key: "deficitCars",
+    header: "赤字",
+    unit: "台",
+    align: "right",
+    cell: (d) => (
+      <span className={d.deficitCars > 0 ? "font-bold text-danger" : "text-ink-muted"}>
+        {num(d.deficitCars)}
+      </span>
+    ),
+  },
+  { key: "sales", header: "売上", unit: "円", align: "right", priority: "low", cell: (d) => yen(d.sales) },
+  {
+    key: "profit",
+    header: "損益",
+    unit: "円",
+    align: "right",
+    cell: (d) => (
+      <span className={`font-bold ${d.profit < 0 ? "text-danger" : "text-ink"}`}>{yen(d.profit)}</span>
+    ),
+  },
+  {
+    key: "margin",
+    header: "利益率",
+    align: "right",
+    priority: "low",
+    cell: (d) => <span className="text-ink-muted">{pct(d.margin)}</span>,
+  },
+];
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -63,35 +105,48 @@ export default async function DashboardPage({
 
   return (
     <>
-      <ScreenHeader
-        screen="/dashboard"
-        action={
-          <PeriodSelect
-            basePath="/dashboard"
-            from={from}
-            to={to}
-            presets={presets}
-            options={selectableYearMonths(25)}
-          />
-        }
-      />
+      <ScreenHeader screen="/dashboard" />
 
-      <p className="-mt-3 mb-4 text-xs font-semibold text-ink-muted">{data.label}</p>
+      {/*
+        期間の指定と「いま何を見ているか」は、この画面の数字の前提そのもの。
+        スクロールで消えないように帯へ貼る (T7 §2-3)。工程タブが無いので below は既定。
+        annual の補助情報行と同じ作り (どちらも帯に集約し、-mt-3 の手書き行は持たない)。
+      */}
+      <StickyFilterBar
+        summary={
+          <>
+            {data.label}
+            {data.isEmpty ? null : (
+              <>
+                {" ・ "}
+                <span className="num">{num(data.vehicleCount)}</span>台
+              </>
+            )}
+          </>
+        }
+      >
+        <PeriodSelect
+          basePath="/dashboard"
+          from={from}
+          to={to}
+          presets={presets}
+          options={selectableYearMonths(25)}
+        />
+      </StickyFilterBar>
 
       {/*
         異常の早期発見: 分析画面から作業画面(チェック)へ気づいた瞬間に橋渡しする。
         0件のときは静かに消え、認知負荷を増やさない。
       */}
       {anomalyCount > 0 && (
-        <Link
-          href="/anomaly"
-          className="pressable mb-4 flex items-center justify-between gap-2 rounded-lg border border-danger/30 bg-danger/5 px-4 py-2.5 text-sm hover:bg-danger/10"
-        >
-          <span className="font-semibold text-danger">
-            未処理の異常が <span className="num">{anomalyCount}</span> 件あります
-          </span>
-          <span className="text-xs font-semibold text-danger">チェックへ →</span>
-        </Link>
+        <div className="mb-4">
+          <AlertPanel tone="danger" title={`未処理の異常が ${anomalyCount} 件あります`}>
+            そのままにすると、この期間の損益に直していない値が混ざったままになります。
+            <Link href="/anomaly" className="ml-1 font-semibold text-danger">
+              {findScreen("/anomaly")?.label ?? "チェック"}で1件ずつ判定する →
+            </Link>
+          </AlertPanel>
+        </div>
       )}
 
       {data.isEmpty ? (
@@ -129,7 +184,7 @@ export default async function DashboardPage({
             <StatTile
               label="1kmあたり原価"
               value={kmPriceLabel(data.costPerKm)}
-              sub={`売上 ${kmPriceLabel(data.salesPerKm)} / 分岐 ${num(
+              sub={`1kmあたり売上 ${kmPriceLabel(data.salesPerKm)} / 損益分岐 ${num(
                 data.thresholds.breakEvenKmPrice,
               )}円`}
             />
@@ -191,7 +246,15 @@ export default async function DashboardPage({
                 <p className="num text-xs text-ink-muted">{num(data.deficitCount)}台</p>
               </div>
               {data.deficitRanking.length === 0 ? (
-                <p className="mt-6 text-center text-sm text-ink-muted">赤字の車両はありません</p>
+                <p className="mt-6 text-center text-sm text-ink-muted">
+                  この期間はすべての車両が黒字なので、並べる車両がありません。
+                  <br />
+                  原因の型で見たくなったときは
+                  <Link href={`/deficit?ym=${to}`} className="font-semibold text-brand-deep">
+                    {findScreen("/deficit")?.label ?? "赤字の理由"}へ
+                  </Link>
+                  。
+                </p>
               ) : (
                 <div className="mt-3">
                   <ShareBars
@@ -211,43 +274,20 @@ export default async function DashboardPage({
           {data.depots.length > 1 && (
             <section className="mt-4 card p-5">
               <h2 className="text-sm font-bold text-ink">営業所別</h2>
-              <div className="mt-3 overflow-x-auto">
-                <table className="data-table w-full min-w-[30rem] text-sm">
-                  <thead>
-                    <tr className="border-b border-line text-xs font-medium text-ink-muted">
-                      <th className="py-2 text-left">所属</th>
-                      <th className="py-2 text-right">台数</th>
-                      <th className="py-2 text-right">赤字</th>
-                      <th className="py-2 text-right">売上(円)</th>
-                      <th className="py-2 text-right">損益(円)</th>
-                      <th className="py-2 text-right">利益率</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.depots.map((d) => (
-                      <tr key={d.depot} className="border-b border-line last:border-b-0">
-                        <td className="py-2 text-ink">{d.depot}</td>
-                        <td className="num py-2 text-right">{num(d.cars)}</td>
-                        <td
-                          className={`num py-2 text-right ${
-                            d.deficitCars > 0 ? "font-bold text-danger" : "text-ink-muted"
-                          }`}
-                        >
-                          {num(d.deficitCars)}
-                        </td>
-                        <td className="num py-2 text-right">{yen(d.sales)}</td>
-                        <td
-                          className={`num py-2 text-right font-bold ${
-                            d.profit < 0 ? "text-danger" : "text-ink"
-                          }`}
-                        >
-                          {yen(d.profit)}
-                        </td>
-                        <td className="num py-2 text-right text-ink-muted">{pct(d.margin)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              {/* 器の判定 (T7 §4-1): 所属をまたいで損益を見比べる表なので、表のままにする */}
+              <div className="mt-3">
+                <DataTable
+                  caption="営業所別の台数・売上・損益"
+                  columns={DEPOT_COLUMNS}
+                  rows={data.depots}
+                  rowKey={(d) => d.depot}
+                  maxHeight="24rem"
+                  empty={
+                    <p className="py-6 text-center text-xs text-ink-muted">
+                      所属が入っている車両がありません。車両マスタ管理で所属を登録すると、ここに並びます。
+                    </p>
+                  }
+                />
               </div>
             </section>
           )}
@@ -255,7 +295,7 @@ export default async function DashboardPage({
           {/* 一段深い分析は既定で畳む。開く前から中身が分かるラベルにする */}
           <details className="group mt-4 card">
             <summary className="cursor-pointer list-none px-5 py-4 text-sm font-bold text-ink hover:bg-subtle">
-              km単価の分布を見る
+              1kmあたり売上の分布を見る
               <span className="ml-2 text-xs font-normal text-ink-muted">
                 {num(data.thresholds.breakEvenKmPrice)}円/km を下回る帯が赤字の主戦場
               </span>
@@ -274,7 +314,7 @@ export default async function DashboardPage({
 
           <p className="mt-4 text-center text-xs text-ink-muted">
             <Link href={`/annual?ym=${to}`} className="font-semibold text-brand-deep hover:underline">
-              年間集計・対前年を見る →
+              {findScreen("/annual")?.label ?? "年間集計"}を見る →
             </Link>
           </p>
         </>

@@ -8,6 +8,7 @@ import { D1VehiclePlRepository } from "../../../src/infrastructure/db/D1VehicleP
 import { D1ReviewFlagRepository } from "../../../src/infrastructure/db/D1ReviewFlagRepository";
 import { GetAnomalyQueueUseCase } from "../../../src/usecase/steps/getAnomalyQueue";
 import { selectableYearMonths } from "../../_lib/yearMonth";
+import { findScreen } from "../../_lib/screens";
 import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
 import { ScreenHeader } from "../../_components/ScreenHeader";
@@ -28,7 +29,13 @@ export default async function AnomalyPage({
   if (!session) redirect("/sign-in");
   // 権限が無い人を黙ってホームへ戻すと、押した本人にはリンクが壊れたようにしか見えない。
   if (!checkAccess(session, "view")) {
-    return <AccessDenied screenName="チェック" permission="view" />;
+    // 画面の名前は screens.ts が唯一の出どころ。ここで別名を書くと横のメニューと食い違う
+    return (
+      <AccessDenied
+        screenName={findScreen("/anomaly")?.label ?? "チェック（1件ずつ）"}
+        permission="view"
+      />
+    );
   }
 
   const { ym } = await searchParams;

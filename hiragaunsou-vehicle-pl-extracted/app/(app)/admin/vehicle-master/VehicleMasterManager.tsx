@@ -17,7 +17,13 @@ import { AlertPanel } from "../../../_components/AlertPanel";
 import { Disclosure } from "../../../_components/Disclosure";
 import { ImportCheckPanel } from "../../../_components/ImportCheckPanel";
 import { StickyActionBar } from "../../../_components/StickyActionBar";
+import { StickyFilterBar } from "../../../_components/StickyFilterBar";
 import { StickyStepHeader } from "../../../_components/StickyStepHeader";
+import { DataTable, type DataTableColumn } from "../../../_components/DataTable";
+import { SectionHeading } from "../../../_components/SectionHeading";
+import { Badge } from "../../../_components/Badge";
+import { Prose } from "../../../_components/Card";
+import { FILE_FIELD_CLASS } from "../../../_components/formStyles";
 import {
   EditableRowCells,
   EditFormActionBar,
@@ -25,7 +31,7 @@ import {
   useEditableRecords,
   type EditableFieldDef,
 } from "../../../_components/editForm";
-import { yen } from "../../../_lib/format";
+import { yearMonthLabel, yen } from "../../../_lib/format";
 
 /** 取込の3手順。手入力画面と同じ札を出し、いまどこにいるかを一目で分かるようにする。 */
 const IMPORT_STEPS = [
@@ -40,7 +46,7 @@ const COST_CATEGORY_LABELS: Record<string, string> = {
   semiTrailer: "セミトレーラ",
   unic: "ユニック",
   medium: "中型",
-  trailer: "被けん引車(トレーラ)",
+  trailer: "被けん引車（トレーラ）",
 };
 
 /**
@@ -104,6 +110,20 @@ interface CheckState {
 const FALLBACK_NOTE =
   "保険・税・リース料は月ごとの実績ではなく車両ごとの決まった金額なので、この月から読んでも同じ値が入ります。";
 
+/**
+ * 車両マスタ管理。
+ *
+ * ■ 表か否か（T7 §4-1 の質問への答え）
+ * 取込内容の確認も現在のマスタも「106台を行をまたいで見比べ、違う行だけを直す」ための
+ * 画面なので、器は表のままでよい。1台を読んで判断する画面（/vehicle/[車番]）とは別。
+ *
+ * ■ 列見出しの固定（T7 §2-1）
+ * 読むだけの表（取込内容の確認）は共通部品 DataTable に載せ、maxHeight で見出しを固定する。
+ * 現在のマスタは1行が入力欄（TextEntryField / NumberEntryField）でできており、DataTable の
+ * 「1列 = 1セル」の作りに載せると入力欄の作法（Enterで次の行・変更の札）が壊れる。
+ * そこで表そのものは残し、「overflow の箱では sticky が効かないので高さの上限を与えて
+ * 縦スクロールにする」という同じ理屈だけを当てて、列見出しを固定する。
+ */
 export function VehicleMasterManager({
   initialVehicles,
   yearMonth,
@@ -294,10 +314,10 @@ export function VehicleMasterManager({
       const towed = towedCount > 0 ? `・けん引先${towedCount}組` : "";
       setDone(
         `${(data.inserted ?? 0) + (data.updated ?? 0)}台を登録しました` +
-          `(新規${data.inserted ?? 0}台・更新${data.updated ?? 0}台${towed})。` +
+          `（新規${data.inserted ?? 0}台・更新${data.updated ?? 0}台${towed}）。` +
           (data.recalculated
-            ? `${yearMonth}の収支表も作り直しました。`
-            : `${yearMonth}の収支表はまだ作り直していません(データ取込が済んでから収支表を作成してください)。`),
+            ? `${yearMonthLabel(yearMonth)}の収支表も作り直しました。`
+            : `${yearMonthLabel(yearMonth)}の収支表はまだ作り直していません（データ取込が済んでから収支表を作成してください）。`),
       );
       setPreview(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -328,9 +348,57 @@ export function VehicleMasterManager({
     (v) => v.costCategory === "trailer" && !v.towedByVehicleNo,
   );
 
+  /** 取込内容の確認。読むだけの表なので共通部品に載せ、maxHeight で見出しを固定する。 */
+  const previewColumns: DataTableColumn<VehicleMasterImportRow>[] = [
+    {
+      key: "kind",
+      header: "区分",
+      cell: (r) =>
+        existingNos.has(r.vehicleNo) ? (
+          <Badge tone="neutral">更新</Badge>
+        ) : (
+          <Badge tone="brand">新規</Badge>
+        ),
+    },
+    { key: "vehicleNo", header: "車番", align: "right", cell: (r) => r.vehicleNo },
+    { key: "vehicleType", header: "車種名", cell: (r) => r.vehicleType },
+    {
+      key: "costCategory",
+      header: "原価区分",
+      cellClassName: "text-ink-muted",
+      cell: (r) => COST_CATEGORY_LABELS[r.costCategory] ?? r.costCategory,
+    },
+    {
+      key: "towedBy",
+      header: "けん引先",
+      align: "right",
+      cell: (r) => (r.towedByVehicleNo ? `→ ${r.towedByVehicleNo}` : "—"),
+    },
+    { key: "depot", header: "所属", priority: "low", cell: (r) => r.depot },
+    { key: "insCompulsory", header: "自賠責", unit: "円", align: "right", cell: (r) => yen(r.insCompulsory) },
+    { key: "insVoluntary", header: "任意保険", unit: "円", align: "right", cell: (r) => yen(r.insVoluntary) },
+    { key: "taxAuto", header: "自動車税", unit: "円", align: "right", priority: "low", cell: (r) => yen(r.taxAuto) },
+    { key: "taxWeight", header: "重量税", unit: "円", align: "right", priority: "low", cell: (r) => yen(r.taxWeight) },
+    { key: "lease", header: "リース", unit: "円", align: "right", cell: (r) => yen(r.lease) },
+    { key: "installment", header: "割賦", unit: "円", align: "right", priority: "low", cell: (r) => yen(r.installment) },
+  ];
+
   return (
     <div className="space-y-6">
       <StickyStepHeader steps={IMPORT_STEPS} currentIndex={done ? 2 : check || preview ? 1 : 0} />
+
+      {/*
+        「どの月のシートを読むのか」「いま何台登録されているのか」は、一覧を下まで見ても
+        要る前提なので上に貼り付ける（T7 §2-3）。この画面に工程タブはあるが、それは
+        StickyStepHeader ではなく取込の3手順の札なので below は既定の "header" のまま。
+      */}
+      <StickyFilterBar
+        summary={`登録${vehicles.length}台（けん引先が未設定のトレーラ${trailersWithoutTractor.length}台）`}
+      >
+        <span className="text-xs font-semibold text-ink">
+          読み取る対象年月：{yearMonthLabel(yearMonth)}
+        </span>
+      </StickyFilterBar>
 
       <section className="card p-5">
         <h2 className="text-sm font-bold text-ink">ファイルを取り込む</h2>
@@ -339,21 +407,22 @@ export function VehicleMasterManager({
           type="file"
           accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           disabled={busy}
+          aria-label="車両マスタのファイルを選ぶ"
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) void inspectThenUpload(file);
           }}
-          className="mt-3 block w-full text-xs text-ink file:mr-3 file:rounded-md file:border file:border-line file:bg-subtle file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-ink"
+          className={`mt-3 ${FILE_FIELD_CLASS}`}
         />
         {/*
           どのファイルを選べばよいかの案内。ボタンより上に置くとボタンを画面外へ押し出すため、
           文章はそのままにボタン直下の折りたたみへ移した。
         */}
         <Disclosure tone="inline" summary="どのファイルを選べばよいですか?">
-          社内Excel「★車両別収支計算用」をそのまま選んでください({yearMonth}
-          の収支表シートから車番・車種名・所属・保険・税・リース費・割賦費を読み取ります)。
+          社内Excel「★車両別収支計算用」をそのまま選んでください（{yearMonthLabel(yearMonth)}
+          の収支表シートから車番・車種名・所属・保険・税・リース費・割賦費を読み取ります）。
           CSVに書き出す必要はありません。CSVを選ぶ場合は、その9列を書き出したものにしてください。
-          車種名から原価カテゴリ(修繕費・タイヤ費の標準単価)を自動判定します。
+          車種名から原価カテゴリ（修繕費・タイヤ費の標準単価）を自動判定します。
           ファイル名は変わっても構いません。中身を読んで判定します。
         </Disclosure>
         {busy && !preview ? (
@@ -404,34 +473,36 @@ export function VehicleMasterManager({
 
       {preview ? (
         <section className="card p-5">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-sm font-bold text-ink">取込内容の確認({preview.fileName})</h2>
-            <p className="num text-xs text-ink-muted">
-              新規{newCount}台・更新{updateCount}台
-              {preview.errors.length > 0 ? ` / 取り込めない行${preview.errors.length}件` : ""}
-            </p>
-          </div>
-          {sourceText ? (
-            <p className="mt-1 text-xs leading-relaxed text-ink-muted">{sourceText}</p>
-          ) : null}
-          <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-            この取込は、いま登録されている車両を消しません。同じ車番は内容を上書きし、
+          <SectionHeading
+            divider={false}
+            action={
+              <span className="num">
+                新規{newCount}台・更新{updateCount}台
+                {preview.errors.length > 0 ? ` / 取り込めない行${preview.errors.length}件` : ""}
+              </span>
+            }
+          >
+            取込内容の確認（{preview.fileName}）
+          </SectionHeading>
+          {sourceText ? <Prose className="mt-1">{sourceText}</Prose> : null}
+          <Prose className="mt-1">
+            この取込は、いま登録されている車両を削除しません。同じ車番は内容を上書きし、
             初めての車番は追加します。一覧から消したい車両があるときはご連絡ください。
-          </p>
+          </Prose>
 
           {towedCount > 0 ? (
-            <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-              Excelの行の並び(トラクタの直下に被けん引車)から、けん引先を{towedCount}
+            <Prose className="mt-1">
+              Excelの行の並び（トラクタの直下に被けん引車）から、けん引先を{towedCount}
               組復元しました。下の「けん引先」列で組み合わせを確かめてから取り込んでください
-              (違っていれば取込後に一覧で選び直せます)。
-            </p>
+              （違っていれば取込後に一覧で選び直せます）。
+            </Prose>
           ) : null}
 
           {preview.errors.length > 0 ? (
             <div className="mt-3">
               <AlertPanel
                 tone="caution"
-                title={`次の${preview.errors.length}件は取り込めません(元のExcel・CSVを直してから入れ直してください)`}
+                title={`次の${preview.errors.length}件は取り込めません（元のExcel・CSVを直してから入れ直してください）`}
               >
                 <ul className="space-y-1">
                   {preview.errors.map((e) => (
@@ -444,53 +515,20 @@ export function VehicleMasterManager({
             </div>
           ) : null}
 
-          <div className="mt-4 overflow-x-auto">
-            <table className="data-table min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-line text-left text-xs text-ink-muted">
-                  <th className="py-2 pr-3">区分</th>
-                  <th className="py-2 pr-3">車番</th>
-                  <th className="py-2 pr-3">車種名</th>
-                  <th className="py-2 pr-3">原価区分</th>
-                  <th className="py-2 pr-3">けん引先</th>
-                  <th className="py-2 pr-3">所属</th>
-                  <th className="py-2 pr-3">自賠責</th>
-                  <th className="py-2 pr-3">任意保険</th>
-                  <th className="py-2 pr-3">自動車税</th>
-                  <th className="py-2 pr-3">重量税</th>
-                  <th className="py-2 pr-3">リース</th>
-                  <th className="py-2">割賦</th>
-                </tr>
-              </thead>
-              <tbody>
-                {preview.valid.map((r) => (
-                  <tr key={r.vehicleNo} className="border-b border-line last:border-b-0">
-                    <td className="py-2 pr-3 text-xs">
-                      {existingNos.has(r.vehicleNo) ? (
-                        <span className="text-ink-muted">更新</span>
-                      ) : (
-                        <span className="font-semibold text-brand-deep">新規</span>
-                      )}
-                    </td>
-                    <td className="num py-2 pr-3">{r.vehicleNo}</td>
-                    <td className="py-2 pr-3 text-ink-muted">{r.vehicleType}</td>
-                    <td className="py-2 pr-3 text-ink-muted">
-                      {COST_CATEGORY_LABELS[r.costCategory] ?? r.costCategory}
-                    </td>
-                    <td className="num py-2 pr-3 text-ink-muted">
-                      {r.towedByVehicleNo ? `→ ${r.towedByVehicleNo}` : "—"}
-                    </td>
-                    <td className="py-2 pr-3 text-ink-muted">{r.depot}</td>
-                    <td className="num py-2 pr-3 text-ink-muted">{yen(r.insCompulsory)}</td>
-                    <td className="num py-2 pr-3 text-ink-muted">{yen(r.insVoluntary)}</td>
-                    <td className="num py-2 pr-3 text-ink-muted">{yen(r.taxAuto)}</td>
-                    <td className="num py-2 pr-3 text-ink-muted">{yen(r.taxWeight)}</td>
-                    <td className="num py-2 pr-3 text-ink-muted">{yen(r.lease)}</td>
-                    <td className="num py-2 text-ink-muted">{yen(r.installment)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-4">
+            <DataTable
+              caption="取り込む車両の一覧。区分・車番・保険・税・リース費を行ごとに見比べる。"
+              columns={previewColumns}
+              rows={preview.valid}
+              rowKey={(r) => r.vehicleNo}
+              maxHeight="26rem"
+              empty={
+                <p className="rounded-lg bg-subtle px-4 py-3 text-xs text-ink-muted">
+                  取り込める行がありません。選んだファイルに車番の列が無いか、すべての行が
+                  上の理由で取り込めない行です。元のExcel・CSVを直してから選び直してください。
+                </p>
+              }
+            />
           </div>
 
           {/* 一覧が長くても取り込みの入口が画面外に出ないよう、カードの下端に貼り付ける */}
@@ -501,7 +539,8 @@ export function VehicleMasterManager({
               onClick={() => void confirm()}
               className="btn btn-primary pressable"
             >
-              {busy ? "取り込んでいます…" : `${preview.valid.length}件を取り込む`}
+              {/* 数える対象は車両なので、押す前も押した後も単位は「台」でそろえる（T7 §1-2） */}
+              {busy ? "取り込んでいます…" : `${preview.valid.length}台を取り込む`}
             </button>
           </StickyActionBar>
         </section>
@@ -515,17 +554,17 @@ export function VehicleMasterManager({
           トレーラがあるときは、下の注意パネルが開かなくても出るので気づける。
         */}
         <Disclosure tone="inline" summary="けん引先を決めるとどうなりますか?">
-          トレーラ(被けん引車)は運賃も運転者も付かないのに保険・税・リース料だけが付くため、
+          トレーラ（被けん引車）は運賃も運転者も付かないのに保険・税・リース料だけが付くため、
           けん引先を決めないと「売上ゼロ・費用だけの赤字行」として収支表に並びます。
           けん引先を選ぶとその行に合算され、車番は「129/1113」のようにまとめて表示されます
-          (収支表は{yearMonth}分を作り直します)。
+          （収支表は{yearMonthLabel(yearMonth)}分を作り直します）。
         </Disclosure>
 
         {vehicles.length === 0 ? (
           <div className="mt-3">
             <AlertPanel tone="caution" title="まだ1台も登録されていません">
               <p>
-                このままだと、収支表は保険・税・リース料が0のまま(実際より黒字に見える状態)になります。
+                このままだと、収支表は保険・税・リース料が0のまま（実際より黒字に見える状態）になります。
                 上の「ファイルを取り込む」で社内Excel「★車両別収支計算用」を選んでください。
               </p>
               <p className="mt-1.5">
@@ -564,10 +603,16 @@ export function VehicleMasterManager({
             直したいところを打ち替えて、画面の下の「保存する」を押してください。打ち替えた欄には
             「変更」の札と元の値が出ます。Enterを押すと同じ列の次の行へ進みます。
           </p>
-          <div className="mt-3 overflow-x-auto">
+          {/*
+            入力欄の作法を壊さないため DataTable には載せず、表のままで列見出しだけを固定する。
+            横スクロールできる箱を作った時点でその箱がスクロールの担当になり、ページの
+            スクロールでは sticky が効かない。高さの上限を与えて縦にもスクロールさせるのが
+            唯一確実な方法（T7 §2-1）。
+          */}
+          <div className="mt-3 max-h-[32rem] overflow-auto">
             <table className="data-table min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-line text-left text-xs text-ink-muted">
+              <thead className="sticky top-0 z-10 bg-white">
+                <tr className="border-b border-line bg-subtle text-left text-xs text-ink-muted">
                   <th className="py-2 pr-3">車番</th>
                   <th className="py-2 pr-3">原価区分</th>
                   <th className="py-2 pr-3">車種名</th>
@@ -613,7 +658,7 @@ export function VehicleMasterManager({
             notice={
               form.changedCount > 0 ? (
                 <p className="text-xs text-ink-muted">
-                  保存すると、まだ締めていない月の収支表にその場で反映されます(締めた月はそのままです)。
+                  保存すると、まだ締めていない月の収支表にその場で反映されます（締めた月はそのままです）。
                 </p>
               ) : null
             }

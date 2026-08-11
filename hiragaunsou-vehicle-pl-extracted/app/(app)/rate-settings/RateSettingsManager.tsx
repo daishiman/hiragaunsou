@@ -10,6 +10,8 @@ import type { RateMasterEntry } from "../../../src/infrastructure/db/D1MasterRep
 import { Disclosure } from "../../_components/Disclosure";
 import { parseAmountInput } from "../../_lib/numberEntry";
 import { StagePanel } from "../../_components/StagePanel";
+import { Badge } from "../../_components/Badge";
+import { Prose } from "../../_components/Card";
 import {
   EditableRowCells,
   EditFormActionBar,
@@ -17,6 +19,7 @@ import {
   useEditableRecords,
   type EditableFieldDef,
 } from "../../_components/editForm";
+import { yearMonthLabel } from "../../_lib/format";
 
 const KIND_UNIT: Record<RateValueKind, string> = {
   rate: "%",
@@ -62,6 +65,19 @@ function findEntry(
   );
 }
 
+/**
+ * 率マスタ設定。
+ *
+ * ■ 表か否か（T7 §4-1 の質問への答え）
+ * 「一般管理費率だけ知りたい」のではなく、率を並べて「この月にどれが効いているか」を
+ * 見比べ、違うものだけを打ち替える画面なので、器は表のままでよい。
+ *
+ * ■ 列見出しの固定（T7 §2-1）
+ * 1行が入力欄（editForm の EditableRowCells）でできており、DataTable の「1列 = 1セル」の
+ * 作りに載せると入力欄の作法（Enterで次の行・変更の札）が壊れる。そこで表そのものは残し、
+ * 「overflow の箱がスクロールを引き受けると sticky は箱を基準にしてしまうので、箱に高さの
+ * 上限を与えて縦にもスクロールさせる」という同じ理屈だけを当てて、列見出しを固定する。
+ */
 export function RateSettingsManager({
   yearMonth,
   initialEntries,
@@ -98,7 +114,7 @@ export function RateSettingsManager({
       },
       {
         field: "monthly",
-        label: `${yearMonth}のみ`,
+        label: `${yearMonthLabel(yearMonth)}のみ`,
         kind: (def) => (def.kind === "yen" ? "yen" : "number"),
         unit: (def) => KIND_UNIT[def.kind],
         widthClass: "w-24",
@@ -141,18 +157,26 @@ export function RateSettingsManager({
   const changedLabels = form.changes.map((c) => `${c.record.label}の${c.def.label}`);
 
   function renderTable(definitions: readonly RateMasterKeyDef[], ariaLabel: string) {
+    /*
+      1行が入力欄なので DataTable には載せられない（EditableRowCells が複数の td を出す）。
+      代わりに T7 §2-1 の理屈だけを当てる: overflow の箱がスクロールを引き受けると sticky は
+      画面ではなく箱を基準にするので、箱に高さの上限を与えて縦にもスクロールさせ、
+      その中で列見出しを貼り付ける。
+    */
     return (
-      <div className="overflow-x-auto card">
+      <div className="card max-h-[32rem] overflow-auto">
         <table
           aria-label={ariaLabel}
           className="data-table w-full min-w-max border-collapse text-xs"
         >
-          <thead>
+          <thead className="sticky top-0 z-10 bg-subtle">
             <tr className="border-b border-line bg-subtle text-ink-muted">
               <th className="px-3 py-2 text-left font-medium">項目</th>
-              <th className="px-3 py-2 text-right font-medium">{yearMonth}の適用値</th>
+              <th className="px-3 py-2 text-right font-medium">
+                {yearMonthLabel(yearMonth)}の適用値
+              </th>
               <th className="px-3 py-2 text-left font-medium">全期間共通</th>
-              <th className="px-3 py-2 text-left font-medium">{yearMonth}のみ</th>
+              <th className="px-3 py-2 text-left font-medium">{yearMonthLabel(yearMonth)}のみ</th>
             </tr>
           </thead>
           <tbody>
@@ -175,8 +199,15 @@ export function RateSettingsManager({
                       {applied === undefined ? "—" : toDisplay(def.kind, applied)}
                     </span>
                     <span className="ml-0.5 text-[11px] text-ink-muted">{KIND_UNIT[def.kind]}</span>
-                    <p className="mt-0.5 text-[10px] text-ink-muted">
-                      {monthly ? "月別値" : common ? "全期間共通値" : "未設定(既定値)"}
+                    {/* どこから来た値かの札。書き方を画面ごとに変えず、共通の Badge に揃える */}
+                    <p className="mt-1">
+                      {monthly ? (
+                        <Badge tone="brand">月別値</Badge>
+                      ) : common ? (
+                        <Badge tone="neutral">全期間共通値</Badge>
+                      ) : (
+                        <Badge tone="caution">未設定（既定値）</Badge>
+                      )}
                     </p>
                     {/*
                       どちらの欄を直しているのかを取り違えると、直したのに数字が動かない。
@@ -211,19 +242,18 @@ export function RateSettingsManager({
 
   return (
     <div className="space-y-4">
-      <p className="text-xs leading-relaxed text-ink-muted">
+      <Prose>
         直したい率を打ち替えて、画面の下の「保存する」を押してください。打ち替えた欄には「変更」の札と
-        元の値が出ます。保存すると{yearMonth}の収支表も作り直します(締めた月はそのままです)。
-      </p>
+        元の値が出ます。保存すると{yearMonthLabel(yearMonth)}
+        の収支表も作り直します（締めた月はそのままです）。
+      </Prose>
 
       <section aria-labelledby="frequently-changed-rates" className="space-y-2">
         <div>
           <h2 id="frequently-changed-rates" className="text-sm font-bold text-ink">
             よく変える項目
           </h2>
-          <p className="mt-0.5 text-xs text-ink-muted">
-            月ごとの単価・受取額です。締め作業のときに確認します。
-          </p>
+          <Prose className="mt-0.5">月ごとの単価・受取額です。締め作業のときに確認します。</Prose>
         </div>
         {renderTable(FREQUENTLY_CHANGED, "よく変える項目")}
       </section>
@@ -234,9 +264,7 @@ export function RateSettingsManager({
         openLabel="めったに変えない項目を開く"
         closeLabel="めったに変えない項目を閉じる"
       >
-        <p className="mb-3 text-xs text-ink-muted">
-          年度・規程・赤字判定の基準を見直すときだけ変更します。
-        </p>
+        <Prose className="mb-3">年度・規程・赤字判定の基準を見直すときだけ変更します。</Prose>
         {renderTable(RARELY_CHANGED, "めったに変えない項目")}
       </StagePanel>
 
@@ -253,7 +281,7 @@ export function RateSettingsManager({
 
       <Disclosure summary="各項目の意味と、月別値・共通値の使い分けを見る">
         <p>
-          月別値があれば全期間共通値より優先されます。「未設定(既定値)」はコード側の保険値で動いている状態で、
+          月別値があれば全期間共通値より優先されます。「未設定（既定値）」はコード側の保険値で動いている状態で、
           既定値を変えると黙って挙動が変わります。運用で使う値は明示的に設定してください。
         </p>
         <dl className="mt-3 space-y-2">

@@ -17,7 +17,13 @@ import { AlertPanel } from "../../../_components/AlertPanel";
 import { Disclosure } from "../../../_components/Disclosure";
 import { ImportCheckPanel } from "../../../_components/ImportCheckPanel";
 import { StickyActionBar } from "../../../_components/StickyActionBar";
+import { StickyFilterBar } from "../../../_components/StickyFilterBar";
 import { StickyStepHeader } from "../../../_components/StickyStepHeader";
+import { DataTable, type DataTableColumn } from "../../../_components/DataTable";
+import { SectionHeading } from "../../../_components/SectionHeading";
+import { Badge } from "../../../_components/Badge";
+import { Prose } from "../../../_components/Card";
+import { FILE_FIELD_CLASS } from "../../../_components/formStyles";
 import {
   EditableRowCells,
   EditFormActionBar,
@@ -25,6 +31,7 @@ import {
   useEditableRecords,
   type EditableFieldDef,
 } from "../../../_components/editForm";
+import { yearMonthLabel } from "../../../_lib/format";
 
 /**
  * 取込の3段階。手入力画面と同じ「札で現在地を出す」作りに揃える。
@@ -64,6 +71,20 @@ interface SkippedRow {
 const FALLBACK_NOTE =
   "社員Noと車番の対応は月ごとの実績ではなく人事の状態なので、この月から読んでも同じ対応表になります。";
 
+/**
+ * 運転者マスタ管理。
+ *
+ * ■ 表か否か（T7 §4-1 の質問への答え）
+ * 取込内容の確認も現在のマスタも「何十名かを行をまたいで見比べ、車番の違う人だけを直す」
+ * ための画面なので、器は表のままでよい。1名を読んで判断する画面ではない。
+ *
+ * ■ 列見出しの固定（T7 §2-1）
+ * 読むだけの表（取込内容の確認）は共通部品 DataTable に載せ、maxHeight で見出しを固定する。
+ * 現在のマスタは1行が入力欄（editForm の EditableRowCells）でできており、DataTable の
+ * 「1列 = 1セル」の作りに載せると入力欄の作法（Enterで次の行・変更の札）が壊れる。
+ * そこで表そのものは残し、「overflow の箱では sticky が効かないので高さの上限を与えて
+ * 縦スクロールにする」という同じ理屈だけを当てて、列見出しを固定する。
+ */
 export function DriverMasterManager({
   initialDrivers,
   vehicleNos,
@@ -120,11 +141,11 @@ export function DriverMasterManager({
         widthClass: "w-44",
         read: (d) => d.vehicleNo,
         options: (d) => [
-          { value: "", label: "未割当(給与は乗りません)" },
+          { value: "", label: "未割当（給与は乗りません）" },
           ...vehicleNos.map((no) => ({ value: no, label: no })),
           // いまの車番が車両マスタから消えている場合でも、選び直すまでは表示できるようにする
           ...(d.vehicleNo && !knownVehicleNos.has(d.vehicleNo)
-            ? [{ value: d.vehicleNo, label: `${d.vehicleNo}(車両マスタに無し)` }]
+            ? [{ value: d.vehicleNo, label: `${d.vehicleNo}（車両マスタに無し）` }]
             : []),
         ],
       },
@@ -243,7 +264,7 @@ export function DriverMasterManager({
       }
       setDone(
         `${(data.inserted ?? 0) + (data.updated ?? 0)}名を登録しました` +
-          `(新規${data.inserted ?? 0}名・更新${data.updated ?? 0}名)`,
+          `（新規${data.inserted ?? 0}名・更新${data.updated ?? 0}名）`,
       );
       setSkipped(data.skipped ?? []);
       setPreview(null);
@@ -269,9 +290,56 @@ export function DriverMasterManager({
     preview?.valid.filter((r) => r.vehicleNo !== null && !knownVehicleNos.has(r.vehicleNo)) ?? [];
   const sourceText = describeImportSource(preview?.source, { fallbackNote: FALLBACK_NOTE });
 
+  /** 取込内容の確認。読むだけの表なので共通部品に載せ、見出しを固定する。 */
+  const previewColumns: DataTableColumn<DriverMasterImportRow>[] = [
+    {
+      key: "kind",
+      header: "区分",
+      cell: (r) =>
+        existingCodes.has(r.employeeCode) ? (
+          <Badge tone="neutral">更新</Badge>
+        ) : (
+          <Badge tone="brand">新規</Badge>
+        ),
+    },
+    {
+      key: "employeeCode",
+      header: "社員No",
+      align: "right",
+      cell: (r) => r.employeeCode,
+    },
+    { key: "driverName", header: "氏名", cell: (r) => r.driverName },
+    {
+      key: "vehicleNo",
+      header: "車番",
+      align: "right",
+      cell: (r) =>
+        r.vehicleNo === null ? (
+          "未割当"
+        ) : knownVehicleNos.has(r.vehicleNo) ? (
+          r.vehicleNo
+        ) : (
+          <span className="text-danger">{r.vehicleNo}（車両マスタに無し）</span>
+        ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <StickyStepHeader steps={IMPORT_STEPS} currentIndex={done ? 2 : preview ? 1 : 0} />
+
+      {/*
+        「どの月のシートを読むのか」「いま何名登録されているのか」は一覧を下まで見ても要る
+        前提なので上に貼り付ける（T7 §2-3）。工程タブ（StickyStepHeader）は取込の3手順の札で
+        あって工程タブではないため、below は既定の "header" のまま。
+      */}
+      <StickyFilterBar
+        summary={`登録${drivers.length}名（うち車番未割当${unassigned}名）`}
+      >
+        <span className="text-xs font-semibold text-ink">
+          読み取る対象年月：{yearMonthLabel(yearMonth)}
+        </span>
+      </StickyFilterBar>
 
       <section className="card p-5">
         <h2 className="text-sm font-bold text-ink">ファイルを取り込む</h2>
@@ -280,21 +348,22 @@ export function DriverMasterManager({
           type="file"
           accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           disabled={busy}
+          aria-label="運転者マスタのファイルを選ぶ"
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) void inspectThenUpload(file);
           }}
-          className="mt-3 block w-full text-xs text-ink file:mr-3 file:rounded-md file:border file:border-line file:bg-subtle file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-ink"
+          className={`mt-3 ${FILE_FIELD_CLASS}`}
         />
         {/*
           どのファイルを選べばよいかの案内は、ボタンより上に置くと毎回読み飛ばされたうえ
           ボタンを画面の下へ押し出していた。文章はそのままに、ボタンの直下の折りたたみへ移す。
         */}
         <Disclosure tone="inline" summary="どのファイルを選べばよいですか?">
-          社内Excel「★車両別収支計算用」をそのまま選んでください({yearMonth}
-          の収支表シートの「コード」「運転者名」「車番」から読み取ります)。
+          社内Excel「★車両別収支計算用」をそのまま選んでください（{yearMonthLabel(yearMonth)}
+          の収支表シートの「コード」「運転者名」「車番」から読み取ります）。
           CSVに書き出す必要はありません。CSVを選ぶ場合は、社員No・氏名・車番の3列を書き出したものにしてください。
-          車番が空の方(内勤・退職等)も登録できます。給与が乗らないだけで、エラーにはなりません。
+          車番が空の方（内勤・退職等）も登録できます。給与が乗らないだけで、エラーにはなりません。
           ファイル名は変わっても構いません。中身を読んで判定します。
         </Disclosure>
         {busy && !preview ? (
@@ -332,11 +401,11 @@ export function DriverMasterManager({
           <div className="mt-3">
             <AlertPanel tone="success" title={done}>
               <p>
-                このあと月次の収支表を作り直すと、人件費が各車両に乗ります(
+                このあと月次の収支表を作り直すと、人件費が各車両に乗ります（
                 <Link href={`/import?ym=${yearMonth}`} className="underline">
                   データ取込
                 </Link>
-                )。
+                ）。
               </p>
             </AlertPanel>
           </div>
@@ -351,7 +420,7 @@ export function DriverMasterManager({
               <ul className="space-y-1">
                 {skipped.map((s) => (
                   <li key={s.employeeCode}>
-                    社員No{s.employeeCode} {s.driverName}(車番{s.vehicleNo}): {s.reason}
+                    社員No{s.employeeCode} {s.driverName}（車番{s.vehicleNo}）: {s.reason}
                   </li>
                 ))}
               </ul>
@@ -369,26 +438,28 @@ export function DriverMasterManager({
 
       {preview ? (
         <section className="card p-5">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-sm font-bold text-ink">取込内容の確認({preview.fileName})</h2>
-            <p className="num text-xs text-ink-muted">
-              新規{newCount}名・更新{updateCount}名
-              {preview.errors.length > 0 ? ` / 取り込めない行${preview.errors.length}件` : ""}
-            </p>
-          </div>
-          {sourceText ? (
-            <p className="mt-1 text-xs leading-relaxed text-ink-muted">{sourceText}</p>
-          ) : null}
-          <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-            この取込は、いま登録されている運転者を消しません。同じ社員Noの方は車番を上書きし、
+          <SectionHeading
+            divider={false}
+            action={
+              <span className="num">
+                新規{newCount}名・更新{updateCount}名
+                {preview.errors.length > 0 ? ` / 取り込めない行${preview.errors.length}件` : ""}
+              </span>
+            }
+          >
+            取込内容の確認（{preview.fileName}）
+          </SectionHeading>
+          {sourceText ? <Prose className="mt-1">{sourceText}</Prose> : null}
+          <Prose className="mt-1">
+            この取込は、いま登録されている運転者を削除しません。同じ社員Noの方は車番を上書きし、
             初めての社員Noの方は追加します。一覧から消したい方がいるときはご連絡ください。
-          </p>
+          </Prose>
 
           {preview.errors.length > 0 ? (
             <div className="mt-3">
               <AlertPanel
                 tone="caution"
-                title={`次の${preview.errors.length}件は取り込めません(元のExcel・CSVを直してから入れ直してください)`}
+                title={`次の${preview.errors.length}件は取り込めません（元のExcel・CSVを直してから入れ直してください）`}
               >
                 <ul className="space-y-1">
                   {preview.errors.map((e) => (
@@ -416,7 +487,7 @@ export function DriverMasterManager({
                   ))}
                 </ul>
                 <p className="mt-1.5">
-                  このまま取り込むと、この方たちだけ登録されません(残りの方は登録されます)。先に
+                  このまま取り込むと、この方たちだけ登録されません（残りの方は登録されます）。先に
                   <Link href={`/admin/vehicle-master?ym=${yearMonth}`} className="underline">
                     車両マスタ管理
                   </Link>
@@ -426,41 +497,20 @@ export function DriverMasterManager({
             </div>
           ) : null}
 
-          <div className="mt-4 overflow-x-auto">
-            <table className="data-table min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-line text-left text-xs text-ink-muted">
-                  <th className="py-2 pr-3">区分</th>
-                  <th className="py-2 pr-3">社員No</th>
-                  <th className="py-2 pr-3">氏名</th>
-                  <th className="py-2">車番</th>
-                </tr>
-              </thead>
-              <tbody>
-                {preview.valid.map((r) => (
-                  <tr key={r.employeeCode} className="border-b border-line last:border-b-0">
-                    <td className="py-2 pr-3 text-xs">
-                      {existingCodes.has(r.employeeCode) ? (
-                        <span className="text-ink-muted">更新</span>
-                      ) : (
-                        <span className="font-semibold text-brand-deep">新規</span>
-                      )}
-                    </td>
-                    <td className="num py-2 pr-3">{r.employeeCode}</td>
-                    <td className="py-2 pr-3 text-ink-muted">{r.driverName}</td>
-                    <td className="num py-2 text-ink-muted">
-                      {r.vehicleNo === null ? (
-                        "未割当"
-                      ) : knownVehicleNos.has(r.vehicleNo) ? (
-                        r.vehicleNo
-                      ) : (
-                        <span className="text-danger">{r.vehicleNo}(車両マスタに無し)</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-4">
+            <DataTable
+              caption="取り込む運転者の一覧。区分・社員No・氏名・車番。"
+              columns={previewColumns}
+              rows={preview.valid}
+              rowKey={(r) => r.employeeCode}
+              maxHeight="26rem"
+              empty={
+                <p className="rounded-lg bg-subtle px-4 py-3 text-sm text-ink-muted">
+                  取り込める行がありませんでした。上の取り込めない行の理由を直してから、
+                  もう一度ファイルを選んでください。
+                </p>
+              }
+            />
           </div>
 
           {/* 一覧が長くても取り込みの入口が画面外に出ないよう、カードの下端に貼り付ける */}
@@ -500,14 +550,20 @@ export function DriverMasterManager({
           </div>
         ) : (
           <>
-            <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+            <Prose className="mt-1">
               直したいところを打ち替えて、画面の下の「保存する」を押してください。打ち替えた欄には
               「変更」の札と元の値が出ます。Enterを押すと同じ列の次の行へ進みます。
-            </p>
-            <div className="mt-3 overflow-x-auto">
+            </Prose>
+            {/*
+              1行が入力欄なので DataTable には載せられない（EditableRowCells が複数の td を出す）。
+              代わりに T7 §2-1 の理屈だけを当てる: overflow の箱がスクロールを引き受けると
+              sticky は画面ではなく箱を基準にするので、箱に高さの上限を与えて縦にもスクロール
+              させ、その中で列見出しを貼り付ける。
+            */}
+            <div className="mt-3 max-h-[32rem] overflow-auto">
               <table className="data-table min-w-full text-sm">
-                <thead>
-                  <tr className="border-b border-line text-left text-xs text-ink-muted">
+                <thead className="sticky top-0 z-10 bg-white">
+                  <tr className="border-b border-line bg-subtle text-left text-xs text-ink-muted">
                     <th className="py-2 pr-3">社員No</th>
                     <th className="py-2 pr-3">氏名</th>
                     <th className="py-2">車番</th>
@@ -541,7 +597,7 @@ export function DriverMasterManager({
               notice={
                 form.changedCount > 0 ? (
                   <p className="text-xs text-ink-muted">
-                    保存すると、まだ締めていない月の収支表にその場で反映されます(締めた月はそのままです)。
+                    保存すると、まだ締めていない月の収支表にその場で反映されます（締めた月はそのままです）。
                   </p>
                 ) : null
               }

@@ -8,6 +8,7 @@ import { D1ImportBatchRepository } from "../../../src/infrastructure/db/D1Import
 import { D1CleansingDecisionRepository } from "../../../src/infrastructure/db/D1CleansingDecisionRepository";
 import { GetCleansingQueueUseCase } from "../../../src/usecase/steps/getCleansingQueue";
 import { selectableYearMonths } from "../../_lib/yearMonth";
+import { findScreen } from "../../_lib/screens";
 import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
 import { ScreenHeader } from "../../_components/ScreenHeader";
@@ -31,7 +32,10 @@ export default async function CleansingPage({
   if (!session) redirect("/sign-in");
   // 権限が無い人を黙ってホームへ戻すと、押した本人にはリンクが壊れたようにしか見えない。
   if (!checkAccess(session, "view")) {
-    return <AccessDenied screenName="データ整形" permission="view" />;
+    // 画面の名前は screens.ts が唯一の出どころ。ここで別名を書くと横のメニューと食い違う
+    return (
+      <AccessDenied screenName={findScreen("/cleansing")?.label ?? "データ整形"} permission="view" />
+    );
   }
 
   const { ym } = await searchParams;

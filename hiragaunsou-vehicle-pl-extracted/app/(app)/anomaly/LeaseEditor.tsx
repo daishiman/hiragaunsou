@@ -2,6 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { NumberEntryField } from "../../_components/NumberEntryField";
+import { AlertPanel } from "../../_components/AlertPanel";
+import { DataTable } from "../../_components/DataTable";
+import { FIELD_CLASS } from "../../_components/formStyles";
 import { num } from "../../_lib/format";
 
 export interface LeaseEditorRow {
@@ -112,95 +115,110 @@ export function LeaseEditor({
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="車番や車種で絞り込む(例: 24)"
-            className="w-full max-w-xs rounded-md border border-line bg-white px-3 py-2 text-sm"
+            placeholder="車番や車種で絞り込む（例: 24）"
+            aria-label="車番や車種で絞り込む"
+            className={`${FIELD_CLASS} max-w-xs`}
           />
 
-          <div className="mt-3 overflow-x-auto">
-            <table className="data-table w-full min-w-[36rem] text-sm">
-              <thead>
-                <tr className="border-b border-line text-xs font-medium text-ink-muted">
-                  <th className="px-2 py-2 text-left">車番</th>
-                  <th className="px-2 py-2 text-left">車種</th>
-                  <th className="px-2 py-2 text-right">リース料(円)</th>
-                  <th className="px-2 py-2 text-right">割賦支払額(円)</th>
-                  <th className="px-2 py-2 text-right">保存</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((r) => {
-                  const v = values[r.vehicleNo] ?? { lease: "", installment: "" };
-                  const dirty = changed(r);
-                  return (
-                    <tr key={r.vehicleNo} className="border-b border-line last:border-b-0">
-                      <td className="num px-2 py-2 font-semibold">{r.vehicleNo}</td>
-                      <td className="px-2 py-2 text-ink-muted">{r.vehicleType}</td>
-                      {(
-                        [
-                          { key: "lease", label: "リース料" },
-                          { key: "installment", label: "割賦支払額" },
-                        ] as const
-                      ).map(({ key, label }, colIndex) => {
-                        // 共通部品は「人が触っていない = 空文字」で持つ。
-                        // ここは常に実額を保存するので、いまの値と同じなら空文字として渡す。
-                        const currentRaw = String(r[key]);
-                        return (
-                          <td key={key} className="px-2 py-1.5 text-right">
-                            <NumberEntryField
-                              value={v[key] === currentRaw ? "" : v[key]}
-                              onChange={(raw) =>
-                                setValues((prev) => ({
-                                  ...prev,
-                                  [r.vehicleNo]: { ...v, [key]: raw === "" ? currentRaw : raw },
-                                }))
-                              }
-                              autoValue={r[key]}
-                              autoLabel="いまの値"
-                              ariaLabel={`${r.vehicleNo}番の${label}(円)`}
-                              disabled={!canEdit}
-                              col={colIndex}
-                              widthClass="w-28"
-                            />
-                          </td>
-                        );
-                      })}
-                      <td className="px-2 py-1.5 text-right">
-                        {savedNo === r.vehicleNo && !dirty ? (
-                          <span className="text-xs text-ink-muted">保存済み</span>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={!canEdit || !dirty || savingNo === r.vehicleNo}
-                            onClick={() => save(r)}
-                            className="btn btn-secondary btn-sm pressable"
-                          >
-                            {savingNo === r.vehicleNo ? "保存中…" : "保存する"}
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="mt-3">
+            {/*
+              表かカードか (T7 §4-1)。ここは「どの車両のリース料がいくらか」を
+              台どうしで見比べながら直す作業なので、列のそろった表にする。
+              100台を超えるので高さを止めて見出しを貼り付ける (T7 §2-1)。
+            */}
+            <DataTable
+              caption="車両ごとのリース料と割賦支払額"
+              maxHeight="24rem"
+              rows={filtered}
+              rowKey={(r) => r.vehicleNo}
+              columns={[
+                {
+                  key: "vehicleNo",
+                  header: "車番",
+                  cellClassName: "num font-semibold",
+                  cell: (r) => r.vehicleNo,
+                },
+                {
+                  key: "vehicleType",
+                  header: "車種",
+                  priority: "low",
+                  cellClassName: "text-ink-muted",
+                  cell: (r) => r.vehicleType,
+                },
+                ...(
+                  [
+                    { key: "lease", label: "リース料", colIndex: 0 },
+                    { key: "installment", label: "割賦支払額", colIndex: 1 },
+                  ] as const
+                ).map(({ key, label, colIndex }) => ({
+                  key,
+                  header: label,
+                  // 単位はセルではなく見出しに置く (T7 §4-4)
+                  unit: "円",
+                  align: "right" as const,
+                  cell: (r: LeaseEditorRow) => {
+                    const v = values[r.vehicleNo] ?? { lease: "", installment: "" };
+                    // 共通部品は「人が触っていない = 空文字」で持つ。
+                    // ここは常に実額を保存するので、いまの値と同じなら空文字として渡す。
+                    const currentRaw = String(r[key]);
+                    return (
+                      <NumberEntryField
+                        value={v[key] === currentRaw ? "" : v[key]}
+                        onChange={(raw) =>
+                          setValues((prev) => ({
+                            ...prev,
+                            [r.vehicleNo]: { ...v, [key]: raw === "" ? currentRaw : raw },
+                          }))
+                        }
+                        autoValue={r[key]}
+                        autoLabel="いまの値"
+                        ariaLabel={`${r.vehicleNo}番の${label}(円)`}
+                        disabled={!canEdit}
+                        col={colIndex}
+                        widthClass="w-28"
+                      />
+                    );
+                  },
+                })),
+                {
+                  key: "save",
+                  header: "保存",
+                  align: "right",
+                  cell: (r) =>
+                    savedNo === r.vehicleNo && !changed(r) ? (
+                      <span className="text-xs text-ink-muted">保存済み</span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={!canEdit || !changed(r) || savingNo === r.vehicleNo}
+                        onClick={() => save(r)}
+                        className="btn btn-secondary btn-sm pressable"
+                      >
+                        {savingNo === r.vehicleNo ? "保存中…" : "保存する"}
+                      </button>
+                    ),
+                },
+              ]}
+              empty={
+                <p className="text-xs text-ink-muted">
+                  「{query}」に一致する車両はありません。絞り込みの言葉を消すと、全車両が出ます。
+                </p>
+              }
+            />
           </div>
 
-          {filtered.length === 0 && (
-            <p className="mt-3 text-xs text-ink-muted">
-              「{query}」に一致する車両はありません。
-            </p>
-          )}
-
           {!canEdit && (
-            <p className="mt-3 rounded-md border border-caution-border bg-caution-soft px-3 py-2 text-xs text-ink">
-              金額を直すには入力権限が必要です。閲覧のみ可能です。
-            </p>
+            <div className="mt-3">
+              <AlertPanel tone="caution" title="金額を直すには入力権限が必要です。閲覧のみ可能です。">
+                直す必要があるときは、管理者に権限の変更を依頼してください。
+              </AlertPanel>
+            </div>
           )}
 
           {error && (
-            <p className="mt-3 rounded-md border border-danger px-3 py-2 text-xs text-danger">
-              {error}
-            </p>
+            <div className="mt-3">
+              <AlertPanel tone="danger" title={error} />
+            </div>
           )}
 
           <p className="mt-3 text-[11px] text-ink-muted">
