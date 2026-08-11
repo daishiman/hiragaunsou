@@ -75,6 +75,77 @@ describe("TrendBars", () => {
     expect(titles).toContain("4月: 未取込");
   });
 
+  // 横軸の月ラベルの帯 (TrendBars の H - PAD_BOTTOM = 164) より下に
+  // 値ラベルが入ると「▲883万円」と「7月」が重なって読めなくなる
+  const AXIS_BAND_TOP = 164;
+  const valueLabelY = (container: HTMLElement, text: string) => {
+    const el = Array.from(container.querySelectorAll("text")).find(
+      (t) => t.textContent === text && t.getAttribute("font-weight") === "700",
+    );
+    expect(el).toBeDefined();
+    return Number(el!.getAttribute("y"));
+  };
+
+  it("負の月の値ラベルは横軸の月ラベルの帯に入らない", () => {
+    const points: TrendPoint[] = [
+      { label: "5月", value: 1_200_000 },
+      { label: "6月", value: 300_000 },
+      { label: "7月", value: -8_830_000 },
+    ];
+    const { container } = render(<TrendBars points={points} title="損益" signed />);
+    expect(valueLabelY(container, "▲883万円")).toBeLessThan(AXIS_BAND_TOP);
+  });
+
+  it("負の値ラベルは棒の下端より下、月ラベルの帯より上に置く", () => {
+    const points: TrendPoint[] = [{ label: "7月", value: -8_830_000 }];
+    const { container } = render(<TrendBars points={points} title="損益" signed />);
+    const bar = container.querySelector('rect[fill="var(--danger)"]')!;
+    const barBottom = Number(bar.getAttribute("y")) + Number(bar.getAttribute("height"));
+    const y = valueLabelY(container, "▲883万円");
+    expect(y).toBeGreaterThan(barBottom);
+    expect(y).toBeLessThan(AXIS_BAND_TOP);
+  });
+
+  it("棒が細い13ヶ月表示でも負の値ラベルは棒の外に置く(棒幅に依存しない)", () => {
+    const points: TrendPoint[] = Array.from({ length: 13 }, (_, i) => ({
+      label: `${(i % 12) + 1}月`,
+      value: i === 12 ? -8_830_000 : 1_000_000,
+    }));
+    const { container } = render(<TrendBars points={points} title="損益" signed />);
+    const el = Array.from(container.querySelectorAll("text")).find(
+      (t) => t.textContent === "▲883万円",
+    )!;
+    // 白地に白字になる「棒の内側に白で置く」方式を採らないことを固定する
+    expect(el.getAttribute("fill")).toBe("var(--ink)");
+    expect(Number(el.getAttribute("y"))).toBeLessThan(AXIS_BAND_TOP);
+  });
+
+  it("正の月の値ラベルは棒の上に置き、上端で見切れない", () => {
+    const points: TrendPoint[] = [
+      { label: "5月", value: 12_000_000 },
+      { label: "6月", value: 3_000_000 },
+    ];
+    const { container } = render(<TrendBars points={points} title="売上" />);
+    const y = valueLabelY(container, "1,200万円");
+    expect(y).toBeGreaterThanOrEqual(11);
+    expect(y).toBeLessThan(AXIS_BAND_TOP);
+  });
+
+  it("13ヶ月でも月ラベルは間引かれ、左端のラベルが描画域からはみ出さない", () => {
+    const points: TrendPoint[] = Array.from({ length: 13 }, (_, i) => ({
+      label: i === 0 ? "2025/9月" : `${((i + 8) % 12) + 1}月`,
+      value: 1_000_000 + i * 10_000,
+    }));
+    const { container } = render(<TrendBars points={points} title="売上" />);
+    const monthLabels = Array.from(container.querySelectorAll("text")).filter(
+      (t) => t.getAttribute("fill") === "var(--ink-muted)",
+    );
+    expect(monthLabels.length).toBeLessThanOrEqual(10);
+    const first = monthLabels[0]!;
+    // 中央揃えなので x から左に半分ぶん伸びる。描画域 (PAD_X = 8) の内側に収まること
+    expect(Number(first.getAttribute("x"))).toBeGreaterThanOrEqual(8 + 20);
+  });
+
   it("実績の月は円換算の値と前年をtitle要素に出す", () => {
     const points: TrendPoint[] = [{ label: "6月", value: 30000, reference: 25000 }];
     const { container } = render(<TrendBars points={points} title="月次売上" />);
