@@ -12,6 +12,10 @@ export default defineConfig({
     environment: "node",
     setupFiles: ["./tests/setup/testingLibrary.ts"],
     globals: true,
+    // 既定5sは jsdom + 高負荷(Rosetta等)で初回描画が落ちることがある。
+    // 契約自体は軽いので上限だけ広げる（無限待ちにはしない）。
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
     include: ["tests/**/*.test.{ts,tsx}"],
     coverage: {
       provider: "v8",
