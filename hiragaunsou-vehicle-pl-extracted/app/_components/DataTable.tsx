@@ -102,7 +102,11 @@ export function DataTable<Row>({
           <caption className={showCaption ? "pb-2 text-left text-xs text-ink-muted" : "sr-only"}>
             {caption}
           </caption>
-          <thead className={stickyHead ? "sticky top-0 z-10" : undefined}>
+          <thead
+            // 見出しが貼り付いたままかを画面の自動テストで確かめるための印
+            data-sticky={stickyHead ? "thead" : undefined}
+            className={stickyHead ? "sticky top-0 z-10" : undefined}
+          >
             <tr className="border-b border-line bg-subtle text-left text-ink-muted">
               {columns.map((col) => (
                 <th
