@@ -49,7 +49,7 @@ describe("AnomalyQueue", () => {
     expect(screen.getByText("1 / 2 件目")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /車番 24/ })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /入力ミス — 直しに送る/ }));
+    await user.click(screen.getByRole("button", { name: /^直す/ }));
 
     expect(global.fetch).toHaveBeenCalledWith(
       "/api/todo/a/resolve",
@@ -63,7 +63,7 @@ describe("AnomalyQueue", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: /車番 300/ })).toBeInTheDocument();
     });
-    expect(screen.getByText(/直前: 車番 24 \/.*入力ミス — 直しに送る/)).toBeInTheDocument();
+    expect(screen.getByText(/直前: 車番 24 \/.*直す/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "この判定を取り消す" }));
     expect(global.fetch).toHaveBeenLastCalledWith(
@@ -81,7 +81,7 @@ describe("AnomalyQueue", () => {
     const items = [makeItem({ id: "a" })];
     render(<AnomalyQueue items={items} yearMonth="2026-05" plVehicleCount={106} canApprove />);
 
-    await user.click(screen.getByRole("button", { name: /入力ミス — 直しに送る/ }));
+    await user.click(screen.getByRole("button", { name: /^直す/ }));
 
     expect(await screen.findByText(/判定を保存できませんでした/)).toBeInTheDocument();
     expect(screen.getByText("1 / 1 件目")).toBeInTheDocument();
@@ -92,7 +92,7 @@ describe("AnomalyQueue", () => {
     render(<AnomalyQueue items={items} yearMonth="2026-05" plVehicleCount={106} canApprove={false} />);
 
     expect(screen.getByText("判定するには承認権限が必要です。閲覧のみ可能です。")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /入力ミス — 直しに送る/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^直す/ })).not.toBeInTheDocument();
   });
 
   it("全件判定済みのときは完了メッセージとダッシュボードへの導線を表示する", () => {

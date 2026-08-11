@@ -91,7 +91,7 @@ test.describe("マスタ管理: 社内Excelをそのまま取り込む", () => {
     await page.getByRole("button", { name: /件を取り込む|台を取り込む/ }).click();
     await expect(page.getByText(/台を登録しました/)).toBeVisible();
     // 件数はローカルDBの中身に左右されるので、今回入れた車両が一覧に出たことで確かめる。
-    await expect(page.getByRole("heading", { name: /現在の車両マスタ\(\d+台\)/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /現在の車両マスタ（\d+台）/ })).toBeVisible();
     await expect(page.getByRole("cell", { name: "300", exact: true })).toBeVisible();
   });
 

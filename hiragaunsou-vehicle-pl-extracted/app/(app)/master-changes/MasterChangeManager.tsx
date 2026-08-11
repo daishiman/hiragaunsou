@@ -6,6 +6,7 @@ import { AlertPanel } from "../../_components/AlertPanel";
 import { ConfirmDialog } from "../../_components/ConfirmDialog";
 import { Disclosure } from "../../_components/Disclosure";
 import { EmptyState } from "../../_components/EmptyState";
+import { StickyFilterBar } from "../../_components/StickyFilterBar";
 import { FIELD_LABELS, formatCellValue } from "../../_lib/fieldLabels";
 import type { VehiclePlField } from "../../../src/domain/entities/VehiclePl";
 import { yearMonthLabel } from "../../_lib/format";
@@ -17,6 +18,9 @@ import type { VehiclePlRowDiff } from "../../../src/domain/rules/masterChangeImp
  *
  * まだ締めていない月は直した時点で反映済みなので、ここには出てこない。
  * ここに並ぶのは確定済みの月だけ = 「反映するかどうかを人が決める必要があるもの」だけにする。
+ *
+ * 表かカードか (T7 §4-1)。利用者は月どうしの値を列で見比べるのではなく、
+ * 1つの月を開いて「この内容なら反映してよいか」を決める。よってカードで並べる。
  */
 export function MasterChangeManager({
   status,
@@ -97,37 +101,40 @@ export function MasterChangeManager({
         />
       ) : (
         <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
+          {/* 何件残っているかは、下までスクロールしても消えないように貼り付ける */}
+          <StickyFilterBar
+            summary={`いまのマスタと違う月 ${months.length}件`}
+          >
             <p className="text-sm font-bold text-ink">
               締めた月のうち {months.length}件が、いまのマスタと違います
             </p>
             {months.length > 1 ? (
               <button
                 type="button"
-                className="rounded-md border border-line px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+                className="btn btn-secondary btn-sm pressable"
                 disabled={busy}
                 onClick={() => setPending(months.map((m) => m.yearMonth))}
               >
                 まとめて反映する
               </button>
             ) : null}
-          </div>
+          </StickyFilterBar>
 
           {months.map((month) => (
-            <div key={month.yearMonth} className="rounded-lg border border-line bg-white px-4 py-3">
+            <div key={month.yearMonth} className="card px-4 py-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm text-ink">
                   <span className="font-bold">{yearMonthLabel(month.yearMonth)}</span>
                   <span className="ml-2">
                     {month.vehicleCount}台の数字が変わります
                     {month.profitDelta !== 0
-                      ? ` (利益 ${month.profitDelta > 0 ? "+" : ""}${Math.round(month.profitDelta).toLocaleString()}円)`
+                      ? `（利益 ${month.profitDelta > 0 ? "+" : ""}${Math.round(month.profitDelta).toLocaleString()}円）`
                       : ""}
                   </span>
                 </p>
                 <button
                   type="button"
-                  className="shrink-0 rounded-md border border-line px-3 py-1.5 text-xs font-semibold disabled:opacity-50"
+                  className="btn btn-secondary btn-sm pressable shrink-0"
                   disabled={busy}
                   onClick={() => setPending([month.yearMonth])}
                 >
@@ -135,7 +142,7 @@ export function MasterChangeManager({
                 </button>
               </div>
 
-              <Disclosure summary={`どこが違うかを見る (${month.rows.length}台)`}>
+              <Disclosure summary={`どこが違うかを見る（${month.rows.length}台）`}>
                 <ul className="space-y-1">
                   {month.rows.map((row) => (
                     <li key={row.vehicleNo}>{rowLines(row)}</li>
@@ -148,13 +155,13 @@ export function MasterChangeManager({
       )}
 
       {status && status.applies.length > 0 ? (
-        <Disclosure summary={`反映した記録 (${status.applies.length}件)`}>
+        <Disclosure summary={`反映した記録（${status.applies.length}件）`}>
           <ul className="space-y-1.5">
             {status.applies.map((a) => (
               <li key={a.id} className="flex items-baseline justify-between gap-3">
                 <span>
                   {yearMonthLabel(a.yearMonth)} : {a.summary} / {a.appliedByName}
-                  {a.revertedAt ? "(取り消し済み)" : ""}
+                  {a.revertedAt ? "（取り消し済み）" : ""}
                 </span>
                 {a.revertedAt ? null : (
                   <button
@@ -175,14 +182,14 @@ export function MasterChangeManager({
       ) : null}
 
       {status && status.edits.length > 0 ? (
-        <Disclosure summary={`直した記録 (${status.edits.length}件)`}>
+        <Disclosure summary={`直した記録（${status.edits.length}件）`}>
           <ul className="space-y-1.5">
             {status.edits.map((e) => (
               <li key={e.id} className="flex items-baseline justify-between gap-3">
                 <span>
-                  {e.targetLabel} の{e.fieldLabel}: {e.beforeValue ?? "(空)"} →{" "}
-                  {e.afterValue ?? "(空)"} / {e.editedByName}
-                  {e.undoneAt ? "(戻し済み)" : ""}
+                  {e.targetLabel} の{e.fieldLabel}: {e.beforeValue ?? "（空）"} →{" "}
+                  {e.afterValue ?? "（空）"} / {e.editedByName}
+                  {e.undoneAt ? "（戻し済み）" : ""}
                 </span>
                 {e.undoneAt ? null : (
                   <button

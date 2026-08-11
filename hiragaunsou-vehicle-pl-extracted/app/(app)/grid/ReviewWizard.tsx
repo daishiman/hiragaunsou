@@ -19,22 +19,15 @@ import {
   isOverridableField,
   type OverridableField,
 } from "../../../src/domain/rules/vehiclePlOverride";
-import { SEVERITY_ORDER, type ReviewSeverity } from "../../../src/domain/rules/vehiclePlReview";
+import { SEVERITY_ORDER } from "../../../src/domain/rules/vehiclePlReview";
 import { FIELD_LABELS, isNumericField } from "../../_lib/fieldLabels";
+import { SEVERITY_LABELS, SEVERITY_TONE } from "../../_lib/severity";
 import { num, yearMonthLabel } from "../../_lib/format";
 import { formatNumberInput, parseNumberInput, toInputText } from "../../_lib/numberInput";
-
-const SEVERITY_LABEL: Record<ReviewSeverity, string> = {
-  blocking: "要修正",
-  warning: "要確認",
-  info: "参考",
-};
-
-const SEVERITY_CHIP: Record<ReviewSeverity, string> = {
-  blocking: "border-danger-border bg-danger-soft text-danger",
-  warning: "border-caution-border bg-caution-soft text-ink",
-  info: "border-brand-soft bg-brand-mist text-brand-deep",
-};
+import { AlertPanel } from "../../_components/AlertPanel";
+import { Badge } from "../../_components/Badge";
+import { DefinitionList } from "../../_components/DefinitionList";
+import { FIELD_CLASS } from "../../_components/formStyles";
 
 /** 表に列がある項目のうち、この画面で直せるもの */
 type EditableColumn = Extract<OverridableField, VehiclePlField>;
@@ -135,6 +128,10 @@ function loadDrafts(yearMonth: string): Record<string, Draft> {
 
 /**
  * 1件ずつの確認画面 (集中モード)。
+ *
+ * ■ 表か、カードか (T7 §4-1 の質問への回答)
+ * ここで人がやりたいのは「1件を読んで、それについて判断すること」なので表は使わない。
+ * 1件ぶんのカードに、項目名と値の対 (DefinitionList) で読ませる。
  *
  * 表と同時に見せない理由は設計メモ T5 §5.1 のとおりで、106行×51列の表は
  * 仕様を知らない人にとって文脈ではなくノイズになる。必要な文脈
@@ -256,14 +253,14 @@ export function ReviewWizard({
       clearDraft(item.issue.key);
       goNext(index);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "確認済みにできませんでした");
+      setError(e instanceof Error ? e.message : "「このままでよい」にできませんでした");
     } finally {
       setBusy(false);
     }
   }
 
   /**
-   * あとで見る (後回し)。
+   * あとで見る。
    *
    * 画面の中だけで覚えず、サーバに残す。対象年月を切り替えて戻ってきたときや、
    * 別の人が同じ月を開いたときにも「これは後回しにした」が見えている必要がある。
@@ -283,7 +280,7 @@ export function ReviewWizard({
   }
 
   /**
-   * 同じ種類の指摘をまとめて「問題なし」にする。
+   * 同じ種類の指摘をまとめて「このままでよい」にする。
    *
    * 実行前に必ず対象と件数を見せ (bulkTarget)、実行後は「元に戻す」を出す (lastBulk)。
    * 押し間違いで大量にOKしてしまっても、1回の操作で戻せる状態を保つ。
@@ -305,7 +302,7 @@ export function ReviewWizard({
       setBulkTarget(null);
       goNext(index - 1);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "まとめて確認済みにできませんでした");
+      setError(e instanceof Error ? e.message : "まとめて「このままでよい」にできませんでした");
     } finally {
       setBusy(false);
     }
@@ -378,45 +375,50 @@ export function ReviewWizard({
       />
 
       {restored && Object.keys(drafts).length > 0 ? (
-        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-caution-border bg-caution-soft px-4 py-2 text-xs text-ink">
-          <p>前回入力していた途中の値を復元しました。</p>
-          <button
-            type="button"
-            onClick={discardAllDrafts}
-            className="rounded border border-line bg-white px-3 py-0.5 font-semibold"
-          >
-            入力途中の値を捨てる
-          </button>
+        <div className="mt-3">
+          <AlertPanel tone="caution" title="前回入力していた途中の値を復元しました。">
+            <button
+              type="button"
+              onClick={discardAllDrafts}
+              className="btn btn-quiet btn-sm pressable"
+            >
+              入力途中の値を捨てる
+            </button>
+          </AlertPanel>
         </div>
       ) : null}
 
       {error ? (
-        <p className="mt-3 rounded-lg border border-danger-border bg-danger-soft px-4 py-2 text-xs text-danger">
-          {error}
-        </p>
+        <div className="mt-3">
+          <AlertPanel tone="danger" title={error} />
+        </div>
       ) : null}
 
       {/* まとめてOKの直後だけ「元に戻す」を出す (自動処理には必ず戻し道を付ける)。 */}
       {lastBulk ? (
-        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-brand-soft bg-brand-mist px-4 py-2 text-xs text-brand-deep">
-          <p>
-            {lastBulk.label} {lastBulk.items.length}件 をまとめて「問題なし」にしました。
-          </p>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void undoBulk()}
-            className="btn btn-secondary pressable"
+        <div className="mt-3">
+          <AlertPanel
+            tone="success"
+            title={`${lastBulk.label} ${lastBulk.items.length}件 をまとめて「このままでよい」にしました。`}
           >
-            元に戻す
-          </button>
-          <button
-            type="button"
-            onClick={() => setLastBulk(null)}
-            className="rounded px-2 py-0.5 text-ink-muted hover:bg-white"
-          >
-            閉じる
-          </button>
+            <span className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void undoBulk()}
+                className="btn btn-secondary btn-sm pressable"
+              >
+                まとめての判断を元に戻す
+              </button>
+              <button
+                type="button"
+                onClick={() => setLastBulk(null)}
+                className="btn btn-quiet btn-sm pressable"
+              >
+                この知らせを閉じる
+              </button>
+            </span>
+          </AlertPanel>
         </div>
       ) : null}
 
@@ -503,13 +505,11 @@ function ProgressHeader({
         <p className="num text-sm font-bold text-ink">
           {done} / {total}件 完了
         </p>
-        {skipped > 0 ? (
-          <p className="text-xs text-ink-muted">あとで見る {skipped}件</p>
-        ) : null}
+        {skipped > 0 ? <Badge tone="caution">あとで見る {skipped}件</Badge> : null}
         <button
           type="button"
           onClick={onExit}
-          className="ml-auto rounded border border-line px-3 py-1 text-xs font-semibold text-ink-muted hover:bg-subtle"
+          className="btn btn-quiet btn-sm pressable ml-auto"
         >
           表に戻る
         </button>
@@ -602,11 +602,7 @@ function IssueCard({
     <article className="mt-4">
       <header className="border-b border-line pb-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span
-            className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${SEVERITY_CHIP[issue.severity]}`}
-          >
-            {SEVERITY_LABEL[issue.severity]}
-          </span>
+          <Badge tone={SEVERITY_TONE[issue.severity]}>{SEVERITY_LABELS[issue.severity]}</Badge>
           <span className="text-xs text-ink-muted">{SEVERITY_MEANING[issue.severity]}</span>
         </div>
         <h3 className="mt-2 text-lg font-bold text-ink">{issue.title}</h3>
@@ -626,7 +622,7 @@ function IssueCard({
             <p>
               先月もOKにした指摘です
               {issue.carriedOver.previousValue !== null
-                ? `(先月の値 ${num(issue.carriedOver.previousValue, digits)} ${unit})`
+                ? `（先月の値 ${num(issue.carriedOver.previousValue, digits)} ${unit}）`
                 : ""}
               {issue.carriedOver.ackedByName
                 ? ` / 判断した人: ${issue.carriedOver.ackedByName}`
@@ -645,17 +641,17 @@ function IssueCard({
             <button
               type="button"
               onClick={() => setCarryOverReleased(true)}
-              className="rounded px-2 py-0.5 text-ink-muted hover:bg-white"
+              className="btn btn-quiet btn-sm pressable"
             >
-              引き継がない(自分で見る)
+              引き継がずに自分で見る
             </button>
           </div>
         ) : null}
 
         {issue.postponed ? (
-          <p className="mt-3 rounded-lg border border-caution-border bg-caution-soft px-4 py-2 text-xs text-ink">
-            これは前に「あとで見る」にした指摘です。
-          </p>
+          <div className="mt-3">
+            <AlertPanel tone="caution" title="これは前に「あとで見る」にした指摘です。" />
+          </div>
         ) : null}
       </header>
 
@@ -693,27 +689,46 @@ function IssueCard({
             {currentNumber === null ? String(currentValue ?? "—") : num(currentNumber, digits)}
             <span className="ml-1 text-sm font-semibold text-ink-muted">{unit}</span>
           </p>
-          <dl className="mt-3 space-y-1.5 border-t border-line pt-3 text-xs">
-            {benchmark.typical !== null ? (
-              <div className="flex items-baseline justify-between gap-3">
-                <dt className="text-ink-muted">{benchmark.typicalLabel}</dt>
-                <dd className="num font-semibold text-ink">
-                  {num(benchmark.typical, digits)} {unit}
-                </dd>
-              </div>
-            ) : null}
-            {benchmark.previous !== null ? (
-              <div className="flex items-baseline justify-between gap-3">
-                <dt className="text-ink-muted">{benchmark.previousLabel}</dt>
-                <dd className="num font-semibold text-ink">
-                  {num(benchmark.previous, digits)} {unit}
-                </dd>
-              </div>
-            ) : null}
-            {benchmark.typical === null && benchmark.previous === null ? (
-              <p className="text-ink-muted">比べられる値がありません(今月が初回の車両です)。</p>
-            ) : null}
-          </dl>
+          {/*
+            比べる値は「項目名と値の対」なので、表ではなく定義リストで読ませる (T7 §4-1)。
+            <dt>/<dd> を画面の中で書き起こさず共通部品を通す (design-system §11-13)。
+          */}
+          {benchmark.typical !== null || benchmark.previous !== null ? (
+            <DefinitionList
+              className="mt-3 border-t border-line pt-3"
+              items={[
+                ...(benchmark.typical !== null
+                  ? [
+                      {
+                        term: benchmark.typicalLabel,
+                        value: (
+                          <span className="num font-semibold">
+                            {num(benchmark.typical, digits)} {unit}
+                          </span>
+                        ),
+                      },
+                    ]
+                  : []),
+                ...(benchmark.previous !== null
+                  ? [
+                      {
+                        term: benchmark.previousLabel,
+                        value: (
+                          <span className="num font-semibold">
+                            {num(benchmark.previous, digits)} {unit}
+                          </span>
+                        ),
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          ) : (
+            <p className="mt-3 border-t border-line pt-3 text-xs text-ink-muted">
+              比べられる値がありません（今月が初回の車両です）。この1台だけで判断が付かないときは、
+              下の「この車両の内訳を見る」で12か月の動きを確かめてください。
+            </p>
+          )}
           <Link
             href={`/vehicle/${encodeURIComponent(row.vehicleNo)}?ym=${yearMonth}`}
             className="mt-3 inline-block text-xs font-semibold text-brand-deep hover:underline"
@@ -754,11 +769,7 @@ function IssueCard({
           {issue.fix ? (
             <Link
               href={issue.fix.href}
-              className={
-                editable
-                  ? "pressable rounded-md border border-brand px-5 py-2.5 text-sm font-semibold text-brand-deep hover:bg-brand-soft"
-                  : "pressable rounded-md bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-deep"
-              }
+              className={`btn pressable ${editable ? "btn-secondary" : "btn-primary"}`}
             >
               {issue.fix.label}
             </Link>
@@ -771,7 +782,7 @@ function IssueCard({
               disabled={busy}
               className="btn btn-secondary pressable"
             >
-              このままでOK(問題なし)
+              このままでよい
             </button>
           ) : null}
 
@@ -784,7 +795,7 @@ function IssueCard({
               disabled={busy}
               className="btn btn-quiet pressable"
             >
-              同じ指摘 {sameCodeCount}件 をまとめてOK
+              同じ指摘 {sameCodeCount}件 をまとめて「このままでよい」にする
             </button>
           ) : null}
 
@@ -792,9 +803,9 @@ function IssueCard({
             type="button"
             onClick={onSkip}
             disabled={busy}
-            className="rounded-md border border-line px-4 py-2.5 text-sm text-ink-muted hover:bg-subtle disabled:opacity-50"
+            className="btn btn-quiet pressable"
           >
-            あとで見る(スキップ)
+            あとで見る
           </button>
 
           {onPrev ? (
@@ -802,9 +813,9 @@ function IssueCard({
               type="button"
               onClick={onPrev}
               disabled={busy}
-              className="ml-auto rounded px-3 py-2 text-xs font-semibold text-ink-muted hover:bg-subtle"
+              className="btn btn-quiet btn-sm pressable ml-auto"
             >
-              ← 前の指摘へ
+              前の指摘へ戻る
             </button>
           ) : null}
         </footer>
@@ -812,7 +823,7 @@ function IssueCard({
 
       {!canEdit ? (
         <p className="mt-3 text-xs text-ink-muted">
-          いまは見るだけの状態です。直したり確認済みにしたりはできません。
+          いまは見るだけの状態です。数字を直したり「このままでよい」と決めたりはできません。
         </p>
       ) : null}
     </article>
@@ -842,10 +853,10 @@ function BulkConfirm({
   return (
     <div className="mt-4 rounded-xl border border-caution-border bg-caution-soft p-5">
       <h3 className="text-lg font-bold text-ink">
-        {label} <span className="num">{items.length}件</span> をまとめて「問題なし」にします。
+        {label} <span className="num">{items.length}件</span> をまとめて「このままでよい」にします。
       </h3>
       <p className="mt-1 text-sm text-ink">
-        この{items.length}件は、内容を1件ずつ見ずに確認済みになります。対象は次の車両です。
+        この{items.length}件は、内容を1件ずつ見ずに「このままでよい」になります。対象は次の車両です。
       </p>
 
       <ul className="mt-3 max-h-56 space-y-1 overflow-y-auto rounded-lg border border-line bg-white px-4 py-3">
@@ -865,7 +876,7 @@ function BulkConfirm({
           disabled={busy}
           className="btn btn-quiet pressable"
         >
-          やめる(1件ずつ見る)
+          やめて1件ずつ見る
         </button>
         <button
           type="button"
@@ -873,7 +884,7 @@ function BulkConfirm({
           disabled={busy}
           className="btn btn-secondary pressable"
         >
-          {busy ? "処理しています…" : `${items.length}件をまとめてOKにする`}
+          {busy ? "処理しています…" : `${items.length}件をまとめて「このままでよい」にする`}
         </button>
         <p className="text-[11px] text-ink-muted">実行した後でも、まとめて元に戻せます。</p>
       </div>
@@ -980,7 +991,7 @@ function ValueEditor({
       return;
     }
     if (reason.trim() === "") {
-      setFormError("直した理由を入力してください(翌月に同じ判断を引き継ぐために使います)");
+      setFormError("直した理由を入力してください（翌月に同じ判断を引き継ぐために使います）");
       reasonRef.current?.focus();
       return;
     }
@@ -1032,14 +1043,14 @@ function ValueEditor({
                   reasonRef.current?.focus();
                 }
               }}
-              className="num w-44 rounded-md border border-line bg-white px-2 py-1.5 text-right text-sm"
+              className={`${FIELD_CLASS} num w-44 text-right`}
             />
             <span className="text-xs font-semibold text-ink-muted">{unit}</span>
           </span>
         </label>
 
         <label className="min-w-64 flex-1 text-xs text-ink">
-          <span className="block font-semibold">直した理由(必須)</span>
+          <span className="block font-semibold">直した理由（必須）</span>
           <input
             ref={reasonRef}
             type="text"
@@ -1047,7 +1058,7 @@ function ValueEditor({
             value={reason}
             onChange={(e) => update(text, e.target.value)}
             placeholder="例: 請求側で15万円減額したため"
-            className="mt-1 block w-full rounded-md border border-line bg-white px-2 py-1.5 text-sm"
+            className={`${FIELD_CLASS} mt-1 block w-full`}
           />
         </label>
       </div>
@@ -1060,7 +1071,7 @@ function ValueEditor({
           <button
             type="button"
             onClick={() => update(toInputText(candidate, digits), reason)}
-            className="rounded border border-line bg-white px-3 py-0.5 font-semibold"
+            className="btn btn-quiet btn-sm pressable"
           >
             この値にする
           </button>
@@ -1091,9 +1102,9 @@ function ValueEditor({
           type="button"
           onClick={onCancel}
           disabled={busy}
-          className="rounded-md border border-line bg-white px-4 py-2.5 text-sm text-ink-muted hover:bg-subtle"
+          className="btn btn-quiet pressable"
         >
-          やめる
+          直すのをやめる
         </button>
         <p className="text-[11px] text-ink-muted">
           入力した内容は自動で控えているので、間違えて閉じても消えません。
@@ -1106,7 +1117,7 @@ function ValueEditor({
 /**
  * 全部見終わったときの画面。
  *
- * ここが体験の「終わり」なので、次の1歩(収支表に反映する)だけを大きく置き、
+ * ここが体験の「終わり」なので、次の1歩(収支表を作り直す)だけを大きく置き、
  * それ以外は見直し用の一覧に畳む (ピークエンドの法則)。
  */
 function FinishedPanel({
@@ -1142,11 +1153,11 @@ function FinishedPanel({
   return (
     <div className="mt-4">
       {skipped.length > 0 ? (
-        <div className="rounded-lg border border-caution-border bg-caution-soft px-4 py-3">
-          <p className="text-sm font-semibold text-ink">
-            あとで見るにした指摘が {skipped.length}件 残っています。
-          </p>
-          <ul className="mt-2 space-y-1">
+        <AlertPanel
+          tone="caution"
+          title={`「あとで見る」にした指摘が ${skipped.length}件 残っています。`}
+        >
+          <ul className="space-y-1">
             {skipped.map((item) => (
               <li key={item.issue.key} className="text-xs text-ink">
                 <button
@@ -1160,7 +1171,7 @@ function FinishedPanel({
               </li>
             ))}
           </ul>
-        </div>
+        </AlertPanel>
       ) : (
         <p className="text-lg font-bold text-ink">準備が整いました。</p>
       )}
@@ -1173,8 +1184,8 @@ function FinishedPanel({
             <>
               <p className="text-sm text-ink">
                 {pendingCount > 0
-                  ? `直した数字が ${pendingCount}件 あります。収支表に反映すると、損益や経費の合計が新しい数字で作り直されます。`
-                  : "直した数字はありません。確認済みにした内容はすでに保存されています。"}
+                  ? `直した数字が ${pendingCount}件 あります。収支表を作り直すと、損益や経費の合計が新しい数字になります。`
+                  : "直した数字はありません。「このままでよい」にした内容はすでに保存されています。"}
               </p>
               <button
                 type="button"
@@ -1182,7 +1193,7 @@ function FinishedPanel({
                 disabled={pendingCount === 0}
                 className="btn btn-primary pressable mt-3"
               >
-                収支表に反映する
+                収支表を作り直す
               </button>
             </>
           )}
@@ -1191,7 +1202,7 @@ function FinishedPanel({
 
       {handled.length > 0 ? (
         <div className="mt-4">
-          <h4 className="text-xs font-bold text-ink">今回の確認内容({handled.length}件)</h4>
+          <h4 className="text-xs font-bold text-ink">今回の判断（{handled.length}件）</h4>
           <ul className="mt-1.5 divide-y divide-line rounded-lg border border-line">
             {handled.map((item) => (
               <li
@@ -1204,15 +1215,15 @@ function FinishedPanel({
                 <span className="text-ink-muted">
                   {verdicts[item.issue.key] === "fixed"
                     ? "値を直しました"
-                    : "このままでOKにしました"}
+                    : "このままでよいと判断しました"}
                 </span>
                 {canEdit ? (
                   <button
                     type="button"
                     onClick={() => onUndo(item)}
-                    className="ml-auto rounded border border-line px-3 py-0.5 font-semibold text-ink-muted hover:bg-subtle"
+                    className="btn btn-quiet btn-sm pressable ml-auto"
                   >
-                    元に戻す
+                    この判断を取り消す
                   </button>
                 ) : null}
               </li>
@@ -1224,7 +1235,7 @@ function FinishedPanel({
       <button
         type="button"
         onClick={onExit}
-        className="mt-4 rounded-md border border-line px-4 py-2 text-sm font-semibold text-ink-muted hover:bg-subtle"
+        className="btn btn-quiet pressable mt-4"
       >
         表に戻る
       </button>

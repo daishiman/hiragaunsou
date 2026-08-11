@@ -7,6 +7,7 @@ import { createDb } from "../../../src/infrastructure/db/client";
 import { D1ReviewFlagRepository } from "../../../src/infrastructure/db/D1ReviewFlagRepository";
 import { GetTodoBoardUseCase } from "../../../src/usecase/steps/getTodoBoard";
 import { selectableYearMonths } from "../../_lib/yearMonth";
+import { findScreen } from "../../_lib/screens";
 import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
 import { ScreenHeader } from "../../_components/ScreenHeader";
@@ -22,7 +23,8 @@ export default async function TodoPage({
   if (!session) redirect("/sign-in");
   // 権限が無い人を黙ってホームへ戻すと、押した本人にはリンクが壊れたようにしか見えない。
   if (!checkAccess(session, "view")) {
-    return <AccessDenied screenName="ToDoボード" permission="view" />;
+    // 画面の名前は screens.ts が唯一の出どころ。ここで別名を書くと横のメニューと食い違う
+    return <AccessDenied screenName={findScreen("/todo")?.label ?? "要確認の一覧（まとめて）"} permission="view" />;
   }
 
   const { ym } = await searchParams;

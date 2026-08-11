@@ -14,26 +14,25 @@ import {
 import { heaviestSeverity, type ReviewSeverity } from "../../../src/domain/rules/vehiclePlReview";
 import { SEVERITY_MEANING } from "../../../src/domain/rules/plIssueGuidance";
 import { FIELD_LABELS, isNumericField } from "../../_lib/fieldLabels";
-import { kmPriceLabel, num, pct, yen } from "../../_lib/format";
+import { SEVERITY_LABELS, SEVERITY_TONE } from "../../_lib/severity";
+import { kmPriceLabel, num, pct, yearMonthLabel, yen } from "../../_lib/format";
+import { AlertPanel } from "../../_components/AlertPanel";
+import { Badge } from "../../_components/Badge";
+import { StickyFilterBar } from "../../_components/StickyFilterBar";
+import { FIELD_CLASS } from "../../_components/formStyles";
 import { ReviewWizard, buildReviewQueue, type ReviewItem } from "./ReviewWizard";
 
-/** 重さごとの見え方。面の色だけで区別せず、凡例の語と1対1で対応させる。 */
-const SEVERITY_STYLE: Record<ReviewSeverity, { cell: string; chip: string; label: string }> = {
-  blocking: {
-    cell: "border border-danger-border bg-danger-soft",
-    chip: "border-danger-border bg-danger-soft text-danger",
-    label: "要修正",
-  },
-  warning: {
-    cell: "border border-caution-border bg-caution-soft",
-    chip: "border-caution-border bg-caution-soft text-ink",
-    label: "要確認",
-  },
-  info: {
-    cell: "border border-brand-soft bg-brand-mist",
-    chip: "border-brand-soft bg-brand-mist text-brand-deep",
-    label: "参考",
-  },
+/**
+ * 重さごとのセルの面。
+ *
+ * 札(要修正・要確認・参考)の見た目と日本語は共通部品に寄せた
+ * (Badge + app/_lib/severity.ts)。ここに残すのは、共通部品では表せない
+ * 「表のセルそのものを塗る」指定だけ。訳の表を画面に持たない (T7 §1-3)。
+ */
+const SEVERITY_CELL: Record<ReviewSeverity, string> = {
+  blocking: "border border-danger-border bg-danger-soft",
+  warning: "border border-caution-border bg-caution-soft",
+  info: "border border-brand-soft bg-brand-mist",
 };
 
 /** 確認済みにした指摘の見え方。色を落として「もう見なくてよい」ことを面で示す。 */
@@ -98,7 +97,7 @@ const GROUPS_SUMMARY: readonly { label: string; cols: readonly ColumnKey[] }[] =
   { label: "車両情報", cols: ["no", "type", "depot", "driver"] },
   { label: "稼働", cols: ["trips", "km"] },
   { label: "売上", cols: ["sales"] },
-  { label: "主な経費(計)", cols: ["tollNet", "fuelTotal", "repairTotal", "laborTotal"] },
+  { label: "主な経費（計）", cols: ["tollNet", "fuelTotal", "repairTotal", "laborTotal"] },
   { label: "合計", cols: ["expense"] },
   { label: "指標", cols: ["profit", "margin", KM_PRICE] },
 ];
@@ -219,6 +218,11 @@ interface AckState {
 
 /**
  * S2 月次収支表 (モック view-grid.js に対応)。
+ *
+ * ■ 表か、カードか (T7 §4-1 の質問への回答)
+ * この画面で人がやりたいのは「106台を列をまたいで見比べること」なので表のままにする。
+ * 1件を読んで判断する作業 (指摘の確認) は同じ器では解かず、確認モード (ReviewWizard) の
+ * カードに分けてある。
  *
  * 既定は要約15列。Excel互換の全列はセグメント切替で開示する(段階的開示)。
  * 指摘の付いたセルはその場で直せ、直さずに通す判断は「確認済み」として残す。
@@ -522,7 +526,7 @@ export function GridTable({
     // ここで戻せないと理由を書き直してもう一度入力し直すことになる。
     setUndo({ vehicleNo: row.vehicleNo, values: before, reason: reasonOf(row) });
     setNotice(
-      `車番${row.vehicleNoLabel} の${OVERRIDABLE_FIELD_META[field].label}を保存しました。収支表に反映するには「収支表に反映する」を押してください。`,
+      `車番${row.vehicleNoLabel} の${OVERRIDABLE_FIELD_META[field].label}を保存しました。数字を表に入れるには「収支表を作り直す」を押してください。`,
     );
   }
 
@@ -596,7 +600,7 @@ export function GridTable({
   }
 
   /**
-   * 同じ種類の指摘をまとめて「問題なし」にする。
+   * 同じ種類の指摘をまとめて「このままでよい」にする。
    *
    * 押し間違いの被害が大きい操作なので、件数の提示 (呼び出し側) と
    * この後の「元に戻す」(bulkUndo) を必ずセットにする。
@@ -622,7 +626,7 @@ export function GridTable({
       count?: number;
       ackedByName?: string | null;
     } | null;
-    if (!res.ok) throw new Error(data?.error ?? "まとめて確認済みにできませんでした");
+    if (!res.ok) throw new Error(data?.error ?? "まとめて「このままでよい」にできませんでした");
     setAcks((prev) => {
       const next = { ...prev };
       for (const issue of issues) {
@@ -675,11 +679,11 @@ export function GridTable({
         vehicleCount?: number;
       } | null;
       if (!res.ok) {
-        setNotice(data?.error ?? "収支表に反映できませんでした");
+        setNotice(data?.error ?? "収支表を作り直せませんでした");
         return;
       }
       setNotice(
-        `直し${data?.appliedCount ?? 0}件を反映して、${data?.vehicleCount ?? 0}台分の収支表を作り直しました。`,
+        `直し${data?.appliedCount ?? 0}件を入れて、${data?.vehicleCount ?? 0}台分の収支表を作り直しました。`,
       );
       setReviewing(false);
       router.refresh();
@@ -696,8 +700,8 @@ export function GridTable({
     return (
       <>
         {notice ? (
-          <div className="mb-3 rounded-lg border border-brand-soft bg-brand-mist px-4 py-2 text-xs text-brand-deep">
-            {notice}
+          <div className="mb-3">
+            <AlertPanel tone="success" title={notice} />
           </div>
         ) : null}
         <ReviewWizard
@@ -746,7 +750,30 @@ export function GridTable({
         onApply={() => void applyPending()}
       />
 
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      {/*
+        絞り込み・対象年月・件数・残りの確認件数は、下までスクロールしても
+        「これは何月の、どの範囲の、何件ぶんの数字か」が消えないように上に貼り付ける
+        (T7 §2-2 の3段目)。/grid には工程の帯 (StickyStepHeader) を出していないので、
+        貼り付け先はアプリのヘッダーの直下 (below="header")。
+      */}
+      <StickyFilterBar
+        summary={
+          <>
+            <span className="num">{yearMonthLabel(yearMonth)}</span>
+            <span className="mx-2">/</span>
+            表示 <span className="num">{filtered.length}</span>台 / 全{" "}
+            <span className="num">{rows.length}</span>台
+            <span className="mx-2">/</span>
+            未確認 <span className="num">{progress.blocking + progress.warning}</span>件
+            {progress.postponed > 0 ? (
+              <>
+                <span className="mx-2">/</span>
+                あとで見る <span className="num">{progress.postponed}</span>件
+              </>
+            ) : null}
+          </>
+        }
+      >
         <div className="inline-flex rounded-md border border-line bg-white p-0.5" role="group">
           {(["summary", "full"] as const).map((m) => (
             <button
@@ -758,7 +785,7 @@ export function GridTable({
                 mode === m ? "bg-brand-soft text-brand-deep" : "text-ink-muted hover:bg-subtle"
               }`}
             >
-              {m === "summary" ? "要約(15列)" : "Excel互換(全列)"}
+              {m === "summary" ? "要約（15列）" : "Excel互換（全列）"}
             </button>
           ))}
         </div>
@@ -768,7 +795,7 @@ export function GridTable({
           <select
             value={depot}
             onChange={(e) => setDepot(e.target.value)}
-            className="rounded-md border border-line bg-white px-2 py-1 text-sm text-ink"
+            className={FIELD_CLASS}
           >
             <option value="">すべて</option>
             {depots.map((d) => (
@@ -784,7 +811,7 @@ export function GridTable({
           <select
             value={type}
             onChange={(e) => setType(e.target.value)}
-            className="rounded-md border border-line bg-white px-2 py-1 text-sm text-ink"
+            className={FIELD_CLASS}
           >
             <option value="">すべて</option>
             {types.map((t) => (
@@ -814,11 +841,7 @@ export function GridTable({
           />
           確認が必要な車両のみ
         </label>
-
-        <p className="num ml-auto text-xs text-ink-muted">
-          {filtered.length} / {rows.length} 台
-        </p>
-      </div>
+      </StickyFilterBar>
 
       <ReviewProgressBar
         progress={progress}
@@ -831,27 +854,58 @@ export function GridTable({
 
       {lockedReason ? null : (
         <p className="mb-3 text-xs text-ink-muted">
-          操作に慣れている方向け: 色の付いたセルをダブルクリック(またはEnter・F2)すると、
-          この表の上で直接数字を直せます。直した値はすぐ保存され、収支表への反映はまとめて1回だけ行います。
+          操作に慣れている方向け: 色の付いたセルをダブルクリック（またはEnter・F2）すると、
+          この表の上で直接数字を直せます。直した値はすぐ保存され、収支表の作り直しはまとめて1回だけ行います。
         </p>
       )}
 
       {notice ? (
-        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-brand-soft bg-brand-mist px-4 py-2 text-xs text-brand-deep">
-          <p>{notice}</p>
-          {undo && canEdit ? (
-            <button
-              type="button"
-              onClick={() => void undoLastEdit()}
-              className="btn btn-secondary pressable"
-            >
-              元に戻す
-            </button>
-          ) : null}
+        <div className="mb-3">
+          <AlertPanel tone="success" title={notice}>
+            {undo && canEdit ? (
+              <button
+                type="button"
+                onClick={() => void undoLastEdit()}
+                className="btn btn-secondary btn-sm pressable"
+              >
+                直前の直しを元に戻す
+              </button>
+            ) : null}
+          </AlertPanel>
         </div>
       ) : null}
 
-      <div className="overflow-x-auto card">
+      {filtered.length === 0 ? (
+        <div className="card px-6 py-10 text-center">
+          <p className="text-sm font-semibold text-ink">
+            いまの絞り込みに合う車両がありません。
+          </p>
+          <p className="mt-1 text-sm text-ink-muted">
+            全{rows.length}台のうち、所属・車種・赤字・確認の条件をすべて満たす車両が0台でした。
+            絞り込みを外すと、また全車両が出ます。
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setDepot("");
+              setType("");
+              setDeficitOnly(false);
+              setReviewOnly(false);
+            }}
+            className="btn btn-secondary pressable mt-4"
+          >
+            絞り込みを外す
+          </button>
+        </div>
+      ) : (
+      /*
+        51列・車番の左固定・グループ見出し行を持つ特殊な表なので、共通部品の DataTable には
+        載せずに table のまま残す。ただし列見出しの縦固定だけは足す。
+        横スクロールの箱を作った時点でその箱がスクロールの担当になり、ページのスクロールでは
+        sticky が効かない (T7 §2-1)。そのため箱に高さの上限を与えて縦にもスクロールさせ、
+        見出し2行 (グループ・列名) と車番の列をその箱の中で固定する。
+      */
+      <div className="card overflow-auto" style={{ maxHeight: "min(70vh, 44rem)" }}>
         <table className="data-table min-w-max border-collapse text-xs">
           <thead>
             <tr className="border-b border-line bg-subtle text-ink-muted">
@@ -859,7 +913,7 @@ export function GridTable({
                 <th
                   key={g.label}
                   colSpan={g.cols.length}
-                  className="border-l border-line px-3 py-1.5 text-center text-[11px] font-semibold first:border-l-0"
+                  className="sticky top-0 z-20 h-7 border-l border-line bg-subtle px-3 py-1.5 text-center text-[11px] font-semibold first:border-l-0"
                 >
                   {g.label}
                 </th>
@@ -869,7 +923,7 @@ export function GridTable({
               {columns.map((col) => (
                 <th
                   key={col}
-                  className={`whitespace-nowrap px-3 py-2 font-medium ${isTextColumn(col) ? "text-left" : "text-right"} ${col === "no" ? "sticky left-0 z-10 bg-subtle" : ""}`}
+                  className={`sticky top-7 whitespace-nowrap bg-subtle px-3 py-2 font-medium ${isTextColumn(col) ? "text-left" : "text-right"} ${col === "no" ? "left-0 z-30" : "z-20"}`}
                 >
                   {labelOf(col)}
                   {isEditableField(col) && canEdit ? (
@@ -960,7 +1014,7 @@ export function GridTable({
                           "whitespace-nowrap px-3 py-2",
                           isTextColumn(col) ? "text-left" : "num text-right",
                           col === "profit" && profit < 0 ? "font-bold text-danger" : "",
-                          allAcked ? ACKED_CELL : severity ? SEVERITY_STYLE[severity].cell : "",
+                          allAcked ? ACKED_CELL : severity ? SEVERITY_CELL[severity] : "",
                           pending ? "border border-dashed border-accent bg-accent-mist" : "",
                           isOpen || isEditing ? "outline outline-2 outline-brand" : "",
                           editable ? "cursor-cell" : "",
@@ -971,7 +1025,7 @@ export function GridTable({
                         </span>
                         {pending ? (
                           <span className="ml-1 text-[10px] font-semibold text-accent-deep">
-                            反映待ち
+                            作り直し待ち
                           </span>
                         ) : null}
                         {allAcked ? (
@@ -1025,10 +1079,11 @@ export function GridTable({
           </tfoot>
         </table>
       </div>
+      )}
 
       {pendingCount > 0 ? (
         <p className="mt-2 text-xs text-ink-muted">
-          合計行と、損益・経費計などの計算結果は、反映するまで直す前の数字のままです。
+          合計行と、損益・経費計などの計算結果は、収支表を作り直すまで直す前の数字のままです。
         </p>
       ) : null}
 
@@ -1136,7 +1191,7 @@ function OpeningGuide({
             </span>
             <span className="inline-block">見ていただくのはこの{openIssueCount}件だけです。</span>
             {postponed > 0 ? (
-              <span className="inline-block">このうち {postponed}件は後回し中です。</span>
+              <span className="inline-block">このうち {postponed}件は「あとで見る」にしたままです。</span>
             ) : null}
           </p>
           {canEdit ? (
@@ -1148,15 +1203,15 @@ function OpeningGuide({
               >
                 確認をはじめる
               </button>
-              {/* 後回しにした分だけをもう一度見に行ける入口。ここが無いと、
-                  後回しにした指摘を探すために全件をもう一度めくることになる。 */}
+              {/* 「あとで見る」にした分だけをもう一度見に行ける入口。ここが無いと、
+                  あとで見るにした指摘を探すために全件をもう一度めくることになる。 */}
               {postponed > 0 ? (
                 <button
                   type="button"
                   onClick={() => onStart(true)}
                   className="btn btn-secondary pressable"
                 >
-                  後回しの{postponed}件だけ確認する
+                  「あとで見る」の{postponed}件だけ見る
                 </button>
               ) : null}
             </div>
@@ -1166,7 +1221,7 @@ function OpeningGuide({
         <>
           <h2 className="text-xl font-bold text-ink">準備が整いました。</h2>
           <p className="mt-1 text-sm text-ink-muted">
-            確認はすべて終わっています。直した数字 {pendingCount}件 を収支表に入れてください。
+            確認はすべて終わっています。直した数字 {pendingCount}件 で収支表を作り直してください。
           </p>
           {canEdit ? (
             <button
@@ -1175,7 +1230,7 @@ function OpeningGuide({
               disabled={applying}
               className="btn btn-primary pressable mt-3"
             >
-              {applying ? "反映しています…" : "収支表に反映する"}
+              {applying ? "作り直しています…" : "収支表を作り直す"}
             </button>
           ) : null}
         </>
@@ -1192,11 +1247,9 @@ function OpeningGuide({
         <ul className="mt-4 flex flex-wrap gap-x-6 gap-y-1.5 border-t border-line pt-3">
           {counts.map(({ severity, count }) => (
             <li key={severity} className="flex items-baseline gap-2 text-xs">
-              <span
-                className={`shrink-0 rounded-full border px-2 py-0.5 font-semibold whitespace-nowrap ${SEVERITY_STYLE[severity].chip}`}
-              >
-                {SEVERITY_STYLE[severity].label} {count}
-              </span>
+              <Badge tone={SEVERITY_TONE[severity]}>
+                {SEVERITY_LABELS[severity]} {count}
+              </Badge>
               <span className="text-ink-muted">{SEVERITY_MEANING[severity]}</span>
             </li>
           ))}
@@ -1249,33 +1302,28 @@ function ReviewProgressBar({
         {remaining === 0 ? (
           <p className="text-sm font-semibold text-ink">
             {pendingCount > 0
-              ? "確認は終わりました。「収支表に反映する」を押すと、直した数字が表に入ります。"
+              ? "確認は終わりました。「収支表を作り直す」を押すと、直した数字が表に入ります。"
               : `確認が必要な箇所はありません。${vehicleCount}台すべてこのまま確定できます。`}
           </p>
         ) : (
           <>
             <p className="text-sm text-ink">
               あと<span className="font-semibold">{remaining}件</span>確認してください。
-              {done > 0 ? `(確認済み ${done}件)` : null}
+              {done > 0 ? `（判断済み ${done}件）` : null}
               残り{progress.cleanVehicles}台は指摘なしです。
             </p>
-            {/* 後回しの件数は、表を見ているときも必ず目に入る場所に置く
-                (後回しにしたこと自体を忘れると、確認したつもりで月を閉じてしまう)。 */}
+            {/* 「あとで見る」の件数は、表を見ているときも必ず目に入る場所に置く
+                (あとで見るにしたこと自体を忘れると、確認したつもりで月を閉じてしまう)。 */}
             {progress.postponed > 0 ? (
-              <span className="rounded-full border border-caution-border bg-caution-soft px-2 py-0.5 text-xs font-semibold text-ink">
-                後回し {progress.postponed}件
-              </span>
+              <Badge tone="caution">あとで見る {progress.postponed}件</Badge>
             ) : null}
             {(["blocking", "warning", "info"] as const).map((severity) => {
               const count = progress[severity];
               if (count === 0) return null;
               return (
-                <span
-                  key={severity}
-                  className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${SEVERITY_STYLE[severity].chip}`}
-                >
-                  {SEVERITY_STYLE[severity].label} {count}
-                </span>
+                <Badge key={severity} tone={SEVERITY_TONE[severity]}>
+                  {SEVERITY_LABELS[severity]} {count}
+                </Badge>
               );
             })}
           </>
@@ -1284,7 +1332,9 @@ function ReviewProgressBar({
         {canEdit ? (
           <div className="ml-auto flex items-center gap-2">
             <span className="text-xs text-ink-muted">
-              {pendingCount > 0 ? `反映待ちの直し ${pendingCount}件` : "反映待ちはありません"}
+              {pendingCount > 0
+                ? `作り直しに入れる直し ${pendingCount}件`
+                : "作り直し待ちの直しはありません"}
             </span>
             <button
               type="button"
@@ -1292,7 +1342,7 @@ function ReviewProgressBar({
               onClick={onApply}
               className="btn btn-primary pressable"
             >
-              {applying ? "反映しています…" : "収支表に反映する"}
+              {applying ? "作り直しています…" : "収支表を作り直す"}
             </button>
           </div>
         ) : null}
@@ -1363,7 +1413,7 @@ function CellEditor({
     const n = validate();
     if (n === null) return;
     if (reason.trim() === "") {
-      setError("直した理由を入力してください(翌月に同じ判断を引き継ぐために使います)");
+      setError("直した理由を入力してください（翌月に同じ判断を引き継ぐために使います）");
       reasonRef.current?.focus();
       return;
     }
@@ -1401,9 +1451,9 @@ function CellEditor({
         <button
           type="button"
           onClick={onCancel}
-          className="ml-auto rounded border border-line px-2 py-0.5 text-xs text-ink-muted hover:bg-subtle"
+          className="btn btn-quiet btn-sm pressable ml-auto"
         >
-          閉じる
+          入力をやめて閉じる
         </button>
       </div>
 
@@ -1430,7 +1480,7 @@ function CellEditor({
           <span className="ml-1 text-[11px] text-ink-muted">{meta.unit}</span>
         </label>
         <label className="min-w-64 flex-1 text-xs text-ink">
-          <span className="block font-semibold">直した理由(必須)</span>
+          <span className="block font-semibold">直した理由（必須）</span>
           <input
             ref={reasonRef}
             type="text"
@@ -1453,7 +1503,7 @@ function CellEditor({
 
       {error ? <p className="mt-2 text-xs text-danger">{error}</p> : null}
       <p className="mt-2 text-[11px] text-ink-muted">
-        保存した値はこの画面を閉じても消えません。損益や経費計は「収支表に反映する」を押したときに作り直されます。
+        保存した値はこの画面を閉じても消えません。損益や経費計は「収支表を作り直す」を押したときに作り直されます。
       </p>
     </div>
   );
@@ -1501,9 +1551,9 @@ function IssuePanel({
         <button
           type="button"
           onClick={onClose}
-          className="ml-auto rounded border border-line px-2 py-0.5 text-xs text-ink-muted hover:bg-subtle"
+          className="btn btn-quiet btn-sm pressable ml-auto"
         >
-          閉じる
+          この所見を閉じる
         </button>
       </div>
 
@@ -1511,19 +1561,21 @@ function IssuePanel({
         {issues.map((issue) => (
           <li key={issue.key} className="rounded-lg border border-line p-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span
-                className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+              <Badge
+                tone={
                   issue.acknowledged
-                    ? "border-line bg-subtle text-ink-muted"
-                    : SEVERITY_STYLE[issue.severity].chip
-                }`}
+                    ? "neutral"
+                    : issue.postponed
+                      ? "caution"
+                      : SEVERITY_TONE[issue.severity]
+                }
               >
                 {issue.acknowledged
-                  ? "確認済み"
+                  ? "このままでよい"
                   : issue.postponed
                     ? "あとで見る"
-                    : SEVERITY_STYLE[issue.severity].label}
-              </span>
+                    : SEVERITY_LABELS[issue.severity]}
+              </Badge>
               <span className="text-sm font-semibold text-ink">{issue.title}</span>
 
               {canEdit ? (
@@ -1534,7 +1586,7 @@ function IssuePanel({
                       onClick={() => onToggleAck(issue, null)}
                       className="btn btn-quiet btn-sm pressable"
                     >
-                      {issue.acknowledged ? "確認済みを取り消す" : "後回しをやめる"}
+                      {issue.acknowledged ? "この判断を取り消す" : "あとで見るをやめる"}
                     </button>
                   ) : (
                     <>
@@ -1550,7 +1602,7 @@ function IssuePanel({
                         onClick={() => onToggleAck(issue, "ok")}
                         className="btn btn-secondary btn-sm pressable"
                       >
-                        確認しました(このままでよい)
+                        このままでよい
                       </button>
                     </>
                   )}

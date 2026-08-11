@@ -88,7 +88,7 @@ export default async function GridPage({
         ) : (
           <EmptyState
             title={`${yearMonthLabel(yearMonth)}のデータはまだありません`}
-            description="データ取込でExcel/CSVを取り込むと、ここに車両別の収支が表示されます。"
+            description="この月はまだ1件も取り込まれていないため、表に出せる車両がありません。データ取込でExcel/CSVを取り込むと、ここに車両別の収支が出ます。"
             actionHref={`/import?ym=${yearMonth}`}
           />
         )
@@ -105,7 +105,7 @@ export default async function GridPage({
               ? "この月は確定済みです。数字を直すには、上の「確定を取り消す」を押してください。"
               : checkAccess(session, "input")
                 ? null
-                : "閲覧のみの権限のため、数字を直したり確認済みにしたりはできません。"
+                : "閲覧のみの権限のため、数字を直したり判断を残したりはできません。直す必要があるときは、入力できる担当者に伝えてください。"
           }
           // 確定・書き出し・Excel突合は「表を見る」ときの操作。
           // 1件ずつ確認している最中には出さないよう、表と一緒に出し分けてもらう。
@@ -129,7 +129,7 @@ export default async function GridPage({
                 href={`/grid/report?ym=${encodeURIComponent(yearMonth)}`}
                 className="btn btn-quiet pressable"
               >
-                確認の記録を印刷・共有
+                確認の記録を印刷・共有する
               </Link>
               <a
                 href={`/api/export?yearMonth=${encodeURIComponent(yearMonth)}`}

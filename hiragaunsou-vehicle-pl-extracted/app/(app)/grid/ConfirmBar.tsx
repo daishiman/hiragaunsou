@@ -3,12 +3,17 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { ConfirmationStatus } from "../../../src/usecase/steps/confirmMonthlyPl";
+import { AlertPanel } from "../../_components/AlertPanel";
+import { Badge } from "../../_components/Badge";
 
 /**
  * 業務フロー STEP8「運送収支表への転記(完成)」の代替となる確定操作。
  *
  * 転記の代わりに「この月の収支表はこれで完成」と宣言する。取り消せる操作なので
  * 確認ダイアログは挟まず、押した結果と戻し方をその場に出す。
+ *
+ * 表か否か (T7 §4-1): ここは「1件 (この月) を読んで確定するかどうかを決める」場所なので
+ * 表にしない。状態は札 (Badge)、注意は AlertPanel で1件ぶんの文として出す。
  */
 export function ConfirmBar({
   status,
@@ -55,6 +60,9 @@ export function ConfirmBar({
       }`}
     >
       <div className="flex flex-wrap items-center gap-3">
+        <Badge tone={state.isConfirmed ? "brand" : "neutral"}>
+          {state.isConfirmed ? "確定済み" : "未確定"}
+        </Badge>
         <p className="text-sm font-semibold text-ink">
           {state.isConfirmed
             ? "この月の収支表は確定済みです"
@@ -63,7 +71,7 @@ export function ConfirmBar({
         <p className="text-xs text-ink-muted">
           {state.isConfirmed
             ? "Excelへの転記は不要です。取込や手入力をやり直すと確定は自動で外れます。"
-            : `車両 ${state.total}台分の収支ができています。内容を確認したら確定してください。`}
+            : `車両 ${state.total}台の収支ができています。内容を確認したら確定してください。`}
         </p>
 
         {canConfirm && (
@@ -91,23 +99,36 @@ export function ConfirmBar({
         )}
       </div>
 
-      {/* 後回しが残っていても確定は止めない (止めると、判断が付かない1件で月末の締めが止まる)。
+      {/* 「あとで見る」が残っていても確定は止めない (止めると、判断が付かない1件で月末の締めが止まる)。
           代わりに「何件残っているか」を確定ボタンの真下に必ず出す。 */}
       {!state.isConfirmed && postponedCount > 0 && (
-        <p className="mt-2 rounded-md border border-caution-border bg-caution-soft px-3 py-2 text-xs text-ink">
-          「あとで見る」にした指摘が {postponedCount}件 残っています。確定はできますが、
-          先に上の「後回しの{postponedCount}件だけ確認する」で見ておくことをおすすめします。
-        </p>
+        <div className="mt-2">
+          <AlertPanel
+            tone="caution"
+            title={`「あとで見る」にした指摘が ${postponedCount}件 残っています。`}
+          >
+            確定はできますが、先に表の上にある「「あとで見る」の{postponedCount}件だけ見る」で
+            確かめておくことをおすすめします。
+          </AlertPanel>
+        </div>
       )}
 
       {!state.isConfirmed && state.openFlagCount > 0 && (
-        <p className="mt-2 rounded-md border border-caution-border bg-caution-soft px-3 py-2 text-xs text-ink">
-          未判定の異常値が {state.openFlagCount}件 残っています。確定はできますが、先に
-          「収支表のチェック(STEP7)」で判定しておくことをおすすめします。
-        </p>
+        <div className="mt-2">
+          <AlertPanel
+            tone="caution"
+            title={`まだ判定していない異常値が ${state.openFlagCount}件 残っています。`}
+          >
+            確定はできますが、先に「収支表のチェック」で判定しておくことをおすすめします。
+          </AlertPanel>
+        </div>
       )}
 
-      {error && <p className="mt-2 text-xs text-danger">{error}</p>}
+      {error && (
+        <div className="mt-2">
+          <AlertPanel tone="danger" title={error} />
+        </div>
+      )}
     </div>
   );
 }

@@ -33,6 +33,8 @@
    */
   --app-header-h: 3.25rem;
   --screen-step-header-h: 3.25rem;
+  /* 絞り込みの条件と件数を貼り付けておく帯 (StickyFilterBar)。工程タブの下に付く */
+  --screen-filter-bar-h: 2.75rem;
   --screen-action-bar-h: 4rem;
 
   /*
@@ -52,6 +54,7 @@
   :root {
     --app-header-h: 2.75rem;
     --screen-step-header-h: 2.75rem;
+    --screen-filter-bar-h: 2.5rem;
     --screen-action-bar-h: 3.25rem;
   }
 }
@@ -372,6 +375,17 @@ main :where(details) > :where(:not(summary)) {
 }
 .data-table :where(th, td).wrap {
   white-space: normal;
+}
+/*
+ * 見出し行を固定したときの背景と下罫。
+ *
+ * 貼り付いた thead に背景が無いと、下から流れてくる行が見出しに重なって読めなくなる。
+ * また border は貼り付いた行では消えることがあるので、下の罫は影で描く。
+ * 背景は tr ではなく th に持たせる (tr の背景は環境によって貼り付き時に描かれない)。
+ */
+.data-table thead th {
+  background: var(--subtle);
+  box-shadow: inset 0 -1px 0 var(--line);
 }
 
 .pressable {

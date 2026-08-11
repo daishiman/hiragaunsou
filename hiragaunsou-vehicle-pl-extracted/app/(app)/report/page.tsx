@@ -8,7 +8,12 @@ import { AccessDenied } from "../../_components/AccessDenied";
 import { ScreenHeader } from "../../_components/ScreenHeader";
 import { ReportGenerator } from "./ReportGenerator";
 
-/** F12 AI要因分析レポート (S10画面)。生成はadmin/executiveのみ(要件定義4章「レポート配信設定」相当)。 */
+/**
+ * F12 AI要因分析レポート (S10画面)。生成はadmin/executiveのみ(要件定義4章「レポート配信設定」相当)。
+ *
+ * 器の判定 (T7 §4-1): この画面で読むのは1件のレポート本文で、列をまたいだ比較はしない。
+ * よって表は使わず、要約は文章、要因は定義リスト (DefinitionList) で出す。
+ */
 export default async function ReportPage() {
   const session = await getServerSession();
   if (!session) redirect("/sign-in");

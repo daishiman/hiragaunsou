@@ -5,15 +5,15 @@ import type { ImportBatchSummary } from "../../../../src/usecase/steps/manageImp
 import type { AuditLogRecord } from "../../../../src/domain/repositories/AuditLogRepository";
 import type { FileImportLogEntry } from "../../../../src/infrastructure/db/D1FileImportLogRepository";
 import { ConfirmDialog } from "../../../_components/ConfirmDialog";
-
-const SOURCE_TYPE_LABELS: Record<string, string> = {
-  vehicle_operation: "車両別運行実績表",
-  sales_monitor: "売上モニタリスト",
-  payroll: "給与集計表",
-  monthly_pl_workbook: "完成済み収支表(Excel)",
-  vehicle_master: "車両マスタ",
-  driver_master: "運転者マスタ",
-};
+import { DataTable, type DataTableColumn } from "../../../_components/DataTable";
+import { EmptyState } from "../../../_components/EmptyState";
+import { StickyFilterBar } from "../../../_components/StickyFilterBar";
+import { SectionHeading } from "../../../_components/SectionHeading";
+import { Badge } from "../../../_components/Badge";
+import { Prose } from "../../../_components/Card";
+import { FIELD_CLASS, FIELD_LABEL_CLASS } from "../../../_components/formStyles";
+import { dateTimeLabel, yearMonthLabel } from "../../../_lib/format";
+import { importBatchStatusLabel, sourceTypeLabel } from "../../../_lib/kindLabels";
 
 /** 記録がどの画面から取り込まれたか。利用者にはメニュー名で見せる。 */
 const SCREEN_LABELS: Record<string, string> = {
@@ -24,16 +24,19 @@ const SCREEN_LABELS: Record<string, string> = {
 
 type RowState = { status: "idle" } | { status: "deleting" } | { status: "error"; message: string };
 
-function formatDateTime(ms: number): string {
-  return new Date(ms).toLocaleString("ja-JP", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
+/**
+ * 取込データ管理。
+ *
+ * ■ 表か否か（T7 §4-1 の質問への答え）
+ * この画面でやりたいのは「どの月のどの帳票が、いつ・誰の手で入ったか」を行をまたいで
+ * 見比べ、要らない1件を見つけて削除することなので、器は表（DataTable）のままでよい。
+ * 1件を読み込んで判断する画面ではないため、定義リストには替えない。
+ *
+ * ■ 固定するもの（T7 §2-1・§2-3）
+ * 取込は数百件になりうるのに、絞り込みの条件も件数も列見出しも流れて消えていた。
+ * 条件と件数は StickyFilterBar、列見出しは DataTable の maxHeight（高さの上限を与えて
+ * 縦スクロールにしないと、overflow の箱の中では sticky が効かない）で固定する。
+ */
 export function ImportBatchesManager({
   initialBatches,
   initialDeletionLog,
@@ -49,7 +52,7 @@ export function ImportBatchesManager({
   const [fileLog, setFileLog] = useState(initialFileLog);
   const [fileLogBusy, setFileLogBusy] = useState<string | null>(null);
   const [rowState, setRowState] = useState<Record<string, RowState>>({});
-  /** 確認待ちの対象。何を消すのかを画面に出してから確定させる。 */
+  /** 確認待ちの対象。何を削除するのかを画面に出してから確定させる。 */
   const [pendingBatch, setPendingBatch] = useState<ImportBatchSummary | null>(null);
   const [pendingForget, setPendingForget] = useState<FileImportLogEntry | null>(null);
   const [yearMonthFilter, setYearMonthFilter] = useState("");
@@ -99,7 +102,7 @@ export function ImportBatchesManager({
       if (listRes.ok && listData?.deletionLog) {
         setDeletionLog(listData.deletionLog);
       }
-      // データ本体を消すと取込の記録も消えるので、画面の記録一覧も取り直す。
+      // データ本体を削除すると取込の記録も消えるので、画面の記録一覧も取り直す。
       if (listRes.ok && listData?.fileLog) {
         setFileLog(listData.fileLog);
       }
@@ -112,7 +115,7 @@ export function ImportBatchesManager({
   }
 
   /**
-   * 取込の記録だけを取り消す。取り込んだデータ自体は消さず「取り込み済み」の目印を外すだけなので、
+   * 取込の記録だけを取り消す。取り込んだデータ自体は削除せず「取り込み済み」の目印を外すだけなので、
    * 同じファイルをもう一度取り込めるようになる。
    */
   async function forgetFile(entry: FileImportLogEntry) {
@@ -130,178 +133,278 @@ export function ImportBatchesManager({
     }
   }
 
+  /** 取込の履歴。数百件になりうるので maxHeight で列見出しを固定する。 */
+  const batchColumns: DataTableColumn<ImportBatchSummary>[] = [
+    {
+      key: "yearMonth",
+      header: "対象年月",
+      cell: (b) => yearMonthLabel(b.yearMonth),
+    },
+    {
+      key: "sourceType",
+      header: "帳票の種類",
+      cell: (b) => sourceTypeLabel(b.sourceType),
+    },
+    {
+      key: "fileName",
+      header: "ファイル名",
+      cellClassName: "wrap text-ink-muted",
+      cell: (b) => b.fileName,
+    },
+    {
+      key: "rowCount",
+      header: "件数",
+      unit: "件",
+      align: "right",
+      cell: (b) => (
+        <>
+          {b.rowCount}
+          {b.excludedRowCount > 0 ? (
+            <span className="ml-1 text-[10px] text-ink-muted">（除外{b.excludedRowCount}）</span>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      key: "status",
+      header: "状態",
+      cell: (b) => (
+        <Badge tone={b.status === "completed" ? "brand" : "caution"}>
+          {importBatchStatusLabel(b.status)}
+        </Badge>
+      ),
+    },
+    {
+      key: "importedAt",
+      header: "取込日時",
+      priority: "low",
+      cellClassName: "whitespace-nowrap text-ink-muted",
+      cell: (b) => dateTimeLabel(b.importedAt),
+    },
+    {
+      key: "importedBy",
+      header: "取込者",
+      priority: "low",
+      cellClassName: "text-ink-muted",
+      cell: (b) => b.importedByName ?? "—",
+    },
+    {
+      key: "actions",
+      header: "できること",
+      cell: (b) => {
+        const state = rowState[b.id] ?? { status: "idle" };
+        return (
+          <>
+            <button
+              type="button"
+              disabled={state.status === "deleting"}
+              onClick={() => setPendingBatch(b)}
+              className="btn btn-danger btn-sm pressable"
+            >
+              {state.status === "deleting" ? "削除中…" : "この取込を削除する"}
+            </button>
+            {state.status === "error" ? (
+              <p className="mt-1 text-[11px] text-danger">{state.message}</p>
+            ) : null}
+          </>
+        );
+      },
+    },
+  ];
+
+  /** 取り込んだファイルの記録。取込のたびに1行増えるので、こちらも見出しを固定する。 */
+  const fileLogColumns: DataTableColumn<FileImportLogEntry>[] = [
+    {
+      key: "importedAt",
+      header: "取込日時",
+      cellClassName: "whitespace-nowrap text-ink-muted",
+      cell: (f) => dateTimeLabel(f.importedAt),
+    },
+    {
+      key: "screen",
+      header: "取り込んだ画面",
+      cell: (f) => SCREEN_LABELS[f.screen] ?? f.screen,
+    },
+    {
+      key: "sourceType",
+      header: "帳票の種類",
+      cell: (f) => sourceTypeLabel(f.sourceType),
+    },
+    {
+      key: "yearMonth",
+      header: "対象年月",
+      cell: (f) => (f.yearMonth ? yearMonthLabel(f.yearMonth) : "—"),
+    },
+    {
+      key: "fileName",
+      header: "ファイル名",
+      cellClassName: "wrap text-ink-muted",
+      cell: (f) => f.fileName,
+    },
+    {
+      key: "rowCount",
+      header: "件数",
+      unit: "件",
+      align: "right",
+      cell: (f) => f.rowCount,
+    },
+    {
+      key: "importedBy",
+      header: "取込者",
+      priority: "low",
+      cellClassName: "text-ink-muted",
+      cell: (f) => f.importedByName,
+    },
+    {
+      key: "actions",
+      header: "できること",
+      cell: (f) => (
+        <button
+          type="button"
+          disabled={fileLogBusy === f.id}
+          onClick={() => setPendingForget(f)}
+          className="btn btn-quiet btn-sm pressable"
+        >
+          {fileLogBusy === f.id ? "処理中…" : "記録から外す"}
+        </button>
+      ),
+    },
+  ];
+
+  /** 削除履歴。いつ・誰が・何を削除したかを並べて見比べる。 */
+  const deletionColumns: DataTableColumn<AuditLogRecord>[] = [
+    {
+      key: "createdAt",
+      header: "削除した日時",
+      cellClassName: "whitespace-nowrap text-ink-muted",
+      cell: (entry) => dateTimeLabel(entry.createdAt),
+    },
+    { key: "actor", header: "削除した人", cell: (entry) => entry.actorName },
+    {
+      key: "summary",
+      header: "削除した内容",
+      cellClassName: "wrap",
+      cell: (entry) => entry.summary,
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      <section className="card p-5">
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1 text-xs text-ink-muted">
-            年月で絞り込み
-            <input
-              type="text"
-              placeholder="2026-08"
-              value={yearMonthFilter}
-              onChange={(e) => setYearMonthFilter(e.target.value)}
-              className="rounded-md border border-line bg-white px-2 py-1.5 text-sm text-ink"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-ink-muted">
-            帳票種別で絞り込み
-            <select
-              value={sourceTypeFilter}
-              onChange={(e) => setSourceTypeFilter(e.target.value)}
-              className="rounded-md border border-line bg-white px-2 py-1.5 text-sm text-ink"
-            >
-              <option value="">すべて</option>
-              {sourceTypes.map((st) => (
-                <option key={st} value={st}>
-                  {SOURCE_TYPE_LABELS[st] ?? st}
-                </option>
-              ))}
-            </select>
-          </label>
-          <span className="text-xs text-ink-muted">{filtered.length}件</span>
-        </div>
+      {/*
+        「何月の・どの帳票を・何件見ているか」は、下までスクロールしても要る前提。
+        この画面には工程タブが無いので below は既定の "header"。
+      */}
+      <StickyFilterBar
+        summary={`全${batches.length}件のうち${filtered.length}件を表示`}
+      >
+        <label className="flex items-center gap-2">
+          <span className={FIELD_LABEL_CLASS}>対象年月で絞り込み</span>
+          <input
+            type="text"
+            placeholder="2026-08"
+            value={yearMonthFilter}
+            onChange={(e) => setYearMonthFilter(e.target.value)}
+            className={`${FIELD_CLASS} w-32`}
+          />
+        </label>
+        <label className="flex items-center gap-2">
+          <span className={FIELD_LABEL_CLASS}>帳票の種類で絞り込み</span>
+          <select
+            value={sourceTypeFilter}
+            onChange={(e) => setSourceTypeFilter(e.target.value)}
+            className={FIELD_CLASS}
+          >
+            <option value="">すべて</option>
+            {sourceTypes.map((st) => (
+              <option key={st} value={st}>
+                {sourceTypeLabel(st)}
+              </option>
+            ))}
+          </select>
+        </label>
+      </StickyFilterBar>
 
-        <div className="mt-4 overflow-x-auto">
-          <table className="data-table min-w-full text-sm">
-            <thead>
-              <tr className="border-b border-line text-left text-xs text-ink-muted">
-                <th className="py-2 pr-3">年月</th>
-                <th className="py-2 pr-3">帳票種別</th>
-                <th className="py-2 pr-3">ファイル名</th>
-                <th className="py-2 pr-3">行数</th>
-                <th className="py-2 pr-3">状態</th>
-                <th className="py-2 pr-3">取込日時</th>
-                <th className="py-2 pr-3">取込者</th>
-                <th className="py-2">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((b) => {
-                const state = rowState[b.id] ?? { status: "idle" };
-                return (
-                  <tr key={b.id} className="border-b border-line last:border-b-0">
-                    <td className="py-2 pr-3">{b.yearMonth}</td>
-                    <td className="py-2 pr-3 text-ink-muted">
-                      {SOURCE_TYPE_LABELS[b.sourceType] ?? b.sourceType}
-                    </td>
-                    <td className="py-2 pr-3 text-ink-muted">{b.fileName}</td>
-                    <td className="py-2 pr-3 text-ink-muted">
-                      {b.rowCount}
-                      {b.excludedRowCount > 0 ? (
-                        <span className="ml-1 text-[11px]">(除外{b.excludedRowCount})</span>
-                      ) : null}
-                    </td>
-                    <td className="py-2 pr-3 text-ink-muted">{b.status}</td>
-                    <td className="py-2 pr-3 text-ink-muted">{formatDateTime(b.importedAt)}</td>
-                    <td className="py-2 pr-3 text-ink-muted">{b.importedByName ?? "-"}</td>
-                    <td className="py-2">
-                      <button
-                        type="button"
-                        disabled={state.status === "deleting"}
-                        onClick={() => setPendingBatch(b)}
-                        className="btn btn-danger btn-sm pressable"
-                      >
-                        {state.status === "deleting" ? "削除中…" : "この取込を削除する"}
-                      </button>
-                      {state.status === "error" ? (
-                        <p className="mt-1 text-[11px] text-danger">{state.message}</p>
-                      ) : null}
-                    </td>
-                  </tr>
-                );
-              })}
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-4 text-center text-xs text-ink-muted">
-                    該当する取込データはありません。
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
+      <section className="card p-5">
+        <SectionHeading divider={false} action={`${filtered.length}件`}>
+          取込の履歴
+        </SectionHeading>
+        <div className="mt-3">
+          <DataTable
+            caption="取り込んだ帳票の履歴。対象年月・帳票の種類・件数・取込日時で見比べる。"
+            columns={batchColumns}
+            rows={filtered}
+            rowKey={(b) => b.id}
+            maxHeight="28rem"
+            empty={
+              batches.length === 0 ? (
+                <EmptyState
+                  title="取り込んだ帳票がまだありません"
+                  description="この画面には、データ取込で取り込んだ帳票が並びます。まだ1件も取り込んでいないため空です。"
+                  actionHref="/import"
+                />
+              ) : (
+                <EmptyState
+                  title="絞り込みの条件に合う取込がありません"
+                  description="対象年月または帳票の種類の指定に合う取込が1件もありません。条件を変えるか、データ取込で新しく取り込んでください。"
+                  actionHref="/import"
+                />
+              )
+            }
+          />
         </div>
       </section>
 
       <section className="card p-5">
-        <h2 className="text-sm font-bold text-ink">取り込んだファイルの記録({fileLog.length}件)</h2>
-        <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+        <SectionHeading divider={false} action={`${fileLog.length}件`}>
+          取り込んだファイルの記録
+        </SectionHeading>
+        <Prose className="mt-1">
           どの画面で・いつ・どのファイルを取り込んだかの記録です。同じファイルをもう一度選んだときに
           「取り込み済みです」とお知らせするために使っています。もう一度取り込み直したいときは
-          「記録から外す」を押してください(取り込んだデータ自体は消えません)。
-        </p>
-        {fileLog.length > 0 ? (
-          <div className="mt-3 overflow-x-auto">
-            <table className="data-table min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-line text-left text-xs text-ink-muted">
-                  <th className="py-2 pr-3">取込日時</th>
-                  <th className="py-2 pr-3">取り込んだ画面</th>
-                  <th className="py-2 pr-3">ファイルの種類</th>
-                  <th className="py-2 pr-3">対象年月</th>
-                  <th className="py-2 pr-3">ファイル名</th>
-                  <th className="py-2 pr-3">件数</th>
-                  <th className="py-2 pr-3">取込者</th>
-                  <th className="py-2">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fileLog.map((f) => (
-                  <tr key={f.id} className="border-b border-line last:border-b-0">
-                    <td className="py-2 pr-3 text-ink-muted">{formatDateTime(f.importedAt)}</td>
-                    <td className="py-2 pr-3 text-ink-muted">{SCREEN_LABELS[f.screen] ?? f.screen}</td>
-                    <td className="py-2 pr-3 text-ink-muted">
-                      {SOURCE_TYPE_LABELS[f.sourceType] ?? f.sourceType}
-                    </td>
-                    <td className="py-2 pr-3 text-ink-muted">{f.yearMonth ?? "—"}</td>
-                    <td className="py-2 pr-3 text-ink-muted">{f.fileName}</td>
-                    <td className="py-2 pr-3 text-ink-muted">{f.rowCount}</td>
-                    <td className="py-2 pr-3 text-ink-muted">{f.importedByName}</td>
-                    <td className="py-2">
-                      <button
-                        type="button"
-                        disabled={fileLogBusy === f.id}
-                        onClick={() => setPendingForget(f)}
-                        className="btn btn-quiet btn-sm pressable"
-                      >
-                        {fileLogBusy === f.id ? "処理中…" : "記録から外す"}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="mt-3 text-xs text-ink-muted">まだ記録はありません。</p>
-        )}
+          「記録から外す」を押してください（取り込んだデータ自体は削除されません）。
+        </Prose>
+        <div className="mt-3">
+          <DataTable
+            caption="取り込んだファイルの記録。同じファイルの二重取込を防ぐ照合に使う。"
+            columns={fileLogColumns}
+            rows={fileLog}
+            rowKey={(f) => f.id}
+            maxHeight="24rem"
+            empty={
+              <p className="rounded-lg bg-subtle px-4 py-3 text-xs text-ink-muted">
+                まだ記録はありません。データ取込・車両マスタ管理・運転者マスタ管理でファイルを
+                取り込むと、ここに1件ずつ残ります。
+              </p>
+            }
+          />
+        </div>
       </section>
 
       <section className="card p-5">
-        <h2 className="text-sm font-bold text-ink">削除履歴(直近{deletionLog.length}件)</h2>
-        <p className="mt-1 text-xs text-ink-muted">
-          いつ・誰が・何を削除したかの記録です。監査用に残ります。
-        </p>
-        {deletionLog.length > 0 ? (
-          <ul className="mt-3 flex flex-col gap-2 text-xs">
-            {deletionLog.map((entry) => (
-              <li key={entry.id} className="rounded-md border border-line px-3 py-2">
-                <span className="text-ink-muted">{formatDateTime(entry.createdAt)}</span>
-                <span className="mx-1 text-ink-muted">·</span>
-                <span className="font-semibold text-ink">{entry.actorName}</span>
-                <span className="mx-1 text-ink-muted">が</span>
-                <span className="text-ink">{entry.summary}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-3 text-xs text-ink-muted">削除履歴はありません。</p>
-        )}
+        <SectionHeading divider={false} action={`直近${deletionLog.length}件`}>
+          削除履歴
+        </SectionHeading>
+        <Prose className="mt-1">いつ・誰が・何を削除したかの記録です。監査用に残ります。</Prose>
+        <div className="mt-3">
+          <DataTable
+            caption="取込データの削除履歴。いつ・誰が・何を削除したか。"
+            columns={deletionColumns}
+            rows={deletionLog}
+            rowKey={(entry) => entry.id}
+            maxHeight="20rem"
+            empty={
+              <p className="rounded-lg bg-subtle px-4 py-3 text-xs text-ink-muted">
+                削除履歴はありません。まだ取込データを1件も削除していないためです。
+                上の「取込の履歴」で削除すると、ここに記録が残ります。
+              </p>
+            }
+          />
+        </div>
       </section>
 
       <ConfirmDialog
         open={pendingBatch !== null}
-        title="以下の取込データを削除します。取り消せません。よろしいですか?"
+        title="以下の取込データを削除します。取り消せません。よろしいですか？"
         confirmLabel="削除する"
         onCancel={() => setPendingBatch(null)}
         onConfirm={() => {
@@ -310,9 +413,8 @@ export function ImportBatchesManager({
       >
         {pendingBatch ? (
           <p className="font-semibold text-ink">
-            {pendingBatch.yearMonth} /{" "}
-            {SOURCE_TYPE_LABELS[pendingBatch.sourceType] ?? pendingBatch.sourceType} /{" "}
-            {pendingBatch.fileName}({pendingBatch.rowCount}行)
+            {yearMonthLabel(pendingBatch.yearMonth)} / {sourceTypeLabel(pendingBatch.sourceType)} /{" "}
+            {pendingBatch.fileName}（{pendingBatch.rowCount}件）
           </p>
         ) : null}
       </ConfirmDialog>
@@ -331,7 +433,7 @@ export function ImportBatchesManager({
           if (pendingForget) void forgetFile(pendingForget);
         }}
       >
-        <p>取り込んだデータ自体は消えません。同じファイルをもう一度取り込めるようになります。</p>
+        <p>取り込んだデータ自体は削除されません。同じファイルをもう一度取り込めるようになります。</p>
       </ConfirmDialog>
     </div>
   );

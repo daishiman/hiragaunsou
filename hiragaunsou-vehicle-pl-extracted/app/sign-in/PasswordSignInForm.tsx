@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { signInWithPassword } from "../_lib/authClient";
+import { FIELD_BLOCK_CLASS, FIELD_LABEL_CLASS } from "../_components/formStyles";
 
 /**
  * メール/パスワードでのサインインフォーム(Gmailを持たない社内ユーザー向け)。
@@ -30,7 +31,7 @@ export function PasswordSignInForm() {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3 text-left">
       <div>
-        <label htmlFor="password-signin-email" className="text-xs font-semibold text-ink-muted">
+        <label htmlFor="password-signin-email" className={FIELD_LABEL_CLASS}>
           メールアドレス
         </label>
         <input
@@ -40,11 +41,11 @@ export function PasswordSignInForm() {
           autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="mt-1 w-full rounded-md border border-line px-3 py-2 text-sm"
+          className={`${FIELD_BLOCK_CLASS} mt-1`}
         />
       </div>
       <div>
-        <label htmlFor="password-signin-password" className="text-xs font-semibold text-ink-muted">
+        <label htmlFor="password-signin-password" className={FIELD_LABEL_CLASS}>
           パスワード
         </label>
         <input
@@ -54,7 +55,7 @@ export function PasswordSignInForm() {
           autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 w-full rounded-md border border-line px-3 py-2 text-sm"
+          className={`${FIELD_BLOCK_CLASS} mt-1`}
         />
       </div>
       {error ? <p className="text-xs text-danger">{error}</p> : null}

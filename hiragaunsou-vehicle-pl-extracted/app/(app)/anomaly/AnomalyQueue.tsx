@@ -10,21 +10,36 @@ import type {
 import { FIELD_LABELS } from "../../_lib/fieldLabels";
 import { num, pct, yen } from "../../_lib/format";
 import { ListToolbar, type SortOption } from "../../_components/ListToolbar";
+import { AlertPanel } from "../../_components/AlertPanel";
+import { Badge } from "../../_components/Badge";
+import { StickyFilterBar } from "../../_components/StickyFilterBar";
 
 type Judgement = AnomalyRecommendation;
 type Priority = AnomalyQueueItem["priority"];
 
 const QUEUE_SORT_OPTIONS: SortOption[] = [
-  { value: "default", label: "対応する順(既定)" },
+  { value: "default", label: "対応する順（既定）" },
   { value: "priorityDesc", label: "優先度が高い順" },
   { value: "vehicleNoAsc", label: "車番順" },
 ];
 
 const PRIORITY_ORDER: Record<Priority, number> = { 高: 0, 中: 1, 低: 2 };
 
+/*
+  判定の呼び名は T7 §1-1 の表に合わせる。/todo と /anomaly は同じ API
+  (/api/todo/{id}/resolve) を呼んでいるのに、画面ごとに別の言い方をしていた。
+  同じ操作は同じ言葉にする。
+*/
 const JUDGEMENT_LABEL: Record<Judgement, string> = {
-  corrected: "入力ミス — 直しに送る",
-  approved: "これで正しい — 確定",
+  corrected: "直す",
+  approved: "このままでよい",
+};
+
+/** 優先度 → 札の見え方。色相は増やさず、意味で選ぶ (Badge の注記) */
+const PRIORITY_TONE: Record<Priority, "danger" | "caution" | "neutral"> = {
+  高: "danger",
+  中: "caution",
+  低: "neutral",
 };
 
 function fieldLabel(field: string | null): string {
@@ -39,6 +54,10 @@ function fieldLabel(field: string | null): string {
  *   - 12ヶ月の推移と中央値を先に見せてから2択を出す
  *   - 優先度の低いものは「これで正しい」を推奨(既定値効果で手数を減らす)
  *   - 判定直後に必ず取り消し線を出す(確認ダイアログではなくUndoで安全を担保する)
+ *
+ * 表かカードか (T7 §4-1)。ここで利用者がするのは「列をまたいで値を見比べる」ことではなく、
+ * 1件の中身(当月の値・いつもの値・推移)を読んで直すかどうかを決めること。よってカードで出す
+ * (T7 §4-3 で「異常の判定」はカードと決まっている)。
  */
 export function AnomalyQueue({
   items,
@@ -144,6 +163,11 @@ export function AnomalyQueue({
     説明を二重に持たず、そちらへ送る。
   */
   if (plVehicleCount === 0) {
+    /*
+      共通の EmptyState は行き先を1つしか持てない。ここは「月次収支表で足りないものを見る」と
+      「取込へ戻る」の2つが要るので、EmptyState には寄せずカードのまま置く。
+      行き先を1つに削るのは、詰まった人の逃げ道を減らすことになる。
+    */
     return (
       <div className="card px-6 py-12 text-center">
         <p className="text-sm font-semibold text-ink">この月の収支表がまだありません</p>
@@ -163,6 +187,7 @@ export function AnomalyQueue({
   }
 
   if (!current) {
+    // ここも行き先が2つ（ダッシュボード・月次収支表）あるため EmptyState には寄せない
     return (
       <div className="card px-6 py-12 text-center">
         <p className="text-sm font-semibold text-ink">この月の異常値はすべて判定済みです</p>
@@ -197,7 +222,11 @@ export function AnomalyQueue({
             月次収支表へ
           </Link>
         </div>
-        {error && <p className="mt-3 text-xs text-danger">{error}</p>}
+        {error ? (
+          <div className="mt-3 text-left">
+            <AlertPanel tone="danger" title={error} />
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -205,24 +234,23 @@ export function AnomalyQueue({
   const sparkMax = Math.max(...current.spark.map((p) => Math.abs(p.value ?? 0)), 1);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_18rem]">
-      <section className="card p-5">
-        <div className="flex items-baseline justify-between gap-3">
-          <p className="num text-xs text-ink-muted">
-            {index + 1} / {items.length} 件目
-          </p>
-          <span
-            className={`rounded px-2 py-0.5 text-[11px] font-semibold ${
-              current.priority === "高"
-                ? "bg-danger/10 text-danger"
-                : current.priority === "中"
-                  ? "bg-accent/10 text-accent-deep"
-                  : "bg-subtle text-ink-muted"
-            }`}
-          >
-            優先度 {current.priority}
-          </span>
-        </div>
+    <div>
+      {/*
+        いま何件目か・あと何件かは、下までスクロールしても見えている必要がある。
+        判定の途中で「あとどれだけ残っているか」が消えると、やめどきが分からなくなる。
+      */}
+      <StickyFilterBar summary={`残り ${remaining.length}件`}>
+        <p className="num text-xs text-ink-muted">
+          {index + 1} / {items.length} 件目
+        </p>
+      </StickyFilterBar>
+
+      <div className="grid gap-4 lg:grid-cols-[1fr_18rem]">
+        <section className="card p-5">
+          {/* 何件目かは上の帯に出しているので、ここでは重ねて出さない */}
+          <div className="flex items-baseline justify-end gap-3">
+            <Badge tone={PRIORITY_TONE[current.priority]}>優先度 {current.priority}</Badge>
+          </div>
 
         <h2 className="mt-2 text-lg font-bold text-ink">
           車番 {current.vehicleNo ?? "—"} — {fieldLabel(current.field)}
@@ -235,7 +263,7 @@ export function AnomalyQueue({
             <p className="num mt-1 text-xl font-bold text-ink">{yen(current.value)}</p>
           </div>
           <div className="rounded-lg border border-line p-3">
-            <p className="text-[11px] text-ink-muted">いつもの値(中央値)</p>
+            <p className="text-[11px] text-ink-muted">いつもの値（中央値）</p>
             <p className="num mt-1 text-xl font-bold text-ink-muted">{yen(current.median)}</p>
           </div>
           <div className="rounded-lg border border-line p-3">
@@ -268,15 +296,18 @@ export function AnomalyQueue({
           </div>
           {current.median !== null && (
             <p className="mt-1 text-[11px] text-ink-muted">
-              中央値 {yen(current.median)}(当月を除く11ヶ月から算出)
+              中央値 {yen(current.median)}（当月を除く11ヶ月から算出）
             </p>
           )}
         </div>
 
         {!canApprove ? (
-          <p className="mt-5 rounded-md border border-caution-border bg-caution-soft px-3 py-2 text-xs text-ink">
-            判定するには承認権限が必要です。閲覧のみ可能です。
-          </p>
+          <div className="mt-5">
+            {/* 押せない理由と、次にどうすればよいかを1行で言う */}
+            <AlertPanel tone="caution" title="判定するには承認権限が必要です。閲覧のみ可能です。">
+              判定を任されている人に頼むか、管理者に権限の変更を依頼してください。
+            </AlertPanel>
+          </div>
         ) : (
           <div className="mt-5 grid gap-2 sm:grid-cols-2">
             {(["corrected", "approved"] as const).map((j) => {
@@ -288,14 +319,12 @@ export function AnomalyQueue({
                   disabled={pending}
                   onClick={() => judge(current, j)}
                   className={[
-                    "pressable rounded-md px-4 py-3 text-sm font-semibold disabled:opacity-50",
-                    recommended
-                      ? "bg-accent text-white hover:bg-accent-deep"
-                      : "border border-line bg-white text-ink hover:bg-subtle",
+                    "btn pressable",
+                    recommended ? "btn-primary" : "btn-secondary",
                   ].join(" ")}
                 >
                   {JUDGEMENT_LABEL[j]}
-                  {recommended && <span className="ml-1 text-xs font-normal">(推奨)</span>}
+                  {recommended && <span className="ml-1 text-xs font-normal">（おすすめ）</span>}
                 </button>
               );
             })}
@@ -303,9 +332,11 @@ export function AnomalyQueue({
         )}
 
         {error && (
-          <p className="mt-3 rounded-md border border-danger px-3 py-2 text-xs text-danger">
-            {error} もう一度お試しください。
-          </p>
+          <div className="mt-3">
+            <AlertPanel tone="danger" title={error}>
+              もう一度お試しください。
+            </AlertPanel>
+          </div>
         )}
 
         {lastDone && (
@@ -341,7 +372,7 @@ export function AnomalyQueue({
       </section>
 
       <aside className="card p-4">
-        <p className="text-xs font-semibold text-ink">残りの待ち行列({remaining.length}件)</p>
+        <p className="text-xs font-semibold text-ink">残りの待ち行列（{remaining.length}件）</p>
         <div className="mt-2">
           <ListToolbar
             searchValue={queueSearch}
@@ -374,12 +405,15 @@ export function AnomalyQueue({
           ))}
         </ul>
         {queueView.length === 0 && (
-          <p className="mt-2 text-[11px] text-ink-muted">条件に合う項目はありません。</p>
+          <p className="mt-2 text-[11px] text-ink-muted">
+            この条件に合う項目はありません。検索の言葉を消すか、優先度の絞り込みを外すと全部出ます。
+          </p>
         )}
         {queueView.length > 12 && (
           <p className="mt-2 text-[11px] text-ink-muted">ほか {queueView.length - 12} 件</p>
         )}
-      </aside>
+        </aside>
+      </div>
     </div>
   );
 }

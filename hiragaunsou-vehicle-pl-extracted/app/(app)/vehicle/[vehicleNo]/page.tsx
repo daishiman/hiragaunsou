@@ -8,35 +8,91 @@ import { AccessDenied } from "../../../_components/AccessDenied";
 import { createDb } from "../../../../src/infrastructure/db/client";
 import { D1VehiclePlRepository } from "../../../../src/infrastructure/db/D1VehiclePlRepository";
 import { D1DeficitFactorAnalysisRepository } from "../../../../src/infrastructure/db/D1DeficitFactorAnalysisRepository";
-import type { DeficitFactorCategory } from "../../../../src/domain/repositories/DeficitFactorAnalysisRepository";
-import { GetVehicleHistoryUseCase } from "../../../../src/usecase/steps/getVehicleHistory";
+import {
+  GetVehicleHistoryUseCase,
+  type VehicleHistoryMonth,
+} from "../../../../src/usecase/steps/getVehicleHistory";
 import { resolveWorkingYearMonth } from "../../../_lib/workingYearMonth";
-import { kmPriceLabel, num, yen, yearMonthLabel } from "../../../_lib/format";
+import { dateTimeLabel, kmPriceLabel, num, yen, yearMonthLabel } from "../../../_lib/format";
+import { findScreen } from "../../../_lib/screens";
+import { factorCategoryLabel } from "../../../_lib/factorLabels";
 import { ScreenHeader } from "../../../_components/ScreenHeader";
 import { EmptyState } from "../../../_components/EmptyState";
 import { BarRow } from "../../../_components/BarRow";
+import { StatTile } from "../../../_components/StatTile";
+import { DefinitionList } from "../../../_components/DefinitionList";
+import { DataTable, type DataTableColumn } from "../../../_components/DataTable";
+import { Disclosure } from "../../../_components/Disclosure";
+import { SectionHeading } from "../../../_components/SectionHeading";
+import { StickyFilterBar } from "../../../_components/StickyFilterBar";
 import { D1VehiclePlOverrideRepository } from "../../../../src/infrastructure/db/D1VehiclePlOverrideRepository";
 import type { OverridableField } from "../../../../src/domain/rules/vehiclePlOverride";
 import { VehiclePlOverrideEditor } from "./VehiclePlOverrideEditor";
 
-/** COST_BREAKDOWN_FIELDS(getVehicleHistory.ts)と対応する日本語ラベル + 売上分 */
-const FACTOR_CATEGORY_LABELS: Record<DeficitFactorCategory, string> = {
-  sales: "売上",
-  tollNet: "運行費",
-  fuelTotal: "燃料費",
-  repairTotal: "修繕費",
-  laborTotal: "人件費",
-  insTotal: "保険料",
-  taxTotal: "賦課税",
-  transportTotal: "運送費",
-  adminTotal: "一般管理費",
-};
+/**
+ * 車両1台の明細。
+ *
+ * ■ 表かカードかの判定 (docs/product/T7-ui-conventions.md §4-1)
+ * この画面で人がやりたいのは「1台を読んで、この車をどうするか判断すること」であって、
+ * 何台かを列で見比べることではない。対象は最初から1台に決まっている。
+ * よって車両そのものの情報は定義リスト、当月の結果は要約カードで出す。
+ *
+ * 12ヶ月の推移だけは「月をまたいで見比べる」ので表が要るが、同じ数字を
+ * 棒グラフでも出しているため、表は折りたたみの中に入れる (T7 §4-2:
+ * 同じデータをグラフと表で二度並べない。比較は棒、正確な値は表)。
+ * かつてはこの2つが上下に並んでいて、同じ12行が二度出ていた。
+ */
 
 /**
- * 車両ドリルダウン (モック view-grid.js の車両モーダルに対応)。
- * 単月の経費内訳・12ヶ月推移・実力損益を1画面にまとめる。
- * モックではモーダルだったが、URLで共有・戻る操作ができるページとして実装している。
+ * 12ヶ月の推移表の列。
+ * 単位はすべて列見出しに出し、セルには入れない (T7 §4-4)。
+ * 狭い画面では、赤字かどうかの判断に直接は要らない列 (走行距離・修理費・1kmあたり売上) を落とす。
  */
+const historyColumns: readonly DataTableColumn<VehicleHistoryMonth>[] = [
+  {
+    key: "month",
+    header: "月",
+    cell: (h) => (
+      <span className="font-medium">
+        {h.label}
+        {h.isMissing ? <span className="ml-1 text-[11px] text-ink-muted">未取込</span> : null}
+      </span>
+    ),
+  },
+  { key: "sales", header: "売上", unit: "円", align: "right", cell: (h) => (h.isMissing ? "—" : yen(h.sales)) },
+  { key: "expense", header: "経費計", unit: "円", align: "right", cell: (h) => (h.isMissing ? "—" : yen(h.expense)) },
+  {
+    key: "profit",
+    header: "損益",
+    unit: "円",
+    align: "right",
+    cell: (h) =>
+      h.isMissing ? "—" : <span className={h.profit < 0 ? "font-bold text-danger" : "font-bold"}>{yen(h.profit)}</span>,
+  },
+  {
+    key: "km",
+    header: "走行距離",
+    unit: "km",
+    align: "right",
+    priority: "low",
+    cell: (h) => (h.isMissing ? "—" : num(h.km, 1)),
+  },
+  {
+    key: "repair",
+    header: "修理費",
+    unit: "円",
+    align: "right",
+    priority: "low",
+    cell: (h) => (h.isMissing ? "—" : yen(h.repair)),
+  },
+  {
+    key: "kmPrice",
+    header: "1kmあたり売上",
+    align: "right",
+    priority: "low",
+    cell: (h) => kmPriceLabel(h.kmPrice),
+  },
+];
 export default async function VehicleDetailPage({
   params,
   searchParams,
@@ -103,15 +159,7 @@ export default async function VehicleDetailPage({
       <ScreenHeader
         screen="/vehicle"
         title={`車番 ${vehicleNoLabel}`}
-        lead={
-          current
-            ? `${current.type} / ${current.depot} / 運転者 ${current.driver ?? "—"} — ${yearMonthLabel(yearMonth)}${
-                towedVehicleNos.length > 0
-                  ? ` / トレーラ ${towedVehicleNos.join("・")} を合算しています`
-                  : ""
-              }`
-            : `${yearMonthLabel(yearMonth)}のデータ`
-        }
+        lead={`${yearMonthLabel(yearMonth)}のこの1台について、いくら稼いでいくら掛かったかを見て、直すかどうかを決めます。`}
         action={
           <Link
             href={`/grid?ym=${yearMonth}`}
@@ -121,6 +169,16 @@ export default async function VehicleDetailPage({
           </Link>
         }
       />
+
+      {/*
+        下へスクロールすると「どの車の、どの月の数字か」が画面から消えていた。
+        数字だけが見えていて前提が見えない状態は読み違いのもとなので、
+        車番と対象年月は貼り付けておく (T7 §2-3)。
+      */}
+      <StickyFilterBar summary={current ? `損益 ${yen(current.profit)}円` : undefined}>
+        <span className="text-sm font-bold text-ink">車番 {vehicleNoLabel}</span>
+        <span className="text-xs text-ink-muted">{yearMonthLabel(yearMonth)}</span>
+      </StickyFilterBar>
 
       {!data.found ? (
         <EmptyState
@@ -133,39 +191,58 @@ export default async function VehicleDetailPage({
         />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <div className="card p-4">
-              <p className="text-xs text-ink-muted">売上</p>
-              <p className="num mt-1 text-xl font-bold text-ink">{yen(current?.sales)}</p>
-            </div>
-            <div className="card p-4">
-              <p className="text-xs text-ink-muted">経費計</p>
-              <p className="num mt-1 text-xl font-bold text-ink">{yen(current?.expense)}</p>
-            </div>
-            <div className="card p-4">
-              <p className="text-xs text-ink-muted">損益</p>
-              <p
-                className={`num mt-1 text-xl font-bold ${(current?.profit ?? 0) < 0 ? "text-danger" : "text-accent"}`}
-              >
-                {yen(current?.profit)}
-              </p>
-            </div>
-            <div className="card p-4">
-              <p className="text-xs text-ink-muted">実力損益</p>
-              <p
-                className={`num mt-1 text-xl font-bold ${(data.normalizedProfit ?? 0) < 0 ? "text-danger" : "text-ink"}`}
-              >
-                {yen(data.normalizedProfit)}
-              </p>
-              <p className="mt-1 text-[11px] text-ink-muted">
-                修理費を12ヶ月平均({yen(data.avgRepair)}円)に均した値
-              </p>
-            </div>
+          {/*
+            この車がどんな車で誰が乗っているかは「読む」情報で、見比べる相手がいない。
+            以前は見出しの下に「大型 / 本社 / 運転者 ○○ — 2026年8月」と1行に詰めていたが、
+            項目名が無いので何と何が並んでいるのかが読み取れなかった (T7 §4-1)。
+          */}
+          <SectionHeading divider={false} note="この1台の登録内容です。違っていれば車両マスタで直します。">
+            この車について
+          </SectionHeading>
+          <div className="card mt-3 p-5">
+            <DefinitionList
+              layout="split"
+              items={[
+                { term: "車種", value: current?.type ?? "—" },
+                { term: "所属", value: current?.depot ?? "—" },
+                { term: "運転者", value: current?.driver ?? "—" },
+                { term: "初年度登録", value: current?.reg ?? "—" },
+                ...(towedVehicleNos.length > 0
+                  ? [
+                      {
+                        term: "合算しているトレーラ",
+                        value: towedVehicleNos.join("・"),
+                        note: "この画面の数字はトラクタ単独ではなく、上のトレーラを足した金額です。",
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          </div>
+
+          <SectionHeading note={`${yearMonthLabel(yearMonth)}の結果です。`}>今月の損益</SectionHeading>
+          <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <StatTile label="売上" value={yen(current?.sales)} unit="円" />
+            <StatTile label="経費計" value={yen(current?.expense)} unit="円" />
+            <StatTile
+              label="損益"
+              value={yen(current?.profit)}
+              unit="円"
+              negative={(current?.profit ?? 0) < 0}
+              hero
+            />
+            <StatTile
+              label="実力損益"
+              value={yen(data.normalizedProfit)}
+              unit="円"
+              negative={(data.normalizedProfit ?? 0) < 0}
+              sub={`修理費を12ヶ月平均（${yen(data.avgRepair)}円）に均した値`}
+            />
           </div>
 
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
             <section className="card p-5">
-              <h2 className="text-sm font-bold text-ink">経費の内訳({yearMonthLabel(yearMonth)})</h2>
+              <h2 className="text-sm font-bold text-ink">経費の内訳（{yearMonthLabel(yearMonth)}）</h2>
               <div className="mt-3">
                 {data.costBreakdown.map((c) => (
                   <BarRow
@@ -183,7 +260,7 @@ export default async function VehicleDetailPage({
             <section className="card p-5">
               <h2 className="text-sm font-bold text-ink">損益の12ヶ月推移</h2>
               <p className="mt-1 text-xs text-ink-muted">
-                棒の長さは各月の損益の絶対値(最大月を100%とした比較)。
+                棒の長さは各月の損益の大きさ（いちばん大きい月を100%とした比べ方）。
               </p>
               <div className="mt-3">
                 {data.history.map((h) => (
@@ -197,12 +274,31 @@ export default async function VehicleDetailPage({
                   />
                 ))}
               </div>
+
+              {/*
+                同じ12ヶ月を棒と表で二度並べない (T7 §4-2)。
+                ざっと比べるのは棒で足りるので、正確な数字が要るときだけ開く。
+              */}
+              <Disclosure summary="月ごとの正確な数字を見る">
+                <DataTable
+                  caption={`車番 ${vehicleNoLabel} の直近12ヶ月の損益`}
+                  columns={historyColumns}
+                  rows={data.history}
+                  rowKey={(h) => h.yearMonth}
+                  rowClassName={(h) => (h.yearMonth === yearMonth ? "bg-brand-soft/50" : undefined)}
+                  empty={
+                    <p className="text-xs text-ink-muted">
+                      過去12ヶ月ぶんの取込がまだありません。月次データ取込から取り込んでください。
+                    </p>
+                  }
+                />
+              </Disclosure>
             </section>
           </div>
 
           {isDeficit && (
             <section className="mt-5 card p-5">
-              <h2 className="text-sm font-bold text-ink">AI要因分析({yearMonthLabel(yearMonth)})</h2>
+              <h2 className="text-sm font-bold text-ink">AI要因分析（{yearMonthLabel(yearMonth)}）</h2>
               {analysis ? (
                 <>
                   <p className="mt-2 text-sm text-ink">{analysis.summary}</p>
@@ -213,7 +309,7 @@ export default async function VehicleDetailPage({
                         className="rounded-md border border-line bg-subtle px-3 py-2 text-xs leading-relaxed"
                       >
                         <span className="font-semibold text-ink">
-                          {FACTOR_CATEGORY_LABELS[f.category] ?? f.category}が
+                          {factorCategoryLabel(f.category)}が
                           {f.direction === "high" ? "高い" : "低い"}
                         </span>
                         <span className="num ml-2 text-ink-muted">目安 {yen(f.amountYen)}円</span>
@@ -222,15 +318,14 @@ export default async function VehicleDetailPage({
                     ))}
                   </ul>
                   <p className="mt-3 text-[11px] text-ink-muted">
-                    {new Date(analysis.updatedAt).toLocaleString("ja-JP")} 時点のAI分析結果(
-                    {analysis.model})
+                    {dateTimeLabel(analysis.updatedAt)} 時点のAI分析結果（{analysis.model}）
                   </p>
                 </>
               ) : (
                 <p className="mt-2 text-xs text-ink-muted">
-                  この月・車両はまだAI分析されていません。
+                  この車のこの月は、まだAI分析をしていません。
                   <Link href={`/deficit?ym=${yearMonth}`} className="ml-1 text-brand-deep hover:underline">
-                    赤字の理由(3分類)画面
+                    {findScreen("/deficit")?.label ?? "赤字の分析"}
                   </Link>
                   の「AI分析する」ボタンから実行できます。
                 </p>
@@ -238,44 +333,6 @@ export default async function VehicleDetailPage({
             </section>
           )}
 
-          <section className="mt-5 overflow-x-auto card">
-            <table className="data-table w-full min-w-max border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-line bg-subtle text-ink-muted">
-                  <th className="px-3 py-2 text-left font-medium">月</th>
-                  <th className="px-3 py-2 text-right font-medium">売上(円)</th>
-                  <th className="px-3 py-2 text-right font-medium">経費計(円)</th>
-                  <th className="px-3 py-2 text-right font-medium">損益(円)</th>
-                  <th className="px-3 py-2 text-right font-medium">走行(km)</th>
-                  <th className="px-3 py-2 text-right font-medium">修理費(円)</th>
-                  <th className="px-3 py-2 text-right font-medium">km単価</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.history.map((h) => (
-                  <tr
-                    key={h.yearMonth}
-                    className={`border-b border-line last:border-b-0 ${h.yearMonth === yearMonth ? "bg-brand-soft/50" : ""}`}
-                  >
-                    <td className="px-3 py-2 font-medium">
-                      {h.label}
-                      {h.isMissing && <span className="ml-1 text-[11px] text-ink-muted">未取込</span>}
-                    </td>
-                    <td className="num px-3 py-2 text-right">{h.isMissing ? "—" : yen(h.sales)}</td>
-                    <td className="num px-3 py-2 text-right">{h.isMissing ? "—" : yen(h.expense)}</td>
-                    <td
-                      className={`num px-3 py-2 text-right font-bold ${h.profit < 0 ? "text-danger" : "text-ink"}`}
-                    >
-                      {h.isMissing ? "—" : yen(h.profit)}
-                    </td>
-                    <td className="num px-3 py-2 text-right">{h.isMissing ? "—" : num(h.km, 1)}</td>
-                    <td className="num px-3 py-2 text-right">{h.isMissing ? "—" : yen(h.repair)}</td>
-                    <td className="num px-3 py-2 text-right">{kmPriceLabel(h.kmPrice)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
         </>
       )}
 

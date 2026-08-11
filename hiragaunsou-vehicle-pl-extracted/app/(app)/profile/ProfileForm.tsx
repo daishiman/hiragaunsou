@@ -3,6 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { signOut, authClient } from "../../_lib/authClient";
+import { AlertPanel } from "../../_components/AlertPanel";
+import { Card, Prose } from "../../_components/Card";
+import { DefinitionList } from "../../_components/DefinitionList";
+import { FIELD_CLASS, FIELD_LABEL_CLASS } from "../../_components/formStyles";
 
 type SaveState = { status: "idle" } | { status: "saving" } | { status: "error"; message: string };
 
@@ -116,42 +120,49 @@ export function ProfileForm({
     }
   }
 
+  /*
+    T7 §4-1 の質問への答え。
+      この画面で人がやるのは「自分の1件を読んで、必要なら直す」こと。
+      利用者どうしを見比べる場面ではないので表は使わず、
+      読むだけの値は定義リスト、直せる値は項目名と入力欄を縦に並べる。
+  */
   return (
     <div className="flex flex-col gap-6">
-      <section className="card p-5">
-        <h2 className="text-sm font-bold text-ink">アカウント情報</h2>
-        <div className="mt-4 flex flex-col gap-4">
-          <label className="flex flex-col gap-1 text-xs text-ink-muted">
-            氏名
+      <Card title="アカウント情報">
+        <div className="flex flex-col gap-4">
+          <label className="flex flex-col gap-1">
+            <span className={FIELD_LABEL_CLASS}>氏名</span>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={100}
-              className="rounded-md border border-line bg-white px-2 py-1.5 text-sm text-ink"
+              className={FIELD_CLASS}
             />
           </label>
 
-          <div className="flex flex-col gap-1 text-xs text-ink-muted">
-            メールアドレス
-            <p className="text-sm text-ink">{email}</p>
-            {!hasPasswordCredential ? (
-              <span className="text-[11px] text-ink-muted">
-                Googleサインインのアカウントのため、この画面からは変更できません。
-              </span>
-            ) : null}
-          </div>
+          <DefinitionList
+            items={[
+              {
+                term: "メールアドレス",
+                value: email,
+                note: hasPasswordCredential
+                  ? undefined
+                  : "Googleサインインのアカウントのため、この画面からは変更できません。",
+              },
+              {
+                term: "ロール",
+                value: roleLabel,
+                note: "ロールの変更は管理者にご依頼ください。",
+              },
+            ]}
+          />
 
-          <div className="flex flex-col gap-1 text-xs text-ink-muted">
-            ロール
-            <p className="text-sm text-ink">{roleLabel}</p>
-            <span className="text-[11px] text-ink-muted">ロールの変更は管理者にご依頼ください。</span>
-          </div>
-
+          {/* 失敗は注意(caution)ではなく danger で出す。色は意味にだけ使う。 */}
           {saveState.status === "error" ? (
-            <div className="rounded-md border border-caution-border bg-caution-soft px-4 py-3 text-xs">
+            <AlertPanel tone="danger" title="保存できませんでした">
               {saveState.message}
-            </div>
+            </AlertPanel>
           ) : null}
 
           <button
@@ -160,126 +171,131 @@ export function ProfileForm({
             disabled={saveState.status === "saving" || name.trim().length === 0}
             className="btn btn-primary pressable self-start"
           >
-            {saveState.status === "saving" ? "保存しています…" : "保存する"}
+            {saveState.status === "saving" ? "保存しています…" : "氏名を保存する"}
           </button>
         </div>
-      </section>
+      </Card>
 
       {hasPasswordCredential ? (
-        <section className="card p-5">
-          <h2 className="text-sm font-bold text-ink">メールアドレスの変更</h2>
-          <p className="mt-1 text-xs text-ink-muted">
+        <Card title="メールアドレスの変更">
+          <Prose>
             確認メールは送信されません。現在のパスワードを入力すると、その場で変更が反映されます
-            (変更後は他のデバイス・タブのログイン状態は失効します)。
-          </p>
+            （変更後は他のデバイス・タブのログイン状態は失効します）。
+          </Prose>
           <form onSubmit={handleChangeEmail} className="mt-4 flex flex-col gap-3">
-            <label className="flex flex-col gap-1 text-xs text-ink-muted">
-              新しいメールアドレス
+            <label className="flex flex-col gap-1">
+              <span className={FIELD_LABEL_CLASS}>新しいメールアドレス</span>
               <input
                 type="email"
                 required
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
-                className="rounded-md border border-line bg-white px-2 py-1.5 text-sm text-ink"
+                className={FIELD_CLASS}
               />
             </label>
-            <label className="flex flex-col gap-1 text-xs text-ink-muted">
-              現在のパスワード(本人確認のため)
+            <label className="flex flex-col gap-1">
+              <span className={FIELD_LABEL_CLASS}>現在のパスワード（本人確認のため）</span>
               <input
                 type="password"
                 required
                 autoComplete="current-password"
                 value={emailCurrentPassword}
                 onChange={(e) => setEmailCurrentPassword(e.target.value)}
-                className="rounded-md border border-line bg-white px-2 py-1.5 text-sm text-ink"
+                className={FIELD_CLASS}
               />
             </label>
             {emailSaveState.status === "error" ? (
-              <p className="text-xs text-danger">{emailSaveState.message}</p>
+              <AlertPanel tone="danger" title="メールアドレスを変更できませんでした">
+                {emailSaveState.message}
+              </AlertPanel>
             ) : null}
             {emailSaveState.status === "success" ? (
-              <p className="text-xs text-brand-deep">メールアドレスを変更しました。次回からは新しいメールアドレスでサインインしてください。</p>
+              <AlertPanel tone="success" title="メールアドレスを変更しました">
+                次回からは新しいメールアドレスでサインインしてください。
+              </AlertPanel>
             ) : null}
             <button
               type="submit"
               disabled={emailSaveState.status === "saving" || newEmail.trim().length === 0}
-              className="btn btn-quiet pressable self-start"
+              className="btn btn-primary pressable self-start"
             >
-              {emailSaveState.status === "saving" ? "変更しています…" : "メールアドレスを変更する"}
+              {emailSaveState.status === "saving" ? "保存しています…" : "メールアドレスを保存する"}
             </button>
           </form>
-        </section>
+        </Card>
       ) : null}
 
       {hasPasswordCredential ? (
-        <section className="card p-5">
-          <h2 className="text-sm font-bold text-ink">パスワードの変更</h2>
-          <p className="mt-1 text-xs text-ink-muted">
-            メール/パスワードでサインインしているアカウントのパスワードを変更します。
-          </p>
+        <Card title="パスワードの変更">
+          <Prose>
+            メール／パスワードでサインインしているアカウントのパスワードを変更します。
+          </Prose>
           <form onSubmit={handleChangePassword} className="mt-4 flex flex-col gap-3">
-            <label className="flex flex-col gap-1 text-xs text-ink-muted">
-              現在のパスワード
+            <label className="flex flex-col gap-1">
+              <span className={FIELD_LABEL_CLASS}>現在のパスワード</span>
               <input
                 type="password"
                 required
                 autoComplete="current-password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                className="rounded-md border border-line bg-white px-2 py-1.5 text-sm text-ink"
+                className={FIELD_CLASS}
               />
             </label>
-            <label className="flex flex-col gap-1 text-xs text-ink-muted">
-              新しいパスワード(8文字以上)
+            <label className="flex flex-col gap-1">
+              <span className={FIELD_LABEL_CLASS}>新しいパスワード（8文字以上）</span>
               <input
                 type="password"
                 required
                 autoComplete="new-password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="rounded-md border border-line bg-white px-2 py-1.5 text-sm text-ink"
+                className={FIELD_CLASS}
               />
             </label>
-            <label className="flex flex-col gap-1 text-xs text-ink-muted">
-              新しいパスワード(確認)
+            <label className="flex flex-col gap-1">
+              <span className={FIELD_LABEL_CLASS}>新しいパスワード（確認）</span>
               <input
                 type="password"
                 required
                 autoComplete="new-password"
                 value={newPasswordConfirm}
                 onChange={(e) => setNewPasswordConfirm(e.target.value)}
-                className="rounded-md border border-line bg-white px-2 py-1.5 text-sm text-ink"
+                className={FIELD_CLASS}
               />
             </label>
             {passwordSaveState.status === "error" ? (
-              <p className="text-xs text-danger">{passwordSaveState.message}</p>
+              <AlertPanel tone="danger" title="パスワードを変更できませんでした">
+                {passwordSaveState.message}
+              </AlertPanel>
             ) : null}
             {passwordSaveState.status === "success" ? (
-              <p className="text-xs text-brand-deep">パスワードを変更しました。</p>
+              <AlertPanel tone="success" title="パスワードを変更しました">
+                次回からは新しいパスワードでサインインしてください。
+              </AlertPanel>
             ) : null}
             <button
               type="submit"
               disabled={passwordSaveState.status === "saving"}
-              className="btn btn-quiet pressable self-start"
+              className="btn btn-primary pressable self-start"
             >
-              {passwordSaveState.status === "saving" ? "変更しています…" : "パスワードを変更する"}
+              {passwordSaveState.status === "saving" ? "保存しています…" : "パスワードを保存する"}
             </button>
           </form>
-        </section>
+        </Card>
       ) : null}
 
-      <section className="card p-5">
-        <h2 className="text-sm font-bold text-ink">ログアウト</h2>
-        <p className="mt-1 text-xs text-ink-muted">このデバイスでのログイン状態を終了します。</p>
+      <Card title="ログアウト">
+        <Prose>このデバイスでのログイン状態を終了します。</Prose>
         <button
           type="button"
           onClick={handleSignOut}
           disabled={signingOut}
-          className="btn btn-danger pressable mt-3"
+          className="btn btn-danger pressable mt-3 self-start"
         >
           {signingOut ? "ログアウトしています…" : "ログアウトする"}
         </button>
-      </section>
+      </Card>
     </div>
   );
 }

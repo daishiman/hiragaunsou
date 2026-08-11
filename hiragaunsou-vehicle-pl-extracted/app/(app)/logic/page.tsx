@@ -1,4 +1,3 @@
-import { Fragment } from "react";
 import { redirect } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../src/infrastructure/auth/session";
@@ -8,6 +7,11 @@ import type { RateSettings } from "../../../src/domain/rules/vehiclePlCalculatio
 import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { Disclosure } from "../../_components/Disclosure";
 import { ScreenHeader } from "../../_components/ScreenHeader";
+import { DataTable, type DataTableColumn } from "../../_components/DataTable";
+import { SectionHeading } from "../../_components/SectionHeading";
+import { AlertPanel } from "../../_components/AlertPanel";
+import { Badge, type BadgeTone } from "../../_components/Badge";
+import { Prose } from "../../_components/Card";
 
 /**
  * S10 データ設計・自動化方針 (モック view-logic.js に対応)。
@@ -21,16 +25,17 @@ import { ScreenHeader } from "../../_components/ScreenHeader";
 
 type MapStatus = "fixed" | "hypo" | "agree";
 
-const STATUS_LABEL: Record<MapStatus, { label: string; className: string }> = {
-  fixed: { label: "確定", className: "bg-subtle text-ink border-line" },
-  hypo: { label: "仮説 — 要ヒアリング", className: "bg-caution-soft text-ink border-caution-border" },
-  agree: { label: "方針合意が必要", className: "bg-brand-soft text-brand-deep border-transparent" },
+/** 状態の札。色は意味にだけ使う (Badge の4色から選ぶ)。 */
+const STATUS_LABEL: Record<MapStatus, { label: string; tone: BadgeTone }> = {
+  fixed: { label: "確定", tone: "neutral" },
+  hypo: { label: "仮説 — 要ヒアリング", tone: "caution" },
+  agree: { label: "方針合意が必要", tone: "brand" },
 };
 
 const LAYER_HEAD: Record<1 | 2 | 3, string> = {
-  1: "層① 自動流入 — 1次ソースから自動で入る(人間は触らない)",
+  1: "層① 自動流入 — 1次ソースから自動で入る（人間は触らない）",
   2: "層② 連鎖確定 — 入力とマスタから自動計算で決まる",
-  3: "層③ 原票読取 — CSV/Excel/PDFから取得し、例外だけ確認する",
+  3: "層③ 原票読取 — CSV／Excel／PDFから取得し、例外だけ確認する",
 };
 
 interface MapRow {
@@ -54,25 +59,25 @@ function manYen(yen: number): string {
 function buildMap(rates: RateSettings): readonly MapRow[] {
   return [
     {
-      item: "運行回数・稼働時間・稼働Km・燃費(分母)",
+      item: "運行回数・稼働時間・走行距離・燃費（分母）",
       layer: 1,
       src: "デジタコ → 車楽",
-      how: "車楽からCSVエクスポート定期取込(API有無を初回確認)",
+      how: "車楽からCSVエクスポート定期取込（API有無を初回確認）",
       status: "hypo",
     },
-    { item: "運賃・附帯料金・伝票件数", layer: 1, src: "車楽(請求システム)", how: "同上", status: "hypo" },
+    { item: "運賃・附帯料金・伝票件数", layer: 1, src: "車楽（請求システム）", how: "同上", status: "hypo" },
     { item: "道路使用料", layer: 1, src: "デジタコETC → 車楽", how: "同上", status: "hypo" },
     {
       item: "高速割引料",
       layer: 2,
       src: `道路使用料 × 割引率${rates.tollDiscountRate}`,
-      how: "率マスタから自動計算(率は設定画面で変更可)",
+      how: "率マスタから自動計算（率は率マスタ設定で変更できます）",
       status: "fixed",
     },
     {
       item: "賞与",
       layer: 2,
-      src: `規程(年${manYen(rates.bonusAnnual)}÷12)`,
+      src: `規程（年${manYen(rates.bonusAnnual)}÷12）`,
       how: "運転者が紐づけば自動",
       status: "fixed",
     },
@@ -80,18 +85,18 @@ function buildMap(rates: RateSettings): readonly MapRow[] {
       item: "福利厚生費",
       layer: 2,
       src: "社保合計",
-      how: "給与データに含まれるなら自動、なければ料率マスタ×給与",
+      how: "給与データに含まれるなら自動、なければ率マスタ×給与",
       status: "hypo",
     },
     {
-      item: "車検・タイヤ費(標準原価)",
+      item: "車検・タイヤ費（標準原価）",
       layer: 2,
-      src: "原価計算シート(大型10.7円/km等)",
-      how: "単価マスタ × 稼働Km で自動",
+      src: "原価計算シート（大型10.7円/km等）",
+      how: "率マスタ × 走行距離 で自動",
       status: "fixed",
     },
     {
-      item: "自賠責・任意保険/自動車税・重量税",
+      item: "自賠責・任意保険／自動車税・重量税",
       layer: 2,
       src: "車両マスタ",
       how: "車検・更新イベント時のみマスタ更新 → 月割自動配賦",
@@ -100,15 +105,15 @@ function buildMap(rates: RateSettings): readonly MapRow[] {
     {
       item: "車両リース・割賦",
       layer: 2,
-      src: "車両マスタ(毎月支払額)",
+      src: "車両マスタ（毎月支払額）",
       how: "契約時登録 → 毎月自動計上",
       status: "fixed",
     },
     {
       item: "一般管理費",
       layer: 2,
-      src: `売上 × ${percent(rates.adminFeeRate)}(3期平均)`,
-      how: "率マスタから自動(当面現行踏襲)",
+      src: `売上 × ${percent(rates.adminFeeRate)}（3期平均）`,
+      how: "率マスタから自動（当面現行踏襲）",
       status: "agree",
     },
     {
@@ -119,14 +124,14 @@ function buildMap(rates: RateSettings): readonly MapRow[] {
       status: "fixed",
     },
     {
-      item: "軽油代(インタンク/外部)・給油量",
+      item: "軽油代（インタンク／外部）・給油量",
       layer: 3,
       src: "給油レシート・外部請求書",
-      how: "CSV/Excelは自動取込、PDFはOCRで車番・金額を抽出",
+      how: "CSV／Excelは自動取込、PDFはOCRで車番・金額を抽出",
       status: "hypo",
     },
     {
-      item: "インタンク単価(円/ℓ)",
+      item: "インタンク単価（円/ℓ）",
       layer: 3,
       src: "月次の仕入単価",
       how: "請求書/仕入データから取得し、全車へ自動反映",
@@ -136,14 +141,14 @@ function buildMap(rates: RateSettings): readonly MapRow[] {
       item: "給与",
       layer: 3,
       src: "ACELINK NX-CE CSV",
-      how: "給与集計表(日給者)をファイル取込",
+      how: "給与集計表（日給者）をファイル取込",
       status: "fixed",
     },
     {
-      item: "修理費(実費)",
+      item: "修理費（実費）",
       layer: 3,
       src: "修理伝票・請求書",
-      how: "車番・金額をOCR/CSV取込。標準原価とは別フィールドで保持",
+      how: "車番・金額をOCR／CSV取込。標準原価とは別フィールドで保持",
       status: "agree",
     },
   ];
@@ -165,10 +170,10 @@ interface SourceFileRow {
 
 const SOURCE_FILES: readonly SourceFileRow[] = [
   {
-    file: "車両別運行実績表(燃費計算)◯◯.csv",
+    file: "車両別運行実績表（燃費計算）◯◯.csv",
     role: "入力",
     system: "デジタコ ITP-WEBServiceV3",
-    用途: "STEP1 運行回数・稼働時間・稼働Km。営業所ごとに1ファイル",
+    用途: "STEP1 運行回数・稼働時間・走行距離。営業所ごとに1ファイル",
   },
   {
     file: "◯年◯月売上モニタリスト.csv",
@@ -177,16 +182,16 @@ const SOURCE_FILES: readonly SourceFileRow[] = [
     用途: "STEP2 運賃・付帯料金・道路使用料を車番別に集計",
   },
   {
-    file: "◯給与集計表(日給者).csv",
+    file: "◯給与集計表（日給者）.csv",
     role: "入力",
     system: "ACELINK NX-CE",
     用途: "STEP4 給与・社保合計。車番の列は無い",
   },
   {
-    file: "請求書・給油機レシート(紙)",
+    file: "請求書・給油機レシート（紙）",
     role: "入力",
     system: "各社・高速協",
-    用途: "STEP3/5/6 燃料費・修繕費・タイヤ・高速料金。手入力画面から入れる",
+    用途: "STEP3／5／6 燃料費・修繕費・タイヤ・高速料金。手入力画面から入れる",
   },
   {
     file: "★車両別収支計算用◯年◯月.xlsx",
@@ -202,23 +207,24 @@ const SOURCE_FILES: readonly SourceFileRow[] = [
   },
 ] as const;
 
-const ROLE_CLASS: Record<SourceFileRow["role"], string> = {
-  入力: "bg-subtle text-ink border-line",
-  作業台: "bg-brand-soft text-brand-deep border-transparent",
-  成果物: "bg-caution-soft text-ink border-caution-border",
+/** 役割の札。分類の名前 (良し悪しが無いもの) と、注意して読むものを Badge の色で分ける。 */
+const ROLE_TONE: Record<SourceFileRow["role"], BadgeTone> = {
+  入力: "neutral",
+  作業台: "brand",
+  成果物: "caution",
 };
 
 const QUESTIONS: readonly (readonly [string, string])[] = [
-  ["車楽のデータ出力手段(CSV/API/画面のみ)", "層①の接続方式が確定"],
+  ["車楽のデータ出力手段（CSV／API／画面のみ）", "層①の接続方式が確定"],
   ["燃料集計Excelの1次ソースと作成手順", "層③の2項目を自動化できるか決まる"],
   ["給与ソフトの製品名と出力形式", "給与取込・福利厚生の自動算出が確定"],
-  ["現状の月次工数の実測(入力・分析)", "効果測定の基準値が確定"],
+  ["現状の月次工数の実測（入力・分析）", "効果測定の基準となる値が確定"],
   ["層③として残す項目の最終合意", "ホームのToDo設計が確定"],
   ["修繕費の「推計」と「実費」の分離への同意", "実力損益が出せるようになる"],
-  ["異常検知の閾値感覚(例月の何倍で疑うか)", "異常値チェックの検知ルールを調整"],
-  ["レポート配信先(Slackか既存Kintoneか)", "月次レポートの届け先が決まる"],
-  ["締め確定の運用(誰が・いつ・遡及修正ルール)", "権限と監査ログの仕様が確定"],
-  ["遊休車9台の扱い(処分・予備の方針)", "ダッシュボードでの表現が決まる"],
+  ["異常検知の閾値感覚（例月の何倍で疑うか）", "異常値チェックの検知ルールを調整"],
+  ["レポート配信先（Slackか既存Kintoneか）", "月次レポートの届け先が決まる"],
+  ["締め確定の運用（誰が・いつ・遡及修正ルール）", "権限と監査ログの仕様が確定"],
+  ["遊休車9台の扱い（処分・予備の方針）", "ダッシュボードでの表現が決まる"],
 ] as const;
 
 const STEP_FLOW = [
@@ -230,7 +236,7 @@ const STEP_FLOW = [
   {
     num: "02 — 入力から連鎖して決まる",
     title: "保険・税・賞与・標準原価・管理費・損益",
-    desc: "車番・運転者・稼働Kmが決まると、マスタから自動計算。",
+    desc: "車番・運転者・走行距離が決まると、率マスタと車両マスタから自動計算。",
   },
   {
     num: "03 — 原票を自動で読む",
@@ -241,16 +247,86 @@ const STEP_FLOW = [
 
 function buildFlowTree(rates: RateSettings): readonly { depth: number; text: string }[] {
   return [
-    { depth: 0, text: "月次シート作成(自動)" },
+    { depth: 0, text: "月次シート作成（自動）" },
     { depth: 1, text: "車両マスタ → 保険・税・リース・配賦単価が全車に即時セット" },
-    { depth: 2, text: "[運転者名] 確定 → 賞与(規程)・給与枠(前月参照)がセット" },
-    { depth: 2, text: "[稼働Km] 流入 → 車検・タイヤ標準原価/燃費を自動計算" },
-    { depth: 2, text: `[売上] 流入 → 一般管理費(×${percent(rates.adminFeeRate)})を自動計算` },
-    { depth: 2, text: `[道路使用料] 流入 → 高速割引(×${rates.tollDiscountRate}) → 運行費計` },
+    { depth: 2, text: "[運転者名] 確定 → 賞与（規程）・給与枠（前月参照）がセット" },
+    { depth: 2, text: "[走行距離] 流入 → 車検・タイヤ標準原価／燃費を自動計算" },
+    { depth: 2, text: `[売上] 流入 → 一般管理費（×${percent(rates.adminFeeRate)}）を自動計算` },
+    { depth: 2, text: `[道路使用料] 流入 → 高速割引（×${rates.tollDiscountRate}） → 運行費計` },
     { depth: 3, text: "上流の確定ごとに → 損益・利益率・全社集計・対前年を即時再計算" },
     { depth: 4, text: "再計算のたびに → 異常検知 → 異常値チェックにカード生成" },
   ];
 }
+
+/**
+ * 入れ子の深さぶんの左余白。
+ * inline style で marginLeft を書くと、余白の刻みが画面ごとに変わる。Tailwind の目盛りに揃える。
+ */
+const DEPTH_INDENT = ["ml-0", "ml-4", "ml-8", "ml-12", "ml-16"] as const;
+
+/** 元ファイル一覧の列。1件ずつ読むのではなく、役割どうしを見比べる表なので DataTable にする。 */
+const SOURCE_FILE_COLUMNS: readonly DataTableColumn<SourceFileRow>[] = [
+  {
+    key: "file",
+    header: "ファイル（名前の例）",
+    cell: (f) => f.file,
+    cellClassName: "font-semibold text-ink",
+    headClassName: "min-w-[14rem]",
+  },
+  {
+    key: "role",
+    header: "役割",
+    cell: (f) => <Badge tone={ROLE_TONE[f.role]}>{f.role}</Badge>,
+    cellClassName: "whitespace-nowrap",
+  },
+  {
+    key: "system",
+    header: "出力元",
+    priority: "low",
+    cell: (f) => f.system,
+    cellClassName: "text-ink-muted",
+    headClassName: "min-w-[10rem]",
+  },
+  {
+    key: "use",
+    header: "何に使うか",
+    cell: (f) => f.用途,
+    cellClassName: "wrap text-ink-muted",
+    headClassName: "min-w-[18rem]",
+  },
+];
+
+/** 項目別の接続マップの列。収支表の項目どうしを見比べる表。 */
+const MAP_COLUMNS: readonly DataTableColumn<MapRow>[] = [
+  {
+    key: "item",
+    header: "収支表の項目",
+    cell: (r) => r.item,
+    cellClassName: "font-semibold text-ink",
+    headClassName: "min-w-[12rem]",
+  },
+  {
+    key: "src",
+    header: "1次ソース",
+    priority: "low",
+    cell: (r) => r.src,
+    cellClassName: "text-ink-muted",
+    headClassName: "min-w-[11rem]",
+  },
+  {
+    key: "how",
+    header: "決まり方",
+    cell: (r) => r.how,
+    cellClassName: "wrap text-ink-muted",
+    headClassName: "min-w-[16rem]",
+  },
+  {
+    key: "status",
+    header: "状態",
+    cell: (r) => <Badge tone={STATUS_LABEL[r.status].tone}>{STATUS_LABEL[r.status].label}</Badge>,
+    cellClassName: "whitespace-nowrap",
+  },
+];
 
 export default async function LogicPage() {
   const session = await getServerSession();
@@ -274,7 +350,7 @@ export default async function LogicPage() {
         最初に出すのは見出しだけにして、読みたい章を押したときにその章だけ開く形にした
         (見出しの並びがそのまま目次になる)。文章は1つも減らしていない。
       */}
-      <Disclosure summary="全体の考え方(3つの層)">
+      <Disclosure summary="全体の考え方（3つの層）">
         <div className="grid gap-3 lg:grid-cols-3">
         {STEP_FLOW.map((s) => (
           <div key={s.num} className="card p-5">
@@ -287,119 +363,103 @@ export default async function LogicPage() {
       </Disclosure>
 
       <Disclosure summary="元になるファイルと、その役割">
-        <p className="text-xs text-ink-muted">列単位の対応は docs/product/data-flow-map.md</p>
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-max border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-line bg-subtle text-ink-muted">
-                <th className="px-3 py-2 text-left font-medium">ファイル(名前の例)</th>
-                <th className="px-3 py-2 text-left font-medium">役割</th>
-                <th className="px-3 py-2 text-left font-medium">出力元</th>
-                <th className="px-3 py-2 text-left font-medium">何に使うか</th>
-              </tr>
-            </thead>
-            <tbody>
-              {SOURCE_FILES.map((f) => (
-                <tr key={f.file} className="border-b border-line align-top">
-                  <td className="min-w-[14rem] px-3 py-2 font-semibold text-ink">{f.file}</td>
-                  <td className="whitespace-nowrap px-3 py-2">
-                    <span
-                      className={`inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${ROLE_CLASS[f.role]}`}
-                    >
-                      {f.role}
-                    </span>
-                  </td>
-                  <td className="min-w-[10rem] px-3 py-2 text-ink-muted">{f.system}</td>
-                  <td className="min-w-[18rem] px-3 py-2 text-ink-muted">{f.用途}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {/*
+          T7 §4-1 の質問への答え: ファイルごとの役割と出力元を「見比べる」ための一覧なので表。
+          1件を読んで判断する場面ではない。
+        */}
+        <Prose>列単位の対応は docs/product/data-flow-map.md</Prose>
+        <div className="mt-3">
+          <DataTable
+            caption="元になるファイルと、その役割"
+            columns={SOURCE_FILE_COLUMNS}
+            rows={SOURCE_FILES}
+            rowKey={(f) => f.file}
+            empty={
+              <Prose>
+                元ファイルの一覧が空です。仕様として持っている内容なので、
+                空になるのは実装の不具合です。管理者にお知らせください。
+              </Prose>
+            }
+          />
         </div>
-        <div className="mt-4 space-y-2 rounded-md border border-caution-border bg-caution-soft px-3 py-2 text-xs leading-relaxed text-ink">
-          <p>
-            <strong>「運送収支表」は入力ではなく、このシステムが作る成果物です。</strong>
+        <div className="mt-4 flex flex-col gap-3">
+          <AlertPanel tone="caution" title="「運送収支表」は入力ではなく、このシステムが作る成果物です">
             業務フローのSTEP8で、出来上がった収支表を貼り付ける先にあたります。
-            ここから数字を読む仕様は作りません(完成した表を元に同じ表を作ることになるため)。
-          </p>
-          <p>
-            <strong>ファイル名は変わっても構いません。中身で判定します。</strong>
-            上の表のファイル名は目印としての例です(◯の部分は月や営業所名が入ります)。
-            どの帳票かは列の見出しで見分け、何年何月分かもファイルの中身から判定します。
-          </p>
-          <p>
-            年月の判定は帳票によって根拠が違います。★車両別収支計算用はシート1行目の見出し
-            「令和◯年◯月車両別収支表」、売上モニタリストは「計上日」の日付から判定します。
-            給与集計表と車両別運行実績表は<strong>中身に日付が1つも無い</strong>ため自動では決まらず、
-            取込のときに何年何月分かを画面で選んでいただきます。
-          </p>
+            ここから数字を読む仕様は作りません（完成した表を元に同じ表を作ることになるため）。
+          </AlertPanel>
+          <AlertPanel tone="info" title="ファイル名は変わっても構いません。中身で判定します">
+            <p>
+              上の表のファイル名は目印としての例です（◯の部分は月や営業所名が入ります）。
+              どの帳票かは列の見出しで見分け、何年何月分かもファイルの中身から判定します。
+            </p>
+            <p className="mt-2">
+              年月の判定は帳票によって根拠が違います。★車両別収支計算用はシート1行目の見出し
+              「令和◯年◯月車両別収支表」、売上モニタリストは「計上日」の日付から判定します。
+              給与集計表と車両別運行実績表は<strong>中身に日付が1つも無い</strong>ため自動では決まらず、
+              取込のときに何年何月分かを画面で選んでいただきます。
+            </p>
+          </AlertPanel>
         </div>
       </Disclosure>
 
       <Disclosure
-        summary={`項目別の接続マップ(${MAP.length}項目中 ${pendingCount}項目がヒアリングで確定待ち)`}
+        summary={`項目別の接続マップ（${MAP.length}項目中 ${pendingCount}項目がヒアリングで確定待ち）`}
       >
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-max border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-line bg-subtle text-ink-muted">
-                <th className="px-3 py-2 text-left font-medium">収支表の項目</th>
-                <th className="px-3 py-2 text-left font-medium">1次ソース</th>
-                <th className="px-3 py-2 text-left font-medium">決まり方</th>
-                <th className="px-3 py-2 text-left font-medium">状態</th>
-              </tr>
-            </thead>
-            <tbody>
-              {([1, 2, 3] as const).map((layer) => (
-                <Fragment key={`layer-${layer}`}>
-                  <tr className="border-b border-line bg-brand-soft/60">
-                    <td colSpan={4} className="px-3 py-2 text-[11px] font-semibold text-brand-deep">
-                      {LAYER_HEAD[layer]}
-                    </td>
-                  </tr>
-                  {MAP.filter((r) => r.layer === layer).map((r) => (
-                    <tr key={r.item} className="border-b border-line align-top">
-                      <td className="min-w-[12rem] px-3 py-2 font-semibold text-ink">{r.item}</td>
-                      <td className="min-w-[11rem] px-3 py-2 text-ink-muted">{r.src}</td>
-                      <td className="min-w-[16rem] px-3 py-2 text-ink-muted">{r.how}</td>
-                      <td className="whitespace-nowrap px-3 py-2">
-                        <span
-                          className={`inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${STATUS_LABEL[r.status].className}`}
-                        >
-                          {STATUS_LABEL[r.status].label}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="mt-4 rounded-md border border-caution-border bg-caution-soft px-3 py-2 text-xs leading-relaxed text-ink">
-          原則: <strong>集計・損益などの下流の値は手入力できない構造</strong>
-          にします(Excelで起きた年間集計への転記漏れを仕組みごと根絶)。
-        </div>
-        <details className="mt-3">
-          <summary className="cursor-pointer text-xs font-semibold text-brand-deep">
-            連鎖反映の流れ(入力が決まると何が決まるか)
-          </summary>
-          <div className="mt-2">
-            {FLOW_TREE.map((n) => (
-              <div
-                key={n.text}
-                className="mt-1.5 border-l-2 border-line pl-3 text-xs text-ink"
-                style={{ marginLeft: `${n.depth * 1.1}rem` }}
-              >
-                {n.text}
+        {/*
+          T7 §4-1 の質問への答え: 収支表の項目どうしを「1次ソースと決まり方の列で見比べる」ので表。
+          層ごとに1つの表に分けているのは、1つの表の中に見出し行を混ぜると
+          列見出しの意味が途中で切れて読めなくなるため。
+        */}
+        {([1, 2, 3] as const).map((layer) => {
+          const rows = MAP.filter((r) => r.layer === layer);
+          return (
+            <div key={`layer-${layer}`}>
+              <SectionHeading divider={layer !== 1} action={`${rows.length}項目`}>
+                {LAYER_HEAD[layer]}
+              </SectionHeading>
+              <div className="mt-3">
+                <DataTable
+                  caption={LAYER_HEAD[layer]}
+                  columns={MAP_COLUMNS}
+                  rows={rows}
+                  rowKey={(r) => r.item}
+                  empty={
+                    <Prose>
+                      この層に当てはまる項目がありません。仕様として持っている内容なので、
+                      空になるのは実装の不具合です。管理者にお知らせください。
+                    </Prose>
+                  }
+                />
               </div>
-            ))}
-          </div>
-        </details>
+            </div>
+          );
+        })}
+
+        <div className="mt-4">
+          <AlertPanel tone="caution" title="集計・損益などの下流の値は手入力できない構造にします">
+            Excelで起きた年間集計への転記漏れを、仕組みごと根絶するためです。
+          </AlertPanel>
+        </div>
+
+        {/* 生の details を書かず Disclosure に揃える(同じページで2つの折りたたみが別の顔になるのを防ぐ)。 */}
+        <Disclosure tone="inline" summary="連鎖反映の流れ（入力が決まると何が決まるか）">
+          {FLOW_TREE.map((n) => (
+            <div
+              key={n.text}
+              className={`mt-1.5 border-l-2 border-line pl-3 text-xs text-ink ${DEPTH_INDENT[n.depth] ?? "ml-16"}`}
+            >
+              {n.text}
+            </div>
+          ))}
+        </Disclosure>
       </Disclosure>
 
-      <Disclosure summary={`ヒアリングで確定させること(${QUESTIONS.length}件)`}>
-        <p className="text-xs text-ink-muted">この画面を見ながら一緒に確認します</p>
+      <Disclosure summary={`ヒアリングで確定させること（${QUESTIONS.length}件）`}>
+        {/*
+          T7 §4-1 の質問への答え: 1件ずつ読んで「決まったか」を判断していく項目なので表にしない。
+          番号付きの一覧のままにする。
+        */}
+        <Prose>この画面を見ながら一緒に確認します</Prose>
         <ul className="mt-2">
           {QUESTIONS.map(([q, effect], i) => (
             <li
@@ -413,7 +473,7 @@ export default async function LogicPage() {
                 <span className="text-ink">{q}</span>
                 <span className="ml-1 text-ink-muted">→ {effect}</span>
               </span>
-              <span className="shrink-0 text-ink-muted">未確定</span>
+              <Badge tone="caution">未確定</Badge>
             </li>
           ))}
         </ul>

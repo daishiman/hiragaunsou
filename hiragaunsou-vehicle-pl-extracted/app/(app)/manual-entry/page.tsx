@@ -19,6 +19,7 @@ import { ConfirmMonthlyPlUseCase } from "../../../src/usecase/steps/confirmMonth
 import { STANDARD_COST_RATES } from "../../../src/domain/entities/VehiclePl";
 import { monthsBefore, selectableYearMonths } from "../../_lib/yearMonth";
 import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
+import { findScreen } from "../../_lib/screens";
 import { ScreenHeader } from "../../_components/ScreenHeader";
 import { YearMonthSelect } from "../../_components/YearMonthSelect";
 import { ManualEntryStepper, type PrefillValues } from "./ManualEntryStepper";
@@ -33,7 +34,13 @@ export default async function ManualEntryPage({
   if (!session) redirect("/sign-in");
   // 権限が無い人を黙ってホームへ戻すと、押した本人にはリンクが壊れたようにしか見えない。
   if (!checkAccess(session, "input")) {
-    return <AccessDenied screenName="手入力" permission="input" />;
+    // 画面の名前は screens.ts が唯一の出どころ。ここで別名を書くと横のメニューと食い違う
+    return (
+      <AccessDenied
+        screenName={findScreen("/manual-entry")?.label ?? "手入力"}
+        permission="input"
+      />
+    );
   }
 
   const { ym, step } = await searchParams;

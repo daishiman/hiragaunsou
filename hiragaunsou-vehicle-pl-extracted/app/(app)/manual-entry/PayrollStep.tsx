@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { AlertPanel } from "../../_components/AlertPanel";
+import { Badge } from "../../_components/Badge";
+import { DataTable, type DataTableColumn } from "../../_components/DataTable";
+import { DefinitionList } from "../../_components/DefinitionList";
+import { EmptyState } from "../../_components/EmptyState";
 import { NumberEntryField } from "../../_components/NumberEntryField";
+import { FIELD_CLASS } from "../../_components/formStyles";
 import type { OverridableField } from "../../../src/domain/rules/vehiclePlOverride";
 
 /**
@@ -256,6 +262,85 @@ export function PayrollStep({
     });
   }
 
+  const payrollColumns: DataTableColumn<PayrollDetailRow>[] = [
+    {
+      key: "vehicleNo",
+      header: "車番",
+      headClassName: "w-px",
+      cellClassName: "num whitespace-nowrap",
+      cell: (row) => row.vehicleNo,
+    },
+    {
+      key: "driver",
+      header: "運転者",
+      headClassName: "w-px",
+      cellClassName: "max-w-[12rem] whitespace-nowrap",
+      cell: (row) => (
+        <>
+          {row.driverName ?? <span className="text-danger">未割当</span>}
+          {/*
+            運転者は割り当たっているのに給与が見つからない車両は、0円が正しいのか
+            突合が外れているのか金額からは分からない。行の上で名指しする。
+          */}
+          {row.driverCount > 0 && row.payrollMatchedCount < row.driverCount ? (
+            <span className="mt-0.5 block text-[11px] text-danger">
+              給与データなし({row.driverCount - row.payrollMatchedCount}人分)
+            </span>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      key: "salary",
+      header: (
+        <>
+          総支給額
+          <span className="block text-[11px] font-normal">給与集計表CSV</span>
+        </>
+      ),
+      unit: "円",
+      align: "right",
+      headClassName: "w-px",
+      cell: (row) => (
+        <PayrollAmountField
+          label={`${row.vehicleNo}番の総支給額(円)`}
+          value={editOf(row).salary}
+          imported={row.importedSalary}
+          overridden={row.salaryOverridden}
+          onChange={(v) => setEdit(row, { salary: v })}
+        />
+      ),
+    },
+    {
+      key: "welfare",
+      header: (
+        <>
+          社保合計
+          <span className="block text-[11px] font-normal">給与集計表CSV</span>
+        </>
+      ),
+      unit: "円",
+      align: "right",
+      headClassName: "w-px",
+      cell: (row) => (
+        <PayrollAmountField
+          label={`${row.vehicleNo}番の社保合計(円)`}
+          value={editOf(row).welfare}
+          imported={row.importedWelfare}
+          overridden={row.welfareOverridden}
+          onChange={(v) => setEdit(row, { welfare: v })}
+        />
+      ),
+    },
+    {
+      // 余った幅を吸わせ、運転者名と金額欄を隣り合わせに保つ
+      key: "spacer",
+      header: <span aria-hidden />,
+      headClassName: "w-full",
+      cell: () => null,
+    },
+  ];
+
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -264,26 +349,38 @@ export function PayrollStep({
         {payrollStatus ? (
           <>
             <p className="mt-3">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-soft px-3 py-1 text-xs font-bold text-brand-deep">
-                <span aria-hidden>✓</span>取込済み
-              </span>
+              <Badge tone="brand">
+                <span aria-hidden className="mr-1">
+                  ✓
+                </span>
+                取込済み
+              </Badge>
             </p>
-            <dl className="mt-3 grid grid-cols-[6rem_1fr] gap-x-3 gap-y-1.5 text-sm">
-              <dt className="text-xs text-ink-muted">ファイル</dt>
-              <dd className="truncate text-ink">{payrollStatus.fileName}</dd>
-              <dt className="text-xs text-ink-muted">件数</dt>
-              <dd className="num text-ink">{payrollStatus.rowCount}件</dd>
-              <dt className="text-xs text-ink-muted">取込日時</dt>
-              <dd className="num text-ink">
-                {new Date(payrollStatus.importedAt).toLocaleString("ja-JP")}
-              </dd>
-            </dl>
+            {/* 1件ぶんの取込の記録を読むだけなので、表ではなく項目と値の対にする（T7 §4-1） */}
+            <DefinitionList
+              className="mt-3"
+              items={[
+                { term: "ファイル", value: <span className="truncate">{payrollStatus.fileName}</span> },
+                { term: "件数", value: <span className="num">{payrollStatus.rowCount}件</span> },
+                {
+                  term: "取込日時",
+                  value: (
+                    <span className="num">
+                      {new Date(payrollStatus.importedAt).toLocaleString("ja-JP")}
+                    </span>
+                  ),
+                },
+              ]}
+            />
           </>
         ) : (
           <div className="mt-3 flex flex-wrap items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-caution-border bg-caution-soft px-3 py-1 text-xs font-bold text-ink">
-              <span aria-hidden>!</span>未取込
-            </span>
+            <Badge tone="caution">
+              <span aria-hidden className="mr-1">
+                !
+              </span>
+              未取込
+            </Badge>
             <Link
               href={`/import?step=4&ym=${yearMonth}`}
               className="btn btn-secondary btn-sm pressable"
@@ -308,11 +405,23 @@ export function PayrollStep({
       />
 
       {rows.length === 0 ? (
-        <p className="text-xs text-ink-muted">
-          車両マスタが登録されていないため、車両別の内訳を出せません。
-        </p>
+        <EmptyState
+          title="車両別の内訳を出せません"
+          description={
+            canManageMasters
+              ? "車両マスタが1台も登録されていないため、給与を車両に割り当てられません。車両マスタを登録すると、ここに全車両が並びます。"
+              : "車両マスタが1台も登録されていないため、給与を車両に割り当てられません。管理者に車両マスタの登録を依頼してください。"
+          }
+          actionHref={canManageMasters ? "/admin/vehicle-master" : undefined}
+          actionLabel={canManageMasters ? "車両マスタの登録へ" : undefined}
+        />
       ) : (
         <>
+          {/*
+            この工程は手入力の中の1ステップとして、上位の card の中に描かれる。
+            StickyFilterBar は本文の左右の余白ぶん外へ広がる帯なので、card の中に置くと
+            枠からはみ出す。検索と件数はここでは貼り付けず、表のすぐ上に置く。
+          */}
           <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 text-xs text-ink">
               <span className="sr-only">車番・運転者で検索</span>
@@ -321,7 +430,7 @@ export function PayrollStep({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="車番・運転者で検索"
-                className="w-56 rounded-md border border-line px-3 py-1.5"
+                className={`${FIELD_CLASS} w-56`}
               />
             </label>
             <p className="num text-xs text-ink-muted">
@@ -330,73 +439,26 @@ export function PayrollStep({
             </p>
           </div>
 
-          <div className="max-h-[56vh] min-h-[14rem] overflow-auto rounded-md border border-line">
-            <table className="data-table min-w-full text-sm">
-              <thead className="sticky top-0 z-10 bg-subtle">
-                <tr>
-                  <th className="w-px px-3 py-2 text-left text-xs font-bold text-ink-muted">
-                    車番
-                  </th>
-                  <th className="w-px px-3 py-2 text-left text-xs font-bold text-ink-muted">
-                    運転者
-                  </th>
-                  <th className="w-px px-3 py-2 text-right text-xs font-bold text-ink-muted">
-                    総支給額(円)
-                    <span className="block text-[11px] font-normal">給与集計表CSV</span>
-                  </th>
-                  <th className="w-px px-3 py-2 text-right text-xs font-bold text-ink-muted">
-                    社保合計(円)
-                    <span className="block text-[11px] font-normal">給与集計表CSV</span>
-                  </th>
-                  {/* 余った幅を吸わせ、運転者名と金額欄を隣り合わせに保つ */}
-                  <th className="w-full" aria-hidden />
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((row) => {
-                  const edit = editOf(row);
-                  const dirty = isDirty(row);
-                  return (
-                    <tr
-                      key={row.vehicleNo}
-                      // 保存していない行は、表の中でも見つけられるようにしておく
-                      // (表の下の操作パネルと行が離れていても、どの行の話か迷わない)
-                      className={`border-t border-line ${dirty ? "bg-caution-soft" : ""}`}
-                    >
-                      <td className="num px-3 py-2 whitespace-nowrap">{row.vehicleNo}</td>
-                      <td className="max-w-[12rem] px-3 py-2 whitespace-nowrap">
-                        {row.driverName ?? <span className="text-danger">未割当</span>}
-                        {/*
-                          運転者は割り当たっているのに給与が見つからない車両は、0円が正しいのか
-                          突合が外れているのか金額からは分からない。行の上で名指しする。
-                        */}
-                        {row.driverCount > 0 && row.payrollMatchedCount < row.driverCount ? (
-                          <span className="mt-0.5 block text-[11px] text-danger">
-                            給与データなし({row.driverCount - row.payrollMatchedCount}人分)
-                          </span>
-                        ) : null}
-                      </td>
-                      <PayrollAmountCell
-                        label={`${row.vehicleNo}番の総支給額(円)`}
-                        value={edit.salary}
-                        imported={row.importedSalary}
-                        overridden={row.salaryOverridden}
-                        onChange={(v) => setEdit(row, { salary: v })}
-                      />
-                      <PayrollAmountCell
-                        label={`${row.vehicleNo}番の社保合計(円)`}
-                        value={edit.welfare}
-                        imported={row.importedWelfare}
-                        overridden={row.welfareOverridden}
-                        onChange={(v) => setEdit(row, { welfare: v })}
-                      />
-                      <td aria-hidden />
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          {/*
+            表かカードか（T7 §4-1）。100台ぶんの総支給額・社保合計を縦にそろえて
+            見比べる作業なので表。20行を超えるので高さを止め、列見出しを貼り付ける。
+          */}
+          <DataTable
+            caption="車両ごとの人件費（給与集計表CSVの取込値と手修正）"
+            columns={payrollColumns}
+            rows={filtered}
+            rowKey={(row) => row.vehicleNo}
+            maxHeight="56vh"
+            className="min-h-[14rem] rounded-md border border-line"
+            // 保存していない行は、表の中でも見つけられるようにしておく
+            // （表の下の操作パネルと行が離れていても、どの行の話か迷わない）
+            rowClassName={(row) => (isDirty(row) ? "bg-caution-soft" : undefined)}
+            empty={
+              <p className="text-xs text-ink-muted">
+                「{search.trim()}」に一致する車両がありません。検索の文字を消すと全車両に戻ります。
+              </p>
+            }
+          />
 
           {/*
             直している行の操作(理由・保存・やめる)は表の外に出す。表のセル内に置くと
@@ -408,18 +470,13 @@ export function PayrollStep({
               const edit = editOf(row);
               const dirty = isDirty(row);
               return (
-                <div
+                <AlertPanel
                   key={row.vehicleNo}
-                  className={`rounded-md border px-4 py-3 ${
-                    dirty ? "border-caution-border bg-caution-soft" : "border-line bg-subtle"
-                  }`}
+                  tone={dirty ? "caution" : "info"}
+                  title={`車番 ${row.vehicleNo}${dirty ? " — 保存していない直しがあります" : " — 手修正されています"}`}
                 >
-                  <p className="text-xs font-bold text-ink">
-                    車番 <span className="num">{row.vehicleNo}</span>
-                    {dirty ? " — 保存していない直しがあります" : " — 手修正されています"}
-                  </p>
                   {!dirty && row.overrideReason ? (
-                    <p className="mt-1 text-[11px] text-ink-muted">理由: {row.overrideReason}</p>
+                    <p className="text-[11px] text-ink-muted">理由: {row.overrideReason}</p>
                   ) : null}
                   <div className="mt-2 flex flex-wrap items-end gap-2">
                     {dirty ? (
@@ -430,7 +487,7 @@ export function PayrollStep({
                           value={edit.reason}
                           onChange={(e) => setEdit(row, { reason: e.target.value })}
                           placeholder="例: 月中に車両を乗り換えたため按分した"
-                          className="min-w-[16rem] rounded-md border border-line bg-white px-3 py-1.5 text-xs"
+                          className={`${FIELD_CLASS} min-w-[16rem]`}
                         />
                       </label>
                     ) : null}
@@ -462,20 +519,12 @@ export function PayrollStep({
                       </button>
                     )}
                   </div>
-                </div>
+                </AlertPanel>
               );
             })}
 
-          {errorMessage ? (
-            <p className="rounded-md border border-danger px-4 py-2 text-xs text-danger">
-              {errorMessage}
-            </p>
-          ) : null}
-          {notice ? (
-            <p className="rounded-md border border-brand bg-brand-soft px-4 py-2 text-xs text-ink">
-              {notice}
-            </p>
-          ) : null}
+          {errorMessage ? <AlertPanel tone="danger" title={errorMessage} /> : null}
+          {notice ? <AlertPanel tone="success" title={notice} /> : null}
 
           <p className="text-[11px] leading-relaxed text-ink-muted">
             この欄の既定は給与集計表CSVの金額です。直した金額は「手修正」として別に記録するため、
@@ -498,7 +547,7 @@ export function PayrollStep({
  * 共通部品は「人が触っていない = 空文字」で持つのに対し、人件費は常に実額を保存するため、
  * ここで値を橋渡しする (取込値と同じなら空文字として渡し、空で戻ってきたら取込値に復元)。
  */
-function PayrollAmountCell({
+function PayrollAmountField({
   label,
   value,
   imported,
@@ -513,8 +562,7 @@ function PayrollAmountCell({
 }) {
   const importedRaw = String(imported);
   return (
-    <td className="px-3 py-2 text-right">
-      <NumberEntryField
+    <NumberEntryField
         value={value === importedRaw ? "" : value}
         onChange={(raw) => onChange(raw === "" ? importedRaw : raw)}
         autoValue={imported}
@@ -528,8 +576,7 @@ function PayrollAmountCell({
           // 保存済みの手修正は、開き直したときにも「直っている」と分かるようにする
           overridden ? <p className="text-[11px] font-semibold text-ink">手修正</p> : null
         }
-      />
-    </td>
+    />
   );
 }
 
@@ -582,21 +629,15 @@ function PayrollDiagnosis({
   if (!problem) return null;
 
   return (
-    <div className="rounded-md border border-caution-border bg-caution-soft px-4 py-3">
-      <p className="text-sm font-bold text-ink">{problem.title}</p>
-      <p className="num mt-1 text-xs leading-relaxed text-ink">{problem.body}</p>
+    <AlertPanel tone="caution" title={problem.title}>
+      <p className="num">{problem.body}</p>
       {!problem.needsAdmin || canManageMasters ? (
-        <Link
-          href={problem.href}
-          className="btn btn-primary pressable mt-3 inline-block"
-        >
+        <Link href={problem.href} className="btn btn-primary pressable mt-3 inline-block">
           {problem.linkLabel}
         </Link>
       ) : (
-        <p className="mt-2 text-xs font-semibold text-ink">
-          管理者に運転者マスタの登録を依頼してください。
-        </p>
+        <p className="mt-2 font-semibold text-ink">管理者に運転者マスタの登録を依頼してください。</p>
       )}
-    </div>
+    </AlertPanel>
   );
 }

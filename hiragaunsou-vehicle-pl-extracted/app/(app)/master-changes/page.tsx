@@ -9,6 +9,7 @@ import { ImportDiffAlertPanel } from "../../_components/ImportDiffAlertPanel";
 import { ScreenHeader } from "../../_components/ScreenHeader";
 import { SourceDataNote } from "../../_components/SourceDataNote";
 import { masterChangeStack } from "../../_lib/masterChangeStack";
+import { findScreen } from "../../_lib/screens";
 import { MasterChangeManager } from "./MasterChangeManager";
 import type { MasterChangeStatus } from "../../../src/usecase/steps/applyMasterChange";
 
@@ -22,7 +23,13 @@ export default async function MasterChangesPage() {
   const session = await getServerSession();
   if (!session) redirect("/sign-in");
   if (!checkAccess(session, "manage_imports")) {
-    return <AccessDenied screenName="マスタの直しの反映" permission="manage_imports" />;
+    // 画面の名前は screens.ts が唯一の出どころ。ここで別名を書くと横のメニューと食い違う
+    return (
+      <AccessDenied
+        screenName={findScreen("/master-changes")?.label ?? "直した内容の反映"}
+        permission="manage_imports"
+      />
+    );
   }
 
   // 締めた月ぶんの作り直し計算を回すので軽くはない。画面を開いたときに1回だけ数える。

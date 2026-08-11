@@ -9,6 +9,7 @@ import { D1ImportBatchRepository } from "../../../src/infrastructure/db/D1Import
 import { IMPORT_SOURCES } from "../../../src/domain/rules/importSources";
 import { ScreenHeader } from "../../_components/ScreenHeader";
 import { isYearMonth } from "../../_lib/yearMonth";
+import { findScreen } from "../../_lib/screens";
 import { resolveWorkingYearMonth } from "../../_lib/workingYearMonth";
 import { ImportForm } from "./ImportForm";
 
@@ -26,7 +27,10 @@ export default async function ImportPage({
   if (!session) redirect("/sign-in");
   // 権限が無い人を黙ってホームへ戻すと、押した本人にはリンクが壊れたようにしか見えない。
   if (!checkAccess(session, "input")) {
-    return <AccessDenied screenName="データ取込" permission="input" />;
+    // 画面の名前は screens.ts が唯一の出どころ。ここで別名を書くと横のメニューと食い違う
+    return (
+      <AccessDenied screenName={findScreen("/import")?.label ?? "データ取込"} permission="input" />
+    );
   }
 
   const { ym, step } = await searchParams;

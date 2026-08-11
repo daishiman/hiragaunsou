@@ -22,7 +22,7 @@ export default async function ProfilePage() {
   if (!session) redirect("/sign-in");
 
   // パスワード変更UIは、メール/パスワード招待(authMethod="password")でパスワードを設定済みの
-  // ユーザーにのみ表示する(Googleサインインのみのユーザーにはパスワードという概念が無いため)。
+  // 利用者にのみ表示する（Googleサインインのみの利用者にはパスワードという概念が無いため）。
   const { env } = await getCloudflareContext({ async: true });
   const db = createDb(env.DB);
   const credentialRows = await db
