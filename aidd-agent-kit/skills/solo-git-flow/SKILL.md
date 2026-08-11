@@ -199,6 +199,17 @@ git switch main && git pull --rebase
 git tag v3 && git push origin v3
 ```
 
+### 手元からデプロイするときの注意
+
+`wrangler` は git のコミットではなく**その場の作業ツリー**をビルドする。「mainにマージしたから、mainの内容が公開される」とは限らない。実行直前に必ず確認する。
+
+```bash
+git status --porcelain   # 何も出ないこと
+git diff --stat          # 何も出ないこと
+```
+
+この食い違いは、**公開を CI に任せれば構造的に消える**(まっさらなチェックアウトしか存在しないため)。設定方法は Skill `ci-cd-pipeline`。導入後は、手元からのデプロイは緊急時のみとする。
+
 ## §7. 取り消し
 
 ```bash

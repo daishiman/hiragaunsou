@@ -4,11 +4,11 @@
 #  ダブルクリックするだけでインストールされます
 #  既に導入済みの場合は「このキットの内容が正」として
 #  上書き更新し、廃止された古いスキルは自動で整理します
-#  v1.5.0
+#  v1.6.0
 # =====================================================
 cd "$(dirname "$0")"
 
-KIT_VERSION="1.5.0"
+KIT_VERSION="1.6.0"
 CLAUDE_DIR="$HOME/.claude"
 STAMP=$(date +%Y%m%d-%H%M%S)
 BACKUP_DIR="$CLAUDE_DIR/backup-$STAMP"
@@ -163,7 +163,7 @@ cp -R skills/. "$CLAUDE_DIR/skills/"
 echo "(2/3) エージェント(自動開発の司令塔)をコピーしています..."
 cp -R agents/. "$CLAUDE_DIR/agents/"
 
-echo "(3/3) コマンド(/build-app, /improve-app, /undo-app)をコピーしています..."
+echo "(3/3) コマンド(/build-app, /improve-app, /undo-app, /setup-cicd)をコピーしています..."
 cp -R commands/. "$CLAUDE_DIR/commands/"
 
 echo ""
@@ -206,7 +206,7 @@ if [ -z "$MISSING" ]; then
   echo ""
   echo "  スキル: ${INSTALLED_SKILLS}個 / ${EXPECTED_SKILLS}個"
   echo "  エージェント: app-orchestrator"
-  echo "  コマンド: /build-app, /improve-app, /undo-app"
+  echo "  コマンド: /build-app, /improve-app, /undo-app, /setup-cicd"
   if [ -n "$CONFLICTS" ]; then
     echo ""
     echo "  以前のファイルは次の場所に保存してあります:"
