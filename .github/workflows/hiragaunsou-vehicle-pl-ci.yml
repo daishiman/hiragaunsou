@@ -1,13 +1,14 @@
 name: hiragaunsou-vehicle-pl CI
 
 # PR作成・更新時に typecheck / test を自動実行する。
-# このリポジトリは複数プロジェクトのモノレポのため、対象パスに変更があるときだけ走らせる。
+#
+# あえて paths フィルタを付けていない。このCIはmainブランチ保護の必須チェックであり、
+# パスで絞ると docs/ や aidd-agent-kit/ だけを変更したPRでワークフローが起動せず、
+# GitHubが「報告待ち」のまま永久にマージをブロックしてしまうため。
+# このリポジトリはpublicでActionsが無料・無制限なので、常時実行のコストは無い。
 on:
   pull_request:
     branches: [main]
-    paths:
-      - "hiragaunsou-vehicle-pl-extracted/**"
-      - ".github/workflows/hiragaunsou-vehicle-pl-ci.yml"
 
 # GITHUB_TOKENの権限は最小(読み取りのみ)。デプロイ等の書き込みはCDワークフロー側でのみ許可する。
 permissions:
