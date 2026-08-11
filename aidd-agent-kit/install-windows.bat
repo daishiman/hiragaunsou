@@ -4,7 +4,7 @@ setlocal enabledelayedexpansion
 title AI開発エージェントキット インストーラー (Windows)
 cd /d "%~dp0"
 
-set "KIT_VERSION=1.5.0"
+set "KIT_VERSION=1.6.0"
 set "CLAUDE_DIR=%USERPROFILE%\.claude"
 rem このキットが「自分で入れたもの」を記録するファイル。
 rem 次回の更新時に、新しいキットに含まれなくなったものだけを安全に整理するために使う。
@@ -127,7 +127,7 @@ echo (2/3) エージェント(自動開発の司令塔)をコピーしていま�
 xcopy "agents" "%CLAUDE_DIR%\agents\" /E /I /Y /Q >nul
 if errorlevel 1 goto ERR_COPY
 
-echo (3/3) コマンド(/build-app, /improve-app, /undo-app)をコピーしています...
+echo (3/3) コマンド(/build-app, /improve-app, /undo-app, /setup-cicd)をコピーしています...
 xcopy "commands" "%CLAUDE_DIR%\commands\" /E /I /Y /Q >nul
 if errorlevel 1 goto ERR_COPY
 
@@ -169,7 +169,7 @@ echo ===============================================
 echo.
 echo   スキル: !INSTALLED!個 / !EXPECTED!個
 echo   エージェント: app-orchestrator
-echo   コマンド: /build-app, /improve-app, /undo-app
+echo   コマンド: /build-app, /improve-app, /undo-app, /setup-cicd
 if !CONFLICT_COUNT! GTR 0 (
   echo.
   echo   以前のファイルは次の場所に保存してあります:

@@ -35,6 +35,7 @@ model: inherit
 1. プロジェクトフォルダで `git init`。`.gitignore`(node_modules, .dev.vars, .wrangler 等)と `.gitattributes`(`* text=auto eol=lf`)を最初のコミットに含める。
 2. `gh repo create <名前> --private --source=. --remote=origin --push` で **プライベートリポジトリ** を作成して初回 push。`gh auth status` が未認証なら利用者本人に `! gh auth login` の実行を依頼する(対話ログインは代行しない)。gh が使えない環境ならローカル git のみで進め、その旨を残課題に記録する。詳細な運用は Skill `solo-git-flow` に従う。
 3. Skill `solo-git-flow` の同梱雛形から `.github/PULL_REQUEST_TEMPLATE.md` と `.github/ISSUE_TEMPLATE/` を設置する(追加開発モードのPR・残課題の起票で使う)。
+4. CI/CD の設置は**初回リリース後**(ステージ5)に行う。まだ公開しておらずテストも無い段階で入れても、守るものが無く手間だけが増える。
 4. 依頼者への報告は「作業場所を用意しました(やり直せる保存の仕組み付き)」の一言でよい。
 
 ## ステージ2: 要件定義
@@ -83,6 +84,8 @@ model: inherit
 - cloudflare-secure-deploy の手順(migrations先行・secrets設定・gotchas回避)に厳密に従う。
 - D1 の作成・マイグレーション状態の確認は Cloudflare MCP で行い、デプロイ実行は wrangler CLI で行う。
 - **git 運用**: 初回リリースまでは main へ直接コミットでよい。デプロイ直前にコミットし、デプロイ後に本番URL確認が済んだらタグを打つ(`git tag v1`)。**追加開発は必ずブランチ+PR**(追加開発モード参照)。
+- **手元からデプロイするときの必須確認**: `wrangler` は git のコミットではなく**その場の作業ツリー**をビルドする。実行直前に `git status --porcelain` と `git diff --stat` が空であることを確認する。特定コミットを確実に出すなら `git worktree add --detach <パス> <commit>` を使う。
+- **初回リリースが済んだら、その場で CI/CD を導入する**: Skill `ci-cd-pipeline` をロードし、`ci.yml` / `deploy.yml` / `migrate.yml` と `smoke.sh` を設置する。**2回目以降のデプロイは main へのマージで自動的に行われる状態にし、手元からの `wrangler deploy` は緊急時のみとする**。上記の「作業ツリーをビルドする」問題が構造的に消えるため、これが最も確実な再発防止になる。認証情報の登録は利用者本人に依頼する(代行しない)。
 
 ## ステージ6: 品質ゲート・リリース判定
 
@@ -110,7 +113,9 @@ model: inherit
 | 上記に該当しない軽微な変更 | 追加監査は省略可(preview 1周は省略不可) |
 
 4. **既存を壊さない検証**: 実装後、新機能だけでなく**既存の主要フローも** `pnpm run preview` で1周して確認する。既存データがあるDBのスキーマ変更は新規マイグレーションファイルで行い、適用前に `wrangler d1 export` でバックアップを取る。
-5. **まとめと反映**: PR を作成し(`gh pr create`。タイトル・本文の書き方は Skill `solo-git-flow` §5)、依頼者に「今回できるようになったこと + 試してほしい操作」を伝えて**preview確認の了承を1回だけ**得る。了承後に squash マージ → main からデプロイ → 本番URL確認 → タグ。
+5. **まとめと反映**: PR を作成し(`gh pr create`。タイトル・本文の書き方は Skill `solo-git-flow` §5)、依頼者に「今回できるようになったこと + 試してほしい操作」を伝えて**preview確認の了承を1回だけ**得る。了承後に squash マージ → デプロイ → 本番URL確認 → タグ。
+   - CI/CD 導入済みなら、マージで自動デプロイが走る。**スキーマ変更を含む場合は、マージの前に `migrate.yml` を手動実行してマイグレーションを先に済ませる**(順番はマイグレーション → デプロイで固定。逆にすると新しいアプリが存在しない列を読んで本番が落ちる)。
+   - 本番URL確認は**時間を空けて2回**行う。Cloudflare Workers は配布後も古いプロセスが数十秒〜1〜2分残るため、1回だけの確認では反映を判定できない。
 6. **報告と次の一手**: 報告に「今回追加したこと / 更新後の残課題リスト / 次の候補」を含め、次に育てる方向を依頼者が選べる状態で終える。
 
 # git の言葉を依頼者に伝えるとき(語彙対応)

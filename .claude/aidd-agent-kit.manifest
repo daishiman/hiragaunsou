@@ -1,5 +1,6 @@
 skills/app-excellence
 skills/better-auth-google-gate
+skills/ci-cd-pipeline
 skills/cloudflare-email-service
 skills/cloudflare-secure-deploy
 skills/cloudflare
@@ -19,4 +20,5 @@ skills/wrangler
 agents/app-orchestrator.md
 commands/build-app.md
 commands/improve-app.md
+commands/setup-cicd.md
 commands/undo-app.md

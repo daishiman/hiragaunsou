@@ -94,11 +94,11 @@
 
   <div class="os-badge">Mac版</div>
   <h1>AI開発エージェントキット<br>セットアップマニュアル</h1>
-  <p class="lead-sub">バージョン 1.5.0 ／ 所要時間 約5分</p>
+  <p class="lead-sub">バージョン 1.6.0 ／ 所要時間 約5分</p>
 
   <div class="box">
     <p class="big">このキットは何?</p>
-    <p>Claude Code(AIがアプリを作ってくれるツール)に、<strong>プロの開発ノウハウ集(スキル18個)</strong> と <strong>開発を最初から最後まで自動で進める司令塔(エージェント)</strong> を追加するキットです。</p>
+    <p>Claude Code(AIがアプリを作ってくれるツール)に、<strong>プロの開発ノウハウ集(スキル19個)</strong> と <strong>開発を最初から最後まで自動で進める司令塔(エージェント)</strong> を追加するキットです。</p>
     <p>インストールすると、Claude Code に</p>
     <p class="quote">/build-app 社員の勤怠を管理するアプリを作って</p>
     <p>と一言頼むだけで、要件の整理 → デザイン → 開発 → 公開 → 品質チェックまでを、決められた手順で自動的に進めてくれるようになります。</p>
@@ -288,9 +288,10 @@ bash install-mac.command</div>
     <tr><td>/build-app</td><td>新しいアプリを最初から公開まで作るコマンド</td></tr>
     <tr><td>/improve-app</td><td>公開済みのアプリに機能追加・改善を1件ずつ行うコマンド</td></tr>
     <tr><td>/undo-app</td><td>直前の変更を取り消して、アプリを1つ前の状態に戻すコマンド</td></tr>
+    <tr><td>/setup-cicd</td><td>自動チェックと自動公開のしくみ(CI/CD)をリポジトリに導入するコマンド</td></tr>
   </table>
 
-  <h3>スキル(開発ノウハウ集) — 18個</h3>
+  <h3>スキル(開発ノウハウ集) — 19個</h3>
   <table>
     <tr><th>名前</th><th>内容</th></tr>
       <tr><td>app-excellence</td><td>アプリ開発全体の進め方・品質基準</td></tr>
@@ -311,6 +312,7 @@ bash install-mac.command</div>
       <tr><td>turnstile-spin</td><td>問い合わせフォームのボット対策</td></tr>
       <tr><td>cloudflare-email-service</td><td>メール送信機能の作り方</td></tr>
       <tr><td>solo-git-flow</td><td>個人開発の変更管理(ブランチ・プルリク・Issue)の進め方</td></tr>
+      <tr><td>ci-cd-pipeline</td><td>自動チェック・自動公開のしくみ(GitHub Actions)の作り方と費用の抑え方</td></tr>
   </table>
 
   <h2 id="update">更新・アンインストール</h2>
@@ -326,7 +328,7 @@ bash install-mac.command</div>
   <h3>アンインストールしたいとき</h3>
   <p>Finder で <code>~/.claude</code> を開き(Command + Shift + G → <code>~/.claude</code>)、次を削除します。</p>
   <ol>
-    <li><code>skills</code> フォルダの中の、<strong>上の表にある18個のフォルダ</strong></li>
+    <li><code>skills</code> フォルダの中の、<strong>上の表にある19個のフォルダ</strong></li>
     <li><code>agents</code> フォルダの中の <code>app-orchestrator.md</code></li>
     <li><code>commands</code> フォルダの中の <code>build-app.md</code>・<code>improve-app.md</code>・<code>undo-app.md</code></li>
     <li><code>.claude</code> フォルダ直下にある <code>aidd-agent-kit.version</code> と <code>aidd-agent-kit.manifest</code>(このキットが何を入れたかを記録したファイルです)</li>
@@ -354,7 +356,7 @@ bash install-mac.command</div>
   </ul>
 
   <div class="footer">
-    AI開発エージェントキット v1.5.0 ／ 本キットに関するお問い合わせ: 株式会社TierMind
+    AI開発エージェントキット v1.6.0 ／ 本キットに関するお問い合わせ: 株式会社TierMind
   </div>
 
 </div>

@@ -1,10 +1,10 @@
 # AI開発エージェントキット セットアップマニュアル【Mac版】
 
-**バージョン 1.5.0**
+**バージョン 1.6.0**
 
 ## このキットは何?
 
-Claude Code(AIがアプリを作ってくれるツール)に、**プロの開発ノウハウ集(スキル18個)** と **開発を最初から最後まで自動で進める司令塔(エージェント)** を追加するキットです。
+Claude Code(AIがアプリを作ってくれるツール)に、**プロの開発ノウハウ集(スキル19個)** と **開発を最初から最後まで自動で進める司令塔(エージェント)** を追加するキットです。
 
 インストールすると、Claude Code に
 
@@ -202,8 +202,9 @@ Claude Code をまだ一度も起動していない状態です。
 | /build-app | 新しいアプリを最初から公開まで作るコマンド |
 | /improve-app | 公開済みのアプリに機能追加・改善を1件ずつ行うコマンド |
 | /undo-app | 直前の変更を取り消して、アプリを1つ前の状態に戻すコマンド |
+| /setup-cicd | 自動チェックと自動公開のしくみ(CI/CD)をリポジトリに導入するコマンド |
 
-### スキル(開発ノウハウ集) — 18個
+### スキル(開発ノウハウ集) — 19個
 
 | 名前 | 内容 |
 |---|---|
@@ -225,6 +226,7 @@ Claude Code をまだ一度も起動していない状態です。
 | turnstile-spin | 問い合わせフォームのボット対策 |
 | cloudflare-email-service | メール送信機能の作り方 |
 | solo-git-flow | 個人開発の変更管理(ブランチ・プルリク・Issue)の進め方 |
+| ci-cd-pipeline | 自動チェック・自動公開のしくみ(GitHub Actions)の作り方と費用の抑え方 |
 
 ---
 
@@ -242,9 +244,9 @@ Claude Code をまだ一度も起動していない状態です。
 
 Finder で `~/.claude` を開き(Command + Shift + G → `~/.claude`)、次を削除します。
 
-1. `skills` フォルダの中の、**上の表にある18個のフォルダ**
+1. `skills` フォルダの中の、**上の表にある19個のフォルダ**
 2. `agents` フォルダの中の **`app-orchestrator.md`**
-3. `commands` フォルダの中の **`build-app.md`**・**`improve-app.md`**・**`undo-app.md`**
+3. `commands` フォルダの中の **`build-app.md`**・**`improve-app.md`**・**`undo-app.md`**・**`setup-cicd.md`**
 4. `.claude` フォルダ直下にある **`aidd-agent-kit.version`** と **`aidd-agent-kit.manifest`**(このキットが何を入れたかを記録したファイルです)
 
 > `skills`・`agents`・`commands` フォルダ自体は削除しないでください。Claude Code が使う他のファイルが入っている場合があります。
