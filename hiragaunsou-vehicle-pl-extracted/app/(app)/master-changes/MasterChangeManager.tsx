@@ -128,7 +128,7 @@ export function MasterChangeManager({
                   <span className="ml-2">
                     {month.vehicleCount}台の数字が変わります
                     {month.profitDelta !== 0
-                      ? `（利益 ${month.profitDelta > 0 ? "+" : ""}${Math.round(month.profitDelta).toLocaleString()}円）`
+                      ? `（損益 ${month.profitDelta > 0 ? "+" : ""}${Math.round(month.profitDelta).toLocaleString()}円）`
                       : ""}
                   </span>
                 </p>
@@ -228,7 +228,7 @@ export function MasterChangeManager({
             return (
               <li key={ym}>
                 <span className="font-semibold">{yearMonthLabel(ym)}</span> :{" "}
-                {m.vehicleCount}台 / 利益 {m.profitDelta > 0 ? "+" : ""}
+                {m.vehicleCount}台 / 損益 {m.profitDelta > 0 ? "+" : ""}
                 {Math.round(m.profitDelta).toLocaleString()}円
               </li>
             );

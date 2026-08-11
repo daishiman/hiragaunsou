@@ -68,6 +68,18 @@
   scroll-margin-bottom: calc(var(--screen-action-bar-h) + 0.5rem);
 }
 
+/*
+ * マウスではヘッダーの密度を保ち、タッチ端末だけアイコン操作を44px以上にする。
+ * h-8 / w-8 は見た目とデスクトップ配置の基準として残し、coarse pointerのときだけ
+ * min-sizeが上回るため、常時ヘッダーの高さを増やさず誤タップを減らせる。
+ */
+@media (pointer: coarse) {
+  .icon-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
 @theme inline {
   --color-brand: var(--brand);
   --color-brand-deep: var(--brand-deep);

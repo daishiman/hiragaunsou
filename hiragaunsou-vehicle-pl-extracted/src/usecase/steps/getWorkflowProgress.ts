@@ -158,7 +158,7 @@ export class GetWorkflowProgressUseCase {
           : {
               status: kirinEntered ? "done" : "partial",
               detail: kirinEntered
-                ? `${salesBatch.fileName} を取込済み・要確認 ${cleansingFlagged}件 も判断済み・キリン配賦も入力済み`
+                ? `${salesBatch.fileName} を取込済み・要確認 ${cleansingFlagged}件 も判定済み・キリン配賦も入力済み`
                 : `${salesBatch.fileName} を取込済み。キリンの協力金の配賦がまだです`,
             },
       3: {
@@ -209,7 +209,7 @@ export class GetWorkflowProgressUseCase {
     const step2Next: { href: string; actionLabel: string } | null = !salesBatch
       ? null
       : cleansingPending > 0
-        ? { href: "/cleansing", actionLabel: "傭車・2重計上・諸口を判断する" }
+        ? { href: "/cleansing", actionLabel: "傭車・2重計上・諸口を判定する" }
         : !kirinEntered
           ? { href: "/manual-entry?step=2", actionLabel: "キリンの協力金を入力する" }
           : null;

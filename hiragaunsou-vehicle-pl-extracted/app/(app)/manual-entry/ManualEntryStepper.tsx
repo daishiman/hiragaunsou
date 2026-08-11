@@ -1284,7 +1284,7 @@ export function ManualEntryStepper({
                       }}
                       className="btn btn-secondary btn-sm pressable mt-2"
                     >
-                      確認しました(先月と同じでよい)
+                      このままでよい（先月と同じ）
                     </button>
                   </AlertPanel>
                 </div>

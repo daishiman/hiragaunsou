@@ -24,7 +24,7 @@ test.describe("未ログイン時のアクセス制御", () => {
     await expect(page).toHaveURL(/\/sign-in$/);
   });
 
-  test("ユーザー管理画面も未ログインだとサインイン画面へリダイレクトされる", async ({ page }) => {
+  test("利用者の管理画面も未ログインだとサインイン画面へリダイレクトされる", async ({ page }) => {
     await page.goto("/admin/users");
     await expect(page).toHaveURL(/\/sign-in$/);
   });

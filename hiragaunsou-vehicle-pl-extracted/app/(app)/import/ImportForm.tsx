@@ -521,7 +521,7 @@ export function ImportForm({
                     // 整形判断は伝票の自然キー(管理№-行№)に紐づくため、取込をやり直しても残る。
                     // 「全部やり直しになる」と誤解して入れ直しを避けるのを防ぐ。
                     <p className="mt-2 text-ink-muted">
-                      データ整形(STEP2)で下した判断は伝票ごとに保存されているため、入れ直しても引き継がれます。
+                      データ整形（STEP2）で下した判定は伝票ごとに保存されているため、入れ直しても引き継がれます。
                     </p>
                   ) : null}
                   <div className="mt-3 flex gap-2">
@@ -662,7 +662,7 @@ export function ImportForm({
             残りの手順をホームで確認する
           </Link>
           <span className="text-xs text-ink-muted">
-            傭車・2重計上・諸口を判断すると、月次収支表と年間集計に反映されます。
+            傭車・2重計上・諸口を判定すると、月次収支表と年間集計に反映されます。
           </span>
         </StickyActionBar>
       ) : null}

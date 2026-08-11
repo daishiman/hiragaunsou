@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { SCREENS as SCREEN_DEFS } from "../../app/_lib/screens";
 import { createTestUser, deleteTestUserByEmail, clearRateLimits } from "./helpers/testUsers";
 import { getSessionCookie, injectSessionCookie } from "./helpers/loginAs";
 
@@ -8,7 +9,7 @@ import { getSessionCookie, injectSessionCookie } from "./helpers/loginAs";
  * 依頼者から挙がった3つの症状を、画面ごとに再発させないための守り:
  *   ② 画面ごとに上下の作りが違う      → ヘッダーとフッターが全画面にあること
  *   ③ 見えていないと困る情報が消える  → 下までスクロールしてもヘッダーが貼り付いたままであること
- *   ⑤ 何でも表になっている(狭い画面) → 375px でページ全体が横に溢れないこと
+ *   ⑤ 何でも表になっている(狭い画面) → 375 / 768 / 1280 / 1600px でページ全体が横に溢れないこと
  *
  * 貼り付きは祖先の overflow 設定でいとも簡単に壊れる (T7 §2-1)。壊れても見た目は
  * ほぼ変わらず、スクロールして初めて分かるため、目視ではなくここで固定する。
@@ -17,31 +18,20 @@ import { getSessionCookie, injectSessionCookie } from "./helpers/loginAs";
 const email = "consistency-admin@example.com";
 const password = "ConsistencyPassw0rd!";
 
-const SCREENS: readonly (readonly [string, string])[] = [
-  ["ホーム", "/"],
-  ["ダッシュボード", "/dashboard"],
-  ["月次収支表", "/grid"],
-  ["確認の記録", "/grid/report"],
-  ["要因分析レポート", "/report"],
-  ["年間集計・対前年", "/annual"],
-  ["チェック", "/anomaly"],
-  ["赤字の理由", "/deficit"],
-  ["データ整形", "/cleansing"],
-  ["月次データ取込", "/import"],
-  ["手入力", "/manual-entry"],
-  ["直した内容の反映", "/master-changes"],
-  ["データ設計・自動化方針", "/logic"],
-  ["ToDoボード", "/todo"],
-  ["利用状況", "/usage"],
-  ["マイページ", "/profile"],
-  ["AI設定", "/ai-settings"],
-  ["率マスタ設定", "/rate-settings"],
-  ["車両1台の明細", "/vehicle/1"],
-  ["運転者マスタ管理", "/admin/driver-master"],
-  ["車両マスタ管理", "/admin/vehicle-master"],
-  ["ユーザー管理", "/admin/users"],
-  ["取込データ管理", "/admin/import-batches"],
-];
+/**
+ * 画面名とrouteをE2Eへ転記しない。新しい画面をSCREENSへ足したら、この検収も同時に増える。
+ * 動的routeだけ、実際に開けるfixture pathへ変換する。
+ */
+const E2E_PATHS: Readonly<Partial<Record<string, string>>> = {
+  "/vehicle": "/vehicle/1",
+};
+
+const SCREENS: readonly (readonly [string, string])[] = SCREEN_DEFS.map((screen) => [
+  screen.label,
+  E2E_PATHS[screen.href] ?? screen.href,
+]);
+
+const VIEWPORT_WIDTHS = [375, 768, 1280, 1600] as const;
 
 /**
  * 下まで一気にスクロールし、実際に動いた量を返す。
@@ -71,7 +61,7 @@ test.describe("全画面で上下の作りと貼り付きがそろっている",
   });
 
   test("パソコンの幅: ヘッダーが貼り付いたままで、フッターが全画面にある", async ({ page, context }) => {
-    test.setTimeout(240_000);
+    test.setTimeout(720_000);
     await injectSessionCookie(context, cookie);
     await page.setViewportSize({ width: 1280, height: 720 });
     const scrolledScreens: string[] = [];
@@ -113,6 +103,38 @@ test.describe("全画面で上下の作りと貼り付きがそろっている",
         // かつ、画面の内側に居残っていること
         expect(filter.y, `${name}: 絞り込みの帯が画面の外へ出た`).toBeLessThan(720);
       }
+
+      // top値を個別に満たしていても、2本のsticky帯が同じ位置なら一方が隠れる。
+      // 共通ヘッダー・工程帯・絞り込み帯の実矩形が互いに重ならないことまで確認する。
+      const stickyRects = await page.evaluate(() => {
+        const elements = [
+          document.querySelector("header"),
+          ...document.querySelectorAll('.screen-step-header, [data-sticky="filter"]'),
+        ].filter((element): element is HTMLElement => element instanceof HTMLElement);
+
+        return elements
+          .map((element) => {
+            const rect = element.getBoundingClientRect();
+            return {
+              name:
+                element.getAttribute("data-sticky") ??
+                (element.classList.contains("screen-step-header") ? "stepHeader" : "appHeader"),
+              top: rect.top,
+              bottom: rect.bottom,
+              visible: rect.bottom > 0 && rect.top < window.innerHeight,
+            };
+          })
+          .filter((rect) => rect.visible)
+          .sort((a, b) => a.top - b.top);
+      });
+      for (let index = 1; index < stickyRects.length; index += 1) {
+        const previous = stickyRects[index - 1]!;
+        const current = stickyRects[index]!;
+        expect(
+          current.top,
+          `${name}: ${previous.name} と ${current.name} が重なっている`,
+        ).toBeGreaterThanOrEqual(previous.bottom - 1);
+      }
     }
 
     // 1画面も実際にスクロールしていないなら、上の判定は全部素通りしている
@@ -126,7 +148,7 @@ test.describe("全画面で上下の作りと貼り付きがそろっている",
     枠に高さの上限を与えて初めて効くので、効いていることをここで固定する。
   */
   test("高さを決めた表は、中を下までスクロールしても列見出しが残る", async ({ page, context }) => {
-    test.setTimeout(240_000);
+    test.setTimeout(720_000);
     await injectSessionCookie(context, cookie);
     await page.setViewportSize({ width: 1280, height: 720 });
 
@@ -171,29 +193,54 @@ test.describe("全画面で上下の作りと貼り付きがそろっている",
     expect(checked, "高さを決めた表が1つも見つからず、列見出しの作りを確かめられていない").toBeGreaterThan(0);
   });
 
-  test("スマホの幅(375px): ページ全体が横にはみ出さない", async ({ page, context }) => {
-    test.setTimeout(240_000);
+  test("4つの基準幅で、ページ全体が横にはみ出さない", async ({ page, context }) => {
+    test.setTimeout(720_000);
     await injectSessionCookie(context, cookie);
-    await page.setViewportSize({ width: 375, height: 720 });
 
+    // 幅ごとに同じrouteを再読込すると 23 × 4 = 92回のサーバー描画になる。
+    // レスポンシブ配置は同一DOMへのviewport変更で発火するため、画面ごとに
+    // 1回だけ読み込み、その場で4幅を測る。
+    await page.setViewportSize({ width: VIEWPORT_WIDTHS.at(-1)!, height: 720 });
     for (const [name, path] of SCREENS) {
       await page.goto(path, { waitUntil: "domcontentloaded" });
       await page.waitForTimeout(300);
 
-      /*
-        描き終わる前に測ると一瞬だけ広く出ることがある(表の列幅が決まる前など)。
-        溢れていると出たときだけ待って測り直し、それでも溢れるなら本物として扱う。
-      */
-      let overflow = 0;
-      for (let i = 0; i < 3; i += 1) {
-        overflow = await page.evaluate(
-          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-        );
-        if (overflow <= 1) break;
-        await page.waitForTimeout(500);
+      for (const width of VIEWPORT_WIDTHS) {
+        await page.setViewportSize({ width, height: 720 });
+        await page.waitForTimeout(100);
+
+        /*
+          描き終わる前に測ると一瞬だけ広く出ることがある(表の列幅が決まる前など)。
+          溢れていると出たときだけ待って測り直し、それでも溢れるなら本物として扱う。
+        */
+        let overflow = 0;
+        for (let i = 0; i < 3; i += 1) {
+          overflow = await page.evaluate(
+            () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          );
+          if (overflow <= 1) break;
+          await page.waitForTimeout(500);
+        }
+        // 表そのものは横に動かして見る作り。溢れてよいのは表の枠の中だけで、ページ全体は溢れない
+        expect(
+          overflow,
+          `${name}（${width}px）: ページ全体が横にはみ出している (${overflow}px)`,
+        ).toBeLessThanOrEqual(1);
       }
-      // 表そのものは横に動かして見る作り。溢れてよいのは表の枠の中だけで、ページ全体は溢れない
-      expect(overflow, `${name}: ページ全体が横にはみ出している (${overflow}px)`).toBeLessThanOrEqual(1);
     }
+  });
+
+  test("認証外の表示画面とリダイレクトaliasも共通フッターを保つ", async ({ page }) => {
+    await page.goto("/sign-in", { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "車両別収支表" })).toBeVisible();
+    await expect(page.locator("footer")).toContainText("車両収支管理システム");
+
+    await page.goto("/reset-password", { waitUntil: "domcontentloaded" });
+    await expect(page).toHaveURL(/\/sign-in$/);
+    await expect(page.locator("footer")).toContainText("車両収支管理システム");
+
+    await page.goto("/screen-consistency-not-found", { waitUntil: "domcontentloaded" });
+    await expect(page.getByText("このページは見つかりませんでした")).toBeVisible();
+    await expect(page.locator("footer")).toContainText("車両収支管理システム");
   });
 });

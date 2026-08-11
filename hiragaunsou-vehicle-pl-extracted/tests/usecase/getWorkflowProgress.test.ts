@@ -209,7 +209,7 @@ describe("GetWorkflowProgressUseCase", () => {
       }).execute(YM);
       const step2 = result.steps.find((s) => s.step.id === 2)!;
       expect(step2.href).toBe("/cleansing");
-      expect(step2.actionLabel).toBe("傭車・2重計上・諸口を判断する");
+      expect(step2.actionLabel).toBe("傭車・2重計上・諸口を判定する");
     });
 
     it("整形が済んでキリンの配賦だけが残っていれば、手入力のキリン配賦へ送る", async () => {

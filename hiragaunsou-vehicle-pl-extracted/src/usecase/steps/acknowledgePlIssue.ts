@@ -6,9 +6,9 @@ export const ACK_PL_ISSUE_ACTION = "acknowledge_pl_issue";
 export const UNACK_PL_ISSUE_ACTION = "unacknowledge_pl_issue";
 export const BULK_ACK_PL_ISSUE_ACTION = "bulk_acknowledge_pl_issue";
 
-/** 判断の種類ごとの、記録に残す言い方 */
+/** 判定の種類ごとの、記録に残す言い方 */
 const STATUS_LABEL: Record<PlIssueAckStatus, string> = {
-  ok: "問題なし",
+  ok: "このままでよい",
   later: "あとで見る",
 };
 
@@ -84,7 +84,7 @@ export class UnacknowledgePlIssueUseCase {
       actorId: input.actorId,
       actorName: input.actorName,
       action: UNACK_PL_ISSUE_ACTION,
-      summary: `${input.yearMonth} 車番${input.vehicleNo} の指摘(${input.field}/${input.code})の判断を取り消した`,
+      summary: `${input.yearMonth} 車番${input.vehicleNo} の指摘(${input.field}/${input.code})の判定を取り消した`,
       detail: { yearMonth: input.yearMonth, ...key },
     });
   }
@@ -172,7 +172,7 @@ export class BulkUnacknowledgePlIssuesUseCase {
       actorId: input.actorId,
       actorName: input.actorName,
       action: UNACK_PL_ISSUE_ACTION,
-      summary: `${input.yearMonth} まとめて付けた判断 ${input.targets.length}件を取り消した`,
+      summary: `${input.yearMonth} まとめて付けた判定 ${input.targets.length}件を取り消した`,
       detail: {
         yearMonth: input.yearMonth,
         count: input.targets.length,

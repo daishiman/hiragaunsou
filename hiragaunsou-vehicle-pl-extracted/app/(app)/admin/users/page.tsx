@@ -20,7 +20,7 @@ export default async function AdminUsersPage() {
   if (!session) redirect("/sign-in");
   // 権限が無い人を黙ってホームへ戻すと、押した本人にはリンクが壊れたようにしか見えない。
   if (!checkAccess(session, "manage_users")) {
-    return <AccessDenied screenName="ユーザー管理" permission="manage_users" />;
+    return <AccessDenied screenName="利用者の管理" permission="manage_users" />;
   }
 
   const { env } = await getCloudflareContext({ async: true });

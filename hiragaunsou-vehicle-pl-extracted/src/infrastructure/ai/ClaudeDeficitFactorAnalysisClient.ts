@@ -105,7 +105,7 @@ function buildPrompt(input: DeficitFactorAnalysisInput): string {
   );
 
   return [
-    `対象月: ${input.yearMonth}`,
+    `対象年月: ${input.yearMonth}`,
     `以下は${input.yearMonth}に赤字だった車両${input.targets.length}台の科目別データ(円)。`,
     JSON.stringify(rows),
     "上記車両群における科目ごとの平均値(同月の赤字車両同士の平均。比較の目安):",

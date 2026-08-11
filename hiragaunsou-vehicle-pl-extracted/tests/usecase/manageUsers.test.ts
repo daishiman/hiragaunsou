@@ -100,12 +100,12 @@ describe("UpdateUserByAdminUseCase", () => {
     expect(repo.deletedSessionsFor).toContain("staff-1");
   });
 
-  it("存在しないユーザーへの操作はエラー", async () => {
+  it("存在しない利用者への操作はエラー", async () => {
     const repo = fakeRepo([admin]);
     const usecase = new UpdateUserByAdminUseCase(repo);
     await expect(
       usecase.execute({ actorId: "admin-1", targetUserId: "missing", banned: true }),
-    ).rejects.toThrow("対象のユーザーが見つかりません");
+    ).rejects.toThrow("対象の利用者が見つかりません");
   });
 });
 
@@ -118,11 +118,11 @@ describe("DeleteUserByAdminUseCase", () => {
     );
   });
 
-  it("存在しないユーザーはエラー", async () => {
+  it("存在しない利用者はエラー", async () => {
     const repo = fakeRepo([admin]);
     const usecase = new DeleteUserByAdminUseCase(repo);
     await expect(usecase.execute({ actorId: "admin-1", targetUserId: "missing" })).rejects.toThrow(
-      "対象のユーザーが見つかりません",
+      "対象の利用者が見つかりません",
     );
   });
 

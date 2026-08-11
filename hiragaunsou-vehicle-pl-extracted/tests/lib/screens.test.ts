@@ -71,7 +71,7 @@ describe("SCREENS の定義漏れ防止", () => {
 
   /**
    * 依頼者の指示 (2026-08-09): サイドバーには「絶対にこの情報が無いと分からない」ものだけを出す。
-   * どこに出すかはグループの placement 1箇所で決まる。判断基準は docs/design-system.md §11-9。
+   * どこに出すかはグループの placement 1箇所で決まる。判断基準は docs/design-system-components.md §11-9。
    */
   it("全グループが置き場所(placement)を持つ", () => {
     for (const g of SCREEN_GROUPS) {

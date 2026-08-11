@@ -35,6 +35,7 @@ export function StickyFilterBar({
     <div
       // 貼り付いたままかを画面の自動テストで確かめるための印
       data-sticky="filter"
+      data-sticky-below={below}
       className={[
         // 本文の左右の余白ぶん外へ広げて、帯が画面いっぱいに見えるようにする
         "sticky z-10 -mx-4 mb-4 flex min-h-[var(--screen-filter-bar-h)] items-center border-b border-line bg-white/95 px-4 py-2 backdrop-blur lg:-mx-8 lg:px-8",

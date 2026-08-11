@@ -54,6 +54,9 @@ describe("parseSumExpression", () => {
 
 describe("ManualEntryStepper", () => {
   beforeEach(() => {
+    // 下書きは端末の localStorage に残る。全件走査や直前の下書き系テストの残りが
+    // 単価初期値を上書きして「先月コピー」の契約テストを壊すため、毎回消す。
+    window.localStorage.clear();
     global.fetch = setupFetchMock();
   });
 
@@ -450,7 +453,7 @@ describe("ManualEntryStepper", () => {
     ).toBeInTheDocument();
 
     // 本人が確認したら印は消える (以後は実績値と同じ扱い)。
-    await user.click(screen.getByRole("button", { name: "確認しました(先月と同じでよい)" }));
+    await user.click(screen.getByRole("button", { name: "このままでよい（先月と同じ）" }));
     expect(
       screen.queryByText("先月(2026-04)の単価をそのまま入れています"),
     ).not.toBeInTheDocument();

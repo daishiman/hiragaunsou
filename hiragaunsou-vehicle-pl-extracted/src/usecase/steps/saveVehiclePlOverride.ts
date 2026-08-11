@@ -91,7 +91,7 @@ export class SaveVehiclePlOverrideUseCase {
   async execute(input: SaveVehiclePlOverrideInput): Promise<SaveVehiclePlOverrideResult> {
     const reason = input.reason.trim();
     if (reason === "") {
-      throw new Error("上書きの理由を入力してください(翌月に同じ判断を引き継ぐために使います)");
+      throw new Error("直した理由を入力してください（翌月に同じ判定を引き継ぐために使います）");
     }
 
     const values: Partial<Record<OverridableField, number>> = {};
@@ -109,7 +109,7 @@ export class SaveVehiclePlOverrideUseCase {
     }
 
     if (!input.excluded && Object.keys(values).length === 0) {
-      throw new Error("上書きする項目が1つもありません(取り消す場合は取消を使ってください)");
+      throw new Error("直す項目が1つもありません（元に戻す場合は取消を使ってください）");
     }
 
     if (input.expectedUpdatedAt !== undefined) {

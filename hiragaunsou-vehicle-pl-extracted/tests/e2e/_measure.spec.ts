@@ -25,7 +25,7 @@ const SCREENS: readonly (readonly [string, string])[] = [
   ["ToDoボード", "/todo"],
   ["利用状況", "/usage"],
   ["AI設定", "/ai-settings"],
-  ["ユーザー管理", "/admin/users"],
+  ["利用者の管理", "/admin/users"],
   ["取込データ管理", "/admin/import-batches"],
   ["車両1台の明細", "/vehicle/1"],
   ["見つからないページ", "/no-such-page"],

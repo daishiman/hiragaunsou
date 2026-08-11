@@ -31,7 +31,7 @@ export function PageHead({
   lead?: string;
   action?: React.ReactNode;
   /**
-   * 見出しの下に全幅で置く補足ブロック(役割ノート・工程の位置づけ)。
+   * 見出しの下に全幅で置く補足ブロック(必要時の境界案内・工程の位置づけ)。
    * ScreenHeader から渡す。ページ側が直接組み立てることは想定しない。
    */
   note?: React.ReactNode;

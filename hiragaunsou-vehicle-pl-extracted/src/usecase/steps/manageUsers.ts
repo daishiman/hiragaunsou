@@ -43,7 +43,7 @@ export class UpdateUserByAdminUseCase {
 
     const target = await this.repo.findById(input.targetUserId);
     if (!target) {
-      throw new Error("対象のユーザーが見つかりません");
+      throw new Error("対象の利用者が見つかりません");
     }
 
     await this.repo.updateRoleAndBanned(input.targetUserId, {
@@ -88,13 +88,13 @@ export class DeleteUserByAdminUseCase {
     }
     const target = await this.repo.findById(input.targetUserId);
     if (!target) {
-      throw new Error("対象のユーザーが見つかりません");
+      throw new Error("対象の利用者が見つかりません");
     }
     try {
       await this.repo.deleteUser(input.targetUserId);
     } catch {
       throw new Error(
-        "このユーザーは操作履歴(データ取込・AI設定変更等)があるため削除できません。ログインを止めたい場合は「凍結する」をご利用ください。",
+        "この利用者は操作履歴(データ取込・AI設定変更等)があるため削除できません。ログインを止めたい場合は「凍結する」をご利用ください。",
       );
     }
   }

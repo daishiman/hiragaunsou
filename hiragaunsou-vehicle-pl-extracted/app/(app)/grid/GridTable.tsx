@@ -173,7 +173,7 @@ const SUMMABLE = new Set<string>([
 const QTY_DIGITS: Record<string, number> = { km: 1, hours: 1, nempi: 2 };
 
 function labelOf(col: ColumnKey): string {
-  if (col === KM_PRICE) return "km単価";
+  if (col === KM_PRICE) return "1kmあたり売上";
   return FIELD_LABELS[col];
 }
 
@@ -592,7 +592,7 @@ export function GridTable({
     } | null;
     // 呼び出し側 (確認モード) が失敗を検知して先へ進めないようにする必要があるため、
     // ここで握りつぶさずに投げる。表側は catch して通知欄に出す。
-    if (!res.ok) throw new Error(data?.error ?? "判断を保存できませんでした");
+    if (!res.ok) throw new Error(data?.error ?? "判定を保存できませんでした");
     setAcks((prev) => ({
       ...prev,
       [issue.key]: { status, ackedByName: data?.ackedByName ?? null },
@@ -1114,14 +1114,14 @@ export function GridTable({
               onEdit={() => startEdit(openedRow, opened!.field as EditableColumn)}
               onToggleAck={(issue, status) => {
                 void setAck(issue, status).catch((e: unknown) =>
-                  setNotice(e instanceof Error ? e.message : "判断を保存できませんでした"),
+                  setNotice(e instanceof Error ? e.message : "判定を保存できませんでした"),
                 );
               }}
               onClose={() => setOpened(null)}
             />
           ) : (
             <p className="mt-3 text-xs text-ink-muted">
-              色の付いたセルを押すと、なぜ確認が必要なのかと、判断のための比較値が下に出ます。
+              色の付いたセルを押すと、なぜ確認が必要なのかと、判定のための比較値が下に出ます。
               車番を押すと、その車両の経費内訳・12ヶ月推移・実力損益を確認できます。
             </p>
           )}
@@ -1309,7 +1309,7 @@ function ReviewProgressBar({
           <>
             <p className="text-sm text-ink">
               あと<span className="font-semibold">{remaining}件</span>確認してください。
-              {done > 0 ? `（判断済み ${done}件）` : null}
+              {done > 0 ? `（判定済み ${done}件）` : null}
               残り{progress.cleanVehicles}台は指摘なしです。
             </p>
             {/* 「あとで見る」の件数は、表を見ているときも必ず目に入る場所に置く
@@ -1413,7 +1413,7 @@ function CellEditor({
     const n = validate();
     if (n === null) return;
     if (reason.trim() === "") {
-      setError("直した理由を入力してください（翌月に同じ判断を引き継ぐために使います）");
+      setError("直した理由を入力してください（翌月に同じ判定を引き継ぐために使います）");
       reasonRef.current?.focus();
       return;
     }
@@ -1586,7 +1586,7 @@ function IssuePanel({
                       onClick={() => onToggleAck(issue, null)}
                       className="btn btn-quiet btn-sm pressable"
                     >
-                      {issue.acknowledged ? "この判断を取り消す" : "あとで見るをやめる"}
+                      {issue.acknowledged ? "この判定を取り消す" : "あとで見るをやめる"}
                     </button>
                   ) : (
                     <>
@@ -1614,17 +1614,17 @@ function IssuePanel({
             {/* 先月の判断は黙って引き継がず、必ず文で見せる (ux-design §6 正直なUI)。 */}
             {issue.carriedOver ? (
               <p className="mt-1 text-[11px] text-ink-muted">
-                先月もOKにした指摘です
+                先月も「このままでよい」と判定した指摘です
                 {issue.carriedOver.previousValue !== null
-                  ? ` (先月の値 ${num(issue.carriedOver.previousValue)})`
+                  ? `（先月の値 ${num(issue.carriedOver.previousValue)}）`
                   : ""}
-                {issue.carriedOver.ackedByName ? ` / 判断した人: ${issue.carriedOver.ackedByName}` : ""}
+                {issue.carriedOver.ackedByName ? ` / 判定した人: ${issue.carriedOver.ackedByName}` : ""}
               </p>
             ) : null}
 
             {(issue.acknowledged || issue.postponed) && issue.ack?.ackedByName ? (
               <p className="mt-1 text-[11px] text-ink-muted">
-                判断した人: {issue.ack.ackedByName}
+                判定した人: {issue.ack.ackedByName}
               </p>
             ) : null}
 

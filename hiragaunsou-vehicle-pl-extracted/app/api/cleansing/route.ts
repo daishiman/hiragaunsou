@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     if (rowKey === "") continue;
     if (!VALID_DECISIONS.includes(d.decision as CleansingDecisionType)) {
       return NextResponse.json(
-        { error: `不正な判断です: ${String(d.decision)}` },
+        { error: `不正な判定です: ${String(d.decision)}` },
         { status: 400 },
       );
     }
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
     await new D1CleansingDecisionRepository(db).upsertMany(records, session!.id);
     return NextResponse.json({ yearMonth, saved: records.length });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "判断の保存に失敗しました";
+    const message = e instanceof Error ? e.message : "判定の保存に失敗しました";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -114,7 +114,9 @@ describe("DeleteImportBatchUseCase", () => {
     expect(auditLog.rows[0]?.action).toBe(DELETE_IMPORT_BATCH_ACTION);
     expect(auditLog.rows[0]?.actorName).toBe("管理者太郎");
     expect(auditLog.rows[0]?.summary).toContain("2026-08");
+    expect(auditLog.rows[0]?.summary).toContain("売上モニタリスト");
     expect(auditLog.rows[0]?.summary).toContain("sample-may-data.csv");
+    expect(auditLog.rows[0]?.summary).toContain("42件");
   });
 
   it("存在しないバッチIDはエラーになり、監査ログも記録されない", async () => {

@@ -20,7 +20,7 @@ export const FACTOR_CATEGORY_LABELS: Record<DeficitFactorCategory, string> = {
   adminTotal: "一般管理費",
 };
 
-/** 文字列で来た分類を日本語にする。知らない値はそのまま返す。 */
+/** 文字列で来た分類を日本語にする。知らない値も内部キーは画面に出さない。 */
 export function factorCategoryLabel(category: string): string {
-  return FACTOR_CATEGORY_LABELS[category as DeficitFactorCategory] ?? category;
+  return FACTOR_CATEGORY_LABELS[category as DeficitFactorCategory] ?? "要因を分類できません";
 }

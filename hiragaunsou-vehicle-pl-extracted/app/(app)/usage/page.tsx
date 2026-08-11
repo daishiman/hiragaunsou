@@ -12,11 +12,12 @@ import { ScreenHeader } from "../../_components/ScreenHeader";
 import { AlertPanel } from "../../_components/AlertPanel";
 import { SectionHeading } from "../../_components/SectionHeading";
 import { StatTile } from "../../_components/StatTile";
-import { DefinitionList, type DefinitionItem } from "../../_components/DefinitionList";
 import { DataTable, type DataTableColumn } from "../../_components/DataTable";
 import { Prose } from "../../_components/Card";
 import { usageKindLabel } from "../../_lib/kindLabels";
-import { num, yen } from "../../_lib/format";
+import { num, yearMonthLabel, yen } from "../../_lib/format";
+import { getJstCalendarMonth } from "../../_lib/yearMonth";
+import type { UsageByUser } from "../../../src/usecase/steps/summarizeUsage";
 
 function readPricing(env: { ANTHROPIC_PRICE_IN_USD_PER_M?: string; ANTHROPIC_PRICE_OUT_USD_PER_M?: string; USD_JPY_RATE?: string }): UsagePricing {
   const inPrice = Number(env.ANTHROPIC_PRICE_IN_USD_PER_M);
@@ -54,7 +55,30 @@ const RECENT_COLUMNS: readonly DataTableColumn<UsageLogRecord>[] = [
   { key: "outputTokens", header: "出力", unit: "token", align: "right", cell: (log) => num(log.outputTokens) },
 ];
 
-/** /usage 利用状況ページ。usageLogを集計し、今月の概算費用・利用者別内訳・最近のログを表示する。 */
+/** 費用順の利用者を、費用と呼び出し回数の2軸で見比べるための列。 */
+const BY_USER_COLUMNS: readonly DataTableColumn<UsageByUser>[] = [
+  {
+    key: "recordedBy",
+    header: "利用者",
+    cell: (row) => row.recordedBy ?? "（不明）",
+  },
+  {
+    key: "costJpy",
+    header: "概算費用",
+    unit: "円",
+    align: "right",
+    cell: (row) => yen(row.costJpy),
+  },
+  {
+    key: "callCount",
+    header: "呼び出し件数",
+    unit: "件",
+    align: "right",
+    cell: (row) => num(row.callCount),
+  },
+];
+
+/** /usage 利用状況ページ。usageLogを日本時間の暦月で集計し、概算費用・内訳・ログを表示する。 */
 export default async function UsagePage() {
   const session = await getServerSession();
   if (!session) redirect("/sign-in");
@@ -67,32 +91,28 @@ export default async function UsagePage() {
   const db = createDb(env.DB);
   const repo = new D1UsageLogRepository(db);
 
-  const now = new Date();
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).getTime();
-  const logs = await repo.findSince(monthStart);
+  const usageMonth = getJstCalendarMonth(new Date());
+  const logs = await repo.findSince(usageMonth.startsAtMs);
   const pricing = readPricing(env);
   const summary = summarizeUsage(logs, pricing);
+  const usagePeriod = `${yearMonthLabel(usageMonth.yearMonth)}（日本時間）`;
 
   // APIキー・モデル設定は/ai-settings画面の責務(1画面1責務)。ここでは
   // manage_api_keys権限を持つ人にだけ、設定画面への案内リンクを出す(UIそのものは移設しない)。
   const canManageApiKeys = checkAccess(session, "manage_api_keys");
 
-  /*
-    T7 §4-1 の質問への答え。
-      利用者別内訳 — 1件（1名）を読んで「誰がどれだけ使ったか」を確かめる。列をまたいで
-        見比べる場面ではないので表にせず定義リスト（項目名と値の組）にする。
-        以前は <dt>/<dd> を <dl> の外に書いていて、読み上げに組だと伝わっていなかった。
-      最近のログ — 日時・種別・token数を行同士で見比べる。ここは表（DataTable）。
-  */
-  const byUserItems: readonly DefinitionItem[] = summary.byUser.map((u) => ({
-    term: u.recordedBy ?? "（不明）",
-    value: <span className="num">¥{yen(u.costJpy)}</span>,
-    note: `呼び出し ${num(u.callCount)}件`,
-  }));
-
   return (
     <div>
       <ScreenHeader screen="/usage" />
+
+      <div className="mb-4 rounded-lg border border-line bg-subtle px-4 py-3">
+        <p className="text-sm font-semibold text-ink">
+          AI利用期間 <span className="num">{usagePeriod}</span>
+        </p>
+        <p className="mt-1 text-[11px] text-ink-muted">
+          収支表などで選ぶ業務の対象年月とは別です。この暦月の1日0時から集計しています。
+        </p>
+      </div>
 
       <AlertPanel tone="caution" title="表示している金額は概算です">
         金額はトークン数から計算した概算で、請求の正はAnthropicのコンソールです。
@@ -102,39 +122,45 @@ export default async function UsagePage() {
 
       <div className="mt-6">
         <StatTile
-          label="今月の概算費用（Anthropic／Claudeのみ集計）"
+          label="AI利用期間の概算費用（Anthropic／Claudeのみ集計）"
           value={`¥${yen(summary.totalCostJpy)}`}
           hero
           sub={`＄${summary.totalCostUsd.toFixed(2)} ／ 呼び出し ${num(summary.callCount)}件`}
         />
       </div>
 
-      <SectionHeading note="今月ぶんを、使った人ごとにまとめています。">利用者別内訳</SectionHeading>
+      <SectionHeading note={`${usagePeriod}の利用を、費用が高い順にまとめています。`}>
+        利用者別内訳
+      </SectionHeading>
       <div className="card mt-3 p-5">
-        {byUserItems.length === 0 ? (
-          <Prose>
-            今月はまだAIを1度も呼び出していないため、内訳がありません。
-            赤字の要因分析を実行すると、ここに利用者ごとの費用が出ます。{" "}
-            <Link href="/deficit" className="font-semibold text-brand-deep hover:underline">
-              赤字分析へ進む →
-            </Link>
-          </Prose>
-        ) : (
-          <DefinitionList items={byUserItems} />
-        )}
+        <DataTable
+          caption={`${usagePeriod}の利用者別概算費用（費用が高い順）`}
+          columns={BY_USER_COLUMNS}
+          rows={summary.byUser}
+          rowKey={(row) => row.recordedBy ?? "unknown"}
+          empty={
+            <Prose>
+              このAI利用期間はまだAIを1度も呼び出していないため、内訳がありません。
+              赤字の要因分析を実行すると、ここに利用者ごとの費用が出ます。{" "}
+              <Link href="/deficit" className="font-semibold text-brand-deep hover:underline">
+                赤字分析へ進む →
+              </Link>
+            </Prose>
+          }
+        />
       </div>
 
       <SectionHeading note="新しい順に最大20件を出しています。">最近のログ</SectionHeading>
       <div className="card mt-3 p-5">
         <DataTable
-          caption="今月のAI呼び出しログ（新しい順・最大20件）"
+          caption={`${usagePeriod}のAI呼び出しログ（新しい順・最大20件）`}
           columns={RECENT_COLUMNS}
           rows={summary.recent}
           rowKey={(log) => log.id}
           maxHeight="24rem"
           empty={
             <Prose>
-              今月はまだAIを1度も呼び出していないため、ログがありません。
+              このAI利用期間はまだAIを1度も呼び出していないため、ログがありません。
               赤字の要因分析を実行すると、ここに1件ずつ記録されます。{" "}
               <Link href="/deficit" className="font-semibold text-brand-deep hover:underline">
                 赤字分析へ進む →

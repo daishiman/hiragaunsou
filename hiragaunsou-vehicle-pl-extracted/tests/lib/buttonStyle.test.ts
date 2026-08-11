@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
  *   「毎回それを一つ一つ改善するってなると手間なので共通化しておいてください。」
  *
  * 画面ごとに px と色を手書きすると、同じ「削除」でも高さも丸みも違ってしまう。
- * 見た目は app/globals.css の .btn 系だけが持つ。判断基準は docs/design-system.md §11-12。
+ * 見た目は app/globals.css の .btn 系だけが持つ。判断基準は docs/design-system-components.md §11-12。
  */
 
 const APP_DIR = join(__dirname, "../../app/(app)");

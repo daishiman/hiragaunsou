@@ -21,7 +21,7 @@ export interface IconButtonProps {
 /**
  * アイコンだけのボタン。
  *
- * アイコンだけにしてよいのは「意味が一意に決まる操作」だけ (docs/design-system.md §11-10)。
+ * アイコンだけにしてよいのは「意味が一意に決まる操作」だけ (docs/design-system-components.md §11-10)。
  * その代わり、名前は必ず label で与える:
  *   - aria-label  … 読み上げとテストがこの名前でボタンを特定できる
  *   - ツールチップ … マウスでもキーボード(フォーカス)でも同じ文が読める
@@ -52,7 +52,7 @@ export function IconButton({
         aria-controls={aria["aria-controls"]}
         {...handlers}
         className={[
-          "pressable inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
+          "icon-button pressable inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
           "text-ink-muted transition-colors hover:bg-subtle hover:text-ink",
           "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand",
           className ?? "",

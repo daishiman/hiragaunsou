@@ -11,14 +11,11 @@ import { PageHead } from "./PageHead";
  * 全画面共通のページヘッダ。
  *
  * ページ側は <ScreenHeader screen="/cleansing" action={...} /> と書くだけでよい。
- * 見出し・リード文・種別バッジ・「この画面ですること / ここでは見ないこと / 次にどこへ行くか」・
- * 業務フロー上の位置づけは、すべて app/_lib/screens.ts の1行から描かれる。
+ * 見出し・リード文・種別バッジ・必要な境界案内・業務フロー上の位置づけは、
+ * すべて app/_lib/screens.ts の1行から描かれる。
  *
- * なぜ役割ノートを全画面に常時出すか:
- * データ取込・データ整形・手入力・チェックは、どれも「今月の数字を整える画面」に見えるため、
- * 開いた人が「ここで何をすればよいのか」「隣の画面と何が違うのか」を毎回考え直していた。
- * 見出しだけでは足りず、かといって画面ごとに説明文を書き足すと言い回しがばらつく。
- * 3行を同じ位置・同じ順序で必ず出すことで、どの画面でも同じ読み方ができるようにする。
+ * 「すること」はリード文と主要操作で伝え、同じ内容を説明カードで繰り返さない。
+ * 境界が紛らわしい画面だけ notHere を短く出し、next は工程ナビに集約する。
  */
 export function ScreenHeader({
   screen,
@@ -54,25 +51,28 @@ export function ScreenHeader({
       action={action}
       help={help}
       showHomeLink={def.flowOrder !== undefined || def.group === "monthly"}
-      note={<ScreenRoleNote def={def} ym={ym} />}
+      note={<ScreenContextNote def={def} ym={ym} />}
     />
   );
 }
 
 /**
- * 画面の役割3点セット + 業務フロー上の位置。
- * 見た目を1つに固定するため、ページから直接呼ばない (ScreenHeader 経由でのみ使う)。
+ * 画面を見分けるために本当に必要な補足だけを出す。
+ * does は lead と主要操作に集約し、next は説明行ではなく工程ナビとして出す。
  */
-function ScreenRoleNote({ def, ym }: { def: ScreenDef; ym: string | null }) {
+function ScreenContextNote({ def, ym }: { def: ScreenDef; ym: string | null }) {
   const flow = def.flowOrder !== undefined ? flowPositionOf(def.href) : null;
+  const finalFlowNext = flow && !flow.next ? def.next : null;
+
+  if (!flow && !def.notHere) return null;
 
   return (
-    <section
-      aria-label="この画面の役割"
-      className="card prose-note mt-4 px-4 py-3"
-    >
+    <div className="mt-3 space-y-2 text-xs leading-relaxed">
       {flow && (
-        <p className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line pb-2 text-xs text-ink-muted">
+        <nav
+          aria-label="毎月の締めの進行"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 text-ink-muted"
+        >
           <span className="font-semibold text-ink">
             毎月の締め <span className="num">{flow.index}</span> /{" "}
             <span className="num">{flow.total}</span>
@@ -99,32 +99,31 @@ function ScreenRoleNote({ def, ym }: { def: ScreenDef; ym: string | null }) {
               </Link>
             </span>
           )}
-        </p>
+          {finalFlowNext?.href && (
+            <span>
+              次:{" "}
+              <Link
+                href={withYm(finalFlowNext.href, ym)}
+                className="font-semibold text-brand-deep hover:underline"
+              >
+                {finalFlowNext.linkLabel ??
+                  getScreen(finalFlowNext.href)?.label ??
+                  finalFlowNext.href}
+              </Link>
+            </span>
+          )}
+        </nav>
       )}
 
-      <dl className="grid gap-x-3 gap-y-1.5 text-xs leading-relaxed sm:grid-cols-[8.5rem_1fr]">
-        <dt className="font-semibold text-ink">この画面ですること</dt>
-        <dd className="text-ink">{def.does}</dd>
-
-        {def.notHere && (
-          <>
-            <dt className="font-semibold text-ink-muted">ここでは見ないこと</dt>
-            <dd className="text-ink-muted">
-              <PointerText pointer={def.notHere} ym={ym} />
-            </dd>
-          </>
-        )}
-
-        {def.next && (
-          <>
-            <dt className="font-semibold text-ink-muted">終わったら次に</dt>
-            <dd className="text-ink-muted">
-              <PointerText pointer={def.next} ym={ym} />
-            </dd>
-          </>
-        )}
-      </dl>
-    </section>
+      {def.notHere && (
+        <aside
+          aria-label="この画面の範囲"
+          className="border-l-2 border-line pl-3 text-ink-muted"
+        >
+          <PointerText pointer={def.notHere} ym={ym} />
+        </aside>
+      )}
+    </div>
   );
 }
 

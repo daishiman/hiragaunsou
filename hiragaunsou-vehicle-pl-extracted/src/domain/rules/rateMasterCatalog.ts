@@ -82,10 +82,10 @@ export const RATE_MASTER_CATALOG: readonly RateMasterKeyDef[] = [
   },
   {
     key: "break_even_km_price",
-    label: "損益分岐のkm単価",
+    label: "損益分岐の1kmあたり売上",
     kind: "yen_per_km",
     scope: "common",
-    description: "ダッシュボードのkm単価分布で「この単価を下回ると赤字」として赤く塗る閾値。分類には使わない。",
+    description: "ダッシュボードの1kmあたり売上の分布で「この金額を下回ると赤字」として赤く塗る閾値。分類には使わない。",
   },
   {
     key: "kirin_transport_support",

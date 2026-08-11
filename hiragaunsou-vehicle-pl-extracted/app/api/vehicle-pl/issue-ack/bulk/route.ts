@@ -89,7 +89,7 @@ export async function POST(request: Request) {
   }
   const status = body.status ?? "ok";
   if (!isPlIssueAckStatus(status)) {
-    return NextResponse.json({ error: `「${status}」は判断として扱えません` }, { status: 400 });
+    return NextResponse.json({ error: `「${status}」は判定として扱えません` }, { status: 400 });
   }
   const targets = parseTargets(body.targets);
   if ("error" in targets) return NextResponse.json({ error: targets.error }, { status: 400 });

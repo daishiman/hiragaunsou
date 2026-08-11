@@ -99,7 +99,7 @@ export function ReportGenerator({ defaultYearMonth }: { defaultYearMonth: string
       {state.status === "done" ? (
         <div className="flex flex-col gap-4">
           <p className="text-xs text-ink-muted">
-            分析対象月: {state.monthsAnalyzed.map(yearMonthLabel).join(" / ")}
+            分析対象年月: {state.monthsAnalyzed.map(yearMonthLabel).join(" / ")}
           </p>
           <section className="card p-5">
             <h2 className="text-sm font-bold text-ink">要約</h2>

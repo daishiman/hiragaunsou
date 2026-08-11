@@ -42,11 +42,11 @@ test.describe("管理者ロールでのログイン後の画面", () => {
       月に1回も開かない画面はサイドバーに常時並べず、名前から開くメニューに畳んである。
       畳んだ状態では出ていないこと(サイドバーが短いままであること)も併せて見る。
     */
-    await expect(page.getByRole("link", { name: "ユーザー管理" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "利用者の管理" })).toHaveCount(0);
 
     const menu = await openAccountMenu(page, "E2Eテスト管理者");
     await expect(menu.getByRole("menuitem", { name: "AI設定" })).toBeVisible();
-    await expect(menu.getByRole("menuitem", { name: "ユーザー管理" })).toBeVisible();
+    await expect(menu.getByRole("menuitem", { name: "利用者の管理" })).toBeVisible();
   });
 
   test("/admin/vehicle-master で車両マスタCSV取込画面が表示される", async ({ page }) => {
@@ -150,7 +150,7 @@ test.describe("車両マスタCSV取込・ym引き継ぎ・入力担当ロール
     const menu = await openAccountMenu(page, "E2Eテスト入力担当");
     await expect(menu).toBeVisible();
     await expect(menu.getByRole("menuitem", { name: "AI設定" })).toHaveCount(0);
-    await expect(menu.getByRole("menuitem", { name: "ユーザー管理" })).toHaveCount(0);
+    await expect(menu.getByRole("menuitem", { name: "利用者の管理" })).toHaveCount(0);
     // メニュー自体は開く(マイページ・ログアウトはロールを問わず要る)
     await expect(menu.getByRole("menuitem", { name: "ログアウト" })).toBeVisible();
   });
@@ -163,7 +163,7 @@ test.describe("車両マスタCSV取込・ym引き継ぎ・入力担当ロール
     page,
   }) => {
     await page.goto("/admin/users");
-    await expect(page.getByText("「ユーザー管理」は管理者のみが開けます。")).toBeVisible();
+    await expect(page.getByText("「利用者の管理」は管理者のみが開けます。")).toBeVisible();
     await expect(page.getByText("必要な場合は管理者にご依頼ください。")).toBeVisible();
     await expect(page.getByRole("link", { name: "ホームに戻る" })).toBeVisible();
     // 一覧そのものは描かない(露出の条件は変えていない)

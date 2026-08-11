@@ -68,7 +68,7 @@ export async function POST(request: Request) {
   // 判断の指定が無い場合は「問題なし」。この列を足す前の画面から来た要求も通るようにする。
   const status = body?.status ?? "ok";
   if (!isPlIssueAckStatus(status)) {
-    return NextResponse.json({ error: `「${status}」は判断として扱えません` }, { status: 400 });
+    return NextResponse.json({ error: `「${status}」は判定として扱えません` }, { status: 400 });
   }
 
   const db = createDb(env.DB);
