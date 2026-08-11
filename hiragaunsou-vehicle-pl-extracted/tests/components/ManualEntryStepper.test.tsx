@@ -54,6 +54,9 @@ describe("parseSumExpression", () => {
 
 describe("ManualEntryStepper", () => {
   beforeEach(() => {
+    // 下書きは端末の localStorage に残る。全件走査や直前の下書き系テストの残りが
+    // 単価初期値を上書きして「先月コピー」の契約テストを壊すため、毎回消す。
+    window.localStorage.clear();
     global.fetch = setupFetchMock();
   });
 
