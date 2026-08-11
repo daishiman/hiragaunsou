@@ -547,7 +547,7 @@ export function VehicleMasterManager({
       ) : null}
 
       <section className="card p-5">
-        <h2 className="text-sm font-bold text-ink">現在の車両マスタ({vehicles.length}台)</h2>
+        <h2 className="text-sm font-bold text-ink">現在の車両マスタ（{vehicles.length}台）</h2>
         {/*
           けん引先の仕組みの説明は、一覧を見るたびに読むものではない。常時出すと一覧より先に
           説明が目に入るので、折りたたみへ移す(文章はそのまま)。けん引先が決まっていない
