@@ -54,7 +54,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ sou
 
   const { sourceType } = await params;
   if (!isSourceType(sourceType)) {
-    return NextResponse.json({ error: `unknown sourceType: ${sourceType}` }, { status: 400 });
+    return NextResponse.json({ error: "指定された帳票の種類は取り込めません" }, { status: 400 });
   }
 
   const form = await request.formData();
@@ -94,8 +94,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ sou
   // STEP別の投入口から来た場合、自動判定は「判定」ではなく「取り違え検知」として使う。
   // 投入口が決まっているので、別帳票を入れた瞬間に弾ける(無関係ファイルの誤投入がここで止まる)。
   if (sourceType !== "auto" && detected !== "unknown" && detected !== resolvedSourceType) {
-    const expected = findImportSource(resolvedSourceType)?.label ?? resolvedSourceType;
-    const actual = findImportSource(detected)?.label ?? detected;
+    const expected = findImportSource(resolvedSourceType)?.label ?? "判別できない帳票";
+    const actual = findImportSource(detected)?.label ?? "判別できない帳票";
     return NextResponse.json(
       { error: `この欄は「${expected}」用です。選択されたファイルは「${actual}」と判定されました。` },
       { status: 422 },

@@ -37,7 +37,7 @@ export function describeImportSource(
     : "";
   if (source.fallbackFromYearMonth) {
     return (
-      `対象月 ${describeYearMonth(source.fallbackFromYearMonth)} のシートがこのExcelに無かったため、` +
+      `対象年月 ${describeYearMonth(source.fallbackFromYearMonth)} のシートがこのExcelに無かったため、` +
       `いちばん新しい${sheet}${month}から読み取りました。` +
       (options?.fallbackNote ?? "")
     );

@@ -94,7 +94,7 @@ export function detectCleansingFlags(input: CleansingCandidateInput): CleansingF
     flags.push({
       type: "misc_entry",
       severity: "review",
-      reason: `運転者が「${MISC_DRIVER_NAME}」で登録されています。内容を確認して、車番を修正するか、この伝票を除外するか判断してください。`,
+      reason: `運転者が「${MISC_DRIVER_NAME}」で登録されています。内容を確認して、車番を直すか、この伝票を除外するか判定してください。`,
     });
   }
 
@@ -125,7 +125,7 @@ export function suggestDecision(
   if (!previous) return null;
   return {
     decision: previous.decision,
-    reason: `${previous.yearMonth} は「${DECISION_LABELS[previous.decision]}」と判断しました${
+    reason: `${previous.yearMonth} は「${DECISION_LABELS[previous.decision]}」と判定しました${
       previous.note ? ` (${previous.note})` : ""
     }。`,
   };
@@ -133,8 +133,8 @@ export function suggestDecision(
 
 export const DECISION_LABELS: Record<CleansingDecisionType, string> = {
   delete: "除外する",
-  correct: "修正して残す",
-  keep: "そのまま残す",
+  correct: "直す",
+  keep: "このままでよい",
 };
 
 export interface ClusterableRow {

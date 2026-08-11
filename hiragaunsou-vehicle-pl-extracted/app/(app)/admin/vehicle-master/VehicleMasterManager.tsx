@@ -389,10 +389,11 @@ export function VehicleMasterManager({
 
       {/*
         「どの月のシートを読むのか」「いま何台登録されているのか」は、一覧を下まで見ても
-        要る前提なので上に貼り付ける（T7 §2-3）。この画面に工程タブはあるが、それは
-        StickyStepHeader ではなく取込の3手順の札なので below は既定の "header" のまま。
+        要る前提なので上に貼り付ける（T7 §2-3）。取込の3手順も StickyStepHeader なので、
+        その直下へ積み重ねる。
       */}
       <StickyFilterBar
+        below="stepHeader"
         summary={`登録${vehicles.length}台（けん引先が未設定のトレーラ${trailersWithoutTractor.length}台）`}
       >
         <span className="text-xs font-semibold text-ink">

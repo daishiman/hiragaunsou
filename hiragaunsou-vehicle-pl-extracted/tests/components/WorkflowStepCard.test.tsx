@@ -41,7 +41,7 @@ describe("WorkflowStepCard", () => {
 
   it("notesが有る場合は件数付きの見出しと一覧を表示する", () => {
     render(<WorkflowStepCard progress={makeProgress()} isNext />);
-    expect(screen.getByText(/判断ポイント\s*1件/)).toBeInTheDocument();
+    expect(screen.getByText(/判定ポイント\s*1件/)).toBeInTheDocument();
     expect(screen.getByText(/諸口は確認して修正・削除します。/)).toBeInTheDocument();
   });
 
@@ -53,7 +53,7 @@ describe("WorkflowStepCard", () => {
       />,
     );
     expect(screen.getByText("この手順について")).toBeInTheDocument();
-    expect(screen.queryByText(/判断ポイント/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/判定ポイント/)).not.toBeInTheDocument();
   });
 
   it("isJudgementHeavyのときは注意文を表示する", () => {
@@ -63,10 +63,10 @@ describe("WorkflowStepCard", () => {
         isNext
       />,
     );
-    expect(screen.getByText(/経験に頼っている判断が残っています/)).toBeInTheDocument();
+    expect(screen.getByText(/経験に頼っている判定が残っています/)).toBeInTheDocument();
 
     rerender(<WorkflowStepCard progress={makeProgress()} isNext />);
-    expect(screen.queryByText(/経験に頼っている判断が残っています/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/経験に頼っている判定が残っています/)).not.toBeInTheDocument();
   });
 
   it("blockedのときは手順を開くリンクの代わりに案内文を出す", () => {

@@ -73,14 +73,14 @@ describe("CreateInvitationUseCase", () => {
     ).rejects.toThrow("メールアドレスの形式が正しくありません");
   });
 
-  it("既に登録済みのユーザーのメールアドレスは拒否する", async () => {
+  it("既に登録済みの利用者のメールアドレスは拒否する", async () => {
     const users = fakeUserRepo([
       { id: "u1", name: "既存", email: "exists@example.co.jp", role: "input_staff", banned: false, createdAt: 0 },
     ]);
     const usecase = new CreateInvitationUseCase(fakeInvitationRepo(), users);
     await expect(
       usecase.execute({ invitedBy: "admin-1", email: "exists@example.co.jp", role: "admin" }),
-    ).rejects.toThrow("既にユーザー登録されています");
+    ).rejects.toThrow("既に利用者として登録されています");
   });
 
   it("正常な招待はリポジトリへ小文字化したメールアドレスで保存される", async () => {

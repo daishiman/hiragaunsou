@@ -82,8 +82,8 @@ export const OVERRIDABLE_FIELD_META: Record<
   fee: { label: "附帯料金", unit: "円", source: "売上モニタリスト" },
   salary: { label: "給与", unit: "円", source: "給与集計表" },
   welfare: { label: "福利厚生費", unit: "円", source: "給与集計表" },
-  driverCount: { label: "乗務員数", unit: "人", source: "運転者マスタ" },
-  bonusMonthly: { label: "賞与(月額)", unit: "円", source: "賞与年額 ÷ 12 × 乗務員数" },
+  driverCount: { label: "運転者数", unit: "人", source: "運転者マスタ" },
+  bonusMonthly: { label: "賞与(月額)", unit: "円", source: "賞与年額 ÷ 12 × 運転者数" },
 };
 
 /**

@@ -95,10 +95,10 @@ function JudgementTable({
   ];
   if (showJudge) {
     columns.push(
-      { key: "judgedBy", header: "判断した人", cell: (item) => item.judgedByName ?? "—" },
+      { key: "judgedBy", header: "判定した人", cell: (item) => item.judgedByName ?? "—" },
       {
         key: "judgedAt",
-        header: "判断した日時",
+        header: "判定した日時",
         cell: (item) => <span className="num">{stamp(item.judgedAt)}</span>,
       },
     );
@@ -199,7 +199,7 @@ export default async function ReviewReportPage({
           { label: "対象車両", value: report.summary.vehicles, unit: "台" },
           { label: "指摘なし", value: report.summary.cleanVehicles, unit: "台" },
           { label: "数字を直した", value: report.summary.fixedVehicles, unit: "台" },
-          { label: "このままでよいと判断", value: report.summary.ok, unit: "件" },
+          { label: "このままでよいと判定", value: report.summary.ok, unit: "件" },
           {
             label: "未確認・あとで見る",
             value: report.summary.open + report.summary.postponed,
@@ -262,16 +262,16 @@ export default async function ReviewReportPage({
       </Section>
 
       <Section
-        title={`このままでよいと判断した指摘（${report.okItems.length}件）`}
+        title={`このままでよいと判定した指摘（${report.okItems.length}件）`}
         lead="見たうえで直さないと決めたものです。誰がいつ決めたかを残しています。"
       >
         <JudgementTable
           items={report.okItems}
           showJudge
-          caption="このままでよいと判断した指摘の一覧"
+          caption="このままでよいと判定した指摘の一覧"
           empty={
             <p className="text-xs text-ink-muted">
-              まだ1件も判断していません。「収支表のチェック」で1件ずつ見て判断してください。
+              まだ1件も判定していません。「収支表のチェック」で1件ずつ見て判定してください。
             </p>
           }
         />
@@ -279,7 +279,7 @@ export default async function ReviewReportPage({
 
       <Section
         title={`「あとで見る」のまま残っている指摘（${report.postponedItems.length}件）`}
-        lead="判断を保留しているものです。締める前にここが0件になっているか確認してください。"
+        lead="判定をあとで見ることにしたものです。確定する前にここが0件になっているか確認してください。"
       >
         <JudgementTable
           items={report.postponedItems}

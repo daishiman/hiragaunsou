@@ -26,7 +26,11 @@ export function StickyStepHeader({
   trailing?: ReactNode;
 }) {
   return (
-    <div className="screen-step-header sticky top-[var(--app-header-h)] z-20 -mx-4 border-b border-line bg-brand-mist/95 px-4 py-2 backdrop-blur lg:-mx-8 lg:px-8">
+    <div
+      data-sticky="step"
+      data-sticky-top="header"
+      className="screen-step-header sticky top-[var(--app-header-h)] z-20 -mx-4 box-border flex h-[var(--screen-step-header-h)] items-center border-b border-line bg-brand-mist/95 px-4 py-1 backdrop-blur lg:-mx-8 lg:px-8"
+    >
       <StepRail
         steps={steps}
         currentIndex={currentIndex}

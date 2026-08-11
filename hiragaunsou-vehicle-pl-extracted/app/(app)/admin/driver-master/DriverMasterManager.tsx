@@ -330,10 +330,11 @@ export function DriverMasterManager({
 
       {/*
         「どの月のシートを読むのか」「いま何名登録されているのか」は一覧を下まで見ても要る
-        前提なので上に貼り付ける（T7 §2-3）。工程タブ（StickyStepHeader）は取込の3手順の札で
-        あって工程タブではないため、below は既定の "header" のまま。
+        前提なので上に貼り付ける（T7 §2-3）。取込の3手順も StickyStepHeader なので、
+        その直下へ積み重ねる。
       */}
       <StickyFilterBar
+        below="stepHeader"
         summary={`登録${drivers.length}名（うち車番未割当${unassigned}名）`}
       >
         <span className="text-xs font-semibold text-ink">

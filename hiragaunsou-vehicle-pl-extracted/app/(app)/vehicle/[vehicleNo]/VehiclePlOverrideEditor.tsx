@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { DefinitionList } from "../../../_components/DefinitionList";
 import { HelpDrawer } from "../../../_components/HelpDrawer";
 import { NumberEntryField } from "../../../_components/NumberEntryField";
 import { parseAmountInput } from "../../../_lib/numberEntry";
@@ -163,45 +164,29 @@ export function VehiclePlOverrideEditor({
 
       {open ? (
         <>
-          <div className="mt-4 overflow-x-auto">
-            <table className="data-table min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-line text-left text-xs text-ink-muted">
-                  <th className="py-2 pr-3">項目</th>
-                  <th className="py-2 pr-3">出どころ</th>
-                  {/* いまの値は欄の中に薄く入っているので、同じ数字を左にも並べない */}
-                  <th className="py-2">値(直すとここが変わります)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {OVERRIDABLE_FIELDS.map((field) => {
-                  const meta = OVERRIDABLE_FIELD_META[field];
-                  const current = currentValues[field];
-                  const overridden = saved?.values[field] !== undefined;
-                  return (
-                    <tr key={field} className="border-b border-line last:border-b-0">
-                      <td className="py-2 pr-3 font-medium text-ink">{meta.label}</td>
-                      <td className="py-2 pr-3 text-[11px] text-ink-muted">
-                        {overridden ? "上書き済み" : meta.source}
-                      </td>
-                      <td className="py-2">
-                        <NumberEntryField
-                          value={draft[field] ?? ""}
-                          onChange={(raw) => setDraft((d) => ({ ...d, [field]: raw }))}
-                          autoValue={typeof current === "number" ? current : null}
-                          autoLabel="いまの値"
-                          ariaLabel={`${meta.label}(${meta.unit})`}
-                          disabled={busy || excluded}
-                          widthClass="w-36"
-                        />
-                        <span className="ml-1 text-[11px] text-ink-muted">{meta.unit}</span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DefinitionList
+            className="mt-4 [&>div]:grid-cols-1 [&>div]:gap-1 sm:[&>div]:grid-cols-[minmax(6rem,10rem)_1fr] sm:[&>div]:gap-3"
+            items={OVERRIDABLE_FIELDS.map((field) => {
+              const meta = OVERRIDABLE_FIELD_META[field];
+              const current = currentValues[field];
+              const overridden = saved?.values[field] !== undefined;
+              return {
+                term: meta.label,
+                value: (
+                  <NumberEntryField
+                    value={draft[field] ?? ""}
+                    onChange={(raw) => setDraft((d) => ({ ...d, [field]: raw }))}
+                    autoValue={typeof current === "number" ? current : null}
+                    autoLabel="いまの値"
+                    ariaLabel={`${meta.label}(${meta.unit})`}
+                    disabled={busy || excluded}
+                    widthClass="w-36"
+                  />
+                ),
+                note: `出どころ：${overridden ? "上書き済み" : meta.source} ／ 単位：${meta.unit}`,
+              };
+            })}
+          />
 
           <label className="mt-4 flex items-center gap-2 text-xs text-ink">
             <input
@@ -216,6 +201,7 @@ export function VehiclePlOverrideEditor({
           <label className="mt-3 block text-xs text-ink">
             <span className="font-semibold">直した理由(必須)</span>
             <textarea
+              aria-label="直した理由（必須）"
               rows={2}
               value={reason}
               disabled={busy}
@@ -224,7 +210,7 @@ export function VehiclePlOverrideEditor({
               className="mt-1 block w-full rounded-md border border-line px-2 py-1.5 text-sm"
             />
             <span className="mt-1 block text-[11px] text-ink-muted">
-              翌月に同じ手直しをするか判断するために残します。
+              翌月に同じ手直しをするか判定するために残します。
             </span>
           </label>
 
@@ -237,7 +223,7 @@ export function VehiclePlOverrideEditor({
               onClick={() => void save()}
               className="btn btn-primary pressable"
             >
-              {busy ? "保存して再計算しています…" : "保存して収支表を作り直す"}
+              {busy ? "収支表を作り直しています…" : "保存して収支表を作り直す"}
             </button>
             {saved ? (
               <button

@@ -26,7 +26,7 @@ export const SEVERITY_TONE: Record<ReviewSeverity, "danger" | "caution" | "neutr
   info: "neutral",
 };
 
-/** 文字列で来た重大さを日本語にする。知らない値はそのまま返す。 */
+/** 文字列で来た重大さを日本語にする。知らない値も内部キーは画面に出さない。 */
 export function severityLabel(severity: string): string {
-  return SEVERITY_LABELS[severity as ReviewSeverity] ?? severity;
+  return SEVERITY_LABELS[severity as ReviewSeverity] ?? "重大さを確認できません";
 }

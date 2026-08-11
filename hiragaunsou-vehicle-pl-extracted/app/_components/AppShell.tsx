@@ -77,7 +77,7 @@ export interface AppShellProps {
 /**
  * 全画面共通のアプリシェル (サイドバー + トップバー + フッター)。
  *
- * サイドバーの方針 (2026-08-09 の決定。判断基準は docs/design-system.md §11-9):
+ * サイドバーの方針 (2026-08-09 の決定。判断基準は docs/design-system-components.md §11-9):
  *   - 常時出すのは業務の画面だけ。運用・設定・仕様書はユーザー名のメニューへ畳む。
  *   - グループは折りたたまない。どの画面へも常に1クリックで着く。
  *     「画面に集中したい」にはサイドバーごと隠すトグルで応える。
@@ -254,7 +254,7 @@ export function AppShell({ userName, userRole, role, badges, children }: AppShel
           止めると広い画面で右半分が丸ごと空き、表示が壊れて見える。
           読み幅を制限してよいのは「途切れない長文の段落」だけで、それは
           globals.css の .prose-note が段落ブロック単位で持つ。ページ全体には掛けない。
-          詳細は docs/design-system.md §11-11。
+          詳細は docs/design-system-components.md §11-11。
         */}
         <main className="min-w-0 flex-1 px-4 py-6 lg:px-8 lg:py-8">{children}</main>
 

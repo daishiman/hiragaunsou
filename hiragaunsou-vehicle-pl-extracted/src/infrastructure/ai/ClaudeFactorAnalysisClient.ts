@@ -105,12 +105,12 @@ function buildPrompt(input: FactorAnalysisReportInput): string {
   const movers = topProfitMovers(input.months, 10);
 
   return [
-    `対象月: ${input.targetYearMonth}`,
+    `対象年月: ${input.targetYearMonth}`,
     "以下は車両別収支表(vehicle_pl)を車両単位で集計した月次フリート合計値(円)。",
     JSON.stringify(fleetTotals),
-    "損益変動が大きい車両トップ10(古い月→対象月の利益差分):",
+    "損益変動が大きい車両トップ10（古い月→対象年月の損益差分）:",
     JSON.stringify(movers),
-    "上記データだけを根拠に、対象月の損益がなぜその水準になったかを日本語で分析してください。",
+    "上記データだけを根拠に、対象年月の損益がなぜその水準になったかを日本語で分析してください。",
     "データから読み取れない推測は書かず、根拠が弱い論点は lowConfidenceNotes に列挙してください。",
   ].join("\n\n");
 }

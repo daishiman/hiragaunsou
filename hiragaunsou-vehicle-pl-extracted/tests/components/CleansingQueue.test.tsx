@@ -50,7 +50,7 @@ describe("CleansingQueue", () => {
     );
   });
 
-  it("「除外する」を押すと保存APIを呼び、未判断件数が減って完了メッセージに切り替わる", async () => {
+  it("「除外する」を押すと保存APIを呼び、未判定件数が減って完了メッセージに切り替わる", async () => {
     const user = userEvent.setup();
     const item = makeItem();
     render(
@@ -76,7 +76,7 @@ describe("CleansingQueue", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("✓ すべて判断済み")).toBeInTheDocument();
+      expect(screen.getByText("✓ すべて判定済み")).toBeInTheDocument();
     });
     expect(screen.getByRole("link", { name: "次のステップへ進む" })).toHaveAttribute(
       "href",
@@ -84,7 +84,7 @@ describe("CleansingQueue", () => {
     );
   });
 
-  it("保存に失敗すると判断が元に戻りエラーメッセージが表示される", async () => {
+  it("保存に失敗すると判定が元に戻りエラーメッセージが表示される", async () => {
     const user = userEvent.setup();
     global.fetch = vi.fn().mockResolvedValue({
       ok: false,
@@ -105,11 +105,11 @@ describe("CleansingQueue", () => {
     await user.click(screen.getAllByRole("button", { name: "除外する" })[0]!);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("保存に失敗しました(競合)");
-    // 保存失敗時は判断が巻き戻るため、未判断件数は1のまま
-    expect(screen.queryByText("✓ すべて判断済み")).not.toBeInTheDocument();
+    // 保存失敗時は判定が巻き戻るため、未判定件数は1のまま
+    expect(screen.queryByText("✓ すべて判定済み")).not.toBeInTheDocument();
   });
 
-  it("「修正して残す」を選ぶと正しい車番の入力欄が出て、フォーカスを外すと保存する", async () => {
+  it("「直す」を選ぶと正しい車番の入力欄が出て、フォーカスを外すと保存する", async () => {
     const user = userEvent.setup();
     const item = makeItem({ rowKey: "2-1", vehicleNo: "10" });
     render(
@@ -123,7 +123,7 @@ describe("CleansingQueue", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "修正して残す" }));
+    await user.click(screen.getByRole("button", { name: "直す" }));
     const vehicleInput = await screen.findByPlaceholderText("例: 24");
     await user.type(vehicleInput, "300");
     await user.tab();

@@ -186,7 +186,7 @@ export default async function VehicleDetailPage({
           description={
             savedOverride?.excluded
               ? "この車両は今月の収支表から外す設定になっています。下の欄で取り消せます。"
-              : "対象月を変えるか、月次データを取り込んでください。"
+              : "対象年月を変えるか、月次データを取り込んでください。"
           }
         />
       ) : (

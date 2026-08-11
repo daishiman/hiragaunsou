@@ -408,7 +408,7 @@ export function ReviewWizard({
                 onClick={() => void undoBulk()}
                 className="btn btn-secondary btn-sm pressable"
               >
-                まとめての判断を元に戻す
+                まとめての判定を元に戻す
               </button>
               <button
                 type="button"
@@ -620,12 +620,12 @@ function IssueCard({
         {issue.carriedOver && !carryOverReleased ? (
           <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-brand-soft bg-brand-mist px-4 py-2 text-xs text-brand-deep">
             <p>
-              先月もOKにした指摘です
+              先月も「このままでよい」と判定した指摘です
               {issue.carriedOver.previousValue !== null
                 ? `（先月の値 ${num(issue.carriedOver.previousValue, digits)} ${unit}）`
                 : ""}
               {issue.carriedOver.ackedByName
-                ? ` / 判断した人: ${issue.carriedOver.ackedByName}`
+                ? ` / 判定した人: ${issue.carriedOver.ackedByName}`
                 : ""}
             </p>
             {canEdit ? (
@@ -635,7 +635,7 @@ function IssueCard({
                 disabled={busy}
                 className="btn btn-secondary pressable"
               >
-                先月と同じくOKにする
+                先月と同じく「このままでよい」にする
               </button>
             ) : null}
             <button
@@ -725,7 +725,7 @@ function IssueCard({
             />
           ) : (
             <p className="mt-3 border-t border-line pt-3 text-xs text-ink-muted">
-              比べられる値がありません（今月が初回の車両です）。この1台だけで判断が付かないときは、
+              比べられる値がありません（今月が初回の車両です）。この1台だけで判定できないときは、
               下の「この車両の内訳を見る」で12か月の動きを確かめてください。
             </p>
           )}
@@ -991,7 +991,7 @@ function ValueEditor({
       return;
     }
     if (reason.trim() === "") {
-      setFormError("直した理由を入力してください（翌月に同じ判断を引き継ぐために使います）");
+      setFormError("直した理由を入力してください（翌月に同じ判定を引き継ぐために使います）");
       reasonRef.current?.focus();
       return;
     }
@@ -1084,7 +1084,7 @@ function ValueEditor({
         <p
           className={`mt-2 text-xs ${check.verdict === "ok" ? "font-semibold text-brand-deep" : "text-ink-muted"}`}
         >
-          {check.verdict === "ok" ? "OK: " : "確認: "}
+          {check.verdict === "ok" ? "範囲内: " : "要確認: "}
           {check.message}
         </p>
       ) : null}
@@ -1202,7 +1202,7 @@ function FinishedPanel({
 
       {handled.length > 0 ? (
         <div className="mt-4">
-          <h4 className="text-xs font-bold text-ink">今回の判断（{handled.length}件）</h4>
+          <h4 className="text-xs font-bold text-ink">今回の判定（{handled.length}件）</h4>
           <ul className="mt-1.5 divide-y divide-line rounded-lg border border-line">
             {handled.map((item) => (
               <li
@@ -1215,7 +1215,7 @@ function FinishedPanel({
                 <span className="text-ink-muted">
                   {verdicts[item.issue.key] === "fixed"
                     ? "値を直しました"
-                    : "このままでよいと判断しました"}
+                    : "このままでよいと判定しました"}
                 </span>
                 {canEdit ? (
                   <button
@@ -1223,7 +1223,7 @@ function FinishedPanel({
                     onClick={() => onUndo(item)}
                     className="btn btn-quiet btn-sm pressable ml-auto"
                   >
-                    この判断を取り消す
+                    この判定を取り消す
                   </button>
                 ) : null}
               </li>

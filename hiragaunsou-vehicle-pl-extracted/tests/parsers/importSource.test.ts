@@ -28,7 +28,7 @@ describe("describeImportSource", () => {
       },
       { fallbackNote: "車両の金額は月をまたいでも変わりません。" },
     );
-    expect(text).toContain("対象月 2026年7月 のシートがこのExcelに無かったため");
+    expect(text).toContain("対象年月 2026年7月 のシートがこのExcelに無かったため");
     expect(text).toContain("いちばん新しいシート「5月収支表」の見出しから2026年5月分と判定し");
     expect(text).toContain("車両の金額は月をまたいでも変わりません。");
   });

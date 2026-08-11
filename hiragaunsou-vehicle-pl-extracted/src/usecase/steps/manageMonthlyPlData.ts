@@ -99,7 +99,7 @@ export class DeleteMonthlyPlUseCase {
     }
     if (target.confirmed > 0) {
       throw new Error(
-        "その月は確定済みです。消すには、先に月次収支表で確定を取り消してください",
+        "その月は確定済みです。削除するには、先に月次収支表で確定を取り消してください",
       );
     }
 

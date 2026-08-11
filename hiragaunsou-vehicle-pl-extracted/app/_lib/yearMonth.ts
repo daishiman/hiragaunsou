@@ -1,10 +1,27 @@
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+export interface JstCalendarMonth {
+  /** 日本時間で見た暦月。業務データの対象年月とは別の概念。 */
+  yearMonth: string;
+  /** その暦月の1日 00:00:00（日本時間）を表すepoch milliseconds。 */
+  startsAtMs: number;
+}
+
+/** 指定時刻が属する日本時間の暦月と、その月初を返す。 */
+export function getJstCalendarMonth(now: Date): JstCalendarMonth {
+  const jst = new Date(now.getTime() + JST_OFFSET_MS);
+  const y = jst.getUTCFullYear();
+  const monthIndex = jst.getUTCMonth();
+  const m = String(monthIndex + 1).padStart(2, "0");
+  return {
+    yearMonth: `${y}-${m}`,
+    startsAtMs: Date.UTC(y, monthIndex, 1) - JST_OFFSET_MS,
+  };
+}
+
 /** 現在の年月を YYYY-MM (JST基準) で返す。Presentation層の表示用ユーティリティ (Domain計算式ではない)。 */
 export function currentYearMonth(): string {
-  const now = new Date();
-  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-  const y = jst.getUTCFullYear();
-  const m = String(jst.getUTCMonth() + 1).padStart(2, "0");
-  return `${y}-${m}`;
+  return getJstCalendarMonth(new Date()).yearMonth;
 }
 
 /**

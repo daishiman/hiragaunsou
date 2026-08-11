@@ -22,7 +22,7 @@ import { FIELD_CLASS } from "../../_components/formStyles";
 type SortKey = "default" | "loadDateDesc" | "vehicleNoAsc";
 
 const SORT_OPTIONS: SortOption[] = [
-  { value: "default", label: "未判断・金額が大きい順（既定）" },
+  { value: "default", label: "未判定・金額が大きい順（既定）" },
   { value: "loadDateDesc", label: "積荷日が新しい順" },
   { value: "vehicleNoAsc", label: "車番順" },
 ];
@@ -35,7 +35,7 @@ const DECISION_ORDER: readonly CleansingDecisionType[] = ["delete", "correct", "
 const DECISION_HINT: Record<CleansingDecisionType, string> = {
   delete: "この伝票を収支計算から外します",
   correct: "正しい車番へ付け替えて残します",
-  keep: "問題なしとしてこのまま残します",
+  keep: "このままでよいと判定して残します",
 };
 
 /*
@@ -328,7 +328,7 @@ export function CleansingQueue({
         </ul>
 
         {item.suggestion && (
-          <p className="mt-2 text-sm text-brand-deep">前月の判断: {item.suggestion.reason}</p>
+          <p className="mt-2 text-sm text-brand-deep">前月の判定: {item.suggestion.reason}</p>
         )}
 
         {canDecide ? (
@@ -389,8 +389,8 @@ export function CleansingQueue({
           </>
         ) : (
           <p className="mt-3 text-sm text-ink-muted">
-            判断の権限がありません。
-            {local.decision ? `現在の判断: ${DECISION_LABELS[local.decision]}` : "未判断です。"}
+            判定の権限がありません。
+            {local.decision ? `現在の判定: ${DECISION_LABELS[local.decision]}` : "未判定です。"}
           </p>
         )}
       </div>
@@ -477,11 +477,11 @@ export function CleansingQueue({
             )}
           </>
         ) : (
-          <p className="mt-3 text-sm text-ink-muted">判断の権限がありません。</p>
+          <p className="mt-3 text-sm text-ink-muted">判定の権限がありません。</p>
         )}
 
         <div className="mt-3">
-          <Disclosure summary="1件ずつ確認する（まとめた判断と違う対応が必要な伝票があれば、ここで個別に変更できます）">
+          <Disclosure summary="1件ずつ確認する（まとめた判定と違う対応が必要な伝票があれば、ここで個別に変更できます）">
             <div className="flex flex-col gap-3">
               {items.map((item) => renderItemCard(item, true))}
             </div>
@@ -502,7 +502,7 @@ export function CleansingQueue({
       <StickyFilterBar
         summary={
           <span className="num">
-            未判断 {pendingCount} / {initialItems.length}件 ・ 取込 {totalRows}件 ・ 傭車除外{" "}
+            未判定 {pendingCount} / {initialItems.length}件 ・ 取込 {totalRows}件 ・ 傭車除外{" "}
             {charteredExcluded}件
           </span>
         }
@@ -513,12 +513,12 @@ export function CleansingQueue({
             checked={showDecided}
             onChange={(e) => setShowDecided(e.target.checked)}
           />
-          判断済みも表示する
+          判定済みも表示する
         </label>
       </StickyFilterBar>
 
       {pendingCount === 0 && (
-        <AlertPanel tone="success" title="✓ すべて判断済み">
+        <AlertPanel tone="success" title="✓ すべて判定済み">
           <Link
             href={withYm("/manual-entry?step=2", yearMonth)}
             className="underline underline-offset-2"
@@ -536,7 +536,7 @@ export function CleansingQueue({
             disabled={pending !== null}
             className="btn btn-secondary pressable"
           >
-            前月と同じ判断をまとめて適用（{suggestable.length}件）
+            前月と同じ判定をまとめて適用（{suggestable.length}件）
           </button>
         </div>
       )}
@@ -571,7 +571,7 @@ export function CleansingQueue({
           <p className="mt-1">
             {initialItems.length === 0
               ? "この月は、確認が要る伝票が1件もありませんでした。次は手入力へ進んでください。"
-              : "いまの絞り込みに合う伝票がありません。検索の言葉を消すか、上の「判断済みも表示する」を入れると出ます。"}
+              : "いまの絞り込みに合う伝票がありません。検索語を空にするか、上の「判定済みも表示する」を入れると出ます。"}
           </p>
         </div>
       )}

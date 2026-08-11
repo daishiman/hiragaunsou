@@ -345,6 +345,6 @@ describe("POST /api/cleansing", () => {
       decisions: [{ rowKey: "S-100-1", decision: "keep" }],
     });
     expect(res.status).toBe(500);
-    expect((await res.json()) as { error: string }).toEqual({ error: "判断の保存に失敗しました" });
+    expect((await res.json()) as { error: string }).toEqual({ error: "判定の保存に失敗しました" });
   });
 });

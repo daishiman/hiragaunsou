@@ -74,7 +74,7 @@ export class CreateInvitationUseCase {
       if (existingUser) {
         const pending = await this.invitations.findPendingByEmail(email);
         if (!pending || pending.authMethod !== "password") {
-          throw new Error("このメールアドレスは既にユーザー登録されています。ユーザー一覧から編集してください。");
+          throw new Error("このメールアドレスは既に利用者として登録されています。利用者の一覧から編集してください。");
         }
         // まだ一度もサインインされていない(=招待が未受諾)password招待のみ、作り直しを許可する。
         await this.users.deleteUser(existingUser.id);
@@ -84,7 +84,7 @@ export class CreateInvitationUseCase {
     }
 
     if (existingUser) {
-      throw new Error("このメールアドレスは既にユーザー登録されています。ユーザー一覧から編集してください。");
+      throw new Error("このメールアドレスは既に利用者として登録されています。利用者の一覧から編集してください。");
     }
     await this.invitations.upsert({ email, role: input.role, invitedBy: input.invitedBy, authMethod: "google" });
     return { needsAccountProvisioning: false };

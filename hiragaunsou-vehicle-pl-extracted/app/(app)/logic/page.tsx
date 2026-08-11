@@ -241,7 +241,7 @@ const STEP_FLOW = [
   {
     num: "03 — 原票を自動で読む",
     title: "燃料・給与・修理費・単価・例外",
-    desc: "入力ではなく、ファイル取込と要確認の判断だけにする。",
+    desc: "入力ではなく、ファイル取込と要確認の判定だけにする。",
   },
 ] as const;
 
@@ -253,8 +253,8 @@ function buildFlowTree(rates: RateSettings): readonly { depth: number; text: str
     { depth: 2, text: "[走行距離] 流入 → 車検・タイヤ標準原価／燃費を自動計算" },
     { depth: 2, text: `[売上] 流入 → 一般管理費（×${percent(rates.adminFeeRate)}）を自動計算` },
     { depth: 2, text: `[道路使用料] 流入 → 高速割引（×${rates.tollDiscountRate}） → 運行費計` },
-    { depth: 3, text: "上流の確定ごとに → 損益・利益率・全社集計・対前年を即時再計算" },
-    { depth: 4, text: "再計算のたびに → 異常検知 → 異常値チェックにカード生成" },
+    { depth: 3, text: "上流の確定ごとに → 損益・利益率・全社集計・対前年の収支表をすぐ作り直す" },
+    { depth: 4, text: "収支表を作り直すたびに → 異常検知 → 異常値チェックにカード生成" },
   ];
 }
 
@@ -365,7 +365,7 @@ export default async function LogicPage() {
       <Disclosure summary="元になるファイルと、その役割">
         {/*
           T7 §4-1 の質問への答え: ファイルごとの役割と出力元を「見比べる」ための一覧なので表。
-          1件を読んで判断する場面ではない。
+          1件を読んで判定する場面ではない。
         */}
         <Prose>列単位の対応は docs/product/data-flow-map.md</Prose>
         <div className="mt-3">
@@ -456,7 +456,7 @@ export default async function LogicPage() {
 
       <Disclosure summary={`ヒアリングで確定させること（${QUESTIONS.length}件）`}>
         {/*
-          T7 §4-1 の質問への答え: 1件ずつ読んで「決まったか」を判断していく項目なので表にしない。
+          T7 §4-1 の質問への答え: 1件ずつ読んで「決まったか」を判定していく項目なので表にしない。
           番号付きの一覧のままにする。
         */}
         <Prose>この画面を見ながら一緒に確認します</Prose>

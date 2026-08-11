@@ -23,7 +23,7 @@ describe("AccessDenied", () => {
   });
 
   it("行き止まりにせず、ホームへ戻る導線を置く", () => {
-    render(<AccessDenied screenName="ユーザー管理" permission="manage_users" />);
+    render(<AccessDenied screenName="利用者の管理" permission="manage_users" />);
     expect(screen.getByRole("link", { name: "ホームに戻る" })).toHaveAttribute("href", "/");
   });
 

@@ -406,7 +406,7 @@ export function AnomalyQueue({
         </ul>
         {queueView.length === 0 && (
           <p className="mt-2 text-[11px] text-ink-muted">
-            この条件に合う項目はありません。検索の言葉を消すか、優先度の絞り込みを外すと全部出ます。
+            この条件に合う項目はありません。検索語を空にするか、優先度の絞り込みを外すと全部出ます。
           </p>
         )}
         {queueView.length > 12 && (

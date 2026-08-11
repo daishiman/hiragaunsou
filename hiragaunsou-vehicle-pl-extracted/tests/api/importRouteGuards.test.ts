@@ -193,7 +193,7 @@ describe("POST /api/import/[sourceType] の入口ガード", () => {
   it("SOURCE_TYPES外のsourceTypeは400", async () => {
     const res = await post("invoice", formOf(csvFile("運行実績表.csv", VEHICLE_OPERATION_CSV), "2026-05"));
     expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ error: "unknown sourceType: invoice" });
+    expect(await res.json()).toEqual({ error: "指定された帳票の種類は取り込めません" });
   });
 });
 

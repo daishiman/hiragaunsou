@@ -201,7 +201,7 @@ export function LeaseEditor({
               ]}
               empty={
                 <p className="text-xs text-ink-muted">
-                  「{query}」に一致する車両はありません。絞り込みの言葉を消すと、全車両が出ます。
+                  「{query}」に一致する車両はありません。絞り込み語を空にすると、全車両が出ます。
                 </p>
               }
             />

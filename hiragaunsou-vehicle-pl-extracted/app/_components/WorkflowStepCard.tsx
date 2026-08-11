@@ -69,7 +69,7 @@ export function WorkflowStepCard({
       <details className="mt-3">
         <summary className="cursor-pointer text-xs font-semibold text-brand-deep">
           この手順について
-          {step.notes.length > 0 ? `(判断ポイント ${step.notes.length}件)` : ""}
+          {step.notes.length > 0 ? `（判定ポイント ${step.notes.length}件）` : ""}
         </summary>
         <p className="mt-1.5 text-xs leading-relaxed text-ink-muted">{step.summary}</p>
         <p className="mt-1 text-xs text-ink-muted">出典: {step.source}</p>
@@ -82,7 +82,7 @@ export function WorkflowStepCard({
         )}
         {step.isJudgementHeavy && (
           <p className="mt-2 rounded-md border border-caution-border bg-caution-soft px-3 py-2 text-xs leading-relaxed">
-            経験に頼っている判断が残っています。迷ったら請求書発行担当に確認してください。
+            経験に頼っている判定が残っています。迷ったら請求書発行担当に確認してください。
           </p>
         )}
       </details>

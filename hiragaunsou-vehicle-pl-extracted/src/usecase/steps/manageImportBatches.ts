@@ -1,5 +1,6 @@
 import type { D1ImportBatchRepository } from "../../infrastructure/db/D1ImportBatchRepository";
 import type { AuditLogRepository, AuditLogRecord } from "../../domain/repositories/AuditLogRepository";
+import { findImportSource } from "../../domain/rules/importSources";
 import { SOURCE_TYPES } from "../../infrastructure/db/schema";
 
 export const DELETE_IMPORT_BATCH_ACTION = "delete_import_batch";
@@ -15,13 +16,6 @@ export interface ImportBatchSummary {
   importedAt: number;
   importedByName: string | null;
 }
-
-const SOURCE_TYPE_LABELS: Record<string, string> = {
-  vehicle_operation: "車両別運行実績表",
-  sales_monitor: "売上モニタリスト",
-  payroll: "給与集計表",
-  monthly_pl_workbook: "完成済み収支表(Excel)",
-};
 
 /**
  * 管理者による全期間・全帳票種別の取込バッチ一覧取得(/admin/import-batches 画面)。
@@ -60,8 +54,8 @@ export class DeleteImportBatchUseCase {
 
     const deletedRawRows = await this.repo.deleteBatches(batch.yearMonth, batch.sourceType, [batch.id]);
 
-    const sourceLabel = SOURCE_TYPE_LABELS[batch.sourceType] ?? batch.sourceType;
-    const summary = `${batch.yearMonth} ${sourceLabel}「${batch.fileName}」(${batch.rowCount}行)を削除`;
+    const sourceLabel = findImportSource(batch.sourceType)?.label ?? "判別できない帳票";
+    const summary = `${batch.yearMonth} ${sourceLabel}「${batch.fileName}」（${batch.rowCount}件）を削除`;
     await this.auditLog.record({
       actorId: input.actorId,
       actorName: input.actorName,
@@ -82,4 +76,3 @@ export class ListImportBatchDeletionLogUseCase {
 }
 
 export const KNOWN_SOURCE_TYPES: readonly string[] = SOURCE_TYPES;
-export { SOURCE_TYPE_LABELS };

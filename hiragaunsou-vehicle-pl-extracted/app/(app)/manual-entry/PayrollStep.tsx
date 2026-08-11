@@ -175,7 +175,7 @@ export function PayrollStep({
     }
     const reason = edit.reason.trim();
     if (reason === "") {
-      setErrorMessage("直した理由を書いてください(後から誰が見ても判断を追えるようにするため)");
+      setErrorMessage("直した理由を書いてください（後から誰が見ても判定を追えるようにするため）");
       return;
     }
 
@@ -455,7 +455,7 @@ export function PayrollStep({
             rowClassName={(row) => (isDirty(row) ? "bg-caution-soft" : undefined)}
             empty={
               <p className="text-xs text-ink-muted">
-                「{search.trim()}」に一致する車両がありません。検索の文字を消すと全車両に戻ります。
+                「{search.trim()}」に一致する車両がありません。検索語を空にすると全車両に戻ります。
               </p>
             }
           />
@@ -619,7 +619,7 @@ function PayrollDiagnosis({
       : summary.payrollMissingVehicleCount > 0
         ? {
             title: `給与集計表に社員Noが見つからない運転者がいます(${summary.payrollMissingVehicleCount}台)`,
-            body: "運転者マスタには登録されていますが、今月の給与集計表にその社員Noの明細がありません。その車両の給与は0円のまま集計されます。運転者マスタの社員No、または取り込んだCSVの対象月を確認してください。",
+            body: "運転者マスタには登録されていますが、今月の給与集計表にその社員Noの明細がありません。その車両の給与は0円のまま集計されます。運転者マスタの社員No、または取り込んだCSVの対象年月を確認してください。",
             href: "/admin/driver-master",
             linkLabel: "運転者マスタを確認",
             needsAdmin: true,

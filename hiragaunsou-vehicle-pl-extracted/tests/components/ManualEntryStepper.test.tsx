@@ -450,7 +450,7 @@ describe("ManualEntryStepper", () => {
     ).toBeInTheDocument();
 
     // 本人が確認したら印は消える (以後は実績値と同じ扱い)。
-    await user.click(screen.getByRole("button", { name: "確認しました(先月と同じでよい)" }));
+    await user.click(screen.getByRole("button", { name: "このままでよい（先月と同じ）" }));
     expect(
       screen.queryByText("先月(2026-04)の単価をそのまま入れています"),
     ).not.toBeInTheDocument();

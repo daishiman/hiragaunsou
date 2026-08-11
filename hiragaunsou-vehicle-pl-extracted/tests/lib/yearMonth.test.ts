@@ -2,12 +2,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   currentYearMonth,
   defaultImportYearMonth,
+  getJstCalendarMonth,
   isYearMonth,
   monthsBefore,
   periodPresets,
   recentYearMonths,
   selectableYearMonths,
 } from "../../app/_lib/yearMonth";
+
+describe("getJstCalendarMonth", () => {
+  it("UTC上の月末でも日本時間の翌月に切り替わった瞬間を月初にする", () => {
+    expect(getJstCalendarMonth(new Date("2026-07-31T15:00:00.000Z"))).toEqual({
+      yearMonth: "2026-08",
+      startsAtMs: Date.parse("2026-07-31T15:00:00.000Z"),
+    });
+  });
+
+  it("日本時間の月初直前は前月とその月初を返す", () => {
+    expect(getJstCalendarMonth(new Date("2026-07-31T14:59:59.999Z"))).toEqual({
+      yearMonth: "2026-07",
+      startsAtMs: Date.parse("2026-06-30T15:00:00.000Z"),
+    });
+  });
+});
 
 describe("currentYearMonth", () => {
   afterEach(() => {
