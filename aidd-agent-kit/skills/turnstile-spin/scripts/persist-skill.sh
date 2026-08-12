@@ -4,9 +4,10 @@
 # follow-up tasks without re-pasting the bootstrap prompt.
 #
 # Args:
-#   --path <path>   SKILL.md destination, e.g. .claude/skills/turnstile-spin/SKILL.md.
+#   --path <path>   SKILL.md destination, e.g. .claude/skills/turnstile-spin/SKILL.md
+#                   or .agents/skills/turnstile-spin/SKILL.md.
 #                   The bundle is extracted into the parent directory of <path>,
-#                   so scripts land at e.g. .claude/skills/turnstile-spin/scripts/.
+#                   so scripts land beside SKILL.md in the selected client bundle.
 #
 # Outputs JSON. Exit 0 if the bundle was written, 1 on failure.
 #   ok:    {"status":"ok","path":"<path>","bundle_root":"<dir>","scripts":[<list>]}
@@ -47,7 +48,13 @@ if [ -d "$TARGET_DIR/scripts" ]; then
   chmod +x "$TARGET_DIR/scripts"/*.sh 2>/dev/null || true
 fi
 
-scripts_list=$(ls "$TARGET_DIR/scripts" 2>/dev/null | sed 's/.*/"&"/' | paste -sd, -)
+scripts_list=$(
+  for script_path in "$TARGET_DIR"/scripts/*; do
+    [ -f "$script_path" ] || continue
+    script_name=${script_path##*/}
+    printf '"%s"\n' "$script_name"
+  done | paste -sd, -
+)
 echo "persist-skill: wrote bundle to $TARGET_DIR" >&2
 echo "{\"status\":\"ok\",\"path\":\"$PATH_ARG\",\"bundle_root\":\"$TARGET_DIR\",\"scripts\":[$scripts_list]}"
 exit 0

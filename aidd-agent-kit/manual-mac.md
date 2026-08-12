@@ -1,22 +1,28 @@
 # AI開発エージェントキット セットアップマニュアル【Mac版】
 
-**バージョン 1.6.0**
+**バージョン 1.9.0**
 
 ## このキットは何?
 
-Claude Code(AIがアプリを作ってくれるツール)に、**プロの開発ノウハウ集(スキル19個)** と **開発を最初から最後まで自動で進める司令塔(エージェント)** を追加するキットです。
+Claude Code と OpenAI Codex に、**プロの開発ノウハウ集(共通スキル20個)** と **開発を最初から最後まで自動で進める司令塔(エージェント)** を同時に追加するキットです。
 
-インストールすると、Claude Code に
+インストールすると、Claude Code では
 
 > /build-app 社員の勤怠を管理するアプリを作って
 
+Codex では
+
+> $build-app 社員の勤怠を管理するアプリを作って
+
 と一言頼むだけで、要件の整理 → デザイン → 開発 → 公開 → 品質チェックまでを、決められた手順で自動的に進めてくれるようになります。
 
-公開した後は
+公開した後は、Claude Code なら `/improve-app`、Codex なら `$improve-app` に続けて要望を書きます。
 
 > /improve-app 月ごとの集計をグラフでも見たい
 
 と頼むだけで、今あるアプリを壊さずに機能を1つずつ追加・改善していけます。
+
+> **Codexにもagent／subagentがあります。** Claude Code のcustom `/command` に対応する標準導線はCodexでは `$skill` です。`/skills` や `/agent` などCodex組み込みのslash commandとは別物です。また、`AGENTS.md` はプロジェクト規約を毎回読み込む常設指示で、必要なときだけ起動するskillやcustom agentの代わりではありません。
 
 **所要時間: 約5分。難しい操作はありません。**
 
@@ -26,10 +32,10 @@ Claude Code(AIがアプリを作ってくれるツール)に、**プロの開発
 
 | 必要なもの | 確認方法 |
 |---|---|
-| Claude Code がインストールされた Mac | アプリ一覧に「Claude Code」がある(なければ社内のIT担当者にご相談ください) |
-| Claude へのサインイン | Claude Code を開いてチャットが使える状態になっている |
+| Claude Code または OpenAI Codex がインストールされた Mac | どちらかのアプリでチャットが使える |
+| 利用するツールへのサインイン | Claude Code または Codex を開いてチャットが使える状態になっている |
 
-> **重要**: インストーラーは Claude Code の設定フォルダ(`~/.claude`)に書き込みます。Claude Code を**一度も起動していないとこのフォルダが存在せず**、インストールは中断されます。先に Claude Code を起動しておいてください。
+> インストーラーは `~/.claude`、`~/.agents/skills`、`~/.codex` に両方の設定を用意します。片方だけを現在使っている場合でも実行できます。
 
 ---
 
@@ -57,14 +63,20 @@ Claude Code(AIがアプリを作ってくれるツール)に、**プロの開発
 
 ### ターミナルでコマンド実行してインストールする方法(上級者向け)
 
-ダブルクリックの代わりに、ターミナル(Claude Code の Bash ツール等)からコマンドで実行することもできます。挙動はダブルクリックと完全に同じです。
+ダブルクリックの代わりに、ターミナルからコマンドで実行することもできます。挙動はダブルクリックと同じです。
 
 ```
 cd aidd-agent-kit フォルダのパス
 bash install-mac.command
 ```
 
-**インストール先を `~/.claude` 以外にしたい場合**(例: 特定のプロジェクト直下にある `.claude` にだけ導入したい場合)は、このインストーラーは `~/.claude` に固定されているため使えません。代わりに `skills`・`agents`・`commands` の中身をそのプロジェクトの `.claude` へ手動でコピーしてください(既存ファイルと重複する場合は、上書き前に別フォルダへコピーしてバックアップしてから行うと安全です)。
+インストール先はユーザー共通の `~/.claude`、`~/.agents/skills`、`${CODEX_HOME:-~/.codex}` です。プロジェクトだけに限定して導入したい場合は、Claude Code はプロジェクトの `.claude`、Codex は `.agents/skills` と `.codex/agents` へ必要な項目だけを手動配置してください。
+
+Codexの旧 `/prompts:build-app` 形式は非推奨で、標準インストールには含まれません。既存運用との移行期間だけ必要な場合は、任意の `--legacy-prompts` を付けます。新しい利用方法では `$build-app` を使ってください。
+
+```
+bash install-mac.command --legacy-prompts
+```
 
 ## STEP 3: 開発環境を準備する(初回のみ)
 
@@ -74,16 +86,16 @@ bash install-mac.command
 2. 黒い画面が開き、自動でインストールが進みます(2〜5分)。
 3. **「セットアップが完了しました!」** と表示されたら成功です。
 
-このスクリプトでは、あわせて **Claude Code と Cloudflare(アプリの公開先)の連携設定(MCP: Claude Code と外部サービスをつなぐ仕組み)** も自動で行われます。初回に利用するとき、ブラウザで許可を求める画面が開くことがありますが、**「許可」を押していただければ大丈夫**です。
+このスクリプトでは、あわせて **Claude Code / Codex と Cloudflare(アプリの公開先)の連携設定(MCP: AI開発ツールと外部サービスをつなぐ仕組み)** も自動で行われます。初回に利用するとき、ブラウザで許可を求める画面が開くことがありますが、**「許可」を押していただければ大丈夫**です。
 
 > すでに入っている場合は「インストール済みです」と表示されるだけなので、何度実行しても問題ありません。
 > 「開発元を検証できないため開けません」と出たときは、STEP 2 と同じ方法(右クリック → 開く)で開いてください。
 
 ## STEP 4: 動作確認する
 
-1. Claude Code を **一度終了して、起動し直します**(Command + Q で完全に終了してください)。
-2. チャット欄に半角で **`/build-app`** と入力します。
-3. 入力候補に **build-app** が表示されればインストール成功です。
+1. Claude Code と Codex を **一度終了して、起動し直します**(Command + Q で完全に終了してください)。
+2. Claude Code は **`/build-app`**、Codex は **`$build-app`** と入力します。
+3. 入力候補に **build-app** が表示されればインストール成功です。Codex では `/skills` からも確認できます。
 
 ---
 
@@ -91,10 +103,11 @@ bash install-mac.command
 
 ### 基本の使い方
 
-チャット欄に `/build-app` に続けて、作りたいものを普通の言葉で書くだけです。
+Claude Code は `/build-app`、Codex は `$build-app` に続けて、作りたいものを普通の言葉で書くだけです。
 
 ```
-/build-app 会議室の予約アプリ。社員だけが使える。Googleアカウントでログイン。
+Claude Code: /build-app 会議室の予約アプリ。社員だけが使える。Googleアカウントでログイン。
+Codex: $build-app 会議室の予約アプリ。社員だけが使える。Googleアカウントでログイン。
 ```
 
 ### 上手に頼むコツ
@@ -107,23 +120,25 @@ bash install-mac.command
 
 ### 公開した後に育てるとき
 
-最初のアプリは「業務に必要な機能一式」がそろった状態で公開されますが、使ってみると「これも欲しい」が必ず出てきます。そのときは `/improve-app` に続けて要望を書くだけです。
+最初のアプリを公開した後は、Claude Code の `/improve-app` または Codex の `$improve-app` に続けて要望を書きます。
 
 ```
-/improve-app 車両ごとの一覧を印刷しやすいレイアウトでも見たい
+Claude Code: /improve-app 車両ごとの一覧を印刷しやすいレイアウトでも見たい
+Codex: $improve-app 車両ごとの一覧を印刷しやすいレイアウトでも見たい
 ```
 
-- 要望を書かずに `/improve-app` だけ入力すると、**残課題リスト(次にやることの候補一覧)**から選べます。
+- 要望を書かずに `/improve-app` または `$improve-app` だけ入力すると、**残課題リスト(次にやることの候補一覧)**から選べます。
 - 複数の要望があっても、**1件ずつ**安全に追加されます(今動いているアプリを壊さないためです)。
-- 変更内容は自動で記録されます。試してみて問題があったときは **`/undo-app`** と入力すれば、**1つ前の状態に戻せます**。
+- 変更内容は自動で記録されます。問題があったときは Claude Code の **`/undo-app`** または Codex の **`$undo-app`** で、**1つ前の状態に戻せます**。
 
 ```
-/undo-app さっき追加した印刷レイアウトをいったん取り消したい
+Claude Code: /undo-app さっき追加した印刷レイアウトをいったん取り消したい
+Codex: $undo-app さっき追加した印刷レイアウトをいったん取り消したい
 ```
 
 ### コマンドを使わなくてもOK
 
-普通に「在庫管理のアプリを作りたい」と話しかけるだけでも、自動的にこのエージェントが動きます。確実に動かしたいときは `/build-app` を使ってください。
+普通に「在庫管理のアプリを作りたい」と話しかけるだけでもスキルは起動できます。確実に動かしたいときは Claude Code の `/build-app` または Codex の `$build-app` を使ってください。
 
 ---
 
@@ -134,13 +149,12 @@ bash install-mac.command
 **手動でコピーする方法**があります。
 
 1. Finder を開き、メニューの **移動 → フォルダへ移動…** を選びます(キーボードで Command + Shift + G でも開けます)。
-2. `~/.claude` と入力して Enter を押します。
-   - 「フォルダが見つかりません」と出た場合は、Claude Code を一度起動してから再度試してください。
-3. ZIPを展開した `aidd-agent-kit` フォルダの中の **`skills`・`agents`・`commands`** の3フォルダの**中身**を、`~/.claude` の同じ名前のフォルダの中へそれぞれコピーします(同名フォルダがなければそのままコピーで作成)。
+2. `~/.claude` と入力し、Claude Code 用の `skills`・`agents`・`commands` を対応するフォルダへコピーします。
+3. Codex 用は、共通 `skills` と `codex/skills` を `~/.agents/skills`、`codex/agents` を `~/.codex/agents` へコピーします。さらに `agents/app-orchestrator.md` を `~/.agents/skills/app-orchestrator/SKILL.md`、`codex/app-orchestrator-openai.yaml` を `~/.agents/skills/app-orchestrator/agents/openai.yaml` として配置します。非推奨の旧互換が必要な場合だけ `codex/prompts` を `~/.codex/prompts` へコピーします。
 
-### Q2. `/build-app` が候補に出てこない
+### Q2. `/build-app` または `$build-app` が候補に出てこない
 
-- Claude Code を**完全に終了**(Command + Q)して起動し直してください。追加した内容は起動時に読み込まれます。
+- 利用中の Claude Code / Codex を**完全に終了**(Command + Q)して起動し直してください。
 - 新しいチャット(新しいセッション)を開いてから入力してください。
 
 ### Q3. 「インストールを確認できませんでした」と表示された
@@ -150,16 +164,15 @@ bash install-mac.command
 - ZIPを展開してできた `aidd-agent-kit` フォルダの**中の** `install-mac.command` を実行しているか確認してください(ZIPの中から直接実行すると失敗します)。
 - 解決しない場合は Q1 の手動コピーをお試しください。
 
-### Q4. 「`~/.claude` が見つかりません」と表示された
+### Q4. Codex でスキルが表示されない
 
-Claude Code をまだ一度も起動していない状態です。
-
-1. Claude Code を起動し、サインインしてチャットが使える状態にします。
-2. Claude Code はそのままでも構いませんので、もう一度インストーラーをダブルクリックします。
+1. Codex を完全に終了して起動し直します。
+2. 新しいチャットで `/skills` を開き、`build-app` を確認します。
+3. 見つからない場合は `~/.agents/skills/build-app/SKILL.md` があるか確認します。
 
 ### Q5. 「別の場所への『近道(リンク)』になっています」と表示された
 
-`~/.claude` の中のフォルダが、別の場所を指すリンク(シンボリックリンク)として設定されています。**このままコピーすると、まったく関係のないフォルダの中身が書き換えられてしまう**ため、インストーラーが安全のために処理を止めました。
+Claude Code または Codex の書き込み先が、別の場所を指すリンクとして設定されています。リンク先を意図せず書き換えないため、インストーラーが停止しました。
 
 心当たりがない場合は、**この画面のまま導入支援の担当者にお見せください**。
 
@@ -167,10 +180,11 @@ Claude Code をまだ一度も起動していない状態です。
 
 ### Q6. 「以前のファイルは次の場所に保存してあります」と表示された
 
-`~/.claude` に既に同じ名前のファイルがあったため、**上書きする前に自動でバックアップ**したという意味です。インストール自体は成功しています。
+Claude Code または Codex に同じ名前の項目があったため、**上書き前に自動でバックアップ**したという意味です。インストール自体は成功しています。
 
 ```
 ~/.claude/backup-20260726-143000/
+~/.codex/backup-20260726-143000/
 ```
 
 元に戻したいときは、このフォルダの中身を元の場所へ戻してください。不要になったら、フォルダごと削除して構いません。
@@ -185,7 +199,7 @@ Claude Code をまだ一度も起動していない状態です。
 
 ## インストールされるものの一覧
 
-すべて `ホーム → .claude` フォルダの中に入ります。Claude Code の設定ファイルや、他のアプリには影響しません。
+Claude Code 用は `~/.claude`、Codex のスキルは `~/.agents/skills`、Codex のcustom agentは `~/.codex/agents` に入ります。このキットが入れていない項目には触れません。
 
 > **同じ名前のファイルがあった場合のみ**、そのファイルは上書きされます。ただし上書き前に `backup-(日時)` フォルダへ自動で退避されるので、元に戻せます。
 
@@ -195,16 +209,18 @@ Claude Code をまだ一度も起動していない状態です。
 |---|---|
 | app-orchestrator | 要件整理→デザイン→開発→公開→品質チェックを順番に進める司令塔 |
 
-### コマンド — 3個
+### コマンドワークフロー — 4個
 
 | 名前 | 役割 |
 |---|---|
-| /build-app | 新しいアプリを最初から公開まで作るコマンド |
-| /improve-app | 公開済みのアプリに機能追加・改善を1件ずつ行うコマンド |
-| /undo-app | 直前の変更を取り消して、アプリを1つ前の状態に戻すコマンド |
-| /setup-cicd | 自動チェックと自動公開のしくみ(CI/CD)をリポジトリに導入するコマンド |
+| `/build-app` / `$build-app` | 新しいアプリを最初から公開まで作る |
+| `/improve-app` / `$improve-app` | 公開済みのアプリに機能追加・改善を1件ずつ行う |
+| `/undo-app` / `$undo-app` | 直前の変更を取り消して、アプリを1つ前の状態に戻す |
+| `/setup-cicd` / `$setup-cicd` | 自動チェックと自動公開のしくみ(CI/CD)を導入する |
 
-### スキル(開発ノウハウ集) — 19個
+Codex では `$...` のスキル形式を使ってください。非推奨の `/prompts:build-app` などは標準では入らず、`--legacy-prompts` を指定した場合だけ旧互換として入ります。
+
+### 共通スキル(開発ノウハウ集) — 20個
 
 | 名前 | 内容 |
 |---|---|
@@ -227,6 +243,7 @@ Claude Code をまだ一度も起動していない状態です。
 | cloudflare-email-service | メール送信機能の作り方 |
 | solo-git-flow | 個人開発の変更管理(ブランチ・プルリク・Issue)の進め方 |
 | ci-cd-pipeline | 自動チェック・自動公開のしくみ(GitHub Actions)の作り方と費用の抑え方 |
+| design-judgment | テンプレート感を業務構造の反映不足として診断・改善する判断基準 |
 
 ---
 
@@ -238,16 +255,17 @@ Claude Code をまだ一度も起動していない状態です。
 - 整理の対象は**このキットが入れたものだけ**です。ご自身で追加されたスキルやコマンドには触れません。
 - 使いながら貯まったノウハウ(ナレッジ)は**消えません**。そのまま引き継がれます。
 
-更新後は Claude Code を再起動してください。
+更新後は Claude Code と Codex を再起動してください。
 
 ## アンインストールしたいとき
 
-Finder で `~/.claude` を開き(Command + Shift + G → `~/.claude`)、次を削除します。
+Finder で `~/.claude`、`~/.agents/skills`、`~/.codex` を開き、次のキット項目だけを削除します。
 
-1. `skills` フォルダの中の、**上の表にある19個のフォルダ**
-2. `agents` フォルダの中の **`app-orchestrator.md`**
-3. `commands` フォルダの中の **`build-app.md`**・**`improve-app.md`**・**`undo-app.md`**・**`setup-cicd.md`**
-4. `.claude` フォルダ直下にある **`aidd-agent-kit.version`** と **`aidd-agent-kit.manifest`**(このキットが何を入れたかを記録したファイルです)
+1. `.claude/skills` と `.agents/skills` の中の、**上の表にある20個のフォルダ**
+2. `.claude/agents/app-orchestrator.md` と `.agents/skills/app-orchestrator`
+3. `.claude/commands` の4ファイルと `.agents/skills` の4コマンドスキル
+4. `.codex/agents/app-orchestrator.toml`。`--legacy-prompts` を使った場合だけ `.codex/prompts` の4ファイル
+5. `.claude` と `.codex` の **`aidd-agent-kit.version`** / **`aidd-agent-kit.manifest`**
 
 > `skills`・`agents`・`commands` フォルダ自体は削除しないでください。Claude Code が使う他のファイルが入っている場合があります。
 
@@ -259,12 +277,11 @@ Finder で `~/.claude` を開き(Command + Shift + G → `~/.claude`)、次を�
 
 エージェントがアプリを**インターネットに公開する**ところまで自動で行うため、利用する環境によって以下が必要です。非エンジニアの方は、導入支援の担当者にご相談ください。
 
-- **Claude の有料プラン**(Claude Code が利用できるプラン)
+- **Claude Code または OpenAI Codex を利用できるプラン**
 - **Cloudflare アカウント**(アプリの公開先。無料プランで開始可能)と `wrangler login` によるログイン
 - **GitHub アカウント**(アプリの変更履歴の保存先。**プライベートリポジトリ**=自社の関係者だけが見られる保管場所を使用します)
-- **Claude Code と外部サービスの連携設定(MCP: Claude Code と外部サービスをつなぐ仕組み)**
-  - **GitHub との連携** と **Cloudflare との連携** が必要です
-  - このうち **Cloudflare との連携は、付属のセットアップスクリプトが自動で設定します**(STEP 3)
+- **GitHub CLI (`gh`)** のインストールと `gh auth login` によるサインイン。プルリクエストの作成・確認・反映はGitHub MCPではなく `gh` を使います
+- **Cloudflare との連携設定(MCP)**。付属のセットアップスクリプトがClaude Code／Codexの両方へ自動で設定します(STEP 3)
 - Googleログイン機能を使う場合: **Google Cloud** の OAuth 設定(手順はスキル内に日本語で収録済み)
 - AI機能を使う場合: **OpenAI / Anthropic 等の APIキー**
 

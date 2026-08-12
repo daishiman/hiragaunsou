@@ -277,7 +277,7 @@ export function isEmail(value: string): boolean {
 }
 
 /* ============================================================
- * 数値表示 — jp-web-design §3-2 の文法(値=変数の描き分け)
+ * 数値表示 — jp-web-design references/typography-numerals.md の文法(値=変数の描き分け)
  * カンマは .num-sep で縮小、単位は .unit。dangerouslySetInnerHTML を避けた配列版。
  * ============================================================ */
 const NUM_FORMAT = new Intl.NumberFormat('ja-JP')

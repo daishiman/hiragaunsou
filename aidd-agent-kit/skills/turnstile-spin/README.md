@@ -24,7 +24,7 @@ This is a mirror of the canonical docs page at [`developers.cloudflare.com/turns
 
 ## How agents load it
 
-Agents that load skill bundles from `github.com/cloudflare/skills` will pick this up automatically. For agents that load skills out of a local directory:
+Agents that load skill bundles from `github.com/cloudflare/skills` will pick this up automatically. For Claude Code or Codex repository-local installation:
 
 ```sh
 # Claude Code
@@ -32,12 +32,18 @@ mkdir -p .claude/skills/turnstile-spin && \
   curl -sSL https://developers.cloudflare.com/turnstile/spin.md \
   -o .claude/skills/turnstile-spin/SKILL.md
 
-# Or, install the whole skills bundle into a global location
+# Codex
+mkdir -p .agents/skills/turnstile-spin && \
+  curl -sSL https://developers.cloudflare.com/turnstile/spin.md \
+  -o .agents/skills/turnstile-spin/SKILL.md
+
+# Or, install the whole skills bundle and link it for both clients
 git clone https://github.com/cloudflare/skills ~/.config/cloudflare-skills
-ln -s ~/.config/cloudflare-skills/turnstile-spin ~/.claude/skills/turnstile-spin
+ln -s ~/.config/cloudflare-skills/skills/turnstile-spin ~/.claude/skills/turnstile-spin
+ln -s ~/.config/cloudflare-skills/skills/turnstile-spin ~/.agents/skills/turnstile-spin
 ```
 
-For other agents, see the table in [`SKILL.md`](./SKILL.md#step-11--persist-the-skill).
+For other clients, choose that client's documented skill-discovery location. Step 11 in [`SKILL.md`](./SKILL.md#conversation-flow) performs the same client-aware selection.
 
 ## Sync with the docs page
 
