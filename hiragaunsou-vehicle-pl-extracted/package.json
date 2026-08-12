@@ -19,7 +19,8 @@
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:overlap": "playwright test --grep @overlap"
   },
   "lint-staged": {
     "*.{ts,tsx}": "eslint --fix"

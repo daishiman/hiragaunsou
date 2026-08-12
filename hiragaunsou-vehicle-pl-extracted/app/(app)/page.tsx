@@ -280,7 +280,19 @@ export default async function HomePage({
             const s = findScreen(href);
             if (!s) return null;
             return (
-              <Link key={href} href={href} className="btn btn-quiet pressable">
+              /*
+                .btn は「1行の操作」用で、中身を横一列に並べ、折り返しも禁じている
+                (globals.css の .btn: inline-flex / align-items:center / white-space:nowrap)。
+                そこへ呼び名と説明の2行を入れると、2行が横に並んだうえで隣のカードへはみ出し、
+                文字同士が重なって読めなくなっていた (tests/e2e/text-overlap.spec.ts が検出)。
+                .btn は打ち消せない (globals.css の指定はレイヤーの外にあり、
+                Tailwind の utility より強い) ので、見た目だけ同じ枠を utility で作る。
+              */
+              <Link
+                key={href}
+                href={href}
+                className="pressable block rounded-[var(--radius-control)] border border-line bg-white px-4 py-2 hover:bg-subtle"
+              >
                 <p className="text-sm font-semibold text-ink">{s.label}</p>
                 <p className="mt-0.5 text-xs text-ink-muted">{s.desc}</p>
               </Link>

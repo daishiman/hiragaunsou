@@ -27,7 +27,9 @@ jobs:
   ci:
     name: typecheck + test
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 文字の重なり検査を足したぶん、20分では足りなくなった。
+    # 手元(Apple Silicon)の実測は全画面×2幅で4.4分・グラフで7秒。CIのRunnerはこれより遅いので倍を見る。
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
@@ -76,10 +78,33 @@ jobs:
       # secretsはcreateAuth()の初期化が落ちないためのダミー値で足りる。
       # BETTER_AUTH_URLはtrustedOriginsの判定に使われるため、webServerが起動する
       # http://localhost:3000 と一致させないと sign-in が Invalid origin で失敗する。
+      #
+      # 「文字の重なり」だけ独立した1ステップにしてある。全画面を総当たりする検査なので、
+      # 他のE2Eに埋めると「どこが壊れたのか」がログの中で埋もれる。
+      # 順番も先にしている: 見た目が壊れているPRは、機能の検証を待たずに落ちてほしい。
+      - name: 文字の重なり検査 (全画面 + グラフ)
+        env:
+          BETTER_AUTH_SECRET: ci-dummy-secret-not-used-for-real-auth
+          BETTER_AUTH_URL: http://localhost:3000
+          GOOGLE_CLIENT_ID: ci-dummy-client-id
+          GOOGLE_CLIENT_SECRET: ci-dummy-client-secret
+        run: npm run test:e2e:overlap
+
+      # 重なり検査で失敗したとき、どう重なっていたのかを画像で残す
+      # (失敗メッセージの文字だけでは、意図した重ねなのかの判断がつかないことがある)。
+      - name: Upload overlap screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: text-overlap-screenshots
+          path: hiragaunsou-vehicle-pl-extracted/test-results/**
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: E2E smoke test
         env:
           BETTER_AUTH_SECRET: ci-dummy-secret-not-used-for-real-auth
           BETTER_AUTH_URL: http://localhost:3000
           GOOGLE_CLIENT_ID: ci-dummy-client-id
           GOOGLE_CLIENT_SECRET: ci-dummy-client-secret
-        run: npm run test:e2e
+        run: npm run test:e2e -- --grep-invert @overlap
