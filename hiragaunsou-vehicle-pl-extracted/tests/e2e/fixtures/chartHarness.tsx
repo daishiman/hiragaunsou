@@ -1,4 +1,5 @@
 import { createRoot, type Root } from "react-dom/client";
+import { flushSync } from "react-dom";
 import { TrendBars, type TrendBarsProps } from "../../../app/_components/charts/TrendBars";
 
 /**
@@ -14,15 +15,17 @@ import { TrendBars, type TrendBarsProps } from "../../../app/_components/charts/
  */
 declare global {
   interface Window {
-    renderTrendBars: (props: TrendBarsProps) => void;
+    renderTrendBars: (props: TrendBarsProps, caseMarker: string) => void;
   }
 }
 
 let root: Root | null = null;
 
-window.renderTrendBars = (props) => {
+window.renderTrendBars = (props, caseMarker) => {
   const host = document.getElementById("chart-host");
   if (!host) throw new Error("chart-host が無い");
   root ??= createRoot(host);
-  root.render(<TrendBars {...props} />);
+  // root.render は非同期なので、前ケースのDOMを測って緑になるのを防ぐ。
+  flushSync(() => root!.render(<TrendBars {...props} />));
+  host.dataset.renderedCase = caseMarker;
 };

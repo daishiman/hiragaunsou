@@ -71,10 +71,25 @@ export async function openChartHarness(page: Page): Promise<void> {
 }
 
 /** 検査用の数字でグラフを描き、描き終わるまで待つ。 */
-export async function renderTrendBars(page: Page, props: TrendBarsProps): Promise<void> {
-  await page.evaluate((p) => {
-    (window as unknown as { renderTrendBars: (props: unknown) => void }).renderTrendBars(p);
-  }, props as unknown as Record<string, unknown>);
+export async function renderTrendBars(
+  page: Page,
+  props: TrendBarsProps,
+  caseMarker: string,
+): Promise<void> {
+  await page.evaluate(
+    ({ chartProps, marker }) => {
+      (
+        window as unknown as {
+          renderTrendBars: (props: unknown, caseMarker: string) => void;
+        }
+      ).renderTrendBars(chartProps, marker);
+    },
+    { chartProps: props as unknown as Record<string, unknown>, marker: caseMarker },
+  );
+  await page.waitForFunction(
+    (marker) => document.getElementById("chart-host")?.dataset.renderedCase === marker,
+    caseMarker,
+  );
   // React の描画とブラウザの字組みが終わってから測る
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve(null))));
 }
