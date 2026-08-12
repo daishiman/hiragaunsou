@@ -1,25 +1,28 @@
 # AI開発エージェントキット
 
-**バージョン 1.5.0**
+**バージョン 1.9.0**
 
-Claude Code に「プロの開発ノウハウ集(スキル18個)」と「開発を自動で進める司令塔(エージェント app-orchestrator)」を追加するキットです。
+Claude Code と OpenAI Codex の両方に、「プロの開発ノウハウ集」と「開発を自動で進める司令塔(app-orchestrator)」を同時に追加するキットです。
 
-インストールすると、Claude Code に次のように頼むだけで、要件の整理からデザイン・開発・公開・品質チェックまでを決められた手順で自動的に進めてくれるようになります。
+インストールすると、どちらのツールでも、要件の整理からデザイン・開発・公開・品質チェックまでを決められた手順で進められます。
 
-```
-/build-app 社員の勤怠を管理するアプリを作って
+```text
+Claude Code: /build-app 社員の勤怠を管理するアプリを作って
+OpenAI Codex: $build-app 社員の勤怠を管理するアプリを作って
 ```
 
 まず業務に必要な機能一式がそろった「最初の1本」を最短で公開し、その後は次のコマンドで1機能ずつ安全に育てていきます。
 
-```
-/improve-app 月ごとの集計をグラフでも見たい
+```text
+Claude Code: /improve-app 月ごとの集計をグラフでも見たい
+OpenAI Codex: $improve-app 月ごとの集計をグラフでも見たい
 ```
 
 変更は自動的に記録されるため、うまくいかなかったときは次のコマンドで1つ前の状態に戻せます。
 
-```
-/undo-app さっき追加したグラフをいったん取り消したい
+```text
+Claude Code: /undo-app さっき追加したグラフをいったん取り消したい
+OpenAI Codex: $undo-app さっき追加したグラフをいったん取り消したい
 ```
 
 ## まずマニュアルをお読みください
@@ -33,12 +36,13 @@ Claude Code に「プロの開発ノウハウ集(スキル18個)」と「開発�
 
 ## 事前に必要なもの
 
-- **Claude Code** がインストール済みで、サインインが完了していること
-  - まだの場合は先に Claude Code を起動し、チャットが使える状態にしてください
-  - `~/.claude` フォルダが存在しないと、インストーラーは処理を中断します
+- **Claude Code または OpenAI Codex** がインストール済みで、サインインが完了していること
+  - インストーラーは両方の設定を同時に用意するため、あとからもう一方を導入しても同じキットを使えます
 - **開発環境(Node.js と pnpm)** — 無くてもキットのインストールはできますが、アプリ開発を始める前に必要です
   - 付属のセットアップスクリプトをダブルクリックするだけで両方入ります
-  - あわせて **Claude Code と Cloudflare(アプリの公開先)の連携** も自動で設定されます
+  - あわせて **Claude Code / Codex と Cloudflare(アプリの公開先)の連携** も自動で設定されます
+- **GitHub CLI (`gh`) とGitHubへのサインイン** — プルリクエストの作成・確認・反映に使います。GitHub MCPは必須ではありません
+  - `gh auth login` を実行し、対象リポジトリへアクセスできる状態にしてください
 
 | お使いのPC | 開発環境セットアップ |
 |---|---|
@@ -51,41 +55,52 @@ Claude Code に「プロの開発ノウハウ集(スキル18個)」と「開発�
 
 1. このZIPを **展開する**(ZIPの中身を直接開いたままでは失敗します)
 2. インストーラーをダブルクリックする
-3. Claude Code を再起動して `/build-app` と入力できれば完了
+3. Claude Code と Codex を再起動し、Claude Code では `/build-app`、Codex では `$build-app` を入力できれば完了
 
 詳しい手順・つまずいたときの対処は、上のマニュアルに全部書いてあります。
 
 ## インストール先
 
-すべて、お使いのユーザーフォルダ内の `.claude` に入ります。
+Claude Code 用と Codex 用の正規の場所へ、それぞれ同じ内容を導入します。
 
-| OS | 場所 |
-|---|---|
-| Mac | `~/.claude/` |
-| Windows | `C:\Users\(あなたの名前)\.claude\` |
+| 対象 | Mac | Windows |
+|---|---|---|
+| Claude Code | `~/.claude/` | `C:\Users\(あなたの名前)\.claude\` |
+| Codex のスキル | `~/.agents/skills/` | `C:\Users\(あなたの名前)\.agents\skills\` |
+| Codex のcustom agent・任意の旧互換prompt | `~/.codex/` | `C:\Users\(あなたの名前)\.codex\` |
 
 ```
 .claude/
-├── skills/      ← スキル18個を追加
+├── skills/      ← 共通スキルを追加
 ├── agents/      ← app-orchestrator.md を追加
-└── commands/    ← build-app.md / improve-app.md / undo-app.md を追加
+└── commands/    ← Claude Code の4コマンドを追加
+
+.agents/skills/
+├── (共通スキル)/
+├── app-orchestrator/
+└── build-app/ improve-app/ undo-app/ setup-cicd/
+
+.codex/
+├── agents/app-orchestrator.toml
+└── prompts/     ← --legacy-prompts 指定時だけ入る旧互換prompt
 ```
 
-Claude Code の設定ファイルや、他のアプリには影響しません。
+既存の同名項目だけをバックアップして更新し、このキットが入れていないスキルや設定には触れません。
 
 ### 既に同じ名前のファイルがある場合
 
 インストーラーが**自動でバックアップを作ってから**上書きします。
 
 ```
-.claude/backup-20260726-143000/   ← 上書き前のファイルがここに残る
+.claude/backup-20260726-143000/   ← Claude Code の上書き前ファイル
+.codex/backup-20260726-143000/    ← Codex の上書き前ファイル
 ```
 
 元に戻したいときは、このフォルダの中身を元の場所へ戻してください。
 
-### 注意: `.claude` の中にリンクを設定している方へ
+### 注意: 設定フォルダ内にリンクを設定している方へ
 
-`skills` `agents` `commands` のいずれかを**シンボリックリンク(別フォルダへの近道)**にしている場合、インストーラーは**処理を中断します**。リンク先の無関係なフォルダを書き換えてしまわないための安全装置です。
+Claude Code / Codex の書き込み対象を**シンボリックリンク(別フォルダへの近道)**にしている場合、インストーラーは**処理を中断します**。リンク先の無関係なフォルダを書き換えてしまわないための安全装置です。
 
 その場合は画面の案内に従い、リンクを一時退避してから再実行してください。
 
@@ -97,16 +112,29 @@ Claude Code の設定ファイルや、他のアプリには影響しません�
 |---|---|
 | app-orchestrator | 要件整理→デザイン→開発→公開→品質チェックを順番に進める司令塔 |
 
-### コマンド — 4個
+Codexにもagent／subagent機能があります。このキットは `~/.codex/agents/app-orchestrator.toml` をcustom agentとして、同じ手順の `$app-orchestrator` を `~/.agents/skills/app-orchestrator/SKILL.md` として導入します。Codexがcustom agentを利用できる環境では司令塔へ委譲し、利用できないクライアントでは同じスキルを現在のスレッドで実行します。
 
-| 名前 | 役割 |
+### コマンドワークフロー — 4個
+
+| Claude Code / Codex | 役割 |
 |---|---|
-| `/build-app` | 新しいアプリを最初から公開まで作るコマンド |
-| `/improve-app` | 公開済みのアプリに機能追加・改善を1件ずつ行うコマンド |
-| `/undo-app` | 直前の変更を取り消して、アプリを1つ前の状態に戻すコマンド |
-| `/setup-cicd` | 自動チェックと自動公開のしくみ(CI/CD)をリポジトリに導入するコマンド |
+| `/build-app` / `$build-app` | 新しいアプリを最初から公開まで作る |
+| `/improve-app` / `$improve-app` | 公開済みのアプリに機能追加・改善を1件ずつ行う |
+| `/undo-app` / `$undo-app` | 直前の変更を取り消して、アプリを1つ前の状態に戻す |
+| `/setup-cicd` / `$setup-cicd` | 自動チェックと自動公開のしくみ(CI/CD)を導入する |
 
-### スキル(開発ノウハウ集) — 19個
+Claude Code のcustom `/command` に対応するCodexの標準機能は、再利用可能な `$skill` です。`$build-app` などはCodexの組み込みslash commandではありません。`/skills` や `/agent` などCodex自身のslash commandは、スキル一覧やagentスレッドを操作する別の機能です。
+
+Codex の `AGENTS.md` はプロジェクト規約を毎回読み込ませる常設指示であり、特定の依頼時だけ起動する `$skill` やcustom agentの代替ではありません。このキットは用途を混ぜず、ワークフローをskills、司令塔をcustom agentに配置します。
+
+Codex custom prompts（`/prompts:build-app` など）は公式に非推奨です。そのため標準インストールでは生成しません。既存運用の移行期間だけ必要な場合は、ターミナル／コマンドプロンプトから次の任意オプションを付けてください。新しい利用方法は常に `$build-app` を使用します。
+
+```text
+Mac:     bash install-mac.command --legacy-prompts
+Windows: install-windows.bat --legacy-prompts
+```
+
+### 共通スキル(開発ノウハウ集) — 20個
 
 | 名前 | 内容 |
 |---|---|
@@ -129,23 +157,26 @@ Claude Code の設定ファイルや、他のアプリには影響しません�
 | cloudflare-email-service | メール送信機能の作り方 |
 | solo-git-flow | 個人開発の変更管理(ブランチ・プルリク・Issue)の進め方 |
 | ci-cd-pipeline | 自動チェック・自動公開のしくみ(GitHub Actions)の作り方と費用の抑え方 |
+| design-judgment | テンプレート感を業務構造の反映不足として診断・改善する判断基準 |
 
 ## 更新するとき
 
 新しいバージョンのZIPを展開し、**同じようにインストーラーを実行するだけ**です。既にキットが入っている環境では、**後からインストールしたキットの内容が常に正**として上書き更新されます(上書き前のファイルは従来どおり `backup-(日時)` フォルダへ自動退避されます)。
 
-インストーラーは `.claude` 直下に導入記録として `aidd-agent-kit.version`(入っているバージョン)と `aidd-agent-kit.manifest`(このキットが入れたものの一覧)を作ります。更新時はこの記録を参照し、**新しいキットに含まれなくなった古いスキル・コマンド・エージェントを自動でバックアップへ移動して整理します**。対象は**キットが入れたものだけ**で、ご自身で追加したスキルやコマンドには一切触れません。
+インストーラーは `.claude` と `.codex` に導入バージョンとmanifest(このキットが入れたものの一覧)を作ります。更新時はこの記録を参照し、**新しいキットに含まれなくなった古いスキル・コマンド・エージェントを自動でバックアップへ移動して整理します**。対象は**キットが入れたものだけ**で、ご自身で追加した項目には触れません。
 
 使用中に蓄積されたナレッジ(各スキルフォルダ内の `knowledge/` など、キットが配布していない追加ファイル)は**更新で消えず、そのまま残ります**。廃止されたスキルの中にあった場合は、バックアップフォルダの中に残ります。
 
 ## アンインストールするとき
 
-`.claude` フォルダから次を削除してください。
+`.claude`、`.agents/skills`、`.codex` から次を削除してください。
 
-- `skills/` の中の、上の表にある19フォルダ
-- `agents/app-orchestrator.md`
-- `commands/build-app.md`・`commands/improve-app.md`・`commands/undo-app.md`・`commands/setup-cicd.md`
-- 導入記録の2ファイル `aidd-agent-kit.version` と `aidd-agent-kit.manifest`
+- `.claude/skills/` と `.agents/skills/` の中の、上の表にある20フォルダ
+- `.claude/agents/app-orchestrator.md`
+- `.claude/commands/build-app.md`・`improve-app.md`・`undo-app.md`・`setup-cicd.md`
+- `.agents/skills/app-orchestrator/` と4つのコマンドスキル
+- `.codex/agents/app-orchestrator.toml`。`--legacy-prompts` を使った場合だけ `.codex/prompts/` 内の4ファイル
+- `.claude` と `.codex` の導入記録 `aidd-agent-kit.version` / `aidd-agent-kit.manifest`
 
 インストール時に作られた `backup-YYYYMMDD-HHMMSS/` フォルダに元のファイルが残っている場合は、そこから戻せます。不要になったバックアップフォルダは削除して構いません。
 
@@ -162,12 +193,45 @@ aidd-agent-kit/
 ├── install-windows.bat      ← Windows用インストーラー
 ├── setup-env-mac.command    ← Mac用 開発環境セットアップ(Node.js + pnpm + Cloudflare連携)
 ├── setup-env-windows.bat    ← Windows用 開発環境セットアップ(Node.js + pnpm + Cloudflare連携)
-├── skills/                  ← スキル19個(開発ノウハウ集)
+├── skills/                  ← Claude Code / Codex 共通スキル20個
 ├── agents/                  ← エージェント(app-orchestrator)
-└── commands/                ← コマンド(/build-app, /improve-app, /undo-app, /setup-cicd)
+├── commands/                ← Claude Code の4コマンド
+└── codex/                   ← Codex のcommand skills・custom agent・任意legacy prompts
 ```
 
 ## 変更履歴
+
+### 1.9.0
+
+- 配布ファイル単位のSHA-256 manifestへ更新し、廃止ファイルを整理しながら、利用者が追加したファイルと `knowledge/` を実配置に保持し、配布ファイルへの変更は上書き前バックアップに保持するようにしました
+- コピー元・SKILL frontmatter・Codex custom agent TOML・スキル名衝突を導入前に検証し、コピー後も内容の一致を確認するようにしました
+- 全変更対象のバックアップを検証し、途中で失敗した場合はClaude Code／Codexの両方を導入前の状態へ戻すようにしました
+- 子フォルダを含む書き込み先のシンボリックリンク／junction／reparse pointを検出し、リンク先の誤更新を防ぐようにしました
+- Codexの非推奨custom promptsを標準導入から外し、`--legacy-prompts` 指定時だけ導入する任意互換にしました
+- Cloudflare MCPを `/mcp` のHTTP transportへ更新し、Claude Codeはuser scopeで登録、両クライアントとも設定結果を確認して失敗を正しく表示するようにしました
+- Codexのcustom agent／subagent、`$skill`、組み込みslash command、`AGENTS.md` の役割の違いを明文化し、内部オーケストレータSkillの暗黙起動を無効化しました
+- Claude Code／Codexのワークフロー、Mac／WindowsのMarkdown／HTMLマニュアル、Turnstileの保存先表記を同期しました
+
+### 1.8.0
+
+- 1回のインストールで Claude Code と OpenAI Codex の両方へ同時導入できるようにしました
+- 共通スキルは Codex の正規ユーザー配置先 `~/.agents/skills` にもコピーします
+- Claude Code の4コマンドを、Codex では `$build-app` などの推奨skill形式へ変換しました
+- `app-orchestrator` を Codex の project/user custom agent 形式(TOML)へ対応させました
+- Claude Code / Codex の両方で、同名項目のバックアップ、更新時の廃止項目整理、全件検証を行います
+- 開発環境セットアップで両クライアントのCloudflare MCPを設定するようにしました
+
+### 1.7.0
+
+- **画面づくりの順番を規律にしました**。jp-web-design に新しい手引き `references/information-design.md` を追加し、「**表を書くところから設計を始めない**」を全体の前提に置いています
+  - 画面は8つの工程で作ります(使われる場面の1文 → ラベル剥がし → 伝わらないものだけ最小限に補う → グループ化 → 優先順位 → 表示用のデータ加工 → 表示形式の導出 → 機能追加と意味づけの装飾)。**装飾を後から足しても画面は良くなりません**
+  - **表示形式を事例集から選ばせません**。主目的・情報量・件数・識別の手がかり・データの関係・求められる操作の6軸で場面を測り、そこから形を導きます。軸が埋まらない場合は「デザインの問題」ではなく**ヒアリング不足**として要件に戻します
+  - **前例のない要件を「対応できません」で終わらせません**。原理に還元 → 軸で測る → 慣習を探す → 実データで検証 → 判断を記録、の手順で導きます
+  - **表が正解の画面もある**ことを明記しました(台帳入力・照合・大量比較)。禁じているのは表そのものではなく、とりあえず表から書き始めて思考を止めることです
+- **「見づらい・ダサい・使いにくい」の直し方を手順化しました**。症状から原因を特定し、装飾を剥がして情報の並べ方から作り直します。**装飾を足す方向では対応せず、既存機能も落としません**
+- **軽量仕様メモの置き場所を統一しました**。標準は `docs/product/T2-experience-spec.md` です。通常の設計判断はここに1行ずつ残し、**前例のない例外判断だけ** `docs/product/design-decisions.md` に分離します。同じ例外判断が3画面で繰り返されたら、スキルへの昇格を提案します
+- ux-design・app-excellence・app-orchestrator・検収チェックリストを上記の工程に合わせて更新しました
+- ci-cd-pipeline の GitHub Actions 雛形で **Node.js を 22 に引き上げ**ました(公開ツール wrangler が 22 以上を要求するため、20 のままだと型生成で失敗します)
 
 ### 1.6.0
 

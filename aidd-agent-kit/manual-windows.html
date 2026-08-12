@@ -94,17 +94,22 @@
 
   <div class="os-badge">Windows版</div>
   <h1>AI開発エージェントキット<br>セットアップマニュアル</h1>
-  <p class="lead-sub">バージョン 1.6.0 ／ 所要時間 約5分</p>
+  <p class="lead-sub">バージョン 1.9.0 ／ 所要時間 約5分</p>
 
   <div class="box">
     <p class="big">このキットは何?</p>
-    <p>Claude Code(AIがアプリを作ってくれるツール)に、<strong>プロの開発ノウハウ集(スキル19個)</strong> と <strong>開発を最初から最後まで自動で進める司令塔(エージェント)</strong> を追加するキットです。</p>
-    <p>インストールすると、Claude Code に</p>
-    <p class="quote">/build-app 社員の勤怠を管理するアプリを作って</p>
+    <p>Claude Code と OpenAI Codex に、<strong>プロの開発ノウハウ集(共通スキル20個)</strong> と <strong>開発を最初から最後まで自動で進める司令塔(エージェント)</strong> を同時に追加するキットです。</p>
+    <p>インストール後は、利用するツールに合わせて次のように入力します。</p>
+    <p class="quote">Claude Code: /build-app 社員の勤怠を管理するアプリを作って<br>Codex: $build-app 社員の勤怠を管理するアプリを作って</p>
     <p>と一言頼むだけで、要件の整理 → デザイン → 開発 → 公開 → 品質チェックまでを、決められた手順で自動的に進めてくれるようになります。</p>
     <p>公開した後は</p>
-    <p class="quote">/improve-app 月ごとの集計をグラフでも見たい</p>
+    <p class="quote">Claude Code: /improve-app 月ごとの集計をグラフでも見たい<br>Codex: $improve-app 月ごとの集計をグラフでも見たい</p>
     <p>と頼むだけで、今あるアプリを壊さずに機能を1つずつ追加・改善していけます。</p>
+  </div>
+
+  <div class="warn">
+    <div class="warn-title">Codexにもagent／subagentがあります</div>
+    <p>Claude Code のcustom <code>/command</code> に対応する標準導線は、Codexでは <code>$skill</code> です。<code>/skills</code> や <code>/agent</code> などCodex組み込みのslash commandとは別物です。<code>AGENTS.md</code> はプロジェクト規約を毎回読み込む常設指示で、必要なときだけ起動するskillやcustom agentの代わりではありません。</p>
   </div>
 
   <div class="toc">
@@ -122,12 +127,12 @@
   <h2 id="need">事前に必要なもの</h2>
   <table>
     <tr><th>必要なもの</th><th>確認方法</th></tr>
-    <tr><td>Claude Code がインストールされた Windows PC</td><td>スタートメニューに「Claude Code」がある(なければ社内のIT担当者にご相談ください)</td></tr>
-    <tr><td>Claude へのサインイン</td><td>Claude Code を開いてチャットが使える状態になっている</td></tr>
+    <tr><td>Claude Code または OpenAI Codex がインストールされた Windows PC</td><td>どちらかのアプリでチャットが使える</td></tr>
+    <tr><td>利用するツールへのサインイン</td><td>Claude Code または Codex でチャットが使える状態になっている</td></tr>
   </table>
   <div class="warn">
     <div class="warn-title">重要</div>
-    <p>インストーラーは Claude Code の設定フォルダ(<code>C:\Users\(あなたの名前)\.claude</code>)に書き込みます。Claude Code を<strong>一度も起動していないとこのフォルダが存在せず</strong>、インストールは中断されます。先に Claude Code を起動しておいてください。</p>
+    <p>インストーラーは <code>.claude</code>、<code>.agents\skills</code>、<code>.codex</code> に両方の設定を用意します。片方だけを現在使っている場合でも実行できます。</p>
   </div>
 
   <h2 id="install">インストール手順</h2>
@@ -165,10 +170,12 @@
         </div>
 
         <h3>コマンドプロンプトでコマンド実行してインストールする方法(上級者向け)</h3>
-        <p>ダブルクリックの代わりに、コマンドプロンプト(Claude Code の Bash ツール等)からコマンドで実行することもできます。挙動はダブルクリックと完全に同じです。</p>
+        <p>ダブルクリックの代わりに、コマンドプロンプトから実行することもできます。挙動はダブルクリックと同じです。</p>
         <div class="cmd-sample">cd aidd-agent-kit フォルダのパス
 install-windows.bat</div>
-        <p><strong>インストール先を <code>C:\Users\(あなたの名前)\.claude</code> 以外にしたい場合</strong>(例: 特定のプロジェクト直下にある <code>.claude</code> にだけ導入したい場合)は、このインストーラーはそのフォルダに固定されているため使えません。代わりに <code>skills</code>・<code>agents</code>・<code>commands</code> の中身をそのプロジェクトの <code>.claude</code> へ手動でコピーしてください(既存ファイルと重複する場合は、上書き前に別フォルダへコピーしてバックアップしてから行うと安全です)。</p>
+        <p>標準のインストール先は <code>.claude</code>、<code>.agents\skills</code>、<code>.codex</code> です。プロジェクト限定で使う場合は、それぞれのプロジェクト用設定フォルダへ手動配置してください。</p>
+        <p>Codexの旧 <code>/prompts:build-app</code> 形式は非推奨で、標準インストールには含まれません。移行期間だけ必要な場合は任意オプションを付けます。新しい利用方法では <code>$build-app</code> を使ってください。</p>
+        <div class="cmd-sample">install-windows.bat --legacy-prompts</div>
         </div>
       </div>
 
@@ -182,7 +189,7 @@ install-windows.bat</div>
           <li>黒い画面が開き、自動でインストールが進みます(2〜5分)。</li>
           <li><strong>「セットアップが完了しました!」</strong> と表示されたら成功です。</li>
           </ol>
-          <p>このスクリプトでは、あわせて <strong>Claude Code と Cloudflare(アプリの公開先)の連携設定(MCP: Claude Code と外部サービスをつなぐ仕組み)</strong> も自動で行われます。初回に利用するとき、ブラウザで許可を求める画面が開くことがありますが、<strong>「許可」を押していただければ大丈夫</strong>です。</p>
+          <p>このスクリプトでは、あわせて <strong>Claude Code / Codex と Cloudflare の連携設定(MCP)</strong> も自動で行われます。初回にブラウザで許可を求められたら、<strong>「許可」</strong>を押してください。</p>
           <p class="quote">すでに入っている場合は「インストール済みです」と表示されるだけなので、何度実行しても問題ありません。「WindowsによってPCが保護されました」という青い画面が出たときは、STEP 2 と同じ方法(詳細情報 → 実行)で開いてください。</p>
         </div>
       </div>
@@ -192,8 +199,8 @@ install-windows.bat</div>
         <div class="step-body">
           <h3>動作確認する</h3>
           <ol>
-          <li>Claude Code を <strong>一度終了して、起動し直します</strong>(すでに閉じていればそのまま起動)。</li>
-          <li>チャット欄に半角で <code>/build-app</code> と入力します。</li>
+          <li>Claude Code と Codex を <strong>一度終了して、起動し直します</strong>。</li>
+          <li>Claude Code は <code>/build-app</code>、Codex は <code>$build-app</code> と入力します。</li>
           <li>入力候補に <strong>build-app</strong> が表示されればインストール成功です。</li>
           </ol>
           
@@ -202,8 +209,8 @@ install-windows.bat</div>
 
   <h2 id="usage">使い方</h2>
   <h3>基本の使い方</h3>
-  <p>チャット欄に <code>/build-app</code> に続けて、作りたいものを普通の言葉で書くだけです。</p>
-  <div class="cmd-sample">/build-app 会議室の予約アプリ。社員だけが使える。Googleアカウントでログイン。</div>
+  <p>Claude Code は <code>/build-app</code>、Codex は <code>$build-app</code> に続けて、作りたいものを普通の言葉で書くだけです。</p>
+  <div class="cmd-sample">Claude Code: /build-app 会議室の予約アプリ。社員だけが使える。<br>Codex: $build-app 会議室の予約アプリ。社員だけが使える。</div>
 
   <h3>上手に頼むコツ</h3>
   <p>次の3点を書くと、AIが迷わず一発で作ってくれます。</p>
@@ -214,30 +221,28 @@ install-windows.bat</div>
   </ol>
 
   <h3>公開した後に育てるとき</h3>
-  <p>最初のアプリは「業務に必要な機能一式」がそろった状態で公開されますが、使ってみると「これも欲しい」が必ず出てきます。そのときは <code>/improve-app</code> に続けて要望を書くだけです。</p>
-  <div class="cmd-sample">/improve-app 車両ごとの一覧を印刷しやすいレイアウトでも見たい</div>
+  <p>公開後は Claude Code の <code>/improve-app</code> または Codex の <code>$improve-app</code> に続けて要望を書きます。</p>
+  <div class="cmd-sample">Claude Code: /improve-app 印刷しやすくしたい<br>Codex: $improve-app 印刷しやすくしたい</div>
   <ul>
-    <li>要望を書かずに <code>/improve-app</code> だけ入力すると、<strong>残課題リスト(次にやることの候補一覧)</strong>から選べます。</li>
+    <li>要望を書かずに <code>/improve-app</code> または <code>$improve-app</code> だけ入力すると、<strong>残課題リスト</strong>から選べます。</li>
     <li>複数の要望があっても、<strong>1件ずつ</strong>安全に追加されます(今動いているアプリを壊さないためです)。</li>
-    <li>変更内容は自動で記録されます。試してみて問題があったときは <code>/undo-app</code> と入力すれば、<strong>1つ前の状態に戻せます</strong>。</li>
+    <li>問題があったときは <code>/undo-app</code> または <code>$undo-app</code> で、<strong>1つ前の状態に戻せます</strong>。</li>
   </ul>
-  <div class="cmd-sample">/undo-app さっき追加した印刷レイアウトをいったん取り消したい</div>
+  <div class="cmd-sample">Claude Code: /undo-app さっきの変更を取り消したい<br>Codex: $undo-app さっきの変更を取り消したい</div>
 
   <h3>コマンドを使わなくてもOK</h3>
-  <p>普通に「在庫管理のアプリを作りたい」と話しかけるだけでも、自動的にこのエージェントが動きます。確実に動かしたいときは <code>/build-app</code> を使ってください。</p>
+  <p>普通に「在庫管理のアプリを作りたい」と頼むこともできます。確実に動かしたいときは <code>/build-app</code> または <code>$build-app</code> を使ってください。</p>
 
   <h2 id="faq">うまくいかないとき</h2>
       <div class="faq-q">Q1. インストーラーがどうしても開けない</div>
       <p><strong>手動でコピーする方法</strong>があります。</p>
       <ol>
-        <li>エクスプローラー(フォルダのアイコン)を開き、上部の <strong>アドレスバー</strong> に <code>%USERPROFILE%\.claude</code> と入力して Enter を押します。
-          <ul><li>「見つかりません」と出た場合は、Claude Code を一度起動してから再度試してください。</li></ul>
-        </li>
-        <li>ZIPを展開した <code>aidd-agent-kit</code> フォルダの中の <code>skills</code>・<code>agents</code>・<code>commands</code> の3フォルダの<strong>中身</strong>を、<code>.claude</code> の同じ名前のフォルダの中へそれぞれコピーします(同名フォルダがなければそのままコピーで作成)。</li>
+        <li>Claude Code 用は <code>skills</code>・<code>agents</code>・<code>commands</code> を <code>.claude</code> の対応先へコピーします。</li>
+        <li>Codex 用は共通 <code>skills</code> と <code>codex\skills</code> を <code>.agents\skills</code>、<code>codex\agents</code> を <code>.codex\agents</code> へコピーします。さらに <code>agents\app-orchestrator.md</code> を <code>.agents\skills\app-orchestrator\SKILL.md</code>、<code>codex\app-orchestrator-openai.yaml</code> を <code>.agents\skills\app-orchestrator\agents\openai.yaml</code> として配置します。非推奨の旧互換が必要な場合だけ <code>codex\prompts</code> を <code>.codex\prompts</code> へコピーします。</li>
       </ol>
-      <div class="faq-q">Q2. /build-app が候補に出てこない</div>
+      <div class="faq-q">Q2. /build-app または $build-app が候補に出てこない</div>
       <ul>
-        <li>Claude Code を<strong>完全に終了</strong>して起動し直してください。追加した内容は起動時に読み込まれます。</li>
+        <li>利用中の Claude Code / Codex を<strong>完全に終了</strong>して起動し直してください。</li>
         <li>新しいチャット(新しいセッション)を開いてから入力してください。</li>
       </ul>
       <div class="faq-q">Q3. 「インストールを確認できませんでした」と表示された</div>
@@ -246,19 +251,15 @@ install-windows.bat</div>
         <li>ZIPを展開してできた <code>aidd-agent-kit</code> フォルダの<strong>中の</strong> <code>install-windows.bat</code> を実行しているか確認してください(ZIPの中から直接実行すると失敗します)。</li>
         <li>解決しない場合は Q1 の手動コピーをお試しください。</li>
       </ul>
-      <div class="faq-q">Q4. 「.claude が見つかりません」と表示された</div>
-      <p>Claude Code をまだ一度も起動していない状態です。</p>
-      <ol>
-        <li>Claude Code を起動し、サインインしてチャットが使える状態にします。</li>
-        <li>Claude Code はそのままでも構いませんので、もう一度インストーラーをダブルクリックします。</li>
-      </ol>
+      <div class="faq-q">Q4. Codex でスキルが表示されない</div>
+      <p>Codex を完全に終了して起動し直し、新しいチャットの <code>/skills</code> で <code>build-app</code> を確認してください。</p>
       <div class="faq-q">Q5. 「別の場所への『近道(リンク)』になっています」と表示された</div>
       <p><code>.claude</code> の中のフォルダが、別の場所を指すリンクとして設定されています。<strong>このままコピーすると、まったく関係のないフォルダの中身が書き換えられてしまう</strong>ため、インストーラーが安全のために処理を止めました。</p>
       <p>心当たりがない場合は、<strong>この画面のまま導入支援の担当者にお見せください</strong>。</p>
       <p>ご自身で設定された方は、画面に表示されたコマンドでリンクを一時的に退避してから、もう一度インストーラーを実行してください。</p>
       <div class="faq-q">Q6. 「以前のファイルは次の場所に保存してあります」と表示された</div>
-      <p><code>.claude</code> に既に同じ名前のファイルがあったため、<strong>上書きする前に自動でバックアップ</strong>したという意味です。インストール自体は成功しています。</p>
-      <div class="cmd-sample">C:\Users\(あなたの名前)\.claude\backup-20260726-143000\</div>
+      <p>Claude Code または Codex に同名項目があったため、<strong>上書き前に自動でバックアップ</strong>したという意味です。</p>
+      <div class="cmd-sample">.claude\backup-20260726-143000\<br>.codex\backup-20260726-143000\</div>
       <p>元に戻したいときは、このフォルダの中身を元の場所へ戻してください。不要になったら、フォルダごと削除して構いません。</p>
       <div class="faq-q">Q7. 「ファイルのコピー中に問題が発生しました」と表示された</div>
       <ul>
@@ -267,13 +268,13 @@ install-windows.bat</div>
         <li>解決しない場合は Q1 の手動コピーをお試しください。</li>
       </ul>
       <div class="faq-q">Q8. 黒い画面の日本語が文字化けしている</div>
-      <p>表示が崩れていてもインストール自体は正常に行われます。STEP 4 の動作確認で <code>/build-app</code> が出れば問題ありません。</p>
+      <p>表示が崩れていてもインストール自体は正常に行われます。STEP 4 で <code>/build-app</code> または <code>$build-app</code> が出れば問題ありません。</p>
       <div class="faq-q">Q9. セットアップスクリプトが「インストールに失敗しました」と表示する</div>
       <p>社内ネットワークの通信制限(必要なファイルのダウンロード先がブロックされている)が原因の場合があります。</p>
       <p><strong>この画面を閉じずに、そのまま社内のIT担当者・導入支援の担当者にお見せください。</strong> どの通信が止められているかが画面に出ているため、担当者側で対応できます。</p>
 
   <h2 id="list">インストールされるものの一覧</h2>
-  <p>すべて <code>C:\Users\(あなたの名前)\.claude</code> フォルダの中に入ります。Claude Code の設定ファイルや、他のアプリには影響しません。</p>
+  <p>Claude Code 用は <code>.claude</code>、Codex のスキルは <code>.agents\skills</code>、Codex のcustom agentは <code>.codex\agents</code> に入ります。</p>
   <div class="warn">
     <div class="warn-title">同じ名前のファイルがあった場合</div>
     <p>そのファイルは上書きされます。ただし上書き前に <code>backup-(日時)</code> フォルダへ自動で退避されるので、元に戻せます。</p>
@@ -284,17 +285,20 @@ install-windows.bat</div>
     <tr><th>名前</th><th>役割</th></tr>
     <tr><td>app-orchestrator</td><td>要件整理→デザイン→開発→公開→品質チェックを順番に進める司令塔</td></tr>
   </table>
+  <p>Codexでは <code>app-orchestrator.toml</code> をcustom agentとして利用し、同じ司令塔手順を <code>$app-orchestrator</code> skillとしても配置します。custom agentを利用できないクライアントでも、現在のスレッドで同じ手順を実行できます。</p>
 
-  <h3>コマンド — 3個</h3>
+  <h3>コマンドワークフロー — 4個</h3>
   <table>
     <tr><th>名前</th><th>役割</th></tr>
-    <tr><td>/build-app</td><td>新しいアプリを最初から公開まで作るコマンド</td></tr>
-    <tr><td>/improve-app</td><td>公開済みのアプリに機能追加・改善を1件ずつ行うコマンド</td></tr>
-    <tr><td>/undo-app</td><td>直前の変更を取り消して、アプリを1つ前の状態に戻すコマンド</td></tr>
-    <tr><td>/setup-cicd</td><td>自動チェックと自動公開のしくみ(CI/CD)をリポジトリに導入するコマンド</td></tr>
+    <tr><td>/build-app / $build-app</td><td>新しいアプリを最初から公開まで作る</td></tr>
+    <tr><td>/improve-app / $improve-app</td><td>公開済みのアプリに機能追加・改善を1件ずつ行う</td></tr>
+    <tr><td>/undo-app / $undo-app</td><td>直前の変更を取り消して、アプリを1つ前の状態に戻す</td></tr>
+    <tr><td>/setup-cicd / $setup-cicd</td><td>自動チェックと自動公開のしくみを導入する</td></tr>
   </table>
 
-  <h3>スキル(開発ノウハウ集) — 19個</h3>
+  <p>Codex では <code>$...</code> のスキル形式を使ってください。非推奨の <code>/prompts:build-app</code> などは標準では入らず、<code>--legacy-prompts</code> を指定した場合だけ旧互換として入ります。</p>
+
+  <h3>共通スキル(開発ノウハウ集) — 20個</h3>
   <table>
     <tr><th>名前</th><th>内容</th></tr>
       <tr><td>app-excellence</td><td>アプリ開発全体の進め方・品質基準</td></tr>
@@ -316,6 +320,7 @@ install-windows.bat</div>
       <tr><td>cloudflare-email-service</td><td>メール送信機能の作り方</td></tr>
       <tr><td>solo-git-flow</td><td>個人開発の変更管理(ブランチ・プルリク・Issue)の進め方</td></tr>
       <tr><td>ci-cd-pipeline</td><td>自動チェック・自動公開のしくみ(GitHub Actions)の作り方と費用の抑え方</td></tr>
+      <tr><td>design-judgment</td><td>テンプレート感を業務構造の反映不足として診断・改善する判断基準</td></tr>
   </table>
 
   <h2 id="update">更新・アンインストール</h2>
@@ -326,40 +331,36 @@ install-windows.bat</div>
     <li>整理の対象は<strong>このキットが入れたものだけ</strong>です。ご自身で追加されたスキルやコマンドには触れません。</li>
     <li>使いながら貯まったノウハウ(ナレッジ)は<strong>消えません</strong>。そのまま引き継がれます。</li>
   </ul>
-  <p>更新後は Claude Code を再起動してください。</p>
+  <p>更新後は Claude Code と Codex を再起動してください。</p>
 
   <h3>アンインストールしたいとき</h3>
-  <p>エクスプローラーのアドレスバーに <code>%USERPROFILE%\.claude</code> と入力して開き、次を削除します。</p>
+  <p>エクスプローラーで <code>.claude</code>、<code>.agents\skills</code>、<code>.codex</code> を開き、次のキット項目だけを削除します。</p>
   <ol>
-    <li><code>skills</code> フォルダの中の、<strong>上の表にある19個のフォルダ</strong></li>
-    <li><code>agents</code> フォルダの中の <code>app-orchestrator.md</code></li>
-    <li><code>commands</code> フォルダの中の <code>build-app.md</code>・<code>improve-app.md</code>・<code>undo-app.md</code></li>
-    <li><code>.claude</code> フォルダ直下にある <code>aidd-agent-kit.version</code> と <code>aidd-agent-kit.manifest</code>(このキットが何を入れたかを記録したファイルです)</li>
+    <li>Claude / Codex のスキル内にある、<strong>上の表の20フォルダ</strong></li>
+    <li>両方の <code>app-orchestrator</code> と4つのコマンドワークフロー</li>
+    <li><code>.codex\agents\app-orchestrator.toml</code>。<code>--legacy-prompts</code> を使った場合だけ <code>.codex\prompts</code> の4ファイル</li>
+    <li><code>.claude</code> と <code>.codex</code> の導入記録 <code>aidd-agent-kit.version</code> / <code>aidd-agent-kit.manifest</code></li>
   </ol>
   <div class="warn">
     <div class="warn-title">注意</div>
-    <p><code>skills</code>・<code>agents</code>・<code>commands</code> フォルダ自体は削除しないでください。Claude Code が使う他のファイルが入っている場合があります。</p>
+    <p><code>skills</code>・<code>agents</code>・<code>commands</code>・<code>prompts</code> フォルダ自体は削除しないでください。他の項目が入っている場合があります。</p>
   </div>
   <p>インストール時に作られた <code>backup-(日時)</code> フォルダが残っている場合、その中に元のファイルが入っています。必要なら戻したうえで、フォルダごと削除してください。</p>
 
   <h2 id="admin">管理者の方へ(セットアップ後の運用に必要なもの)</h2>
   <p>エージェントがアプリを<strong>インターネットに公開する</strong>ところまで自動で行うため、利用する環境によって以下が必要です。非エンジニアの方は、導入支援の担当者にご相談ください。</p>
   <ul>
-    <li><strong>Claude の有料プラン</strong>(Claude Code が利用できるプラン)</li>
+    <li><strong>Claude Code または OpenAI Codex を利用できるプラン</strong></li>
     <li><strong>Cloudflare アカウント</strong>(アプリの公開先。無料プランで開始可能)と <code>wrangler login</code> によるログイン</li>
     <li><strong>GitHub アカウント</strong>(アプリの変更履歴の保存先。<strong>プライベートリポジトリ</strong>=自社の関係者だけが見られる保管場所を使用します)</li>
-    <li><strong>Claude Code と外部サービスの連携設定(MCP: Claude Code と外部サービスをつなぐ仕組み)</strong>
-      <ul>
-        <li><strong>GitHub との連携</strong> と <strong>Cloudflare との連携</strong> が必要です</li>
-        <li>このうち <strong>Cloudflare との連携は、付属のセットアップスクリプトが自動で設定します</strong>(STEP 3)</li>
-      </ul>
-    </li>
+    <li><strong>GitHub CLI (<code>gh</code>)</strong> のインストールと <code>gh auth login</code> によるサインイン。プルリクエストの作成・確認・反映はGitHub MCPではなく <code>gh</code> を使います</li>
+    <li><strong>Cloudflare との連携設定(MCP)</strong>。付属のセットアップスクリプトがClaude Code／Codexの両方へ自動で設定します(STEP 3)</li>
     <li>Googleログイン機能を使う場合: <strong>Google Cloud</strong> の OAuth 設定(手順はスキル内に日本語で収録済み)</li>
     <li>AI機能を使う場合: <strong>OpenAI / Anthropic 等の APIキー</strong></li>
   </ul>
 
   <div class="footer">
-    AI開発エージェントキット v1.6.0 ／ 本キットに関するお問い合わせ: 株式会社TierMind
+    AI開発エージェントキット v1.9.0 ／ 本キットに関するお問い合わせ: 株式会社TierMind
   </div>
 
 </div>

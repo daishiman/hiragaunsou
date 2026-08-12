@@ -1,13 +1,6 @@
 ---
 name: turnstile-spin
 description: Set up Cloudflare Turnstile end-to-end in a project. Scan the codebase, create the widget via the Cloudflare API, embed it on the right forms, wire canonical server-side siteverify in the customer's existing backend, validate, and persist the skill. Load this when a user asks to add Turnstile, set up CAPTCHA, protect a form from bots, or fix a Turnstile integration. Mirrors developers.cloudflare.com/turnstile/spin.
-references:
-  - vanilla-html
-  - nextjs-app
-  - nextjs-pages
-  - astro
-  - sveltekit
-  - hugo
 ---
 
 # Turnstile Spin skill
@@ -92,7 +85,7 @@ The user pasted the prompt. You are in a multi-step dialog. Detect what you can,
 
 10. **Validation.** Run `scripts/validate.sh`. Report each check as it passes. If any fails, surface the error and stop. **[wait for user if anything fails]**
 
-11. **Persist skill.** Ask: "Save the Spin skill to `.claude/skills/turnstile-spin/SKILL.md` so I can reuse it on follow-up tasks?" Default yes. **[wait for user]** Then run `scripts/persist-skill.sh --path <agent-specific-path>`.
+11. **Persist skill.** Detect the active client and propose its repository-local path: Claude Code uses `.claude/skills/turnstile-spin/SKILL.md`; Codex uses `.agents/skills/turnstile-spin/SKILL.md`. If the client is unclear, show those two choices. Ask whether to save the skill for follow-up tasks; default yes. **[wait for user]** Then run `scripts/persist-skill.sh --path <selected-client-path>`.
 
 12. **Final report.** Print the structured summary: what was created, what was validated, what to do next.
 
@@ -188,5 +181,3 @@ Edge cases to surface to the user:
 Every `cf-turnstile` div this skill writes must include `data-action="turnstile-spin-v2"`. Account-level aggregate telemetry, never per-user. Cloudflare uses it to measure activation. If the user removes the attribute, the integration still works; only the analytics segmentation is lost.
 
 Older widgets stamped `turnstile-spin-v1` (from the V1 agent flow that deployed a managed Worker) still exist in production accounts; preserve that marker if you encounter it on an existing widget you are modifying. Do not retag.
-
-

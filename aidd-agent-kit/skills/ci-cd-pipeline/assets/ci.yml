@@ -69,7 +69,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # wrangler が Node 22 以上を要求する。20 だと cf-typegen で落ちる。
+          node-version: 22
           cache: ${{ steps.pm.outputs.name }}
 
       - name: 依存関係のインストール（${{ steps.pm.outputs.name }}）
