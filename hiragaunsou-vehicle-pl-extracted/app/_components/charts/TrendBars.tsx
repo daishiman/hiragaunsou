@@ -10,6 +10,13 @@ import { man, yen } from "../../_lib/format";
  *   青×グレーの2系列は normal ΔE 13.8 で見分けがつかないため、色ではなく
  *   線種でエンコードを分ける。
  * - 値は色だけで伝えない。符号は棒の向き + 直接ラベルでも分かるようにする。
+ *
+ * ラベルの規律:
+ * - 横軸の月ラベルは画面下部の専用の帯に置き、値ラベルはそこへ入らない
+ *   (負の棒の値ラベルが「7月」等と重なって読めなくなる事故を構造的に防ぐ)。
+ * - 値ラベルの居場所は棒の長さの計算段階で確保する。位置合わせで後から避けると、
+ *   期間 (単月/3/6/13ヶ月) や符号の組み合わせのどれかで必ず破綻する。
+ * - 中央揃えのラベルは左右の端で切れないよう、描画域の内側に寄せる。
  */
 export interface TrendPoint {
   label: string;
@@ -36,6 +43,40 @@ const PAD_X = 8;
 const PAD_TOP = 22;
 const PAD_BOTTOM = 26;
 
+const FONT = 11;
+/** ここから下は横軸の月ラベル専用の帯。値ラベルを絶対に侵入させない */
+const AXIS_BAND_TOP = H - PAD_BOTTOM;
+/** 値ラベルのベースラインの下限 (下げるとしても月ラベルの帯の手前で止める) */
+const MAX_BASELINE = AXIS_BAND_TOP - 3;
+/** 値ラベルのベースラインの上限 (上げすぎるとviewBoxの外で見切れる) */
+const MIN_BASELINE = FONT;
+/**
+ * 負の棒の下に確保する値ラベル用の余白。
+ * ここを取らずに描くと「▲883万円」が横軸の「7月」と同じ座標に落ちて読めなくなる。
+ * 棒の中に白字で置く手もあるが、13ヶ月表示のように棒が細いと字が棒からはみ出て
+ * 白地に白字になるため、棒の太さに依存しないこの方式にする。
+ */
+const NEGATIVE_LABEL_BAND = 16;
+
+/**
+ * SVGのtextは自動で折り返さず、はみ出した分はviewBoxの外で切れる。
+ * 端の点のラベルを画面内に収めるため、必要な幅を概算する。
+ * 全角 (▲・万・億・円・月) は約1em、半角の数字・記号は約0.58em。
+ */
+function approxTextWidth(text: string): number {
+  let w = 0;
+  for (const ch of text) w += /[0-9.,/-]/.test(ch) ? FONT * 0.58 : FONT;
+  return w;
+}
+
+/** 中央揃えラベルの基準Xを描画域の内側に寄せる (両端の "2025/9月" 等が切れるのを防ぐ) */
+function clampCenterX(cx: number, text: string): number {
+  const half = approxTextWidth(text) / 2;
+  const min = PAD_X + half;
+  const max = W - PAD_X - half;
+  return min > max ? W / 2 : Math.min(Math.max(cx, min), max);
+}
+
 export function TrendBars({ points, title, referenceLabel, signed = false }: TrendBarsProps) {
   if (points.length === 0) return null;
 
@@ -44,7 +85,8 @@ export function TrendBars({ points, title, referenceLabel, signed = false }: Tre
   const minV = Math.min(...values, 0);
   const span = Math.max(maxV - minV, 1);
 
-  const plotH = H - PAD_TOP - PAD_BOTTOM;
+  // 下に伸びる棒があるときだけ、棒が届く一番下を持ち上げて値ラベルの居場所を作る
+  const plotH = H - PAD_TOP - PAD_BOTTOM - (minV < 0 ? NEGATIVE_LABEL_BAND : 0);
   const slot = (W - PAD_X * 2) / points.length;
   // 隣り合う棒の間に 2px の地の隙間を空ける (面がくっつくと1本に見える)
   const barW = Math.max(slot - 6, 4);
@@ -116,10 +158,10 @@ export function TrendBars({ points, title, referenceLabel, signed = false }: Tre
               </title>
               {showLabel(i) && (
                 <text
-                  x={x + barW / 2}
+                  x={clampCenterX(x + barW / 2, p.label)}
                   y={H - 9}
                   textAnchor="middle"
-                  fontSize={11}
+                  fontSize={FONT}
                   fill="var(--ink-muted)"
                 >
                   {p.label}
@@ -146,17 +188,27 @@ export function TrendBars({ points, title, referenceLabel, signed = false }: Tre
           const peak = points.reduce((a, b) => (Math.abs(b.value) > Math.abs(a.value) ? b : a));
           if (peak.isEmpty || peak.value === 0) return null;
           const i = points.indexOf(peak);
-          const above = peak.value >= 0;
+          const text = man(peak.value);
+          // 棒の先端 (正なら上端・負なら下端) の座標
+          const tipY = yOf(peak.value);
+
+          // 値ラベルは常に棒の外側 (先端の続き) に置く。上下とも先に余白を取ってあるので、
+          // 上は viewBox から、下は横軸の月ラベルの帯からはみ出さない。
+          const y =
+            peak.value >= 0
+              ? Math.max(tipY - 6, MIN_BASELINE)
+              : Math.min(tipY + 12, MAX_BASELINE);
+
           return (
             <text
-              x={PAD_X + slot * i + slot / 2}
-              y={above ? yOf(peak.value) - 6 : yOf(peak.value) + 14}
+              x={clampCenterX(PAD_X + slot * i + slot / 2, text)}
+              y={y}
               textAnchor="middle"
-              fontSize={11}
+              fontSize={FONT}
               fontWeight={700}
               fill="var(--ink)"
             >
-              {man(peak.value)}
+              {text}
             </text>
           );
         })()}

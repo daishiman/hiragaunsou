@@ -268,17 +268,11 @@ export function RateSettingsManager({
         {renderTable(RARELY_CHANGED, "めったに変えない項目")}
       </StagePanel>
 
-      {/* 保存の入口・未保存件数・離れるときの確認は共通の帯に任せる */}
-      <EditFormActionBar
-        form={form}
-        saveLabel="率を保存して収支表を作り直す"
-        notice={
-          changedLabels.length > 0 ? (
-            <p className="text-xs text-ink-muted">直している欄: {changedLabels.join("、")}</p>
-          ) : null
-        }
-      />
-
+      {/*
+        項目の意味の説明は、値を直しているときに読むもの。表の続きとしてここに置く。
+        保存の帯 (下に貼り付く) より後ろに置くと、帯の下に潜り込んで読めなくなる
+        (帯は画面の最後に置く前提の部品。StickyActionBar のコメント参照)。
+      */}
       <Disclosure summary="各項目の意味と、月別値・共通値の使い分けを見る">
         <p>
           月別値があれば全期間共通値より優先されます。「未設定（既定値）」はコード側の保険値で動いている状態で、
@@ -296,6 +290,17 @@ export function RateSettingsManager({
           ))}
         </dl>
       </Disclosure>
+
+      {/* 保存の入口・未保存件数・離れるときの確認は共通の帯に任せる (画面の最後に置く) */}
+      <EditFormActionBar
+        form={form}
+        saveLabel="率を保存して収支表を作り直す"
+        notice={
+          changedLabels.length > 0 ? (
+            <p className="text-xs text-ink-muted">直している欄: {changedLabels.join("、")}</p>
+          ) : null
+        }
+      />
     </div>
   );
 }
