@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { TrendBars, type TrendPoint } from "../../../app/_components/charts/TrendBars";
+import { AXIS_BAND_TOP } from "../../../app/_components/charts/trendBarsLayout";
 
 describe("TrendBars", () => {
   it("pointsが空のときは何も描画しない", () => {
@@ -75,9 +76,10 @@ describe("TrendBars", () => {
     expect(titles).toContain("4月: 未取込");
   });
 
-  // 横軸の月ラベルの帯 (TrendBars の H - PAD_BOTTOM = 164) より下に
-  // 値ラベルが入ると「▲883万円」と「7月」が重なって読めなくなる
-  const AXIS_BAND_TOP = 164;
+  // 横軸の月ラベルの帯 (AXIS_BAND_TOP) より下に値ラベルが入ると
+  // 「▲883万円」と「7月」が重なって読めなくなる。
+  // 帯の位置は trendBarsLayout.ts が決めるので、ここに数字を写し取らない
+  // (写すと、レイアウトを直したときにテストだけが古い前提で緑になる)。
   const valueLabelY = (container: HTMLElement, text: string) => {
     const el = Array.from(container.querySelectorAll("text")).find(
       (t) => t.textContent === text && t.getAttribute("font-weight") === "700",

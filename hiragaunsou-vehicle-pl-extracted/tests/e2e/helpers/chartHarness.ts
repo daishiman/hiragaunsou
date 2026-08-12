@@ -62,8 +62,8 @@ export async function openChartHarness(page: Page): Promise<void> {
         font-feature-settings: "palt";
         background: #fff;
       }
-      /* 本番のカードの中と同じ幅の使い方 (svg は h-auto w-full) */
-      #chart-host svg { width: 100%; height: auto; display: block; }
+      /* 本番のカードの中と同じ幅の使い方 (svg は block max-w-full。幅は部品が px で決める) */
+      #chart-host svg { display: block; max-width: 100%; }
       .m-0 { margin: 0; }
     </style></head><body><div id="chart-host"></div></body></html>`,
   );
@@ -90,6 +90,16 @@ export async function renderTrendBars(
     (marker) => document.getElementById("chart-host")?.dataset.renderedCase === marker,
     caseMarker,
   );
+  /*
+    グラフは置かれた場所の幅を測ってから px で描き直す (viewBox を引き伸ばさない)。
+    測る前の仮の幅のまま測定すると、本番では起きない重なりを拾ってしまうので、
+    実寸で描き直したことを確かめてから先へ進む。
+  */
+  await page.waitForFunction(() => {
+    const host = document.getElementById("chart-host");
+    const figure = host?.querySelector("figure");
+    return figure instanceof HTMLElement && Number(figure.dataset.chartWidth) > 0;
+  });
   // React の描画とブラウザの字組みが終わってから測る
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve(null))));
 }

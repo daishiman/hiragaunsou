@@ -18,11 +18,11 @@ import { collectTextRects, findOverlaps, formatOverlaps } from "./helpers/textOv
 
 /**
  * グラフが置かれる幅。
- * 広い画面のカード幅と、タブレットで2段組みが1列に折り返したときの幅。
- * (SVGは幅に合わせて丸ごと拡大縮小するので、文字同士の重なり方は幅では変わらない。
- *  それでも2通り見るのは、丸めの誤差で崩れないことまで含めて確かめるため)
+ * グラフは置かれた場所の幅を測って px で描くようになった (拡大縮小しない) ため、
+ * 幅が変われば棒の数・間引き・値ラベルの出し方まで変わる。つまり幅ごとに別の検査になる。
+ * 大きな画面 / 一般的なノートPC / タブレットで1列に折り返したときの3通りを見る。
  */
-const CHART_WIDTHS = [920, 360] as const;
+const CHART_WIDTHS = [1280, 920, 360] as const;
 
 test.describe("グラフの中で文字が重ならない", () => {
   for (const width of CHART_WIDTHS) {
