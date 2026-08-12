@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
+    "test:coverage:overlap-geometry": "vitest run tests/helpers/textOverlapGeometry.test.ts tests/helpers/textOverlapMeasurements.test.ts tests/helpers/chartCases.test.ts --coverage --coverage.include=tests/helpers/textOverlapGeometry.ts --coverage.include=tests/helpers/textOverlapMeasurements.ts --coverage.include=tests/e2e/fixtures/chartCases.ts --coverage.reporter=text --coverage.reportsDirectory=coverage/text-overlap-geometry --coverage.thresholds.100",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "cf-typegen": "wrangler types",
     "cf:build": "opennextjs-cloudflare build",
@@ -19,7 +20,8 @@
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:overlap": "playwright test --grep @overlap"
   },
   "lint-staged": {
     "*.{ts,tsx}": "eslint --fix"

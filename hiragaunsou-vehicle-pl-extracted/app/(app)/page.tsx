@@ -24,6 +24,7 @@ import { Disclosure } from "../_components/Disclosure";
 import { YearMonthSelect } from "../_components/YearMonthSelect";
 import { StickyFilterBar } from "../_components/StickyFilterBar";
 import { WorkflowStepCard } from "../_components/WorkflowStepCard";
+import { ScreenLinkCard } from "../_components/Card";
 import { findScreen } from "../_lib/screens";
 
 /**
@@ -280,10 +281,12 @@ export default async function HomePage({
             const s = findScreen(href);
             if (!s) return null;
             return (
-              <Link key={href} href={href} className="btn btn-quiet pressable">
-                <p className="text-sm font-semibold text-ink">{s.label}</p>
-                <p className="mt-0.5 text-xs text-ink-muted">{s.desc}</p>
-              </Link>
+              <ScreenLinkCard
+                key={href}
+                href={href}
+                label={s.label}
+                description={s.desc}
+              />
             );
           })}
         </div>

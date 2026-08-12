@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { Card, Prose } from "../../app/_components/Card";
+import { Card, Prose, ScreenLinkCard } from "../../app/_components/Card";
 
 /**
  * 全画面の「面」と「説明文の器」。
@@ -71,6 +71,41 @@ describe("Card", () => {
   it("画面ごとの調整は className で足せる", () => {
     const { container } = render(<Card className="mt-4">中身</Card>);
     expect(container.querySelector("section")?.className).toContain("mt-4");
+  });
+});
+
+describe("ScreenLinkCard", () => {
+  it("画面名と説明を持つリンクとして描画する", () => {
+    render(
+      <ScreenLinkCard
+        href="/annual"
+        label="年間集計"
+        description="1年ぶんを月ごとに見比べる"
+      />,
+    );
+
+    const link = screen.getByRole("link", {
+      name: /年間集計.*1年ぶんを月ごとに見比べる/,
+    });
+    expect(link).toHaveAttribute("href", "/annual");
+    expect(screen.getByText("年間集計")).toBeInTheDocument();
+    expect(screen.getByText("1年ぶんを月ごとに見比べる")).toBeInTheDocument();
+  });
+
+  it(".btn を使わず、画面名と説明を折り返せる", () => {
+    render(
+      <ScreenLinkCard
+        href="/grid"
+        label="月次収支表"
+        description="選んだ1か月を車両1台ずつ見る"
+      />,
+    );
+
+    const link = screen.getByRole("link");
+    expect(link.classList.contains("btn")).toBe(false);
+    expect(link).toHaveClass("block", "whitespace-normal", "break-words");
+    expect(screen.getByText("月次収支表")).toHaveClass("block");
+    expect(screen.getByText("選んだ1か月を車両1台ずつ見る")).toHaveClass("block");
   });
 });
 

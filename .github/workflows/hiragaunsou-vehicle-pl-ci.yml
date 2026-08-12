@@ -7,8 +7,9 @@ name: hiragaunsou-vehicle-pl CI
 # GitHubが「報告待ち」のまま永久にマージをブロックしてしまうため。
 # このリポジトリはpublicでActionsが無料・無制限なので、常時実行のコストは無い。
 on:
+  # 積み上げPRでも品質ゲートを省略しない。mainの必須チェックとして使いつつ、
+  # 中間ブランチ向けPRも同じ条件で先に検証する。
   pull_request:
-    branches: [main]
 
 # GITHUB_TOKENの権限は最小(読み取りのみ)。デプロイ等の書き込みはCDワークフロー側でのみ許可する。
 permissions:
@@ -27,7 +28,10 @@ jobs:
   ci:
     name: typecheck + test
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 文字の重なり検査を足したぶん、20分では足りなくなった。
+    # 手元(Apple Silicon)の実測は認証後catalog全件×4幅 + グラフで1.5分。
+    # CIは全E2Eを1 workerで直列実行し、失敗時のretryもあるため余裕を持たせる。
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
@@ -76,10 +80,38 @@ jobs:
       # secretsはcreateAuth()の初期化が落ちないためのダミー値で足りる。
       # BETTER_AUTH_URLはtrustedOriginsの判定に使われるため、webServerが起動する
       # http://localhost:3000 と一致させないと sign-in が Invalid origin で失敗する。
+      #
+      # 「文字の重なり」だけ独立した1ステップにしてある。認証後の画面カタログを総当たりするため、
+      # 他のE2Eに埋めると「どこが壊れたのか」がログの中で埋もれる。
+      # 検査器自身の数値判定は、最大・境界値を含む単体テストと100% coverageに固定する。
+      - name: 文字重なり判定の境界値 (100% coverage)
+        run: npm run test:coverage:overlap-geometry
+
+      # 順番は通常E2Eより先。見た目が壊れているPRは、
+      # その後の業務フローE2Eが終わるのを待たずに落とす。
+      - name: 文字の重なり検査 (認証後画面カタログ + グラフ)
+        env:
+          BETTER_AUTH_SECRET: ci-dummy-secret-not-used-for-real-auth
+          BETTER_AUTH_URL: http://localhost:3000
+          GOOGLE_CLIENT_ID: ci-dummy-client-id
+          GOOGLE_CLIENT_SECRET: ci-dummy-client-secret
+        run: npm run test:e2e:overlap
+
+      # 重なり検査で失敗したとき、どう重なっていたのかを画像で残す
+      # (失敗メッセージの文字だけでは、意図した重ねなのかの判断がつかないことがある)。
+      - name: Upload overlap screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: text-overlap-screenshots
+          path: hiragaunsou-vehicle-pl-extracted/test-results/**
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: E2E smoke test
         env:
           BETTER_AUTH_SECRET: ci-dummy-secret-not-used-for-real-auth
           BETTER_AUTH_URL: http://localhost:3000
           GOOGLE_CLIENT_ID: ci-dummy-client-id
           GOOGLE_CLIENT_SECRET: ci-dummy-client-secret
-        run: npm run test:e2e
+        run: npm run test:e2e -- --grep-invert @overlap

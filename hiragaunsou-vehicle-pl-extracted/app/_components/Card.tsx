@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 /**
@@ -41,6 +42,32 @@ export function Card({
       )}
       {padding === "tight" ? <div className="px-4 py-3">{children}</div> : children}
     </section>
+  );
+}
+
+/**
+ * 画面名と説明を2行で読ませる画面遷移カード。
+ *
+ * `.btn` は1行の操作専用で、中身を横一列にして折り返さない。
+ * 呼び名と説明を持つ導線はこの部品に集約し、画面ごとに枠を書き起さない。
+ */
+export function ScreenLinkCard({
+  href,
+  label,
+  description,
+}: {
+  href: string;
+  label: ReactNode;
+  description: ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className="pressable block whitespace-normal break-words rounded-[var(--radius-control)] border border-line bg-white px-4 py-2 hover:bg-subtle"
+    >
+      <span className="block text-sm font-semibold text-ink">{label}</span>
+      <span className="mt-0.5 block text-xs text-ink-muted">{description}</span>
+    </Link>
   );
 }
 
