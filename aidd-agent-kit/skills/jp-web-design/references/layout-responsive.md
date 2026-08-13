@@ -4,13 +4,24 @@
 
 ## 1. レイアウト
 
-- **アプリシェル**: 白地ヘッダー(高さ56〜64px・下罫線 `border-b border-line`)+ 極薄グレー地の main。
+- **アプリシェル**: `page-bg`の外周 + `bg`のmain + `surface/surface-alt`の面。境界は`border`、hover/inputは`border-strong`。Mode Aの値は `mode-a-graphite-amber.md`。
 - **ヘッダー左のアプリ名はホームへのリンクにする(必須仕様)**。クリックでホーム画面に戻る。アプリ名は「いつ使うか」が分かる名前。ナビは3つまで。
 - **コンテンツ幅**: 下記ブレークポイント表に従う。
-- **面の重ね方**: 極薄グレー地の上に白カード(`bg-white border border-line`)。影に頼らず罫線で分ける。影はモーダル等「浮いている」ことに意味がある要素だけ。
+- **面の重ね方**: `bg`の上に`surface`カード。影に頼らず罫線で分ける。影はアプリ外枠・モーダル等「浮いている」ことに意味がある要素だけ。
 - **角丸**: カード `rounded-xl` / コントロール・小要素 `rounded-md`。用途で固定し混在させない。
 - **余白**: カード `p-5` / 行 `px-4 py-3`(詰めても `py-2` まで)。区切りは背景色ではなく `border-b border-line` の細罫線(最終行は `last:border-b-0`)。
 - **定義リスト**: `grid grid-cols-[8rem_1fr]` でラベル列を固定幅に。値は左揃えで縦のラインを通す。
+
+### ナビゲーション骨格
+
+画面例のサイドバーを無条件にコピーしない。主要ナビが1〜3個なら上部ナビ、4〜5個で反復作業なら次を既定候補にする:
+
+- 1025px以上: 212pxサイドバー(アイコン+ラベル)。
+- 641〜1024px: 68pxアイコンレール。tooltipだけに意味を隠さず、`aria-label`を付ける。
+- 640px以下: サイドバーを外し、下部固定タブバーへ。項目は最大5個。
+- 6個以上なら業務場面で第2階層へ再編する。「その他」を含め5個以下へ減らす。
+
+下部タブバーは`surface`、上border、`position: fixed; z-index: 10`。本文下部へ`calc(76px + env(safe-area-inset-bottom))`を確保し、左右・下へsafe-areaを加算する。アクティブ項目は文言/太さ/`aria-current`を主符号にし、アイコンのaccentは補助符号に限る。
 
 ## 2. レスポンシブ規律(4段・コードで固定)
 
@@ -23,7 +34,7 @@
 | PC | 1024〜1439px | `max-w-5xl`(1024px)中央 | **1280px** |
 | ワイド | 1440px〜 | `max-w-6xl`(1152px)中央・**それ以上広げない** | **1600px** |
 
-- ブレークポイントはTailwind既定(`sm:640 / md:768 / lg:1024 / xl:1280`)に合わせ、独自の中途半端な値(560px等)を作らない。
+- アプリ骨格は `640 / 1024px` を境に下部タブ / アイコンレール / フルサイドバーへ切り替える。コンテンツ幅の検収はTailwind既定(`sm:640 / md:768 / lg:1024 / xl:1280`)へ揃え、独自値を乱立させない。
 - **ワイドで間延びさせない**: コンテンツ幅は上限で止める。カードを画面幅なりに引き伸ばさない。
 - **どの幅でも「1文字だけ改行」「1個だけ折返し」を出さない**(`typography-numerals.md` の折返し禁則)。幅を連続的に縮めて確認し、危険な語は文節 `inline-block`・`balance`・ラベル短縮で先に潰す。
 - **ページ全体の横スクロール禁止**。はみ出すのは表などのコンテナ内スクロール(`overflow-x-auto`)だけ。
@@ -66,13 +77,13 @@ SPで全情報を縮小して詰め込まない。**第一階層だけ見せて�
 
 ## 5. 結果・レポート画面の情報階層
 
-**白・余白・罫線で階層を作る。カードの色分けに頼らない(主役面のティントだけ例外)。**
+**surface・余白・罫線で階層を作る。カードの色分けやグラデーションに頼らない。**
 
-1. **主数字(=この画面の視覚的主役)** — 小さいグレーのラベル + 大きな数字(ページで唯一のaccent・`--font-num`)。主役の面には白→brand-softの微グラデを使ってよい(`color-system.md`・1画面1箇所)。
+1. **主数字(=この画面の視覚的主役)** — 小さいmutedラベル + 大きな`text`色の数字(`--font-num`)。Mode Aでaccentをキー数字へ使わない。
 2. **前提ストリップ** — 上下の細罫線だけの3カラム(脇役として静かに)。
 3. **事実カード** — ユーザーが次に知りたいこと(実際の額・期限)を白カードで。
 4. **比較** — 少数比較は「数字+差分(+7.4pt)」。バーを使うなら `components.md` のバーチャート3条件を満たすものだけ。
-5. **CTA**(accent・全幅)。
+5. **CTA**(primary・SPは全幅)。
 6. **根拠の開示**(折りたたみ)+ 免責。
 
 各ブロックは `rise-in` + stagger で上から順に現れる。
@@ -84,8 +95,8 @@ SPで全情報を縮小して詰め込まない。**第一階層だけ見せて�
 - **共通レイアウト部品として1箇所に実装する**。画面ごとに同じ `sticky` を書かない(ヘッダー/フッターの高さ・影・z-index が画面ごとにずれる原因になる)。
 
 ```css
-.app-header { position: sticky; top: 0; z-index: 30; background: #fff; border-bottom: 1px solid var(--line); }
-.app-footer { position: sticky; bottom: 0; z-index: 30; background: #fff; border-top: 1px solid var(--line);
+.app-header { position: sticky; top: 0; z-index: 30; background: var(--surface); border-bottom: 1px solid var(--border); }
+.app-footer { position: sticky; bottom: 0; z-index: 30; background: var(--surface); border-top: 1px solid var(--border);
               padding-bottom: max(12px, env(safe-area-inset-bottom)); }   /* iOSのホームバー回避 */
 /* 固定要素の下にアンカー・フォーカスが隠れないように */
 :root { scroll-padding-top: 64px; scroll-padding-bottom: 88px; }

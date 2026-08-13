@@ -2,8 +2,13 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
 <title>デザインカタログ — jp-web-design モデルケース</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="theme.js"></script>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -11,9 +16,14 @@
 <header class="app-header">
   <div class="app-name">デザインカタログ<span class="app-name-sub">jp-web-design の部品と状態の一覧</span></div>
   <nav class="app-nav" aria-label="主要ナビゲーション">
-    <a href="index.html" style="font-size:13px; color:var(--brand-deep); text-decoration:none; padding:6px 12px">モードA(ミニマル)</a>
+    <a href="index.html" style="font-size:13px; color:var(--text); text-decoration:none; padding:6px 12px">Mode A(Graphite)</a>
     <a href="pop.html" style="font-size:13px; color:var(--brand-deep); text-decoration:none; padding:6px 12px">モードB(Pop)</a>
   </nav>
+  <div class="theme-toggle" role="group" aria-label="テーマ切り替え">
+    <button type="button" data-theme-choice="auto" aria-pressed="true">自動</button>
+    <button type="button" data-theme-choice="light" aria-pressed="false">ライト</button>
+    <button type="button" data-theme-choice="dark" aria-pressed="false">ダーク</button>
+  </div>
 </header>
 
 <main>
@@ -22,23 +32,17 @@
 
   <!-- §1-2 カラートークン -->
   <section class="catalog-section">
-    <h2 class="section-heading">カラートークン — プライマリ + 差し色1色 + グレースケール</h2>
-    <p class="spec-note">60% = 白・極薄グレーの地 / 30% = 文字・罫線 / 10% = 操作(brand)と結果(accent)。差し色は1色まで・1画面の色相は3つまで。企業カラー指定時は brand にプライマリ、accent に補色系1色(緑系プライマリ→オレンジ等)を割り当て、残りはグレースケールのまま。黒背景は絶対に作らない。</p>
+    <h2 class="section-heading">Mode A — Graphite × Amber</h2>
+    <p class="spec-note">primary(グラファイト)=主要CTA・操作・選択。accent(アンバー)=実行中・処理中だけ。AI機能へ専用色を割り当てず、Light/Darkともpage-bg→bg→surface→surface-alt→borderの面階層を保ちます。</p>
     <div class="swatch-row">
-      <div class="swatch"><div class="sw-color" style="background:var(--brand)"></div><div class="sw-meta"><strong>brand</strong><br><code>#1d63be</code> 操作・選択・リンク・進捗のみ</div></div>
-      <div class="swatch"><div class="sw-color" style="background:var(--accent)"></div><div class="sw-meta"><strong>accent</strong><br><code>#e8590c</code> 主要CTA+キー数字の2箇所だけ</div></div>
-      <div class="swatch"><div class="sw-color" style="background:var(--ink)"></div><div class="sw-meta"><strong>ink</strong><br><code>#16191d</code> 本文</div></div>
-      <div class="swatch"><div class="sw-color" style="background:var(--ink-muted)"></div><div class="sw-meta"><strong>ink-muted</strong><br><code>#545e6b</code> 補足(これより薄くしない)</div></div>
-      <div class="swatch"><div class="sw-color" style="background:var(--line)"></div><div class="sw-meta"><strong>line</strong><br><code>#e3e6ea</code> 罫線・境界</div></div>
-      <div class="swatch"><div class="sw-color" style="background:var(--danger)"></div><div class="sw-meta"><strong>danger</strong><br><code>#d93025</code> エラー・破壊的操作のみ</div></div>
-      <div class="swatch"><div class="sw-color" style="background:var(--brand-soft)"></div><div class="sw-meta"><strong>brand-soft</strong><br><code>#e3edfa</code> 選択・チップ・主役面</div></div>
-      <div class="swatch"><div class="sw-color" style="background:var(--brand-mist)"></div><div class="sw-meta"><strong>brand-mist</strong><br><code>#eef3fa</code> ページ地(白の単調を回避)</div></div>
-    </div>
-    <p class="spec-note" style="margin-top:16px">ブランド適用サンプル(頻出パターン)。原色・蛍光は使わず、差し色は淡め・柔らかめに倒す(青×オレンジのみ実績上そのまま)。</p>
-    <div class="swatch-row">
-      <div class="swatch"><div class="sw-color" style="background:#0e7490"></div><div class="sw-meta"><strong>深めの水色(brand例)</strong><br><code>#0e7490</code> 「真っ青」よりこちらが多い</div></div>
-      <div class="swatch"><div class="sw-color" style="background:#e57a9e"></div><div class="sw-meta"><strong>淡めのローズ(差し色例)</strong><br><code>#e57a9e</code> 鮮ピンクはきつい。柔らかく</div></div>
-      <div class="swatch"><div class="sw-color" style="background:#e0973f"></div><div class="sw-meta"><strong>ソフトアンバー(差し色例)</strong><br><code>#e0973f</code> 緑・紫系のプライマリに</div></div>
+      <div class="swatch"><div class="sw-color" style="background:var(--primary)"></div><div class="sw-meta"><strong>primary</strong><br><code>theme token</code> CTA・操作・選択</div></div>
+      <div class="swatch"><div class="sw-color" style="background:var(--accent)"></div><div class="sw-meta"><strong>accent</strong><br><code>theme token</code> 実行中の状態だけ</div></div>
+      <div class="swatch"><div class="sw-color" style="background:var(--text)"></div><div class="sw-meta"><strong>text</strong><br><code>theme token</code> 本文・キー数字</div></div>
+      <div class="swatch"><div class="sw-color" style="background:var(--text-muted)"></div><div class="sw-meta"><strong>text-muted</strong><br><code>theme token</code> 補足</div></div>
+      <div class="swatch"><div class="sw-color" style="background:var(--surface)"></div><div class="sw-meta"><strong>surface</strong><br><code>theme token</code> カード・パネル</div></div>
+      <div class="swatch"><div class="sw-color" style="background:var(--surface-alt)"></div><div class="sw-meta"><strong>surface-alt</strong><br><code>theme token</code> 沈んだ面</div></div>
+      <div class="swatch"><div class="sw-color" style="background:var(--success)"></div><div class="sw-meta"><strong>success</strong><br><code>theme token</code> 完了・稼働中</div></div>
+      <div class="swatch"><div class="sw-color" style="background:var(--danger)"></div><div class="sw-meta"><strong>danger</strong><br><code>theme token</code> エラー・破壊的操作</div></div>
     </div>
   </section>
 
@@ -58,17 +62,32 @@
     </div>
   </section>
 
+  <section class="catalog-section">
+    <h2 class="section-heading">操作と入場のモーション</h2>
+    <p class="spec-note">hoverはborder/surfaceを90〜140ms、pressedはscale(.985)、新しく現れた要素だけ6px下から180〜220msで入場。最大6要素・全体300ms以内です。reduced-motionでは動きを止めても意味を保ちます。</p>
+    <div class="grid-2">
+      <button type="button" class="card card-pad pressable" style="text-align:left; color:var(--text); cursor:pointer">
+        <strong>hover / pressed</strong>
+        <span style="display:block; color:var(--text-muted); font-size:12px; margin-top:4px">境界と押下だけを短く返す操作対象</span>
+      </button>
+      <div class="card card-pad rise-in" style="--stagger:40ms">
+        <strong>enter</strong>
+        <span style="display:block; color:var(--text-muted); font-size:12px; margin-top:4px">追加された場所を伝える一度だけの入場</span>
+      </div>
+    </div>
+  </section>
+
   <!-- §5 バッジ -->
   <section class="catalog-section">
     <h2 class="section-heading">ステータスバッジ</h2>
-    <p class="spec-note">色相を増やさず「塗り・罫線・打消し・破線」の違いで状態を区別する。文字ラベルを必ず持つ。</p>
+    <p class="spec-note">色+文言+30%相当の縁取りで状態を区別する。accentとwarningは文言・配置でも区別します。</p>
     <div class="card card-pad">
       <div class="demo-row">
-        <span class="badge badge-active">進行中</span>
-        <span class="badge badge-done">成約</span>
-        <span class="badge badge-closed">売却済</span>
-        <span class="badge badge-dropped">取下げ</span>
-        <span class="badge badge-alert">要確認</span>
+        <span class="badge badge-running">実行中</span>
+        <span class="badge badge-success">完了</span>
+        <span class="badge badge-warning">要確認</span>
+        <span class="badge badge-danger">エラー</span>
+        <span class="badge badge-neutral">下書き</span>
         <span class="badge badge-required">必須</span>
       </div>
     </div>
@@ -186,7 +205,7 @@
     <p class="spec-note">1画面に視覚的主役を1つ。主役と本文のサイズ比は2.5倍以上。数字は欧文フォント+等幅数字。カンマは0.8emに縮小、通貨記号は単位扱い(62%+間隔)で「数字=変数」と見分ける。</p>
     <div class="card card-pad">
       <div class="hero-number" style="padding:8px 0 16px">
-        <div class="hn-label">ページ主数字 = 視覚的主役(唯一のaccent・カンマ縮小・¥は単位扱い)</div>
+        <div class="hn-label">ページ主数字 = 視覚的主役(text色・カンマ縮小・¥は単位扱い)</div>
         <div class="hn-value"><span class="currency">¥</span>372<span class="num-sep">,</span>160<span class="num-sep">,</span>000</div>
       </div>
       <dl class="def-list" style="border-top:1px solid var(--line); padding-top:14px">

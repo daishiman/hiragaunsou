@@ -5,10 +5,10 @@
 ## §1. デザイントークン(最初に確定、以後ハードコード禁止)
 
 - **余白**: 4/8pxグリッド(4,8,12,16,24,32,48,64)。目分量の余白を書かない
-- **タイポ**: スケールは1.25倍系(12,14,16,20,25,31…)。本文16px以上・行間1.6・1行の全角文字数は最大35字程度
-- **色**: セマンティック名で定義(primary/success/warning/danger/surface/border/text-primary/text-secondary)。生HEXをコンポーネントに書かない。コントラストはAA(references/checklists/accessibility-jp.md)
+- **タイポ**: 日本語本文13〜14pxを既定、ページタイトル19px(SP17px)。UI英数字はIBM Plex Sans、ID/タグ/ログはJetBrains Mono。外部fontが使えない場合のsystem fallbackを必ず持つ
+- **色**: 既定はGraphite × Amber。primary=主要CTA/操作/選択、accent=実行中など状態専用。success/warning/danger/neutralをsemantic名で定義し、生HEXをコンポーネントに書かない。AI専用色を作らない。コントラストはLight/DarkともAA(references/checklists/accessibility-jp.md)
 - **角丸・影**: 各3段階まで。トークン外の値を発明しない
-- ダークモードは初期から変数設計だけ対応(実装はSlice 2+で可)
+- Mode AはLight/Dark/autoを初期から実装し、テーマ選択を永続化する。Darkは機械反転せず、page-bg/bg/surface/surface-alt/borderの面階層を個別定義する
 
 ## §2. コンポーネント規律
 
@@ -19,7 +19,7 @@
 ## §3. ふるまいの標準
 
 - **楽観的UI**: 成功率の高い操作(保存・チェック)は即時に画面へ反映し、裏で同期。失敗時はUndo付きで通知
-- **アニメーション**: 150〜300ms・easing(標準はease-out)。装飾でなく因果の説明(どこから来てどこへ行くか)のためだけに使う。`prefers-reduced-motion` を尊重
+- **アニメーション**: hover 90〜140ms、入場/展開180〜280ms、stagger30〜50ms・最大6要素・全体300ms以内。装飾でなく因果の説明に限り、hoverはborder/surface中心、移動1px以下。`prefers-reduced-motion` では停止しても文言・border・DOM順で意味を保つ
 - **エラーとリトライ**: 通信は指数バックオフで自動再試行(最大3回)→だめならユーザーに再試行ボタン。書き込みの再試行は冪等キーで二重登録を防ぐ
 - **オフライン/低速**: 3G相当で全ジャーニーを一度歩く(05 §2)。入力データは端末側に保持し、復帰時に再送
 

@@ -1,6 +1,6 @@
 # AI開発エージェントキット セットアップマニュアル【Mac版】
 
-**バージョン 1.9.1**
+**バージョン 1.10.2**
 
 ## このキットは何?
 
@@ -299,7 +299,3 @@ Finder で `~/.claude`、`~/.agents/skills`、`~/.codex` を開き、次のキ�
 - **Cloudflare との連携設定(MCP)**。付属のセットアップスクリプトがClaude Code／Codexの両方へ自動で設定します(STEP 3)
 - Googleログイン機能を使う場合: **Google Cloud** の OAuth 設定(手順はスキル内に日本語で収録済み)
 - AI機能を使う場合: **OpenAI / Anthropic 等の APIキー**
-
----
-
-*本キットに関するお問い合わせ: 株式会社TierMind*

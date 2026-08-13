@@ -1,73 +1,149 @@
-# モーション・操作感・アクセシビリティ
+# モーション・hover・操作感・アクセシビリティ
 
-モーション・操作感・アクセシビリティの全ルール。
+動きは装飾ではなく、①操作できる ②押した ③現れた場所 ④状態が変わった ⑤処理が続いている、のいずれかを伝えるためだけに使う。理由を1文で言えないアニメーションは入れない。
 
-## 1. モーション(控えめ・因果の説明のみ)
-
-すべて `prefers-reduced-motion: reduce` で無効化。装飾のための動きは足さない。
-
-| 用途 | 実装 | 時間 |
-|---|---|---|
-| 画面/質問の遷移 | 方向つきスライド(`--dir: 1/-1` で進む/戻る) | 出150ms / 入260ms |
-| カード・選択肢の入場 | `rise-in`(fade + translateY(10px))+ `--stagger` 40〜70ms刻み | 260ms |
-| 選択フィードバック | チェックの `pop-in`(scale 0.4→1) | 180ms |
-| 押下 | `.pressable`(`active:scale(0.98)`) | 100ms |
-| 進捗・数値 | バーの width transition / カウントアップ(rAF + ease-out) | 300〜900ms |
+## 1. モーション時間とイージング
 
 ```css
-@keyframes rise-in { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
-.rise-in { animation: rise-in 260ms cubic-bezier(0.2,0,0,1) both; animation-delay: var(--stagger, 0ms); }
-@keyframes pop-in { from { opacity:0; transform: scale(0.4); } to { opacity:1; transform: scale(1); } }
-.pop-in { animation: pop-in 180ms cubic-bezier(0.2,0,0,1) both; }
-.pressable { transition: transform 100ms; }
-.pressable:active { transform: scale(0.98); }
-@keyframes pulse-soft { 0%,100% { opacity:1; } 50% { opacity:.45; } }
-.skeleton { background: var(--subtle); border-radius: 6px; animation: pulse-soft 1.4s ease-in-out infinite; }
+:root {
+  --motion-instant: 90ms;
+  --motion-fast: 140ms;
+  --motion-base: 200ms;
+  --motion-slow: 280ms;
+  --ease-standard: cubic-bezier(.2, 0, 0, 1);
+  --ease-exit: cubic-bezier(.4, 0, 1, 1);
+}
+```
+
+| 場面 | 見た目 | 時間 | 目的 |
+|---|---|---:|---|
+| hover | border / surface / textの変化。移動は0〜1px | 90〜140ms | 操作対象を示す |
+| pressed | `scale(.985)` または1px沈む | 90ms | 押下を即時に返す |
+| focus | outlineを即時表示。フェードさせない | 0ms | キーボード現在地を失わせない |
+| 小要素の入場 | opacity 0→1 + translateY(6px→0) | 180〜220ms | 「パッと出る」が唐突にならない |
+| ページ/大面の入場 | opacity + translateY 8px | 220〜280ms | 空間の連続性を示す |
+| popover/menu | opacity + translateY(-4px) + scale(.98→1) | 140〜180ms | 呼び出し元との関係を示す |
+| modal/dialog | overlay fade + panel translateY(8px)/scale(.985→1) | 180〜220ms | 前景へ移ったことを示す |
+| accordion/details | grid row / height + opacity | 180〜220ms | 開いた領域を追えるようにする |
+| toast | 右または下から8px + opacity | 180〜220ms | 結果の発生場所を知らせる |
+| 状態更新 | 背景/罫線を一度だけ変化 | 180〜240ms | 変更された対象を示す |
+| progress | width/transformを線形寄りに更新 | 200〜500ms | 進捗の方向と量を示す |
+
+- 同時入場は最大6要素。staggerは30〜50ms、全体を300ms以内に収める。長い一覧を1件ずつ順番に出さない。
+- hoverでカードを大きく浮かせない。border変化を基本とし、移動しても1pxまで。レイアウトを動かすプロパティは使わない。
+- 画面全体の毎回フェード、バウンス、オーバーシュート、常時点滅、背景の自動移動、カーソル追従は禁止。
+- 処理中は対象の近くへ進捗と文言を出す。画面全体を動かして待たせない。
+
+## 2. 参照CSS
+
+```css
+.interactive {
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard),
+    transform var(--motion-instant) var(--ease-standard);
+}
+.interactive:hover { border-color: var(--border-strong); }
+.interactive:active { transform: scale(.985); }
+
+@keyframes enter-soft {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.enter-soft {
+  animation: enter-soft var(--motion-base) var(--ease-standard) both;
+  animation-delay: var(--enter-delay, 0ms);
+}
+
+@keyframes popover-in {
+  from { opacity: 0; transform: translateY(-4px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.popover[data-state="open"] {
+  transform-origin: top;
+  animation: popover-in var(--motion-fast) var(--ease-standard) both;
+}
+
+@keyframes dialog-in {
+  from { opacity: 0; transform: translateY(8px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.dialog[data-state="open"] {
+  animation: dialog-in var(--motion-base) var(--ease-standard) both;
+}
+
+@keyframes busy-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .55; }
+}
+.busy-indicator { animation: busy-pulse 1.2s ease-in-out infinite; }
+```
+
+要素をDOMへ追加するときは、追加された要素だけへ `.enter-soft` を付ける。同じ要素を再レンダーするたびに入場アニメーションを再実行しない。戻る操作では進行方向を逆にするか、動きを省く。
+
+## 3. hoverと状態の設計
+
+- **ボタン**: hoverで同色相の明度、pressedでscale、loadingで幅を維持したまま文言 + 進捗表示。二度押しを防ぐ。
+- **カード/行**: クリック可能な場合だけhoverで`border-strong`またはsurface変化。押せないカードへhover・pointerを付けない。
+- **リンク/ナビ**: textまたはsurface変化に加えて太さ・border・`aria-current`を使う。色だけに頼らない。
+- **入力**: hoverはborder、focusはoutline、errorはdanger border + 直し方。hoverをfocusより強くしない。
+- **状態バッジ**: 状態変化時に1回だけsurface/borderを変える。連続点滅させない。処理中だけaccent + 文言 + 必要なら穏やかなpulse。
+- **ドラッグ**: 掴める形、grab/grabbing、移動先のプレースホルダーを同時に示す。hoverだけに隠さない。
+
+タッチ端末にはhoverがない。重要操作・説明・状態をhoverだけに置かず、`@media (hover: hover) and (pointer: fine)` の中だけでhover固有効果を有効にする。
+
+## 4. 展開・オーバーレイ
+
+- popover/menuはトリガーに近い方向から短く現れる。閉じるときは120〜160msで速く退出する。
+- modalはoverlayとpanelを別々に動かす。開いたらフォーカスを移し、閉じたら呼び出し元へ戻す。破壊的確認は外側クリックで閉じない。
+- accordionは内容を先に表示してopacityだけ動かす実装を避ける。高さ/行とopacityを同時に変え、フォーカス可能要素が閉じた領域に残らないようにする。
+- toastは成功なら一定時間後に消してよい。エラーは次の行動と閉じる操作を持ち、自動で消さない。
+- tooltipは補助であり、操作に必須の情報を置かない。キーボードfocusとタッチでも到達可能にする。
+
+## 5. reduced motion / contrast / forced colors
+
+```css
 @media (prefers-reduced-motion: reduce) {
-  .rise-in, .pop-in, .skeleton { animation: none; }
-  .pressable, .pressable:active { transition: none; transform: none; }
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root, html[data-theme] {
+    --border: var(--border-strong);
+    --text-muted: var(--text);
+  }
+}
+
+@media (forced-colors: active) {
+  :where(a, button, input, select, textarea, summary):focus-visible {
+    outline: 2px solid CanvasText;
+  }
 }
 ```
 
-選択→自動送りは「ハイライトを一拍(約160ms)見せてから」遷移する。
+reduced-motionでも状態変化そのものは消さない。animationを止めた状態で、文言・アイコン・border・DOM順だけで同じ意味が伝わることを確認する。
 
-## 2. 操作感の基準(参照実装: catnoseのプロダクト群 — Zenn/しずかなインターネット/Nani翻訳)
+## 6. アクセシビリティ
 
-装飾ではなく「手に馴染む」ための規律。どのアプリでも同じ基準を適用する。
+- `:focus-visible` は2px outline + 2px offset、即時表示。
+- タップ領域44×44px以上。SPでは主要CTAを原則全幅にする。
+- 状態を色だけで伝えない。文言、border、アイコン、位置のうち少なくとも1つを併用する。
+- Light/Darkの本文・muted・状態色・focusをaxe等で機械検査する。Dark warningは個別に確認する。
+- スクリーンリーダーのlive regionは必要な結果だけを短く読み上げる。アニメーションの途中経過を連続通知しない。
+- キーボードでpopover / modal / accordion / tabbarを操作し、フォーカスが見え、閉じた要素へ入らず、固定要素の下へ隠れないことを実測する。
 
-- **触った要素だけが動く**。画面全体を揺らす・スクロールを奪う・関係ない要素を動かすアニメーションは禁止。
-- 反応の速度感: hover変化は即時(100ms以内)・押下は `.pressable`・遷移や入場は150〜260msのease-out短距離。バウンス・オーバーシュートは使わない。
-- **説明文よりUIが先に語る**: placeholderで挙動を予告(「好きな言語で入力…」=自動判定を一言も説明せず伝える)。機能紹介は「アイコン+体言止め短文」のカードで、段落文を書かない。
-- 主要CTAの状態が文脈を語る: 入力が揃うまでの見た目・実行中の「送信中…」・完了後の結果まで、ボタン1つの状態変化で進行が分かる。
-- **キーボードショートカットはキーキャップUIで見せる**:
+## 7. 検収
 
-```css
-.kbd {
-  display: inline-block;
-  border: 1px solid var(--line);
-  border-bottom-width: 2px;
-  border-radius: 4px;
-  background: #fff;
-  padding: 0 5px;
-  font-size: 11px;
-  font-family: var(--font-num);
-  color: var(--ink-muted);
-  line-height: 1.6;
-}
-```
-
-ショートカット(⌘+Enter等)はボタンの近くに `<span class="kbd">⌘</span><span class="kbd">Enter</span>` で常時またはhover時に表示し、「知っている人だけの隠し機能」にしない(Nani翻訳が送信ボタン近傍に「⌘ Shift Enter」をキーキャップ表示する方式)。挙動の規律は Skill `ux-design` §4-2「送信トリガ」。
-
-## 3. アクセシビリティ
-
-- **キーボードフォーカスを必ず可視化**:
-
-```css
-:where(a, button, input, select, textarea, summary):focus-visible {
-  outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px;
-}
-```
-
-- コントラスト: 本文は `--ink`、補足は `--ink-muted` まで。それより薄いグレーを本文に使わない。
-- タップ領域は最低44px相当。装飾要素(スケルトン等)は `aria-hidden`。
-- 状態を色だけで伝えない(バッジは文字ラベルも持つ)。モーダルはフォーカストラップ、トーストは `aria-live`。
+- [ ] すべての動きに「何を伝えるか」の理由がある。
+- [ ] hover / pressed / focus / loading / success / errorが別々に設計されている。
+- [ ] 入場は追加された対象だけ、6要素以内、全体300ms以内。
+- [ ] hoverでレイアウトが動かず、タッチでも重要情報へ到達できる。
+- [ ] modal・popover・accordion・toastを実操作し、開閉・ESC・フォーカス復帰を確認した。
+- [ ] reduced-motionで装飾動作が止まり、意味と操作が残る。
+- [ ] Light/Dark/contrast/keyboard/screen readerを確認した。

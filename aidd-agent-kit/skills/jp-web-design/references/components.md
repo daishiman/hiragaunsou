@@ -7,14 +7,14 @@
 ## 1. ボタン(3階層 + 破壊的)
 
 ```html
-<!-- 主要CTA(画面に基本1つ。accentはこことキー数字だけ) -->
-<button class="pressable rounded-md bg-accent px-5 py-2 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50">送信する</button>
-<!-- セカンダリ(操作=brandの罫線ボタン) -->
-<button class="pressable rounded-md border border-brand px-4 py-2 text-sm font-semibold text-brand-deep hover:bg-brand-soft disabled:opacity-50">編集する</button>
+<!-- 主要CTA(画面に基本1つ。Graphite primary。accentは使わない) -->
+<button class="interactive rounded-lg bg-primary min-h-11 px-5 text-sm font-bold text-primary-text hover:bg-primary-hover disabled:opacity-50">送信する</button>
+<!-- セカンダリ(surface + strong border) -->
+<button class="interactive rounded-lg border border-border-strong bg-surface min-h-11 px-4 text-sm font-bold text-text hover:bg-surface-alt disabled:opacity-50">編集する</button>
 <!-- 三次(静かな操作) -->
-<button class="pressable rounded-md border border-line bg-white px-4 py-2 text-sm text-ink hover:bg-subtle">キャンセル</button>
+<button class="interactive rounded-lg border border-border bg-surface min-h-11 px-4 text-sm text-text hover:bg-surface-alt">キャンセル</button>
 <!-- 破壊的(通常は罫線。塗りのdangerは最終確認モーダル内だけ) -->
-<button class="pressable rounded-md border border-danger px-4 py-2 text-sm font-semibold text-danger hover:bg-red-50">削除する</button>
+<button class="interactive rounded-lg border border-danger min-h-11 px-4 text-sm font-bold text-danger hover:bg-danger-bg">削除する</button>
 ```
 
 - ラベルは**動詞で終える**(「送信する」「保存する」)。「〜させていただく」禁止。
@@ -41,14 +41,19 @@
 - チェックボックス/ラジオはラベル全体をクリック可能に、タップ領域44px。
 - disabled で黙らせるより、押させて理由を言う。disabled にするなら理由を近くに表示する。
 
-## 3. ステータスバッジ(色相を増やさず塗り/罫線/打消しで区別)
+## 3. ステータスバッジ(色 + 文言 + borderで区別)
 
 ```html
-<span class="inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium bg-brand-soft text-brand-deep border-transparent">進行中</span>
-<span class="... bg-subtle text-ink border-line">成約</span>
-<span class="... bg-subtle text-ink-muted border-line line-through decoration-1">売却済</span>
-<span class="... bg-white text-ink-muted border-line border-dashed">取下げ</span>
+<span class="badge badge-running">実行中</span>
+<span class="badge badge-success">完了</span>
+<span class="badge badge-warning">要確認</span>
+<span class="badge badge-danger">エラー</span>
+<span class="badge badge-neutral">下書き</span>
 ```
+
+- runningだけaccentを使う。success / warning / danger / neutralは各semantic tokenを使う。
+- 背景色だけに頼らず、同色30%相当のborderと文言を必ず付ける。ID・タグ・ログ・バッジは`--font-mono`。
+- accentとwarningは色相が近いので、`実行中`と`要確認`の文言・配置・必要ならアイコンで区別する。
 
 ## 4. テーブル
 
@@ -62,9 +67,9 @@
 リストで1件でも選択されたら、リスト上部(または画面下部固定)に現れるバー:
 
 ```html
-<div class="flex items-center gap-3 rounded-lg bg-brand-soft px-4 py-2 text-sm" role="status">
-  <span class="font-bold text-brand-deep tnum">3件を選択中</span>
-  <button class="text-brand-deep underline-offset-2 hover:underline">すべて解除</button>
+<div class="flex items-center gap-3 rounded-lg bg-surface-alt border border-border px-4 py-2 text-sm" role="status">
+  <span class="font-bold text-text tnum">3件を選択中</span>
+  <button class="text-text underline-offset-2 hover:underline">すべて解除</button>
   <div class="ml-auto"><!-- 主要アクション(選択件数入りラベル: 「3件に送信する」) --></div>
 </div>
 ```
@@ -80,15 +85,15 @@
 ## 7. 空状態 / スケルトン / 注意の面
 
 ```html
-<div class="rounded-lg border border-dashed border-line px-6 py-12 text-center">
-  <p class="text-sm font-semibold text-ink">まだ登録がありません</p>
-  <p class="mt-1 text-sm text-ink-muted">最初の1件を追加すると、ここに一覧が表示されます。</p>
+<div class="rounded-lg border border-dashed border-border px-6 py-12 text-center">
+  <p class="text-sm font-semibold text-text">まだ登録がありません</p>
+  <p class="mt-1 text-sm text-text-muted">最初の1件を追加すると、ここに一覧が表示されます。</p>
   <div class="mt-4"><!-- 主要アクション --></div>
 </div>
 
 <div class="skeleton h-10 w-full"></div>
 
-<div class="rounded-md border border-caution-border bg-caution-soft px-4 py-3 text-xs leading-relaxed">
+<div class="rounded-md border border-warning bg-warning-bg px-4 py-3 text-xs leading-relaxed">
   この操作は取り消せません。内容をご確認ください。
 </div>
 ```
@@ -126,5 +131,5 @@
 - **比率(%)同士を恣意的な幅で描かない**(反響率11.2%を45%幅のバーで表すのは嘘のスケール)。
 - **2〜3値の比較はバーより「数字+差分」が速い**(「先月 11.2% → 今月 18.6%(+7.4pt)」)。バーチャートを使いすぎない。
 - 裸の棒禁止: バーには必ずラベルと数値を添える(図形だけで意味を伝えない)。
-- 色は現状=グレー、対象=brand。accentをグラフに使わない。
+- 色は現状=neutral、対象=primary。accentをグラフに使わない。
 - 円グラフは2分割(残量表現)まで。3分割以上は表にする。

@@ -7,7 +7,7 @@ description: Set up Cloudflare Turnstile end-to-end in a project. Scan the codeb
 
 Turns the prompt "set up Turnstile" into a working end-to-end integration: a widget, frontend snippets at every chosen insertion point, canonical server-side siteverify in the customer's existing backend, and a real validation pass before reporting success.
 
-You are the agent. Run the wizard below by invoking the scripts under `scripts/` and branching on their JSON output. The scripts hold the deterministic logic (API calls, retry/error handling); your job is orchestration, codebase reading, confirmation, and the frontend + backend edits.
+You are the agent. Run the workflow below by invoking the scripts under `scripts/` and branching on their JSON output. The scripts hold the deterministic logic (API calls, retry/error handling); your job is orchestration, codebase reading, decisive selection, and the frontend + backend edits.
 
 Canonical instructions live at [`developers.cloudflare.com/turnstile/spin`](https://developers.cloudflare.com/turnstile/spin/). If the docs page and this file disagree, trust the docs page.
 
@@ -22,11 +22,11 @@ Load when the user's prompt mentions any of:
 
 Do not load for unrelated Cloudflare tasks (Workers, Pages, R2, etc.) unless Turnstile is also mentioned.
 
-## Conversation flow
+## Artifact-first flow
 
-The user pasted the prompt. You are in a multi-step dialog. Detect what you can, ask only when you have to, confirm before every irreversible step. Each numbered moment is one agent message. Items marked **[wait for user]** require a user response.
+The user's request to set up Turnstile is authority to inspect the repository, choose the safest canonical insertion points, implement the scoped integration, and validate it. Do not turn the workflow into a multi-step questionnaire. Use `Evidence → Decide → Draft → Validate → Diff`: perform read-only discovery first, choose one recommended configuration, produce the integration, then show the validated result and unified diff. Pause only for credentials/account identity, a production hostname that cannot be inferred, destructive CAPTCHA migration, or another boundary only the user can decide.
 
-1. **Brief acknowledge.** One sentence: "I'll run Turnstile setup end to end. That's: check auth, scan the codebase, create the widget, embed it on the right forms, wire server-side siteverify, validate. Proceed?" **[wait for user]** Do NOT present a plan yet. Auth + scan come first.
+1. **Start immediately.** Briefly acknowledge the outcome being built, then continue to auth and read-only scanning without a preliminary confirmation round-trip.
 
 2. **CLI check.** Spin's helper scripts use `curl` against `api.cloudflare.com` and `pnpm wrangler whoami` for account enumeration. Widget creation in Step 8 prefers `wrangler turnstile widget create` when the subcommand is available (Wrangler 4.109+), falling back to the bundled curl script otherwise. No persistent CLI install is required.
 
@@ -42,14 +42,14 @@ The user pasted the prompt. You are in a multi-step dialog. Detect what you can,
 
 4. **Account selection.** If `auth-probe.sh` returned `ok` after a `multiple_accounts` round-trip, this is already done. Otherwise the script picked the single account silently and you continue to Step 5.
 
-5. **Domain.** Always include `localhost` and `127.0.0.1`. For production, scan `package.json` `homepage`, `wrangler.toml`, `README.md`, `AGENTS.md`, git remote. Confirm: "I'll register for `localhost`, `127.0.0.1`, and `<domain>`. OK?" **[wait for user]** If no production domain is found, ask.
+5. **Domain.** Always include `localhost` and `127.0.0.1`. For production, scan `package.json` `homepage`, `wrangler.toml`, `README.md`, `AGENTS.md`, git remote and select the strongest evidenced hostname. Do not ask for confirmation when one hostname is clearly evidenced. If no production hostname is found, prepare and validate the localhost integration first, then ask for the single missing hostname before creating the production widget.
 
 6. **Codebase scan.** Detect three things silently:
    - **Frontend framework** (Next.js, Astro, SvelteKit, Hugo, vanilla, etc.) → drives the widget embed snippet.
    - **Backend handler location** (Express route, Next.js API route, Rails controller, Workers fetch handler, Pages Function, etc.) → drives the siteverify snippet.
    - **Existing CAPTCHA** (reCAPTCHA / hCaptcha) → switches Step 7 to migration mode.
 
-7. **Insertion plan.** Show the candidate list with `[recommended]` / `[skip by default]` markers; ask the user to confirm (numbers, "all", "recommended", or a list). **[wait for user]** If an existing CAPTCHA was detected, present a migration plan instead (see "Migrating from another CAPTCHA").
+7. **Insertion decision.** Score candidates by public exposure, abuse impact, existing submit path, backend verification availability, and implementation risk. Select all `[recommended]` candidates and skip `[skip by default]` candidates without asking the user to choose. Record the reasons in the final report. If an existing CAPTCHA is detected, create a concrete migration diff first; only destructive replacement or an Enterprise setup requires user approval (see "Migrating from another CAPTCHA").
 
 8. **Widget creation.** Prefer the wrangler CLI when its `turnstile widget` subcommand is available:
 
@@ -60,7 +60,7 @@ The user pasted the prompt. You are in a multi-step dialog. Detect what you can,
 
    Parse `sitekey` and `secret` from stdout JSON. If wrangler is missing, older than the turnstile subcommand (`unknown command`), or otherwise fails, fall back to `scripts/widget-create.sh --account-id <id> --name <name> --domains <list> --mode managed`, which uses `curl` against the Cloudflare API directly. Report the sitekey. Capture the secret into a shell variable `WIDGET_SECRET`; never write it to disk except into the user's own env / secret store in Step 9.
 
-9. **Wire the integration.** State the contract: "I'll embed the widget on each chosen form and add a canonical siteverify call inside your existing submit handler, gated on `success === true`. The handler logic stays the same. The secret lives in your env as `TURNSTILE_SECRET`." Ask "yes" / "show". **[wait for user]** If "show", print unified diffs and ask again. Do NOT propose alternate behavior (mail delivery, custom backends).
+9. **Wire the integration.** Apply the canonical contract directly to each selected form: embed the widget and add a siteverify call inside the existing submit handler, gated on `success === true`; keep the handler logic unchanged and keep the secret in `TURNSTILE_SECRET`. The explicit setup request authorizes this scoped, reversible code edit. Validate first and show the unified diff afterward. Do NOT propose alternate behavior (mail delivery, custom backends).
 
    Canonical server-side siteverify (Node / fetch idiom; adapt to the detected backend):
 
@@ -96,7 +96,7 @@ The user pasted the prompt. You are in a multi-step dialog. Detect what you can,
 
 - Do not write the Turnstile secret to disk except as part of the user's own env / secret store.
 - Do not skip validation.
-- Do not overwrite files without showing a diff.
+- Do not overwrite unrelated behavior. Keep edits scoped, validate them, and show the resulting diff in the final report.
 - Do not call siteverify from the browser. Always: browser → user's backend → siteverify.
 - Do not deploy any extra infrastructure (Workers, proxies, sidecars). The customer's existing backend calls siteverify directly.
 - Do not use `sudo` or install global packages without asking.

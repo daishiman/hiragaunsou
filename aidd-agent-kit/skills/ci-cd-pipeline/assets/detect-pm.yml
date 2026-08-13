@@ -15,7 +15,7 @@
 #   （複数ある場合は上から。移行途中で2つ残っていることがあるため順序を固定する）
 
 steps:
-  - uses: actions/checkout@v4
+  - uses: actions/checkout@v5
 
   - name: パッケージマネージャを判別
     id: pm
