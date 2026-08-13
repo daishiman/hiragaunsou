@@ -36,9 +36,9 @@ rg -l 'data-action="turnstile-spin-v2"' <(echo "$WRITTEN_FILES")
 
 Expected: every written file matches. If a snippet was written without the marker, the wizard skipped the Step 9 contract (or the agent edited the template). Re-run.
 
-## Test 4 — Skill persists to the right location
+## Test 4 — Skill persists through the right ownership path
 
-After Step 11:
+After Step 11 in an unmanaged repository:
 
 ```sh
 test -f .claude/skills/turnstile-spin/SKILL.md \
@@ -49,7 +49,7 @@ test -f .claude/skills/turnstile-spin/SKILL.md \
   || test -f .windsurf/rules/turnstile-spin.md
 ```
 
-Expected exit code: 0.
+Expected exit code: 0. In an AIDD-managed repository, do not use this direct-persistence assertion: update `aidd-agent-kit/skills/turnstile-spin/`, run the repository sync, and verify that the managed runtime matches its manifest instead.
 
 ## Running all cases
 
