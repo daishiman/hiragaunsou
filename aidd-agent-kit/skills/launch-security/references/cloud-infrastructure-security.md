@@ -191,7 +191,7 @@ jobs:
       contents: read  # Minimal permissions
       
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       
       # Scan for secrets
       - name: Secret scanning

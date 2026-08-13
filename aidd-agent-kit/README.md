@@ -1,6 +1,6 @@
 # AI開発エージェントキット
 
-**バージョン 1.9.1**
+**バージョン 1.10.2**
 
 Claude Code と OpenAI Codex の両方に、「プロの開発ノウハウ集」と「開発を自動で進める司令塔(app-orchestrator)」を同時に追加するキットです。
 
@@ -169,8 +169,8 @@ Windows: install-windows.bat --legacy-prompts
 |---|---|
 | app-excellence | アプリ開発全体の進め方・品質基準 |
 | mvp-first-development | まず必要な機能一式で公開し、残課題を管理しながら育てる進め方 |
-| jp-web-design | 日本語アプリのデザインルール |
-| ux-design | 使いやすさ(UX)の設計ルール |
+| jp-web-design | Graphite × Amber、Light/Dark、レスポンシブ、状態・モーションを含む日本語UIルール |
+| ux-design | 業務フロー、入力、一括操作、エラー回復、知覚速度を含むUXルール |
 | cloudflare-secure-deploy | 安全にインターネット公開する手順 |
 | launch-security | 公開前のセキュリティ・品質検査 |
 | testing-excellence | テストの進め方 |
@@ -225,6 +225,7 @@ aidd-agent-kit/
 ├── sync-project-mac.command ← このリポジトリへ反映(Mac・管理用)
 ├── sync-project-windows.bat ← このリポジトリへ反映(Windows・管理用)
 ├── verify-codex-layout.sh   ← Codex配置と原本一致の自動検査
+├── scripts/                 ← Windows事前検証とCI用smoke test
 ├── setup-env-mac.command    ← Mac用 開発環境セットアップ(Node.js + pnpm + Cloudflare連携)
 ├── setup-env-windows.bat    ← Windows用 開発環境セットアップ(Node.js + pnpm + Cloudflare連携)
 ├── skills/                  ← Claude Code / Codex 共通スキル20個
@@ -238,6 +239,28 @@ aidd-agent-kit/
 ```
 
 ## 変更履歴
+
+### 1.10.2
+
+- Windowsの事前検証を、`cmd.exe`内の長大なPowerShell文字列から独立したPowerShell 5.1互換スクリプトへ分離しました。正規表現の記号がcmd側で再解釈され、インストーラーがexit 255になる問題を防ぎます
+- Windowsの受入検査を再利用可能なsmoke scriptへ集約しました。日本語・空白を含むパス、custom agent TOMLの追加設定、manifest、no-op、project同期、実USERPROFILE不変を段階名つきで検査し、失敗時は原因箇所を残します
+- 成果物先行契約に命令の優先順位を追加しました。分析限定・編集禁止・段階ゲート・承認境界を自律進行より優先し、根因未確定の障害では推測修正ではなく再現fixture・診断・原因範囲の縮小を最初の成果物にします
+- GitHub ActionsのcheckoutをNode.js 24対応版へ統一し、非推奨ランタイム警告を解消しました
+
+### 1.10.1
+
+- 全体の進め方を **Evidence → Decide → Draft → Validate → Diff** に統一しました。質問で要件を埋めるのではなく、依頼文・既存コード・資料・ログから最有力案を1つ選び、仕様初稿・代表画面・動く縦切り・修正差分を先に作ります
+- 新規開発・既存改善・UI/UXで、空欄の質問票、A/B/Cの丸投げ、複数候補からの選択待ちを既定動作から外しました。利用者は完成物を見て違う箇所だけを返せます
+- 質問は秘密、本人確認、課金・契約、公開、破壊操作、重大なデータ所有境界など本人しか決められない事項に限定しました。これらもローカル成果物やdry-runを先に作ります
+- app-excellence、mvp-first-development、design-judgment、ux-design、jp-web-design、Better Auth、Turnstile、app-orchestrator、Claude/Codex入口、T1〜T3テンプレートを同じ成果物先行契約へ揃え、CIで旧来の質問先行文言への退行を検出します
+
+### 1.10.0
+
+- UI標準のMode Aを **Graphite × Amber**へ更新しました。グラファイトを主要CTA・操作・選択、アンバーを実行中・処理中・ヒアリング中だけに限定し、AIへ紫・ネオン・専用グラデーションを付けない規律に統一しました
+- Light / Dark / OS自動追従と手動選択の永続化、IBM Plex Sans + JetBrains Mono、面の明度階層、状態色、44px操作領域、safe-areaを参照実装へ追加しました
+- ナビゲーションを参考画面の模倣で決めず、項目数と最頻作業から上部ナビまたは「212pxサイドバー → 68pxアイコンレール → モバイル下部タブ」を選ぶ導出ルールへしました
+- hover / pressed / focus / 入場 / popover / modal / accordion / toast / loading / 状態更新の短いモーションを標準化しました。入場は追加対象だけ・最大6要素・全体300ms以内とし、reduced-motionでも意味と操作が残る検収を追加しました
+- app-excellenceのT2体験設計書とapp-orchestratorへ、テーマ・ナビ骨格・Light/Darkコントラスト・状態/モーションの設計表を追加しました
 
 ### 1.9.1
 

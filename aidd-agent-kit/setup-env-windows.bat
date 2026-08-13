@@ -6,7 +6,7 @@ rem  開発環境セットアップ (Windows用)
 rem  Node.js と pnpm をインストールし、Claude Code / Codex と
 rem  Cloudflare の連携(MCP)も設定します
 rem  ダブルクリックするだけでOKです
-rem  v1.9.1
+rem  v1.10.2
 rem =====================================================
 
 echo.

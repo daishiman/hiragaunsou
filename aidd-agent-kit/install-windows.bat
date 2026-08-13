@@ -4,7 +4,7 @@ setlocal EnableExtensions EnableDelayedExpansion
 title AI開発エージェントキット インストーラー (Windows)
 cd /d "%~dp0"
 
-set "KIT_VERSION=1.9.1"
+set "KIT_VERSION=1.10.2"
 if defined AIDD_TARGET_HOME (
   set "INSTALL_HOME=%AIDD_TARGET_HOME%"
 ) else (
@@ -60,6 +60,7 @@ echo ===============================================
 echo.
 
 rem --- ステップ 1/6: コピー元と形式の事前検証 ----------------------
+set "AIDD_PHASE=source-files"
 if not exist "skills" goto ERR_SRC
 if not exist "agents" goto ERR_SRC
 if not exist "commands" goto ERR_SRC
@@ -67,6 +68,7 @@ if not exist "codex\workflow-skills" goto ERR_SRC
 if not exist "codex\agents" goto ERR_SRC
 if not exist "agents\app-orchestrator.md" goto ERR_SRC
 if not exist "codex\app-orchestrator-openai.yaml" goto ERR_SRC
+if not exist "scripts\preflight-windows.ps1" goto ERR_SRC
 if "%LEGACY_PROMPTS%"=="1" if not exist "codex\prompts" goto ERR_SRC
 
 if exist "%WORK_DIR%" goto ERR_TEMP
@@ -81,32 +83,43 @@ set "KIT_ROOT=%CD%"
 rem SKILL frontmatter名・配布先名・重複、TOML必須フィールド、
 rem コピー元reparse pointを1回のPowerShell走査で検証する。
 rem TOMLは必須の文字列3項目だけを確認し、公式configの追加キーやtableは許容する。
-set "AGENT_TOML_DIR=%KIT_ROOT%\codex\agents"
-powershell -NoProfile -Command "$ErrorActionPreference='Stop'; $seen=@{}; $dirs=@((Get-ChildItem -LiteralPath (Join-Path $env:KIT_ROOT 'skills') -Directory),(Get-ChildItem -LiteralPath (Join-Path $env:KIT_ROOT 'codex\workflow-skills') -Directory)); $dirs+=Get-Item -LiteralPath (Join-Path $env:KIT_ROOT 'agents'); foreach($d in $dirs){if($d.Name -eq 'agents'){$file=Join-Path $d.FullName 'app-orchestrator.md';$expected='app-orchestrator'}else{$file=Join-Path $d.FullName 'SKILL.md';$expected=$d.Name}; if(-not (Test-Path -LiteralPath $file -PathType Leaf)){throw ('SKILL.md missing: '+$file)}; $text=Get-Content -LiteralPath $file -Raw; $fm=[regex]::Match($text,'(?s)\A---\r?\n(.*?)\r?\n---'); if(-not $fm.Success){throw ('invalid frontmatter: '+$file)}; $nm=[regex]::Match($fm.Groups[1].Value,'(?m)^name:[ \t]*([a-z0-9-]+)[ \t]*\r?$'); $ds=[regex]::Match($fm.Groups[1].Value,'(?m)^description:[ \t]*(?<value>[^\r\n]*)\r?$'); if(-not $nm.Success -or -not $ds.Success -or $nm.Groups[1].Value -ne $expected){throw ('skill metadata mismatch: '+$file)}; $head=$ds.Groups['value'].Value.Trim(); if($head -match '^[>|](?:[1-9][+-]?|[+-][1-9]?)?$'){$hasBody=$false;$tail=$fm.Groups[1].Value.Substring($ds.Index+$ds.Length); foreach($line in ($tail -split '\r?\n')){if($line -match '^[ \t]+\S'){$hasBody=$true;break};if($line -match '^\S'){break}};if(-not $hasBody){throw ('empty block description: '+$file)}}elseif([string]::IsNullOrWhiteSpace($head)){throw ('empty description: '+$file)}; if($seen.ContainsKey($expected)){throw ('duplicate Codex skill name: '+$expected)};$seen[$expected]=$true}; foreach($f in Get-ChildItem -LiteralPath $env:AGENT_TOML_DIR -Filter '*.toml' -File){$t=Get-Content -LiteralPath $f.FullName -Raw;$masked=[regex]::Replace($t,'(?s)""".*?"""','""""""');foreach($key in @('name','description')){$pattern='(?m)^[ \t]*'+[regex]::Escape($key)+'[ \t]*=[ \t]*"(?<value>(?:\\.|[^\r\n"\\])*)"[ \t]*(?:#.*)?\r?$';$matches=[regex]::Matches($masked,$pattern);if($matches.Count -ne 1 -or [string]::IsNullOrWhiteSpace($matches[0].Groups['value'].Value)){throw ('missing, duplicate, non-string, or empty '+$key+': '+$f.FullName)}};$pattern='(?ms)^[ \t]*developer_instructions[ \t]*=[ \t]*(?:"""(?<multi>.*?)"""|"(?<single>(?:\\.|[^\r\n"\\])*)")[ \t]*(?:#.*)?\r?$';$matches=[regex]::Matches($t,$pattern);if($matches.Count -ne 1){throw ('missing, duplicate, or non-string developer_instructions: '+$f.FullName)};$value=if($matches[0].Groups['multi'].Success){$matches[0].Groups['multi'].Value}else{$matches[0].Groups['single'].Value};if([string]::IsNullOrWhiteSpace($value)){throw ('empty developer_instructions: '+$f.FullName)}};$roots=@('skills','agents','commands','codex\workflow-skills','codex\agents');if($env:LEGACY_PROMPTS -eq '1'){$roots+='codex\prompts'};foreach($r in $roots){$root=Get-Item -LiteralPath (Join-Path $env:KIT_ROOT $r) -Force;if(($root.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){throw ('source root reparse point: '+$root.FullName)};foreach($i in Get-ChildItem -LiteralPath $root.FullName -Recurse -Force){if(($i.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){throw ('source reparse point: '+$i.FullName)}}};$direct=Get-Item -LiteralPath (Join-Path $env:KIT_ROOT 'codex\app-orchestrator-openai.yaml') -Force;if(($direct.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){throw ('source reparse point: '+$direct.FullName)}" >nul 2>&1
+set "AIDD_PHASE=source-preflight"
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%KIT_ROOT%\scripts\preflight-windows.ps1" -KitRoot "%KIT_ROOT%" -LegacyPrompts "%LEGACY_PROMPTS%"
 if errorlevel 1 goto ERR_FORMAT
 
 rem 旧manifestをコマンドとして解釈させないため、読み込み前に安全な文字・形式へ限定する。
+set "AIDD_PHASE=old-manifest"
 set "OLD_CLAUDE_MANIFEST=%CLAUDE_MANIFEST%"
 set "OLD_CODEX_MANIFEST=%CODEX_MANIFEST%"
 powershell -NoProfile -Command "$ErrorActionPreference='Stop'; foreach($path in @($env:OLD_CLAUDE_MANIFEST,$env:OLD_CODEX_MANIFEST)){if(-not (Test-Path -LiteralPath $path -PathType Leaf)){continue}; foreach($line in Get-Content -LiteralPath $path){if([string]::IsNullOrWhiteSpace($line)){continue}; $p=$line.Split('|',2); if($p.Count -eq 2 -and $p[0] -notmatch '^[0-9a-fA-F]{64}$'){throw ('invalid manifest hash: '+$path)}; $rel=$p[$p.Count-1]; if($rel -notmatch '^[A-Za-z0-9_.\\-]+$' -or $rel -match '(^|\\)\.\.?($|\\)' -or $rel -notmatch '^(skills|agents|commands|prompts)\\'){throw ('unsafe manifest path: '+$path)}}}" >nul 2>&1
 if errorlevel 1 goto ERR_FORMAT
 
+set "AIDD_PHASE=map-claude-skills"
 call :MAP_TREE C "skills" "skills" || goto ERR_FORMAT
+set "AIDD_PHASE=map-claude-agents"
 call :MAP_TREE C "agents" "agents" || goto ERR_FORMAT
+set "AIDD_PHASE=map-claude-commands"
 call :MAP_TREE C "commands" "commands" || goto ERR_FORMAT
+set "AIDD_PHASE=map-codex-common-skills"
 call :MAP_TREE X "skills" "skills" || goto ERR_FORMAT
+set "AIDD_PHASE=map-codex-workflow-skills"
 call :MAP_TREE X "codex\workflow-skills" "skills" || goto ERR_FORMAT
+set "AIDD_PHASE=map-codex-orchestrator-skill"
 call :MAP_FILE X "agents\app-orchestrator.md" "skills\app-orchestrator\SKILL.md" || goto ERR_FORMAT
+set "AIDD_PHASE=map-codex-orchestrator-metadata"
 call :MAP_FILE X "codex\app-orchestrator-openai.yaml" "skills\app-orchestrator\agents\openai.yaml" || goto ERR_FORMAT
+set "AIDD_PHASE=map-codex-custom-agents"
 call :MAP_TREE X "codex\agents" "agents" || goto ERR_FORMAT
 if "%LEGACY_PROMPTS%"=="1" (
+  set "AIDD_PHASE=map-codex-legacy-prompts"
   call :MAP_TREE X "codex\prompts" "prompts"
   if errorlevel 1 goto ERR_FORMAT
 )
 
 set "CL_NEW=%CLAUDE_NEW_MANIFEST%"
 set "CX_NEW=%CODEX_NEW_MANIFEST%"
-powershell -NoProfile -Command "$ErrorActionPreference='Stop'; $cache=@{}; $claude=New-Object Collections.Generic.List[string]; $codex=New-Object Collections.Generic.List[string]; foreach($line in Get-Content -LiteralPath $env:SOURCE_MAP){$p=$line.Split('|',3); if($p.Count -ne 3){throw 'invalid source map'}; if(-not $cache.ContainsKey($p[1])){$cache[$p[1]]=(Get-FileHash -LiteralPath $p[1] -Algorithm SHA256).Hash.ToLowerInvariant()}; $entry=$cache[$p[1]]+'|'+$p[2]; if($p[0] -eq 'C'){$claude.Add($entry)}else{$codex.Add($entry)}}; $claude=$claude.ToArray() | Sort-Object -Unique; $codex=$codex.ToArray() | Sort-Object -Unique; [IO.File]::WriteAllLines($env:CL_NEW,$claude,(New-Object Text.UTF8Encoding($false))); [IO.File]::WriteAllLines($env:CX_NEW,$codex,(New-Object Text.UTF8Encoding($false)))" >nul 2>&1
+set "AIDD_PHASE=build-manifests"
+powershell -NoProfile -Command "$ErrorActionPreference='Stop'; $cache=@{}; $claude=New-Object Collections.Generic.List[string]; $codex=New-Object Collections.Generic.List[string]; foreach($line in Get-Content -LiteralPath $env:SOURCE_MAP -Encoding UTF8){$p=$line.Split('|',3); if($p.Count -ne 3){throw 'invalid source map'}; if(-not $cache.ContainsKey($p[1])){$cache[$p[1]]=(Get-FileHash -LiteralPath $p[1] -Algorithm SHA256).Hash.ToLowerInvariant()}; $entry=$cache[$p[1]]+'|'+$p[2]; if($p[0] -eq 'C'){$claude.Add($entry)}else{$codex.Add($entry)}}; $claude=$claude.ToArray() | Sort-Object -Unique; $codex=$codex.ToArray() | Sort-Object -Unique; [IO.File]::WriteAllLines($env:CL_NEW,$claude,(New-Object Text.UTF8Encoding($false))); [IO.File]::WriteAllLines($env:CX_NEW,$codex,(New-Object Text.UTF8Encoding($false)))" >nul 2>&1
 if errorlevel 1 goto ERR_FORMAT
 echo %KIT_VERSION%> "%WORK_DIR%\version"
 
@@ -116,10 +129,12 @@ call :CHECK_NO_CHANGES
 if not errorlevel 1 goto NO_CHANGES
 
 rem 新旧manifestが示す「実際に変更するファイル」だけを登録する。
+set "AIDD_PHASE=register-claude-manifest"
 for /f "usebackq delims=" %%L in ("%CLAUDE_NEW_MANIFEST%") do (
   call :REGISTER_MANIFEST_ENTRY C "%%L"
   if errorlevel 1 goto ERR_FORMAT
 )
+set "AIDD_PHASE=register-codex-manifest"
 for /f "usebackq delims=" %%L in ("%CODEX_NEW_MANIFEST%") do (
   call :REGISTER_MANIFEST_ENTRY X "%%L"
   if errorlevel 1 goto ERR_FORMAT
@@ -132,6 +147,7 @@ if exist "%CODEX_MANIFEST%" for /f "usebackq delims=" %%L in ("%CODEX_MANIFEST%"
   call :REGISTER_OLD_ENTRY X "%%L"
   if errorlevel 1 goto ERR_FORMAT
 )
+set "AIDD_PHASE=register-control-files"
 call :REGISTER_REL C "aidd-agent-kit.manifest" || goto ERR_FORMAT
 call :REGISTER_REL C "aidd-agent-kit.version" || goto ERR_FORMAT
 call :REGISTER_REL X "aidd-agent-kit.manifest" || goto ERR_FORMAT
@@ -212,11 +228,11 @@ echo (5/6) Codex のカスタムエージェントをコピーしています...
 xcopy "codex\agents" "%CODEX_DIR%\agents\" /E /I /Y /Q /H >nul
 if errorlevel 1 goto ERR_COPY
 if "%LEGACY_PROMPTS%"=="1" (
-  echo (6/6) Codex のlegacy promptsをコピーしています...
+  echo ^(6/6^) Codex のlegacy promptsをコピーしています...
   xcopy "codex\prompts" "%CODEX_DIR%\prompts\" /E /I /Y /Q /H >nul
   if errorlevel 1 goto ERR_COPY
 ) else (
-  echo (6/6) Codex のコマンドはスキルとして導入済みです。
+  echo ^(6/6^) Codex のコマンドはスキルとして導入済みです。
 )
 echo.
 
@@ -594,6 +610,7 @@ goto ERR_END
 
 :ERR_FORMAT
 echo [エラー] SKILL frontmatter、スキル名の重複、TOML必須形式、またはコピー元の形式検証に失敗しました。
+echo 失敗段階: %AIDD_PHASE%
 goto ERR_END
 
 :ERR_SYMLINK

@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # 判別の根拠は「設定に書いた宣言」ではなく、ロックファイルが実在するかどうか。
       # 宣言は書き換え忘れるが、ロックファイルは実際に入れた事実の痕跡なのでズレない。

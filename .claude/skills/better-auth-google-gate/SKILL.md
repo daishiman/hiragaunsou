@@ -17,6 +17,7 @@ Cloudflare上のアプリへGoogle認証を導入する。既定はGoogle Worksp
 - ルート保護はCookieの存在だけで完了させず、保護ページ、Server Action、API、データアクセス直前で`auth.api.getSession`を検証する。
 - Better Authの認証テーブルを記憶で手書きしない。CLIで現在の導入バージョンに対応したスキーマを生成する。
 - ユーザーが「実装して」と依頼した場合、検証済みの安全な次工程が残る限り、案内だけで止まらず実行する。
+- 通常は事前質問ゼロで、既存コードと設定から認証モデルを再構成し、secretを必要としない実装・テスト・設定ガイドを先に完成させる。複数方式を並べず、証拠に合う安全な構成を1つ選ぶ。
 
 ## 0. 実装方針（分岐なし）
 
@@ -47,9 +48,9 @@ node <skill-dir>/scripts/inspect-project.mjs --project <project-root>
 
 依存バージョンやCLI構文は変わり得る。実装前に`references/official-sources.md`を読み、公式ドキュメントを再確認する。
 
-## 2. 発見できない値だけ確定する
+## 2. 発見できない値を仮説で補い、成果物を先に作る
 
-コードやWrangler設定から取得できなかった値だけをユーザーへ確認する。
+コードやWrangler設定から取得できない値は、既存のサービス名、git remote、公開設定、メールドメインから可逆な仮説を置く。仮説値を明記したsecret-freeの実装、テスト、設定ガイドを先に生成し、Google Cloudの本人操作や組織ドメインなど本人しか確定できない境界だけを最後に1回で確認する。
 
 ```text
 APP_NAME=Google同意画面とサインイン画面に出す名称
@@ -58,7 +59,7 @@ WORKSPACE_DOMAIN=example.co.jp
 LOCAL_ORIGIN=http://localhost:3000（通常は既定値）
 ```
 
-Client ID、Client Secret、BETTER_AUTH_SECRETの値をチャットで尋ねない。Workspace限定でない要件なら、許可対象を確認して`hd`を外す前にリスクを説明する。
+Client ID、Client Secret、BETTER_AUTH_SECRETの値をチャットで尋ねない。Workspace限定でない要件でも、既定は閉じた構成のままローカル成果物を作り、許可主体とリスクを具体化してから`hd`を外す一点だけを確認する。
 
 ## 3. 自動実装する
 

@@ -2,8 +2,13 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
 <title>物件提案デスク — ux-design / jp-web-design モデルケース</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="theme.js"></script>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -15,6 +20,11 @@
     <button type="button" data-nav="list">提案リスト</button>
     <button type="button" data-nav="report">レポート</button>
   </nav>
+  <div class="theme-toggle" role="group" aria-label="テーマ切り替え">
+    <button type="button" data-theme-choice="auto" aria-pressed="true">自動</button>
+    <button type="button" data-theme-choice="light" aria-pressed="false">ライト</button>
+    <button type="button" data-theme-choice="dark" aria-pressed="false">ダーク</button>
+  </div>
 </header>
 
 <main>
