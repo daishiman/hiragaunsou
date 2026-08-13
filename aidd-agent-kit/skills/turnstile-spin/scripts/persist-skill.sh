@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Persists the canonical Spin skill bundle (SKILL.md + scripts/ + references/)
-# from cloudflare/skills to the user's repo so the agent can re-load it on
-# follow-up tasks without re-pasting the bootstrap prompt.
+# from cloudflare/skills to an unmanaged repository. Repositories whose
+# AGENTS.md declares runtime locations as generated must update their authoring
+# source and run their sync workflow instead.
 #
 # Args:
 #   --path <path>   SKILL.md destination, e.g. .claude/skills/turnstile-spin/SKILL.md
@@ -26,6 +27,42 @@ done
 : "${PATH_ARG:?--path required}"
 
 TARGET_DIR=$(dirname "$PATH_ARG")
+
+# Find the closest repository guidance before writing anything. AIDD-managed
+# runtime paths are generated artifacts; fetching upstream content into them
+# would bypass the authoring source, manifest, and verification contract.
+case "$TARGET_DIR" in
+  /*) SEARCH_DIR="$TARGET_DIR" ;;
+  *) SEARCH_DIR="$PWD/$TARGET_DIR" ;;
+esac
+while [ ! -e "$SEARCH_DIR" ] && [ "$SEARCH_DIR" != "/" ]; do
+  SEARCH_DIR=$(dirname "$SEARCH_DIR")
+done
+
+GUIDANCE=""
+CURRENT="$SEARCH_DIR"
+while [ -n "$CURRENT" ] && [ "$CURRENT" != "/" ]; do
+  CANDIDATE=""
+  if [ -f "$CURRENT/AGENTS.override.md" ]; then
+    CANDIDATE="$CURRENT/AGENTS.override.md"
+  elif [ -f "$CURRENT/AGENTS.md" ]; then
+    CANDIDATE="$CURRENT/AGENTS.md"
+  fi
+  if [ -n "$CANDIDATE" ] && \
+     grep -Eq 'aidd-agent-kit/skills|管理対象の実配置|authoring path' "$CANDIDATE"; then
+    GUIDANCE="$CANDIDATE"
+    break
+  fi
+  CURRENT=$(dirname "$CURRENT")
+done
+
+if [ -n "$GUIDANCE" ]; then
+  echo "persist-skill: refusing to write a managed runtime path: $TARGET_DIR" >&2
+  echo "persist-skill: update the authoring path declared by $GUIDANCE, then run sync and verify." >&2
+  echo "{\"status\":\"error\",\"reason\":\"managed_runtime\",\"guidance\":\"$GUIDANCE\"}"
+  exit 1
+fi
+
 mkdir -p "$TARGET_DIR"
 
 # Install the canonical bundle from cloudflare/skills via degit. This writes

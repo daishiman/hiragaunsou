@@ -1,6 +1,6 @@
 # AI開発エージェントキット セットアップマニュアル【Mac版】
 
-**バージョン 1.9.0**
+**バージョン 1.9.1**
 
 ## このキットは何?
 
@@ -23,6 +23,8 @@ Codex では
 と頼むだけで、今あるアプリを壊さずに機能を1つずつ追加・改善していけます。
 
 > **Codexにもagent／subagentがあります。** Claude Code のcustom `/command` に対応する標準導線はCodexでは `$skill` です。`/skills` や `/agent` などCodex組み込みのslash commandとは別物です。また、`AGENTS.md` はプロジェクト規約を毎回読み込む常設指示で、必要なときだけ起動するskillやcustom agentの代わりではありません。
+
+> **CodexのAIDD配置は2種類です。** `SKILL.md` は `.agents/skills/<名前>/`、custom agentの `.toml` は `.codex/agents/` に置きます。projectの`.codex/skills`は使いません。`~/.codex/skills`はCodex組込installer/plugin等のpersonal installed領域で、AIDDは書き込みません。
 
 **所要時間: 約5分。難しい操作はありません。**
 
@@ -70,7 +72,9 @@ cd aidd-agent-kit フォルダのパス
 bash install-mac.command
 ```
 
-インストール先はユーザー共通の `~/.claude`、`~/.agents/skills`、`${CODEX_HOME:-~/.codex}` です。プロジェクトだけに限定して導入したい場合は、Claude Code はプロジェクトの `.claude`、Codex は `.agents/skills` と `.codex/agents` へ必要な項目だけを手動配置してください。
+通常インストーラーが書くのはuser scopeの `~/.claude`、`~/.agents/skills`、`${CODEX_HOME:-~/.codex}` です。Codex公式の探索範囲にはproject scopeの `.agents/skills`・`.codex/agents` もありますが、同名Skillはuser/project間で統合されません。このキットをプロジェクト限定で使う場合は手動コピーではなく、キットを含むリポジトリのルートから `bash aidd-agent-kit/sync-project-mac.command` を使い、project scopeを明示してください。同じAIDDキットの二重導入は非推奨です。
+
+配置だけ診断する場合は、対象リポジトリのルートで `./aidd-agent-kit/doctor-codex-layout.sh` を実行します。診断はファイルを削除・移動しません。同内容の重複は警告、内容差やproject `.codex/skills` はNGです。
 
 Codexの旧 `/prompts:build-app` 形式は非推奨で、標準インストールには含まれません。既存運用との移行期間だけ必要な場合は、任意の `--legacy-prompts` を付けます。新しい利用方法では `$build-app` を使ってください。
 
@@ -150,7 +154,7 @@ Codex: $undo-app さっき追加した印刷レイアウトをいったん取り
 
 1. Finder を開き、メニューの **移動 → フォルダへ移動…** を選びます(キーボードで Command + Shift + G でも開けます)。
 2. `~/.claude` と入力し、Claude Code 用の `skills`・`agents`・`commands` を対応するフォルダへコピーします。
-3. Codex 用は、共通 `skills` と `codex/skills` を `~/.agents/skills`、`codex/agents` を `~/.codex/agents` へコピーします。さらに `agents/app-orchestrator.md` を `~/.agents/skills/app-orchestrator/SKILL.md`、`codex/app-orchestrator-openai.yaml` を `~/.agents/skills/app-orchestrator/agents/openai.yaml` として配置します。非推奨の旧互換が必要な場合だけ `codex/prompts` を `~/.codex/prompts` へコピーします。
+3. Codex 用は、共通 `skills` と `codex/workflow-skills` を `~/.agents/skills`、`codex/agents` を `~/.codex/agents` へコピーします。さらに `agents/app-orchestrator.md` を `~/.agents/skills/app-orchestrator/SKILL.md`、`codex/app-orchestrator-openai.yaml` を `~/.agents/skills/app-orchestrator/agents/openai.yaml` として配置します。非推奨の旧互換が必要な場合だけ `codex/prompts` を `~/.codex/prompts` へコピーします。
 
 ### Q2. `/build-app` または `$build-app` が候補に出てこない
 
@@ -169,8 +173,17 @@ Codex: $undo-app さっき追加した印刷レイアウトをいったん取り
 1. Codex を完全に終了して起動し直します。
 2. 新しいチャットで `/skills` を開き、`build-app` を確認します。
 3. 見つからない場合は `~/.agents/skills/build-app/SKILL.md` があるか確認します。
+4. AIDDのSkillは `~/.agents/skills` を確認します。`~/.codex/skills` はCodex組込installer/plugin等の管理領域なので、AIDDのファイルを手動で追加・移動しないでください。
 
-### Q5. 「別の場所への『近道(リンク)』になっています」と表示された
+### Q5. `.codex/agents` と `.toml` は何に使う?
+
+`.codex/agents/app-orchestrator.toml` は、Codexが仕事を委譲するcustom agentの定義です。スキルの置き場所ではありません。`name`・`description`・`developer_instructions` を持つTOMLをここへ置き、実際の作業手順は `.agents/skills/app-orchestrator/SKILL.md` から読みます。
+
+### Q5-1. userとprojectの両方に同じAIDDスキルがある
+
+Codexは同名Skillを自動統合しないため、二重導入は推奨しません。`./aidd-agent-kit/doctor-codex-layout.sh` で非破壊診断し、表示されたmanifestを確認して、どちらのscopeを使うか決めてください。doctorは自動削除しません。なお、`~/.codex/skills` はCodex組込installer/plugin等の管理領域なので、存在するだけで誤配置ではありません。
+
+### Q6. 「別の場所への『近道(リンク)』になっています」と表示された
 
 Claude Code または Codex の書き込み先が、別の場所を指すリンクとして設定されています。リンク先を意図せず書き換えないため、インストーラーが停止しました。
 
@@ -178,7 +191,7 @@ Claude Code または Codex の書き込み先が、別の場所を指すリン�
 
 ご自身で設定された方は、画面に表示されたコマンドでリンクを一時的に退避してから、もう一度インストーラーを実行してください。
 
-### Q6. 「以前のファイルは次の場所に保存してあります」と表示された
+### Q7. 「以前のファイルは次の場所に保存してあります」と表示された
 
 Claude Code または Codex に同じ名前の項目があったため、**上書き前に自動でバックアップ**したという意味です。インストール自体は成功しています。
 
@@ -189,7 +202,7 @@ Claude Code または Codex に同じ名前の項目があったため、**上�
 
 元に戻したいときは、このフォルダの中身を元の場所へ戻してください。不要になったら、フォルダごと削除して構いません。
 
-### Q7. セットアップスクリプトが「インストールに失敗しました」と表示する
+### Q8. セットアップスクリプトが「インストールに失敗しました」と表示する
 
 社内ネットワークの通信制限(必要なファイルのダウンロード先がブロックされている)が原因の場合があります。
 
@@ -208,6 +221,8 @@ Claude Code 用は `~/.claude`、Codex のスキルは `~/.agents/skills`、Code
 | 名前 | 役割 |
 |---|---|
 | app-orchestrator | 要件整理→デザイン→開発→公開→品質チェックを順番に進める司令塔 |
+
+Codexでは `app-orchestrator.toml` をcustom agentとして利用し、同じ手順を内部Skill `$app-orchestrator` として配置します。利用者は `$build-app` / `$improve-app` を入口にしてください。内部Skillは明示的な委譲またはfallbackでだけ使われ、一般の依頼から暗黙起動しません。
 
 ### コマンドワークフロー — 4個
 

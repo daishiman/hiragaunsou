@@ -94,7 +94,7 @@
 
   <div class="os-badge">Windows版</div>
   <h1>AI開発エージェントキット<br>セットアップマニュアル</h1>
-  <p class="lead-sub">バージョン 1.9.0 ／ 所要時間 約5分</p>
+  <p class="lead-sub">バージョン 1.9.1 ／ 所要時間 約5分</p>
 
   <div class="box">
     <p class="big">このキットは何?</p>
@@ -110,6 +110,7 @@
   <div class="warn">
     <div class="warn-title">Codexにもagent／subagentがあります</div>
     <p>Claude Code のcustom <code>/command</code> に対応する標準導線は、Codexでは <code>$skill</code> です。<code>/skills</code> や <code>/agent</code> などCodex組み込みのslash commandとは別物です。<code>AGENTS.md</code> はプロジェクト規約を毎回読み込む常設指示で、必要なときだけ起動するskillやcustom agentの代わりではありません。</p>
+    <p><strong>AIDDの配置は2種類です。</strong> Skillの <code>SKILL.md</code> は <code>.agents\skills\&lt;名前&gt;\</code>、custom agentの <code>.toml</code> は <code>.codex\agents\</code> に置きます。projectの <code>.codex\skills</code> は使いません。<code>%CODEX_HOME%\skills</code> はCodex組込installer/plugin等のpersonal installed領域で、AIDDは書き込みません。</p>
   </div>
 
   <div class="toc">
@@ -173,7 +174,8 @@
         <p>ダブルクリックの代わりに、コマンドプロンプトから実行することもできます。挙動はダブルクリックと同じです。</p>
         <div class="cmd-sample">cd aidd-agent-kit フォルダのパス
 install-windows.bat</div>
-        <p>標準のインストール先は <code>.claude</code>、<code>.agents\skills</code>、<code>.codex</code> です。プロジェクト限定で使う場合は、それぞれのプロジェクト用設定フォルダへ手動配置してください。</p>
+        <p>通常インストーラーが書くのはuser scopeの <code>.claude</code>、<code>.agents\skills</code>、<code>.codex</code> です。Codex公式の探索範囲にはproject scopeもありますが、同名Skillはuser/project間で統合されません。プロジェクト限定で使う場合は、リポジトリルートから <code>call aidd-agent-kit\sync-project-windows.bat</code> を使ってproject scopeを明示してください。同じAIDDキットの二重導入は非推奨です。</p>
+        <p>配置だけ診断する場合はGit BashまたはWSLで <code>./aidd-agent-kit/doctor-codex-layout.sh</code> を実行します。読み取り専用で、同内容の重複は警告、内容差やproject <code>.codex\skills</code> はNGです。ファイルは自動削除しません。</p>
         <p>Codexの旧 <code>/prompts:build-app</code> 形式は非推奨で、標準インストールには含まれません。移行期間だけ必要な場合は任意オプションを付けます。新しい利用方法では <code>$build-app</code> を使ってください。</p>
         <div class="cmd-sample">install-windows.bat --legacy-prompts</div>
         </div>
@@ -238,7 +240,7 @@ install-windows.bat</div>
       <p><strong>手動でコピーする方法</strong>があります。</p>
       <ol>
         <li>Claude Code 用は <code>skills</code>・<code>agents</code>・<code>commands</code> を <code>.claude</code> の対応先へコピーします。</li>
-        <li>Codex 用は共通 <code>skills</code> と <code>codex\skills</code> を <code>.agents\skills</code>、<code>codex\agents</code> を <code>.codex\agents</code> へコピーします。さらに <code>agents\app-orchestrator.md</code> を <code>.agents\skills\app-orchestrator\SKILL.md</code>、<code>codex\app-orchestrator-openai.yaml</code> を <code>.agents\skills\app-orchestrator\agents\openai.yaml</code> として配置します。非推奨の旧互換が必要な場合だけ <code>codex\prompts</code> を <code>.codex\prompts</code> へコピーします。</li>
+        <li>Codex 用は共通 <code>skills</code> と <code>codex\workflow-skills</code> を <code>.agents\skills</code>、<code>codex\agents</code> を <code>.codex\agents</code> へコピーします。さらに <code>agents\app-orchestrator.md</code> を <code>.agents\skills\app-orchestrator\SKILL.md</code>、<code>codex\app-orchestrator-openai.yaml</code> を <code>.agents\skills\app-orchestrator\agents\openai.yaml</code> として配置します。非推奨の旧互換が必要な場合だけ <code>codex\prompts</code> を <code>.codex\prompts</code> へコピーします。</li>
       </ol>
       <div class="faq-q">Q2. /build-app または $build-app が候補に出てこない</div>
       <ul>
@@ -252,24 +254,28 @@ install-windows.bat</div>
         <li>解決しない場合は Q1 の手動コピーをお試しください。</li>
       </ul>
       <div class="faq-q">Q4. Codex でスキルが表示されない</div>
-      <p>Codex を完全に終了して起動し直し、新しいチャットの <code>/skills</code> で <code>build-app</code> を確認してください。</p>
-      <div class="faq-q">Q5. 「別の場所への『近道(リンク)』になっています」と表示された</div>
+      <p>Codex を完全に終了して起動し直し、新しいチャットの <code>/skills</code> で <code>build-app</code> を確認してください。見つからない場合は <code>%USERPROFILE%\.agents\skills\build-app\SKILL.md</code> を確認します。<code>%CODEX_HOME%\skills</code> はCodex組込installer/plugin等の管理領域なので、AIDDのファイルを手動で追加・移動しないでください。</p>
+      <div class="faq-q">Q5. .codex\agents と .toml は何に使う?</div>
+      <p><code>.codex\agents\app-orchestrator.toml</code> は、Codexが仕事を委譲するcustom agentの定義です。スキルの置き場所ではありません。実際の作業手順は <code>.agents\skills\app-orchestrator\SKILL.md</code> から読みます。</p>
+      <div class="faq-q">Q5-1. userとprojectの両方に同じAIDDスキルがある</div>
+      <p>Codexは同名Skillを自動統合しないため、二重導入は推奨しません。Git BashまたはWSLで <code>./aidd-agent-kit/doctor-codex-layout.sh</code> を実行して非破壊診断し、manifestを確認して使うscopeを決めてください。doctorは自動削除しません。<code>%CODEX_HOME%\skills</code> は別の管理領域なので、存在するだけで誤配置ではありません。</p>
+      <div class="faq-q">Q6. 「別の場所への『近道(リンク)』になっています」と表示された</div>
       <p><code>.claude</code> の中のフォルダが、別の場所を指すリンクとして設定されています。<strong>このままコピーすると、まったく関係のないフォルダの中身が書き換えられてしまう</strong>ため、インストーラーが安全のために処理を止めました。</p>
       <p>心当たりがない場合は、<strong>この画面のまま導入支援の担当者にお見せください</strong>。</p>
       <p>ご自身で設定された方は、画面に表示されたコマンドでリンクを一時的に退避してから、もう一度インストーラーを実行してください。</p>
-      <div class="faq-q">Q6. 「以前のファイルは次の場所に保存してあります」と表示された</div>
+      <div class="faq-q">Q7. 「以前のファイルは次の場所に保存してあります」と表示された</div>
       <p>Claude Code または Codex に同名項目があったため、<strong>上書き前に自動でバックアップ</strong>したという意味です。</p>
       <div class="cmd-sample">.claude\backup-20260726-143000\<br>.codex\backup-20260726-143000\</div>
       <p>元に戻したいときは、このフォルダの中身を元の場所へ戻してください。不要になったら、フォルダごと削除して構いません。</p>
-      <div class="faq-q">Q7. 「ファイルのコピー中に問題が発生しました」と表示された</div>
+      <div class="faq-q">Q8. 「ファイルのコピー中に問題が発生しました」と表示された</div>
       <ul>
         <li>ディスクの空き容量を確認してください(50MB程度必要です)。</li>
         <li>ウイルス対策ソフトがコピーを止めている場合があります。一時的に停止できないか、社内のIT担当者にご相談ください。</li>
         <li>解決しない場合は Q1 の手動コピーをお試しください。</li>
       </ul>
-      <div class="faq-q">Q8. 黒い画面の日本語が文字化けしている</div>
+      <div class="faq-q">Q9. 黒い画面の日本語が文字化けしている</div>
       <p>表示が崩れていてもインストール自体は正常に行われます。STEP 4 で <code>/build-app</code> または <code>$build-app</code> が出れば問題ありません。</p>
-      <div class="faq-q">Q9. セットアップスクリプトが「インストールに失敗しました」と表示する</div>
+      <div class="faq-q">Q10. セットアップスクリプトが「インストールに失敗しました」と表示する</div>
       <p>社内ネットワークの通信制限(必要なファイルのダウンロード先がブロックされている)が原因の場合があります。</p>
       <p><strong>この画面を閉じずに、そのまま社内のIT担当者・導入支援の担当者にお見せください。</strong> どの通信が止められているかが画面に出ているため、担当者側で対応できます。</p>
 
@@ -285,7 +291,7 @@ install-windows.bat</div>
     <tr><th>名前</th><th>役割</th></tr>
     <tr><td>app-orchestrator</td><td>要件整理→デザイン→開発→公開→品質チェックを順番に進める司令塔</td></tr>
   </table>
-  <p>Codexでは <code>app-orchestrator.toml</code> をcustom agentとして利用し、同じ司令塔手順を <code>$app-orchestrator</code> skillとしても配置します。custom agentを利用できないクライアントでも、現在のスレッドで同じ手順を実行できます。</p>
+  <p>Codexでは <code>app-orchestrator.toml</code> をcustom agentとして利用し、同じ手順を内部Skill <code>$app-orchestrator</code> として配置します。利用者は <code>$build-app</code> / <code>$improve-app</code> を入口にしてください。内部Skillは明示的な委譲またはfallbackでだけ使われ、一般の依頼から暗黙起動しません。</p>
 
   <h3>コマンドワークフロー — 4個</h3>
   <table>
@@ -360,7 +366,7 @@ install-windows.bat</div>
   </ul>
 
   <div class="footer">
-    AI開発エージェントキット v1.9.0 ／ 本キットに関するお問い合わせ: 株式会社TierMind
+    AI開発エージェントキット v1.9.1 ／ 本キットに関するお問い合わせ: 株式会社TierMind
   </div>
 
 </div>

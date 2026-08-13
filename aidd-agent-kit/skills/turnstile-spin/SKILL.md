@@ -85,7 +85,10 @@ The user pasted the prompt. You are in a multi-step dialog. Detect what you can,
 
 10. **Validation.** Run `scripts/validate.sh`. Report each check as it passes. If any fails, surface the error and stop. **[wait for user if anything fails]**
 
-11. **Persist skill.** Detect the active client and propose its repository-local path: Claude Code uses `.claude/skills/turnstile-spin/SKILL.md`; Codex uses `.agents/skills/turnstile-spin/SKILL.md`. If the client is unclear, show those two choices. Ask whether to save the skill for follow-up tasks; default yes. **[wait for user]** Then run `scripts/persist-skill.sh --path <selected-client-path>`.
+11. **Persist or update the skill without bypassing repository ownership.** First read the applicable `AGENTS.md` files and classify the destination:
+    - **AIDD-managed repository:** `.claude/skills` and `.agents/skills` are generated runtime locations. Never write or fetch directly into them. Update the authoring path declared by `AGENTS.md` (for this bundled copy, `aidd-agent-kit/skills/turnstile-spin/`), then use the repository's sync and verify commands. If an upstream copy must be fetched, fetch it into a temporary directory, review the diff, and apply the approved changes to the authoring path; do not target managed runtime with `persist-skill.sh`.
+    - **Repository with another authoring rule:** obey that rule. Do not assume the runtime discovery path is editable source.
+    - **Unmanaged repository with no authoring rule:** propose the repository-local runtime path—Claude Code uses `.claude/skills/turnstile-spin/SKILL.md`; Codex uses `.agents/skills/turnstile-spin/SKILL.md`. Ask whether to save it for follow-up tasks; default yes. **[wait for user]** Only in this unmanaged case run `scripts/persist-skill.sh --path <selected-client-path>`.
 
 12. **Final report.** Print the structured summary: what was created, what was validated, what to do next.
 
@@ -98,6 +101,7 @@ The user pasted the prompt. You are in a multi-step dialog. Detect what you can,
 - Do not deploy any extra infrastructure (Workers, proxies, sidecars). The customer's existing backend calls siteverify directly.
 - Do not use `sudo` or install global packages without asking.
 - Do not propose features outside the wizard (custom Workers, custom domains, advanced WAF rules) unless asked.
+- Do not persist or download this skill into a managed runtime directory. Respect `AGENTS.md`, update its declared authoring path, then sync and verify.
 
 ### Hard scope boundary: DO NOT ask the user about
 

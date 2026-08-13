@@ -13,7 +13,7 @@ This is a mirror of the canonical docs page at [`developers.cloudflare.com/turns
 | `scripts/widget-create.sh`        | Creates the Turnstile widget via the Cloudflare API                    |
 | `scripts/fetch-secret.sh`         | Retrieves the secret for an existing widget (recovery flow)            |
 | `scripts/validate.sh`             | Dummy-siteverify + hostname check at the end of the wizard             |
-| `scripts/persist-skill.sh`        | Installs the canonical skill bundle into the user's repo               |
+| `scripts/persist-skill.sh`        | Installs into an unmanaged repo; refuses AIDD-managed runtime paths     |
 | `references/vanilla-html.md`      | Code snippet for static / vanilla HTML projects                        |
 | `references/nextjs-app.md`        | Code snippet for Next.js App Router projects                           |
 | `references/nextjs-pages.md`      | Code snippet for Next.js Pages Router projects                         |
@@ -24,7 +24,11 @@ This is a mirror of the canonical docs page at [`developers.cloudflare.com/turns
 
 ## How agents load it
 
-Agents that load skill bundles from `github.com/cloudflare/skills` will pick this up automatically. For Claude Code or Codex repository-local installation:
+Agents that load skill bundles from `github.com/cloudflare/skills` will pick this up automatically.
+
+**Read the applicable `AGENTS.md` before using the commands below.** In an AIDD-managed repository, `.claude/skills` and `.agents/skills` are generated runtime paths. Do not download or link into them. Update the authoring source declared by `AGENTS.md` (this bundled copy uses `aidd-agent-kit/skills/turnstile-spin/`), then run the repository sync and verify commands. Fetch an upstream version into a temporary directory first so the diff can be reviewed.
+
+Only for an unmanaged repository with no authoring rule, repository-local installation is:
 
 ```sh
 # Claude Code
@@ -43,7 +47,7 @@ ln -s ~/.config/cloudflare-skills/skills/turnstile-spin ~/.claude/skills/turnsti
 ln -s ~/.config/cloudflare-skills/skills/turnstile-spin ~/.agents/skills/turnstile-spin
 ```
 
-For other clients, choose that client's documented skill-discovery location. Step 11 in [`SKILL.md`](./SKILL.md#conversation-flow) performs the same client-aware selection.
+For other clients, choose that client's documented skill-discovery location. Step 11 in [`SKILL.md`](./SKILL.md#conversation-flow) first honors repository ownership and only performs direct persistence for unmanaged repositories.
 
 ## Sync with the docs page
 

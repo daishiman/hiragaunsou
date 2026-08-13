@@ -3,20 +3,20 @@
 # =====================================================
 #  AI開発エージェントキット インストーラー (Mac用)
 #  Claude Code と OpenAI Codex の両方へ同時導入します
-#  v1.9.0
+#  v1.9.1
 # =====================================================
 
 set -Ee
 cd "$(dirname "$0")"
 
-KIT_VERSION="1.9.0"
-INSTALL_HOME="$HOME"
+KIT_VERSION="1.9.1"
+INSTALL_HOME="${AIDD_TARGET_HOME:-$HOME}"
 while case "$INSTALL_HOME" in *'//'*) true ;; *) false ;; esac; do
   INSTALL_HOME=${INSTALL_HOME//\/\//\/}
 done
 INSTALL_HOME=${INSTALL_HOME%/}
 CLAUDE_DIR="$INSTALL_HOME/.claude"
-CODEX_DIR="${CODEX_HOME:-$INSTALL_HOME/.codex}"
+CODEX_DIR="${AIDD_CODEX_TARGET:-${CODEX_HOME:-$INSTALL_HOME/.codex}}"
 while case "$CODEX_DIR" in *'//'*) true ;; *) false ;; esac; do
   CODEX_DIR=${CODEX_DIR//\/\//\/}
 done
@@ -36,7 +36,7 @@ WORK_DIR=""
 finish() {
   status="${1:-0}"
   echo ""
-  if [ -t 0 ]; then
+  if [ "${AIDD_NONINTERACTIVE:-0}" != "1" ] && [ -t 0 ]; then
     read -r -p "Enterキーを押すとこのウィンドウを閉じられます..." _unused
   fi
   exit "$status"
@@ -103,7 +103,7 @@ trap cleanup EXIT
 case "$CLAUDE_DIR|$CODEX_DIR|$CODEX_SKILLS_DIR" in
   /*'|'/*'|'/*) ;;
   *)
-    echo "[エラー] HOME と CODEX_HOME は絶対パスで指定してください。"
+    echo "[エラー] AIDD_TARGET_HOME と AIDD_CODEX_TARGET（未指定時は HOME / CODEX_HOME）は絶対パスで指定してください。"
     finish 1
     ;;
 esac
@@ -127,7 +127,9 @@ echo "==============================================="
 echo ""
 
 # --- ステップ 1/6: コピー元と形式の事前検証 ----------------------
-for required in skills agents commands codex/skills codex/agents; do
+# `codex/workflow-skills` は配布元の分類名であり、実配置の `.codex/skills`
+# ではない。Codex のスキルは常に `.agents/skills` へ配布する。
+for required in skills agents commands codex/workflow-skills codex/agents; do
   if [ ! -d "$required" ]; then
     echo "[エラー] インストールに必要なフォルダが見つかりません: $required"
     echo "ZIPを展開後、その中の install-mac.command を実行してください。"
@@ -158,8 +160,17 @@ validate_skill() {
     NR == 1 && $0 != "---" { exit 20 }
     NR > 1 && $0 == "---" { closed=1; exit }
     NR > 1 && $1 == "name:" { sub(/^[[:space:]]*name:[[:space:]]*/, ""); name=$0 }
-    NR > 1 && $1 == "description:" { sub(/^[[:space:]]*description:[[:space:]]*/, ""); desc=$0 }
-    END { if (!closed || name == "" || desc == "") exit 21; print name }
+    NR > 1 && $1 == "description:" {
+      sub(/^[[:space:]]*description:[[:space:]]*/, "")
+      desc=$0
+      if (desc ~ /^[>|][0-9+-]*[[:space:]]*$/) block=1
+      next
+    }
+    block && $0 ~ /^[[:space:]]+[^[:space:]]/ { block_content=1 }
+    END {
+      if (!closed || name == "" || desc == "" || (block && !block_content)) exit 21
+      print name
+    }
   ' "$file") || {
     echo "[エラー] SKILL.md のfrontmatterが不正です: $file"
     return 1
@@ -179,7 +190,7 @@ validate_skill() {
   printf '%s\n' "$actual" >> "$WORK_DIR/skill-names"
 }
 
-for dir in skills/*/ codex/skills/*/; do
+for dir in skills/*/ codex/workflow-skills/*/; do
   [ -d "$dir" ] || continue
   name=$(basename "$dir")
   [ -f "$dir/SKILL.md" ] || {
@@ -201,7 +212,7 @@ import tomllib
 with open(sys.argv[1], "rb") as source:
     data = tomllib.load(source)
 required = {"name", "description", "developer_instructions"}
-if set(data) != required:
+if not required.issubset(data):
     raise SystemExit(1)
 if not re.fullmatch(r"[a-z][a-z0-9_]*", data["name"]):
     raise SystemExit(1)
@@ -212,30 +223,36 @@ PY
       finish 1
     }
   elif ! awk '
+    BEGIN { top=1 }
     function fail() { bad=1 }
     inblock {
-      if ($0 ~ /^[[:space:]]*"""[[:space:]]*$/) { inblock=0; closed=1 }
+      if ($0 ~ /^[[:space:]]*"""[[:space:]]*$/) { inblock=0; closed=1; next }
+      if ($0 ~ /[^[:space:]]/) content=1
       next
     }
     /^[[:space:]]*($|#)/ { next }
-    /^[[:space:]]*name[[:space:]]*=[[:space:]]*"[a-z][a-z0-9_]*"[[:space:]]*$/ {
+    /^[[:space:]]*\[/ { top=0; next }
+    top && /^[[:space:]]*name[[:space:]]*=[[:space:]]*"[a-z][a-z0-9_]*"[[:space:]]*$/ {
       if (name++) fail(); next
     }
-    /^[[:space:]]*description[[:space:]]*=[[:space:]]*"[^"\r\n]+"[[:space:]]*$/ {
+    top && /^[[:space:]]*description[[:space:]]*=[[:space:]]*"[^"\r\n]+"[[:space:]]*$/ {
       if (description++) fail(); next
     }
-    /^[[:space:]]*developer_instructions[[:space:]]*=[[:space:]]*"""[[:space:]]*$/ {
+    top && /^[[:space:]]*developer_instructions[[:space:]]*=[[:space:]]*"[^"\r\n]+"[[:space:]]*$/ {
+      if (instructions++) fail(); content=1; closed=1; next
+    }
+    top && /^[[:space:]]*developer_instructions[[:space:]]*=[[:space:]]*"""[[:space:]]*$/ {
       if (instructions++) fail(); inblock=1; next
     }
-    { fail() }
-    END { if (bad || inblock || !closed || name != 1 || description != 1 || instructions != 1) exit 1 }
+    { next }
+    END { if (bad || inblock || !closed || !content || name != 1 || description != 1 || instructions != 1) exit 1 }
   ' "$toml"; then
     echo "[エラー] Codexカスタムエージェントの必須形式が不正です: $toml"
     finish 1
   fi
 done
 
-SOURCE_LINK_ROOTS="skills agents commands codex/skills codex/agents"
+SOURCE_LINK_ROOTS="skills agents commands codex/workflow-skills codex/agents"
 if [ "$LEGACY_PROMPTS" -eq 1 ]; then
   SOURCE_LINK_ROOTS="$SOURCE_LINK_ROOTS codex/prompts"
 fi
@@ -260,7 +277,7 @@ append_tree C skills skills
 append_tree C agents agents
 append_tree C commands commands
 append_tree X skills skills
-append_tree X codex/skills skills
+append_tree X codex/workflow-skills skills
 printf '%s\n' 'X|agents/app-orchestrator.md|skills/app-orchestrator/SKILL.md' >> "$WORK_DIR/maps"
 printf '%s\n' 'X|codex/app-orchestrator-openai.yaml|skills/app-orchestrator/agents/openai.yaml' >> "$WORK_DIR/maps"
 append_tree X codex/agents agents
@@ -333,10 +350,60 @@ printf '%s\n' \
 LC_ALL=C sort -u "$WORK_DIR/affected" -o "$WORK_DIR/affected"
 LC_ALL=C sort -u "$WORK_DIR/check-paths" -o "$WORK_DIR/check-paths"
 
+# manifestは実配置の所有契約。バックアップ前に生成し、
+# 完全なno-opなら書き込みとバックアップを一切行わない。
+awk -F'|' '{ print $2 }' "$WORK_DIR/maps" | LC_ALL=C sort -u > "$WORK_DIR/sources"
+perl -MDigest::SHA -e '
+  while (<STDIN>) {
+    chomp;
+    open my $fh, "<", $_ or die "$!: $_\n";
+    binmode $fh;
+    my $sha = Digest::SHA->new(256);
+    $sha->addfile($fh);
+    print $sha->hexdigest, "|", $_, "\n";
+  }
+' < "$WORK_DIR/sources" > "$WORK_DIR/source-hashes"
+
+awk -F'|' '
+  NR == FNR { hash[$2]=$1; next }
+  $1 == "C" { print hash[$2] "|" $3 }
+' "$WORK_DIR/source-hashes" "$WORK_DIR/maps" | LC_ALL=C sort -u > "$WORK_DIR/claude.manifest"
+awk -F'|' '
+  NR == FNR { hash[$2]=$1; next }
+  $1 == "X" { print hash[$2] "|" $3 }
+' "$WORK_DIR/source-hashes" "$WORK_DIR/maps" | LC_ALL=C sort -u > "$WORK_DIR/codex.manifest"
+printf '%s\n' "$KIT_VERSION" > "$WORK_DIR/version"
+
+NOOP=1
+while IFS='|' read -r client source relative; do
+  target=$(target_for "$client" "$relative")
+  if [ ! -f "$target" ] || ! cmp -s "$source" "$target"; then
+    NOOP=0
+    break
+  fi
+done < "$WORK_DIR/maps"
+cmp -s "$WORK_DIR/claude.manifest" "$CLAUDE_MANIFEST" || NOOP=0
+cmp -s "$WORK_DIR/codex.manifest" "$CODEX_MANIFEST" || NOOP=0
+cmp -s "$WORK_DIR/version" "$CLAUDE_VERSION_FILE" || NOOP=0
+cmp -s "$WORK_DIR/version" "$CODEX_VERSION_FILE" || NOOP=0
+
+if [ -d "$CODEX_DIR/skills" ]; then
+  echo "[情報] $CODEX_DIR/skills はAIDDキットの配布先ではありません。"
+  echo "  AIDD Skillの配置先: $CODEX_SKILLS_DIR"
+  echo "  Codex組込installer等が管理する既存ファイルは変更しません。"
+  echo ""
+fi
+
+if [ "$NOOP" -eq 1 ]; then
+  echo "[OK] 配布先はキット $KIT_VERSION と一致しています。"
+  echo "     変更がないため、バックアップと書き込みは行いません。"
+  finish 0
+fi
+
 # --- ステップ 2/6: 上書き先と祖先リンクの安全確認 ---------------
 echo "Claude Code: $CLAUDE_DIR"
 echo "Codex skills: $CODEX_SKILLS_DIR"
-echo "Codex agents: $CODEX_DIR"
+echo "Codex custom agents: $CODEX_DIR/agents"
 if [ "$LEGACY_PROMPTS" -eq 1 ]; then
   echo "Codex legacy prompts: 有効"
 fi
@@ -409,27 +476,6 @@ if [ -d "$CODEX_BACKUP_DIR" ]; then
 fi
 
 # --- ステップ 4/6: 旧manifest所有ファイルの整理 -------------------
-# shasumをファイルごとに起動せず、1プロセスでコピー元hashを作る。
-awk -F'|' '{ print $2 }' "$WORK_DIR/maps" | LC_ALL=C sort -u > "$WORK_DIR/sources"
-perl -MDigest::SHA -e '
-  while (<STDIN>) {
-    chomp;
-    open my $fh, "<", $_ or die "$!: $_\n";
-    binmode $fh;
-    my $sha = Digest::SHA->new(256);
-    $sha->addfile($fh);
-    print $sha->hexdigest, "|", $_, "\n";
-  }
-' < "$WORK_DIR/sources" > "$WORK_DIR/source-hashes"
-
-awk -F'|' '
-  NR == FNR { hash[$2]=$1; next }
-  $1 == "C" { print hash[$2] "|" $3 }
-' "$WORK_DIR/source-hashes" "$WORK_DIR/maps" | LC_ALL=C sort -u > "$WORK_DIR/claude.manifest"
-awk -F'|' '
-  NR == FNR { hash[$2]=$1; next }
-  $1 == "X" { print hash[$2] "|" $3 }
-' "$WORK_DIR/source-hashes" "$WORK_DIR/maps" | LC_ALL=C sort -u > "$WORK_DIR/codex.manifest"
 
 new_has_relative() {
   client="$1"
@@ -514,7 +560,6 @@ install_record() {
   cmp -s "$source" "$target"
 }
 
-printf '%s\n' "$KIT_VERSION" > "$WORK_DIR/version"
 install_record "$WORK_DIR/claude.manifest" "$CLAUDE_MANIFEST"
 install_record "$WORK_DIR/codex.manifest" "$CODEX_MANIFEST"
 install_record "$WORK_DIR/version" "$CLAUDE_VERSION_FILE"
@@ -531,7 +576,7 @@ for toml in codex/agents/*.toml; do
 done
 
 CLAUDE_SKILLS=$(find skills -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
-CODEX_COMMAND_SKILLS=$(find codex/skills -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
+CODEX_COMMAND_SKILLS=$(find codex/workflow-skills -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
 CODEX_SKILLS=$((CLAUDE_SKILLS + CODEX_COMMAND_SKILLS + 1))
 CLAUDE_AGENTS=$(find agents -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')
 CLAUDE_COMMANDS=$(find commands -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')
@@ -552,6 +597,11 @@ echo "  OpenAI Codex: スキル ${CODEX_SKILLS}個 / カスタムエージェン
 if [ "$LEGACY_PROMPTS" -eq 1 ]; then
   echo "  Codex legacy prompts: ${LEGACY_PROMPT_COUNT}個"
 fi
+echo ""
+echo "配置先:"
+echo "  Codex skills: $CODEX_SKILLS_DIR"
+echo "  Codex custom agents (.toml): $CODEX_DIR/agents"
+echo "  ※ AIDDキットは .codex/skills へ配布しません。"
 echo ""
 echo "次にやること:"
 echo "  1. Claude Code と Codex を終了して起動し直す"
