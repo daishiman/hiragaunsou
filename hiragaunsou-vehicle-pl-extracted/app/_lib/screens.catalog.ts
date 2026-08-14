@@ -446,6 +446,22 @@ export const SCREENS: readonly ScreenDef[] = [
     kind: "tool",
     permission: "manage_imports",
   },
+  {
+    href: "/admin/improvements",
+    label: "改善要望",
+    title: "改善要望（各画面から届いた「使いにくい」）",
+    desc: "各画面の右下から届いた改善要望を読み、対応状況を決める",
+    lead: "各画面の右下にある「改善要望」から届いた声を、画面ごとにまとめて確認します。読んだら対応状況（未対応・対応中・対応済み・見送り）を決めてください。",
+    does: "届いた要望を読み、直すかどうかを決める",
+    notHere: {
+      text: "数字の間違いの申し送りではありません。数字の確認は今月のToDoで行います。",
+      href: "/todo",
+      linkLabel: "今月のToDo",
+    },
+    group: "account",
+    kind: "tool",
+    permission: "manage_improvements",
+  },
 
   // ── 直した内容の反映(最下部) ────────────────────────────
   {
