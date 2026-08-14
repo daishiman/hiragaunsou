@@ -721,3 +721,66 @@ export const deficitFactorAnalysis = sqliteTable(
     uniqueIndex("deficit_factor_analysis_ym_no_idx").on(table.yearMonth, table.vehicleNo),
   ],
 );
+
+/**
+ * 各画面の右下から届く改善要望。
+ *
+ * 本文と画像を別のテーブルに分ける。画像は1件で数百KBあり、一覧を描くたびに
+ * 引くと全件ぶんの画像を読むことになる。一覧は本文だけ、詳細を開いたときだけ
+ * 画像を引く形にするため、最初から行を分けておく。
+ *
+ * routePattern は集計の単位 (/vehicle/[vehicleNo])。path は実URL。
+ * 実URLだけで数えると同じ画面への指摘が車番の数だけ分かれるため、両方を持つ。
+ */
+export const improvementRequest = sqliteTable(
+  "improvement_request",
+  {
+    /**
+     * 投稿者 + 送信キーから決まる id。同じ内容を2回送っても同じ行になるので、
+     * 通信が切れて押し直されたときに要望が2件並ばない。
+     */
+    id: text("id").primaryKey(),
+    reporterId: text("reporter_id").references(() => user.id, { onDelete: "set null" }),
+    /** 退職などで利用者が消えても「誰が言ったか」を残す。 */
+    reporterName: text("reporter_name").notNull().default(""),
+    /** 送信のたびにブラウザが作る鍵。再送を1件にまとめるために使う。 */
+    submissionKey: text("submission_key").notNull(),
+    path: text("path").notNull(),
+    routePattern: text("route_pattern").notNull(),
+    screenLabel: text("screen_label").notNull(),
+    body: text("body").notNull(),
+    /** 送ったときの画面の幅×高さ。「私の画面では崩れる」を再現するための手がかり。 */
+    viewport: text("viewport"),
+    userAgent: text("user_agent"),
+    status: text("status").notNull().default("open"),
+    handledById: text("handled_by_id").references(() => user.id, { onDelete: "set null" }),
+    handledNote: text("handled_note"),
+    handledAt: integer("handled_at", { mode: "timestamp_ms" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [
+    index("improvement_request_created_idx").on(table.createdAt),
+    index("improvement_request_status_idx").on(table.status, table.createdAt),
+    index("improvement_request_route_idx").on(table.routePattern, table.createdAt),
+    // 並んで届いた再送も1件に収める最後の砦 (id の一致だけに頼らない)
+    uniqueIndex("improvement_request_submission_idx").on(table.reporterId, table.submissionKey),
+  ],
+);
+
+/** 改善要望に添えられた画面の写し (注釈・黒塗りを焼き込んだ後の1枚)。 */
+export const improvementShot = sqliteTable("improvement_shot", {
+  requestId: text("request_id")
+    .primaryKey()
+    .references(() => improvementRequest.id, { onDelete: "cascade" }),
+  /** data URL のまま持つ。R2 を挟むと本文と画像で保存先が分かれ、片方だけ残る事故が起きる。 */
+  dataUrl: text("data_url").notNull(),
+  bytes: integer("bytes").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+    .notNull(),
+});
