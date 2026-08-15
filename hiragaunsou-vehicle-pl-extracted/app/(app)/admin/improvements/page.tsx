@@ -153,6 +153,10 @@ export default async function AdminImprovementsPage({
                     </Badge>
                     <span className="text-xs font-semibold text-ink">{r.screenLabel}</span>
                     {r.hasShot && <Badge tone="neutral">画像あり</Badge>}
+                    {/* 一覧で「もう上げた要望か」が分かると、同じものを二度上げずに済む */}
+                    {r.githubIssueNumber !== null && (
+                      <Badge tone="neutral">Issue #{r.githubIssueNumber}</Badge>
+                    )}
                     <span className="ml-auto text-xs text-ink-muted">
                       {r.reporterName || "利用者"}・{dateTimeLabel(r.createdAt.getTime())}
                     </span>

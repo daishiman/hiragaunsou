@@ -16,6 +16,15 @@ declare global {
      * この鍵を知っている人間だけがAPIキーを復号できるため、絶対に漏らさないこと。
      */
     API_KEY_ENCRYPTION_SECRET: string;
+    /**
+     * 改善要望を GitHub Issue として起票するためのトークン。
+     * 必要な権限は起票先リポジトリの Issues: write のみ(fine-grained token 推奨)。
+     * 任意設定。未設定なら「Issueにする」操作が案内つきで断られるだけで、他の機能は動く
+     * (だから wrangler.jsonc の secrets.required には入れない)。
+     */
+    GITHUB_ISSUE_TOKEN?: string;
+    /** 起票先リポジトリ。`owner/repo` 形式。GITHUB_ISSUE_TOKEN と両方揃って初めて起票できる。 */
+    GITHUB_ISSUE_REPO?: string;
     /** /usage 概算費用計算用。未設定時はDEFAULT_USAGE_PRICING(Haiku 4.5相当)にフォールバックする */
     ANTHROPIC_PRICE_IN_USD_PER_M?: string;
     ANTHROPIC_PRICE_OUT_USD_PER_M?: string;

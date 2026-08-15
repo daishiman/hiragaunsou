@@ -14,6 +14,8 @@ import { PageHead } from "../../../../_components/PageHead";
 import { Badge } from "../../../../_components/Badge";
 import { dateTimeLabel } from "../../../../_lib/format";
 import { ImprovementHandlingForm } from "./ImprovementHandlingForm";
+import { DiagnosticsPanel } from "./DiagnosticsPanel";
+import { ImprovementIssuePanel } from "./ImprovementIssuePanel";
 
 /**
  * /admin/improvements/[id]: 届いた要望1件の詳細 (manage_improvements=管理者専用)。
@@ -124,6 +126,14 @@ export default async function AdminImprovementDetailPage({
           この要望に画像は付いていません（文章だけで送られています）。
         </p>
       )}
+
+      <DiagnosticsPanel d={item.diagnostics} />
+
+      <ImprovementIssuePanel
+        id={item.id}
+        issueNumber={item.githubIssueNumber}
+        issueUrl={item.githubIssueUrl}
+      />
 
       <div className="mt-3">
         <ImprovementHandlingForm

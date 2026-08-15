@@ -46,6 +46,9 @@
     "BOOTSTRAP_ADMIN_EMAILS": "manjumoto.daishi@senpai-lab.com,h_atsushi@hiragaunsou.co.jp"
   },
   // 未設定のままデプロイして「本番だけ500」になるのを防ぐ(設定漏れならデプロイ自体が失敗する)。
+  // GITHUB_ISSUE_TOKEN / GITHUB_ISSUE_REPO は意図的にここへ入れていない。
+  // 未設定でも「Issueにする」が案内つきで断られるだけで他は動くため、
+  // required に入れるとまだ決まっていない設定のせいでデプロイ全体が止まってしまう。
   "secrets": {
     "required": ["BETTER_AUTH_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]
   },

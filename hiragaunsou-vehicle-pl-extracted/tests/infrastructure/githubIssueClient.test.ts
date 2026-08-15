@@ -1,0 +1,79 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  GitHubIssueClient,
+  GitHubIssueError,
+  githubIssueConfigOf,
+} from "../../src/infrastructure/github/GitHubIssueClient";
+
+/**
+ * GitHub への起票。
+ *
+ * 一番の関心は「打ち間違えた設定のまま、業務の中身を知らない場所へ投げないこと」。
+ * だから設定の受け入れは厳しく、失敗の伝え方は控えめにする。
+ */
+describe("githubIssueConfigOf", () => {
+  it("トークンと起票先が揃っていれば使える", () => {
+    expect(
+      githubIssueConfigOf({ GITHUB_ISSUE_TOKEN: "t", GITHUB_ISSUE_REPO: "daishiman/hiragaunsou" }),
+    ).toEqual({ token: "t", repo: "daishiman/hiragaunsou" });
+  });
+
+  it("どちらかが無ければ未設定として扱う（機能を止めず、下書きだけ使える）", () => {
+    expect(githubIssueConfigOf({ GITHUB_ISSUE_REPO: "a/b" })).toBeNull();
+    expect(githubIssueConfigOf({ GITHUB_ISSUE_TOKEN: "t" })).toBeNull();
+    expect(githubIssueConfigOf(undefined)).toBeNull();
+    expect(githubIssueConfigOf({ GITHUB_ISSUE_TOKEN: "  ", GITHUB_ISSUE_REPO: "a/b" })).toBeNull();
+  });
+
+  it("owner/repo の形でなければ受け付けない（別のリポジトリへ投げる事故を止める）", () => {
+    for (const repo of ["hiragaunsou", "https://github.com/a/b", "a/b/c", "a b"]) {
+      expect(githubIssueConfigOf({ GITHUB_ISSUE_TOKEN: "t", GITHUB_ISSUE_REPO: repo }), repo).toBeNull();
+    }
+  });
+});
+
+describe("GitHubIssueClient", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  const draft = { title: "t", body: "b", labels: ["改善要望"] };
+
+  it("番号とURLを返す", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ number: 5, html_url: "https://github.com/a/b/issues/5" }), {
+        status: 201,
+      }),
+    );
+    const client = new GitHubIssueClient({ token: "t", repo: "a/b" });
+    expect(await client.create(draft)).toEqual({
+      number: 5,
+      url: "https://github.com/a/b/issues/5",
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api.github.com/repos/a/b/issues");
+    expect((init.headers as Record<string, string>).authorization).toBe("Bearer t");
+  });
+
+  it("断られたときは、次にすることが分かる言葉で返す", async () => {
+    fetchMock.mockResolvedValue(new Response("Bad credentials", { status: 403 }));
+    const client = new GitHubIssueClient({ token: "t", repo: "a/b" });
+    await expect(client.create(draft)).rejects.toBeInstanceOf(GitHubIssueError);
+    await expect(client.create(draft)).rejects.toThrow(/トークンの権限/);
+  });
+
+  it("起票先が無いときは設定を疑うよう伝える", async () => {
+    fetchMock.mockResolvedValue(new Response("Not Found", { status: 404 }));
+    const client = new GitHubIssueClient({ token: "t", repo: "a/b" });
+    await expect(client.create(draft)).rejects.toThrow(/リポジトリが見つかりません/);
+  });
+
+  it("応答が読めないときも、成功として扱わない", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 201 }));
+    const client = new GitHubIssueClient({ token: "t", repo: "a/b" });
+    await expect(client.create(draft)).rejects.toThrow(/読み取れませんでした/);
+  });
+});
