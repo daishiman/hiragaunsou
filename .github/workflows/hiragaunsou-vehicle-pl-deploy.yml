@@ -48,7 +48,11 @@ jobs:
       - uses: actions/checkout@v4
 
       # CI と同じ pnpm を使う。ここだけ別のものを使うと「CIは緑なのにデプロイが落ちる」。
+      # アプリの package.json はリポジトリ直下ではなくサブフォルダにある。
+      # 場所を教えないと packageManager を読めず「pnpm のバージョンが分からない」で止まる。
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: hiragaunsou-vehicle-pl-extracted/package.json
 
       - uses: actions/setup-node@v4
         with:

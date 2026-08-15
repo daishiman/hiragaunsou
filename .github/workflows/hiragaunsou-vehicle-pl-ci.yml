@@ -39,7 +39,11 @@ jobs:
       # 片方のロックファイルだけが更新され、手元の品質ゲートが全部通っているのに
       # CI だけ install で落ちる (実際に起きた)。バージョンは package.json の
       # packageManager から読ませ、ここには書かない (2箇所に持つと片方だけ古くなる)。
+      # アプリの package.json はリポジトリ直下ではなくサブフォルダにある。
+      # 場所を教えないと packageManager を読めず「pnpm のバージョンが分からない」で止まる。
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: hiragaunsou-vehicle-pl-extracted/package.json
 
       - uses: actions/setup-node@v4
         with:
