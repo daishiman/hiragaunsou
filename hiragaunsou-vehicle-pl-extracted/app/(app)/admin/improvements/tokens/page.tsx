@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../../../src/infrastructure/auth/session";
@@ -6,7 +5,7 @@ import { checkAccess } from "../../../../../src/infrastructure/auth/accessContro
 import { createDb } from "../../../../../src/infrastructure/db/client";
 import { D1InstructionTokenRepository } from "../../../../../src/infrastructure/db/D1InstructionTokenRepository";
 import { AccessDenied } from "../../../../_components/AccessDenied";
-import { PageHead } from "../../../../_components/PageHead";
+import { ScreenHeader } from "../../../../_components/ScreenHeader";
 import { dateTimeLabel } from "../../../../_lib/format";
 import { InstructionTokenTable, type TokenRow } from "./InstructionTokenTable";
 
@@ -57,19 +56,14 @@ export default async function InstructionTokensPage() {
 
   return (
     <div>
-      <PageHead kind="tool" title="Claude Code に渡した鍵" />
-
-      <div className="mt-1">
-        <Link href="/admin/improvements" className="text-xs text-brand-deep underline">
-          ← 改善要望の一覧へ戻る
-        </Link>
-      </div>
-
-      <p className="mt-3 text-sm text-ink-muted">
-        改善要望を Claude Code に渡すと、その件だけを読める鍵が1つできます。
-        いま使える鍵は{active}件です。渡す相手が変わったときや、貼り先を間違えたときは
-        期限を待たずにここで止めてください。止めた鍵では、その瞬間から1件も読めなくなります。
-      </p>
+      {/*
+        見出し・リード・戻り先は画面の台帳 (app/_lib/screens.ts) の1行から描く。
+        リードだけは、いま使える鍵の本数を混ぜたいので上書きする。
+      */}
+      <ScreenHeader
+        screen="/admin/improvements/tokens"
+        lead={`改善要望を Claude Code に渡すと、その件だけを読める鍵が1つできます。いま使える鍵は${active}件です。渡す相手が変わったときや、貼り先を間違えたときは、期限を待たずにここで止めてください。止めた鍵では、その瞬間から1件も読めなくなります。`}
+      />
 
       {rows.length === 0 ? (
         <div className="mt-4 rounded-xl border border-dashed border-line bg-white px-6 py-12 text-center">
