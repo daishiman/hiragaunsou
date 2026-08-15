@@ -18,6 +18,7 @@ import { useHoverTooltip } from "./useHoverTooltip";
 import { IconButton } from "./IconButton";
 import { SidebarAccountMenu } from "./SidebarAccountMenu";
 import { FeedbackWidget } from "./FeedbackWidget";
+import { DiagnosticsRecorder } from "./DiagnosticsRecorder";
 
 /**
  * サイドバーを隠しているかどうかを覚えておくキー。
@@ -275,6 +276,12 @@ export function AppShell({ userName, userRole, role, badges, children }: AppShel
         「意見を出せない画面」になる (どの画面からでも同じ場所に出るのが大事)。
       */}
       <FeedbackWidget />
+
+      {/*
+        画面の裏で控えを始める。要望が届いてから「そのときエラーは出ていましたか」と
+        聞き直さずに済むよう、開いた瞬間から控える。
+      */}
+      <DiagnosticsRecorder />
     </div>
   );
 }

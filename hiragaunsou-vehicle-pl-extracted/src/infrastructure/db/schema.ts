@@ -756,6 +756,26 @@ export const improvementRequest = sqliteTable(
     handledById: text("handled_by_id").references(() => user.id, { onDelete: "set null" }),
     handledNote: text("handled_note"),
     handledAt: integer("handled_at", { mode: "timestamp_ms" }),
+    /**
+     * GitHub へ起票したときの番号とURL。
+     * 「まだ起票していない」と「起票した」を1件の中で持つことで、
+     * 押すたびに Issue が増えるのを DB の側で止められる (画面の制御だけに頼らない)。
+     */
+    githubIssueNumber: integer("github_issue_number"),
+    githubIssueUrl: text("github_issue_url"),
+    githubIssuedAt: integer("github_issued_at", { mode: "timestamp_ms" }),
+    githubIssuedById: text("github_issued_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    /**
+     * 起票の作業中を示す印 (取りかかった時刻)。
+     *
+     * 番号は GitHub から返ってきて初めて分かるので、番号の列だけでは
+     * 「GitHubへ投げている最中」を止められない。先にこの印を取った人だけが
+     * 投げられるようにして、二重起票を通信の前に断つ。
+     * 途中で落ちても、一定時間で自然に空くようにする (取りかかった時刻で判断する)。
+     */
+    githubIssuingAt: integer("github_issuing_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
@@ -769,8 +789,30 @@ export const improvementRequest = sqliteTable(
     index("improvement_request_route_idx").on(table.routePattern, table.createdAt),
     // 並んで届いた再送も1件に収める最後の砦 (id の一致だけに頼らない)
     uniqueIndex("improvement_request_submission_idx").on(table.reporterId, table.submissionKey),
+    // 1つの要望に Issue は1つ。押し損ねて2回押されても2本立たない
+    // (SQLite の unique は NULL 同士を別物として扱うので、未起票は何件あってもよい)。
+    uniqueIndex("improvement_request_issue_idx").on(table.githubIssueNumber),
   ],
 );
+
+/**
+ * 改善要望に自動で付く診断情報 (ブラウザの控え + サーバで足した分)。
+ *
+ * 本文と別の表にするのは、一覧で読まないため。診断情報は1件あたり数十KBあり、
+ * 一覧で全件読むと件数が増えるほど管理画面が開かなくなる。
+ * JSON のまま持つのは、集める項目が今後増えても表を作り直さずに済むから
+ * (この中身で検索・集計する予定は無い)。
+ */
+export const improvementDiagnostics = sqliteTable("improvement_diagnostics", {
+  requestId: text("request_id")
+    .primaryKey()
+    .references(() => improvementRequest.id, { onDelete: "cascade" }),
+  payload: text("payload").notNull(),
+  bytes: integer("bytes").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+    .notNull(),
+});
 
 /** 改善要望に添えられた画面の写し (注釈・黒塗りを焼き込んだ後の1枚)。 */
 export const improvementShot = sqliteTable("improvement_shot", {

@@ -4,11 +4,24 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { AlertPanel } from "./AlertPanel";
 import { routeIdentityOf } from "../_lib/routeIdentity";
+import { collectDiagnostics } from "../_lib/diagnostics/recorder";
 import {
   IMPROVEMENT_BODY_MAX,
   IMPROVEMENT_SHOT_MAX_BYTES,
   shotBytesOf,
 } from "../../src/domain/rules/improvement";
+
+/**
+ * 控えてある診断情報を切り出す。取れなくても要望は送れるようにする。
+ * 「環境が取れなかったから意見も届かなかった」が一番避けたい結末。
+ */
+function safeCollectDiagnostics(): unknown {
+  try {
+    return collectDiagnostics();
+  } catch {
+    return { notes: ["診断情報を集められませんでした。"] };
+  }
+}
 
 /**
  * 全画面共通の「改善要望」。
@@ -451,6 +464,10 @@ export function FeedbackWidget() {
           viewport: `${window.innerWidth}×${window.innerHeight}`,
           shot: image,
           submissionKey,
+          // 送る人には書かせない。「どのブラウザで」「そのときエラーは出ていたか」を
+          // 聞き直さずに済ませるため、控えてあった分をここで一緒に送る。
+          // 集めそこねても要望自体は送れるように、失敗しても止めない。
+          diagnostics: safeCollectDiagnostics(),
         }),
       });
       const json = (await res.json()) as { id?: string; message?: string };
@@ -511,10 +528,25 @@ export function FeedbackWidget() {
             <p className="mt-0.5 mb-3 text-sm font-bold text-ink">{screenLabel}</p>
 
             {sent ? (
-              <AlertPanel tone="success" title="送りました。ありがとうございます。">
-                内容は管理者の一覧に届いています。続けて別のことを送るときは、いったん閉じて
-                もう一度「改善要望」を押してください。
-              </AlertPanel>
+              <>
+                <AlertPanel tone="success" title="送りました。ありがとうございます。">
+                  内容は管理者の一覧に届いています。
+                </AlertPanel>
+                {/*
+                  気づいたことは続けて出てくる。「閉じて押し直す」を挟むと、
+                  2件目は言われないまま消えることが多い。
+                */}
+                <button
+                  type="button"
+                  className="btn btn-quiet pressable mt-3"
+                  onClick={() => {
+                    reset();
+                    void capture();
+                  }}
+                >
+                  続けてもう1件送る
+                </button>
+              </>
             ) : (
               <>
                 {error && <AlertPanel tone="danger" title={error} />}
@@ -545,6 +577,16 @@ export function FeedbackWidget() {
                 {bodyError && (
                   <p id="feedback_body_error" className="mt-1 text-xs text-danger" role="alert">
                     {bodyError}
+                  </p>
+                )}
+                {/*
+                  上限に近づいたときだけ残りを出す。常時出すと「何文字までか」を
+                  気にしながら書かせることになる。逆に何も出さないと、上限に達した
+                  瞬間から打った字が消え、理由の分からない不具合に見える。
+                */}
+                {IMPROVEMENT_BODY_MAX - body.length <= 100 && (
+                  <p className="mt-1 text-xs text-ink-muted" aria-live="polite">
+                    あと{IMPROVEMENT_BODY_MAX - body.length}文字書けます。
                   </p>
                 )}
 
@@ -653,6 +695,15 @@ export function FeedbackWidget() {
                   </span>
                   <input ref={fileRef} type="file" accept="image/*" hidden onChange={onPickFile} />
                 </div>
+
+                {/*
+                  黙って環境を集めない。入力は増やさないが、何が一緒に行くかは書いておく。
+                  「勝手に取られていた」と後から知る方が、信頼を大きく損なう。
+                */}
+                <p className="mt-3 text-xs text-ink-muted">
+                  送信時に、ご利用のブラウザ・画面の大きさ・直近のエラー記録も一緒に送られます
+                  （パスワード・メールアドレスなどは自動で伏せられます）。
+                </p>
               </>
             )}
           </div>
@@ -668,7 +719,8 @@ export function FeedbackWidget() {
                 onClick={() => void submit()}
                 disabled={busy || capturing}
               >
-                送る
+                {/* 押した後に何も変わらないと、届いていないと思って押し直される */}
+                {busy ? "送っています…" : "送る"}
               </button>
             )}
           </div>

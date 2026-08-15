@@ -128,6 +128,62 @@ describe("/api/improvements の投稿", () => {
     );
   });
 
+  it("診断情報が無くても受け取る (記録が取れないことで要望を落とさない)", async () => {
+    sessionMock.mockResolvedValue(staffSession);
+    const { POST } = await import("../../app/api/improvements/route");
+    const res = await POST(post(validPost));
+    expect(res.status).toBe(200);
+    expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ diagnostics: null }));
+  });
+
+  it("診断情報の「誰が・どの画面か」はサーバ側で入れ直す (名乗りを信じない)", async () => {
+    sessionMock.mockResolvedValue(staffSession);
+    const { POST } = await import("../../app/api/improvements/route");
+    await POST(
+      post({
+        ...validPost,
+        diagnostics: {
+          environment: { browser: "Chrome 141" },
+          reporter: { id: "admin-1", name: "管理者", role: "admin", organization: "よその会社" },
+          screen: { path: "/admin", routePattern: "/admin", label: "管理", sourceFile: "x" },
+          occurredAt: { utc: "1999-01-01T00:00:00.000Z", jst: "1999-01-01 09:00:00 JST" },
+        },
+      }),
+    );
+    const saved = saveMock.mock.calls.at(-1)?.[0] as {
+      diagnostics: {
+        reporter: { id: string; role: string };
+        screen: { routePattern: string; sourceFile: string };
+        occurredAt: { utc: string };
+        environment: { browser: string };
+      };
+    };
+    expect(saved.diagnostics.reporter.id).toBe("staff-1");
+    expect(saved.diagnostics.reporter.role).toBe("input_staff");
+    expect(saved.diagnostics.screen.routePattern).toBe("/vehicle/[vehicleNo]");
+    expect(saved.diagnostics.screen.sourceFile).toBe("app/(app)/vehicle/[vehicleNo]/page.tsx");
+    expect(saved.diagnostics.occurredAt.utc).not.toContain("1999");
+    // ブラウザにしか分からないものは、そのまま受け取る。
+    expect(saved.diagnostics.environment.browser).toBe("Chrome 141");
+  });
+
+  it("診断情報に混ざった秘密は、保存する前に伏せる", async () => {
+    sessionMock.mockResolvedValue(staffSession);
+    const { POST } = await import("../../app/api/improvements/route");
+    await POST(
+      post({
+        ...validPost,
+        diagnostics: {
+          console: [{ level: "error", message: "password=harunoumi2026", at: "12:00" }],
+          network: [{ method: "GET", url: "/api/x?token=abcdef123456" }],
+        },
+      }),
+    );
+    const dump = JSON.stringify(saveMock.mock.calls.at(-1)?.[0]);
+    expect(dump).not.toContain("harunoumi2026");
+    expect(dump).not.toContain("abcdef123456");
+  });
+
   it("本文が空なら400 (画像だけの投稿は受けない)", async () => {
     sessionMock.mockResolvedValue(staffSession);
     const { POST } = await import("../../app/api/improvements/route");

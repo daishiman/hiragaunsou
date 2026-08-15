@@ -19,6 +19,12 @@ import {
   readJsonBodyWithinLimit,
   RequestBodyTooLargeError,
 } from "../../../src/infrastructure/security/readJsonBodyWithinLimit";
+import {
+  occurredAtOf,
+  sanitizeClientDiagnostics,
+  sourceFileOf,
+  type StoredDiagnostics,
+} from "../../../src/domain/rules/diagnostics";
 import { isSameOriginRequest } from "../../_lib/assertSameOrigin";
 import { isAcceptableScreenPath, routeIdentityOf } from "../../_lib/routeIdentity";
 
@@ -62,6 +68,7 @@ export async function POST(request: Request) {
     viewport?: unknown;
     shot?: unknown;
     submissionKey?: unknown;
+    diagnostics?: unknown;
   };
 
   if (!isAcceptableScreenPath(input.path)) {
@@ -114,6 +121,31 @@ export async function POST(request: Request) {
     );
   }
 
+  // 誰が・どの画面から送ったかは、ブラウザの申告ではなくサーバ側で入れ直す。
+  // ブラウザから来る診断情報は「本人が確かめていないもの」なので、
+  // 名乗りをそのまま信じると、なりすましも取り違えも防げない。
+  const diagnostics: StoredDiagnostics | null =
+    input.diagnostics === undefined
+      ? null
+      : {
+          ...sanitizeClientDiagnostics(input.diagnostics),
+          occurredAt: occurredAtOf(new Date()),
+          screen: {
+            path: route.path,
+            routePattern: route.routePattern,
+            label: route.label,
+            sourceFile: sourceFileOf(route.routePattern),
+          },
+          reporter: {
+            id: session.id,
+            name: session.name,
+            role: session.role,
+            // 1社専用のアプリなので会社IDは持たない。空欄にすると
+            // 「取り忘れ」と読まれるため、持っていないことを書いておく。
+            organization: "平賀運送（1社専用のため会社IDなし）",
+          },
+        };
+
   try {
     const id = await repo.save({
       reporterId: session.id,
@@ -127,6 +159,7 @@ export async function POST(request: Request) {
       userAgent: request.headers.get("user-agent")?.slice(0, 300) ?? null,
       shot,
       shotBytes: shot ? shotBytesOf(shot) : 0,
+      diagnostics,
     });
     return NextResponse.json({ id, message: "改善要望を送りました。ありがとうございます。" });
   } catch {
