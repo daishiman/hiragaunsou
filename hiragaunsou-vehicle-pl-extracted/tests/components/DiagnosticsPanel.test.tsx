@@ -32,7 +32,7 @@ function diagnostics(over: Partial<StoredDiagnostics> = {}): StoredDiagnostics {
     console: [],
     errors: [],
     network: [],
-    api: [],
+    slowApi: [],
     breadcrumbs: [],
     notes: [],
     occurredAt: { utc: "2026-08-15T01:00:00.000Z", jst: "2026-08-15 10:00:00 JST" },
@@ -42,7 +42,7 @@ function diagnostics(over: Partial<StoredDiagnostics> = {}): StoredDiagnostics {
       label: "車両別の収支",
       sourceFile: "app/(app)/vehicle/[vehicleNo]/page.tsx",
     },
-    reporter: { id: "u1", name: "入力担当", role: "input_staff", organization: "平賀運送" },
+    reporter: { id: "u1", name: "入力担当", role: "input_staff", companyId: "（1社専用のため会社IDなし）" },
     ...over,
   };
 }
@@ -81,7 +81,9 @@ describe("DiagnosticsPanel", () => {
   it("空の一覧には「無い」と書く（無言で空にしない）", () => {
     render(<DiagnosticsPanel d={diagnostics()} />);
     expect(screen.getByText("失敗した通信はありません。")).toBeTruthy();
-    expect(screen.getByText("APIの呼び出しはありません。")).toBeTruthy();
+    expect(
+      screen.getByText("3秒を超えた通信はありません。うまくいった通信は記録していません。"),
+    ).toBeTruthy();
   });
 
   it("捨てたものがあれば注記を出す", () => {

@@ -35,6 +35,21 @@ function outgoing(text: string): string {
  * (dry-run) し、テストで文面そのものを固定できる。
  */
 
+/**
+ * Issue に載せないと決めたもの。
+ *
+ * 集める量・保存する量・外へ出す量は別々に決める。GitHub の Issue は
+ * 編集しても履歴と通知メールが残り、実質取り消せない。読む人の範囲も管理画面と違う。
+ * だから、管理画面では見えるが Issue には出さないものがある。
+ *
+ *  - 送った人の氏名・メールアドレス (誰が困ったかは管理画面で引く)
+ *  - 会社名 (1社専用なので、そもそも保存もしない)
+ *  - 実URL (IDが埋まっているため。route pattern だけ載せる)
+ *  - 失敗した通信のレスポンス本文 (業務データそのものが混ざる)
+ *  - console 出力の全件 (件数だけ載せ、中身は管理画面で読む)
+ *
+ * 足りない分は、末尾の管理画面リンクから必ずたどれるようにしてある。
+ */
 export interface IssueDraft {
   title: string;
   body: string;
@@ -106,20 +121,19 @@ export function buildIssueDraft(
     `| 項目 | 値 |`,
     `| --- | --- |`,
     `| 画面 | ${item.screenLabel} |`,
+    // 実URL は載せない。IDが埋まっていて、それ自体が誰の何かを指してしまう。
     `| route pattern | \`${item.routePattern}\` |`,
-    `| 実URL | \`${item.path}\` |`,
     `| 直すファイル (推定) | \`${d?.screen.sourceFile ?? sourceFileOf(item.routePattern)}\` |`,
-    `| 遷移元 | ${code(d?.referrer)} |`,
     "",
-    "## いつ・誰が・どの版で",
+    "## いつ・どの版で",
     "",
     `| 項目 | 値 |`,
     `| --- | --- |`,
     `| 発生時刻 (JST) | ${d?.occurredAt.jst ?? DIAGNOSTICS_UNAVAILABLE} |`,
     `| 発生時刻 (UTC) | ${d?.occurredAt.utc ?? item.createdAt.toISOString()} |`,
-    `| 送った人 | ${item.reporterName || "利用者"}（権限: ${d?.reporter.role ?? DIAGNOSTICS_UNAVAILABLE}） |`,
-    `| 利用者ID | ${code(d?.reporter.id)} |`,
-    `| 組織 | ${d?.reporter.organization ?? DIAGNOSTICS_UNAVAILABLE} |`,
+    // 氏名・利用者ID・会社は載せない。権限だけは、どの立場で開いた画面かで
+    // 見え方が変わるため残す (誰かは特定できない)。
+    `| 送った人の権限 | ${d?.reporter.role ?? DIAGNOSTICS_UNAVAILABLE} |`,
     `| アプリの版 | ${code(d?.build.id)} |`,
     `| コミット | ${code(d?.build.commit)} |`,
     `| 状況 | ${STATUS_TEXT[item.status] ?? item.status} |`,
@@ -144,13 +158,16 @@ export function buildIssueDraft(
       "",
       foldable("環境（ブラウザ・OS・画面）", environmentTable(d)),
       "",
-      foldable("直近のエラーと console 出力", errorSection(d)),
-      "",
-      foldable("失敗した通信", networkTable(d.network, "失敗した通信はありません。")),
+      foldable("捕まえ損ねた例外", errorSection(d)),
       "",
       foldable(
-        "直近のAPI呼び出し（相関IDつき・サーバのログと突き合わせる用）",
-        networkTable(d.api, "API の呼び出しはありません。"),
+        "失敗した通信（相関IDつき・サーバのログと突き合わせる用）",
+        networkTable(d.network, "失敗した通信はありません。"),
+      ),
+      "",
+      foldable(
+        "3秒を超えた通信",
+        networkTable(d.slowApi, "3秒を超えた通信はありません。"),
       ),
       "",
       foldable("速さ", performanceTable(d)),
@@ -201,7 +218,8 @@ function foldable(summary: string, content: string): string {
 }
 
 function influenceOf(item: ImprovementDetail, d: StoredDiagnostics | null): string {
-  const who = `${item.reporterName || "利用者"}（1名から報告）`;
+  // 誰が送ったかは管理画面で分かる。ここでは人数だけ書く。
+  const who = "利用者1名から報告";
   const errors = d?.errors.length ?? 0;
   const failed = d?.network.length ?? 0;
   const signal =
@@ -225,7 +243,12 @@ function shotSection(
     return [
       `![${item.screenLabel}の画面の写し（送った人の書き込み入り）](${options.shotUrl})`,
       "",
+      // private なリポジトリでは画像が展開されないことがある。そのときのために
+      // 必ずリンクも併記する (見えないまま「画像なし」と誤解されないように)。
+      `画像が表示されないときはこちら: ${options.shotUrl}`,
+      "",
       "赤・橙・青の書き込みは送った本人の指摘、黒い塗りつぶしは本人が隠した部分です。",
+      "黒い部分は画像そのものを塗りつぶしてあり、元の内容は残っていません。",
     ].join("\n");
   }
   // 画像を外へ出さない設定のとき。Issue には出さず、見る場所だけ示す。
@@ -262,6 +285,13 @@ function crumbText(c: Breadcrumb): string {
   }
 }
 
+/**
+ * 環境はブラウザ・OS・画面の大きさの3つだけ載せる。
+ *
+ * UserAgent や言語・タイムゾーン・表示倍率まで並べると、
+ * 組み合わせで「どの端末の誰か」が絞れてしまう。再現に要るのはこの3つで足り、
+ * 残りは管理画面で見られる。
+ */
 function environmentTable(d: StoredDiagnostics): string {
   const e = d.environment;
   return [
@@ -269,13 +299,9 @@ function environmentTable(d: StoredDiagnostics): string {
     "| --- | --- |",
     `| ブラウザ | ${e.browser} |`,
     `| OS | ${e.os} |`,
-    `| UserAgent | \`${e.userAgent}\` |`,
     `| 画面の大きさ | ${e.viewport} |`,
-    `| devicePixelRatio | ${e.devicePixelRatio} |`,
-    `| タッチ操作 | ${e.touch === true ? "はい" : e.touch === false ? "いいえ" : e.touch} |`,
-    `| 言語 | ${e.language} |`,
-    `| タイムゾーン | ${e.timezone} |`,
-    `| 通信状態 | ${e.online === true ? "オンライン" : e.online === false ? "オフライン" : e.online} |`,
+    "",
+    "UserAgent・言語・タイムゾーンなどは管理画面で確認できます。",
   ].join("\n");
 }
 
@@ -294,32 +320,56 @@ function errorSection(d: StoredDiagnostics): string {
       );
     }
   }
-  parts.push("", "### console 出力（新しいものほど下）", "");
-  if (d.console.length === 0) {
-    parts.push("記録されていません。");
-  } else {
-    for (const c of d.console) {
-      parts.push(`- \`${c.level}\` ${c.at} — ${c.message}`);
-      if (c.stack) parts.push("", "```", c.stack, "```", "");
-    }
-  }
+  // console 出力は件数だけ。中身は管理画面で読む。
+  // 業務の数字や画面の中身がそのまま文字列で出ていることがあり、
+  // 全件を外へ貼ると、診断のための記録が持ち出し口になる。
+  parts.push(
+    "",
+    `### console 出力: error ${countLevel(d, "error")}件 / warn ${countLevel(d, "warn")}件`,
+    "",
+    "中身は管理画面の「送信時の記録」で読めます（この Issue には貼りません）。",
+  );
   return parts.join("\n");
+}
+
+function countLevel(d: StoredDiagnostics, level: "error" | "warn"): number {
+  return d.console.filter((c) => c.level === level).length;
+}
+
+/**
+ * 実URL から、どの入り口かだけを取り出す。
+ *
+ * `/api/vehicles/42/monthly?year=2026` は `/api/vehicles/:id/monthly` になる。
+ * どのAPIが失敗したかは分かり、どのデータかは分からない。
+ */
+export function endpointOf(url: string): string {
+  const path = (url.split("?")[0] ?? "").replace(/^https?:\/\/[^/]+/, "");
+  if (!path.startsWith("/")) return DIAGNOSTICS_UNAVAILABLE;
+  return path
+    .split("/")
+    .map((segment) =>
+      /^\d+$/.test(segment) || /^[0-9a-f-]{16,}$/i.test(segment) || /^\d{4}-\d{2}/.test(segment)
+        ? ":id"
+        : segment,
+    )
+    .join("/");
 }
 
 function networkTable(entries: NetworkEntry[], emptyText: string): string {
   if (entries.length === 0) return emptyText;
+  // 実URL ではなくエンドポイント。応答の中身は載せない (業務データが混ざる)。
   const rows = entries.map(
     (n) =>
-      `| ${n.method} | \`${n.url}\` | ${n.status ?? "通信できず"} | ${n.durationMs}ms | ${code(n.requestId)} | ${code(n.cfRay)} |`,
+      `| ${n.method} | \`${endpointOf(n.url)}\` | ${n.status ?? "通信できず"} | ${n.durationMs}ms | ${code(n.requestId)} | ${code(n.cfRay)} |`,
   );
-  const excerpts = entries
-    .filter((n) => n.responseExcerpt)
-    .map((n) => `- \`${n.url}\` の応答: \`${n.responseExcerpt}\``);
+  const hasExcerpt = entries.some((n) => n.responseExcerpt);
   return [
-    "| method | URL | status | 所要 | x-request-id | cf-ray |",
+    "| method | エンドポイント | status | 所要 | x-request-id | cf-ray |",
     "| --- | --- | --- | --- | --- | --- |",
     ...rows,
-    ...(excerpts.length > 0 ? ["", "**応答の冒頭（マスク済み）**", ...excerpts] : []),
+    ...(hasExcerpt
+      ? ["", "応答の中身は管理画面で確認してください（この Issue には貼りません）。"]
+      : []),
   ].join("\n");
 }
 
@@ -330,6 +380,6 @@ function performanceTable(d: StoredDiagnostics): string {
     "| --- | --- |",
     `| ページの読み込み | ${typeof p.pageLoadMs === "number" ? `${p.pageLoadMs}ms` : p.pageLoadMs} |`,
     `| APIの中央値 | ${typeof p.medianApiMs === "number" ? `${p.medianApiMs}ms` : p.medianApiMs} |`,
-    `| 一番遅かったAPI | ${p.slowestApi ? `\`${p.slowestApi.url}\` ${p.slowestApi.durationMs}ms` : "なし"} |`,
+    `| 一番遅かったAPI | ${p.slowestApi ? `\`${endpointOf(p.slowestApi.url)}\` ${p.slowestApi.durationMs}ms` : "なし"} |`,
   ].join("\n");
 }

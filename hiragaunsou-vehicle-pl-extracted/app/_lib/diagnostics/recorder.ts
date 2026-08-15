@@ -1,6 +1,7 @@
 import {
   DIAGNOSTICS_LIMITS,
   DIAGNOSTICS_VERSION,
+  SLOW_API_MS,
   type Breadcrumb,
   type ClientDiagnostics,
   type ConsoleEntry,
@@ -47,8 +48,19 @@ class Ring<T> {
 const consoleRing = new Ring<ConsoleEntry>(DIAGNOSTICS_LIMITS.console);
 const errorRing = new Ring<ErrorEntry>(DIAGNOSTICS_LIMITS.errors);
 const networkRing = new Ring<NetworkEntry>(DIAGNOSTICS_LIMITS.network);
-const apiRing = new Ring<NetworkEntry>(DIAGNOSTICS_LIMITS.api);
+/** うまくいった通信のうち、SLOW_API_MS を超えたものだけ。 */
+const slowApiRing = new Ring<NetworkEntry>(DIAGNOSTICS_LIMITS.slowApi);
 const crumbRing = new Ring<Breadcrumb>(DIAGNOSTICS_LIMITS.breadcrumbs);
+
+/**
+ * 所要時間だけの控え。件数と合計だけを持ち、URL も本文も持たない。
+ *
+ * 「速さの様子」を出すのに通信の記録そのものは要らない。
+ * 記録を残さずに数だけ数えれば、持ち出す情報を増やさずに中央値が出せる。
+ */
+const durations: number[] = [];
+const DURATIONS_MAX = 200;
+
 const notes: string[] = [];
 
 let installed = false;
@@ -75,7 +87,9 @@ function stringifyArg(value: unknown): string {
 /* ───── console ───── */
 
 function installConsole() {
-  const levels = ["error", "warn", "info"] as const;
+  // error と warn だけ差し替える。info / log は量が桁違いに多く、
+  // 30件の枠を埋めてしまって肝心のエラーを押し出す。
+  const levels = ["error", "warn"] as const;
   for (const level of levels) {
     const original = console[level].bind(console);
     console[level] = (...args: unknown[]) => {
@@ -203,6 +217,11 @@ async function record(
       ok: response.ok,
     };
 
+    if (meta.sameOrigin) {
+      durations.push(entry.durationMs);
+      if (durations.length > DURATIONS_MAX) durations.shift();
+    }
+
     if (!response.ok) {
       // 失敗したときだけ中身を覗く。複製して読むので、呼び出し元の処理は変わらない。
       try {
@@ -212,8 +231,12 @@ async function record(
         entry.responseExcerpt = DIAGNOSTICS_UNAVAILABLE;
       }
       networkRing.push(entry);
+      return;
     }
-    if (meta.sameOrigin) apiRing.push(entry);
+
+    // うまくいった通信は残さない。ただし異常に遅いものは、それ自体が要望の中身
+    // (「この画面が遅い」) であることが多いので、そこだけ残す。
+    if (meta.sameOrigin && entry.durationMs >= SLOW_API_MS) slowApiRing.push(entry);
   } catch {
     note("通信の記録に失敗したものがあります。");
   }
@@ -335,11 +358,9 @@ function timezoneOf(): string {
 }
 
 function performanceOf() {
-  const durations = apiRing
-    .all()
-    .map((e) => e.durationMs)
-    .sort((a, b) => a - b);
-  const slowest = apiRing.all().reduce<NetworkEntry | null>(
+  // 中央値は全ての通信から出す (遅かったものだけで数えると、必ず遅い値になる)。
+  const sorted = [...durations].sort((a, b) => a - b);
+  const slowest = slowApiRing.all().reduce<NetworkEntry | null>(
     (max, e) => (max === null || e.durationMs > max.durationMs ? e : max),
     null,
   );
@@ -347,8 +368,8 @@ function performanceOf() {
     pageLoadMs: pageLoadMs(),
     slowestApi: slowest ? { url: slowest.url, durationMs: slowest.durationMs } : null,
     medianApiMs:
-      durations.length > 0
-        ? Math.round(durations[Math.floor(durations.length / 2)] ?? 0)
+      sorted.length > 0
+        ? Math.round(sorted[Math.floor(sorted.length / 2)] ?? 0)
         : DIAGNOSTICS_UNAVAILABLE,
   };
 }
@@ -396,7 +417,7 @@ export function collectDiagnostics(): ClientDiagnostics {
     console: consoleRing.all(),
     errors: errorRing.all(),
     network: networkRing.all(),
-    api: apiRing.all(),
+    slowApi: slowApiRing.all(),
     breadcrumbs: crumbRing.all(),
     notes: [...notes, ...(installed ? [] : ["診断情報の記録が動いていません。"])],
   };
@@ -412,7 +433,8 @@ export function resetDiagnosticsForTest() {
   consoleRing.clear();
   errorRing.clear();
   networkRing.clear();
-  apiRing.clear();
+  slowApiRing.clear();
   crumbRing.clear();
+  durations.length = 0;
   notes.length = 0;
 }

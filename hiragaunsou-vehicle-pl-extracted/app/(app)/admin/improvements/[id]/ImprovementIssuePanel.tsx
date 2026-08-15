@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertPanel } from "../../../../_components/AlertPanel";
+import { GitHubTokenGuide } from "./GitHubTokenGuide";
 
 /**
  * 改善要望を GitHub Issue にする操作。
@@ -127,9 +128,12 @@ export function ImprovementIssuePanel({
       </div>
 
       {configured === false && (
-        <p className="mt-2 text-xs text-ink-muted">
-          起票先（リポジトリとトークン）がまだ設定されていないため、いまは下書きの確認までできます。
-        </p>
+        <>
+          <p className="mt-2 text-xs text-ink-muted">
+            起票先（リポジトリとトークン）がまだ設定されていないため、いまは下書きの確認までできます。
+          </p>
+          <GitHubTokenGuide />
+        </>
       )}
 
       {draft !== null && (
@@ -146,6 +150,8 @@ export function ImprovementIssuePanel({
       {error && (
         <div className="mt-3">
           <AlertPanel tone="danger" title={error} />
+          {/* 断られた理由が設定・権限・期限のときは、その場で直せるよう案内も出す。 */}
+          {/(設定|トークン|権限)/.test(error) && configured !== false && <GitHubTokenGuide />}
         </div>
       )}
       {done && (

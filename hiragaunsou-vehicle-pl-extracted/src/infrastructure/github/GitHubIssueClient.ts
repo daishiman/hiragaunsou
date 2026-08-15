@@ -15,6 +15,15 @@ export interface GitHubIssueConfig {
   token: string;
   /** "owner/repo" の形。 */
   repo: string;
+  /**
+   * 画面の写しを Issue に貼るか。既定は false。
+   *
+   * 貼るにはリポジトリへファイルを置く必要があり、トークンに
+   * Contents の書き込み権限が要る。既定の権限は Issues だけに絞ってあるので、
+   * 「画像も貼りたい」と決めたときにだけ、権限と一緒にこれを入にする。
+   * false のときも、Issue には管理画面への導線が必ず載る。
+   */
+  attachShot: boolean;
 }
 
 export interface IssuedResult {
@@ -30,7 +39,9 @@ export function githubIssueConfigOf(env: unknown): GitHubIssueConfig | null {
   // owner/repo 以外の形は受け付けない。打ち間違いのまま他人のリポジトリへ
   // 業務の中身を投げてしまう事故を、実行前に止める。
   if (!token || !/^[\w.-]+\/[\w.-]+$/.test(repo)) return null;
-  return { token, repo };
+  // 既定は「貼らない」。明示的に true と書いたときだけ入にする。
+  const attachShot = String(src.GITHUB_ISSUE_ATTACH_SHOT ?? "").trim().toLowerCase() === "true";
+  return { token, repo, attachShot };
 }
 
 export class GitHubIssueError extends Error {
@@ -43,19 +54,64 @@ export class GitHubIssueError extends Error {
   }
 }
 
+/** 画像を置く場所。1つの要望につき1枚なので、要望のIDをそのままファイル名にする。 */
+export function shotPathOf(improvementId: string): string {
+  return `improvement-shots/${improvementId}.jpg`;
+}
+
 export class GitHubIssueClient {
   constructor(private readonly config: GitHubIssueConfig) {}
+
+  private headers(): Record<string, string> {
+    return {
+      authorization: `Bearer ${this.config.token}`,
+      accept: "application/vnd.github+json",
+      "content-type": "application/json",
+      "user-agent": "hiragaunsou-vehicle-pl",
+      "x-github-api-version": "2022-11-28",
+    };
+  }
+
+  /**
+   * 書き込みを焼き込んだ画像を、起票先のリポジトリへ1枚置く。
+   *
+   * 置くのは、書き込み後の1枚だけ (元画像は手元にも残していない)。
+   * 失敗しても null を返して起票そのものは続ける。画像が貼れないことより、
+   * 要望が届かないことの方が困る。見る道は管理画面のリンクが残る。
+   */
+  async uploadShot(improvementId: string, dataUrl: string): Promise<string | null> {
+    if (!this.config.attachShot) return null;
+    const base64 = dataUrl.includes(",") ? dataUrl.slice(dataUrl.indexOf(",") + 1) : "";
+    if (!base64) return null;
+
+    const path = shotPathOf(improvementId);
+    try {
+      const res = await fetch(
+        `https://api.github.com/repos/${this.config.repo}/contents/${path}`,
+        {
+          method: "PUT",
+          headers: this.headers(),
+          body: JSON.stringify({
+            message: `改善要望 ${improvementId} の画面の写しを追加`,
+            content: base64,
+          }),
+        },
+      );
+      if (!res.ok) return null;
+      const json = (await res.json()) as { content?: { html_url?: unknown } };
+      const htmlUrl = json.content?.html_url;
+      // 表示用のURL。private なリポジトリでは画像が直接は展開されないので、
+      // 本文側でリンクも併記する (improvementIssue.ts の shotSection)。
+      return typeof htmlUrl === "string" ? `${htmlUrl}?raw=1` : null;
+    } catch {
+      return null;
+    }
+  }
 
   async create(draft: IssueDraft): Promise<IssuedResult> {
     const res = await fetch(`https://api.github.com/repos/${this.config.repo}/issues`, {
       method: "POST",
-      headers: {
-        authorization: `Bearer ${this.config.token}`,
-        accept: "application/vnd.github+json",
-        "content-type": "application/json",
-        "user-agent": "hiragaunsou-vehicle-pl",
-        "x-github-api-version": "2022-11-28",
-      },
+      headers: this.headers(),
       body: JSON.stringify({
         title: draft.title,
         body: draft.body,

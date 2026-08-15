@@ -35,7 +35,7 @@ function diagnostics(over: Partial<StoredDiagnostics> = {}): StoredDiagnostics {
     console: [],
     errors: [],
     network: [],
-    api: [],
+    slowApi: [],
     breadcrumbs: [],
     notes: [],
     occurredAt: { utc: "2026-08-15T01:00:00.000Z", jst: "2026-08-15 10:00:00 JST" },
@@ -45,7 +45,7 @@ function diagnostics(over: Partial<StoredDiagnostics> = {}): StoredDiagnostics {
       label: "車両別の収支",
       sourceFile: "app/(app)/vehicle/[vehicleNo]/page.tsx",
     },
-    reporter: { id: "u1", name: "入力担当", role: "input_staff", organization: "平賀運送" },
+    reporter: { id: "u1", name: "入力担当", role: "input_staff", companyId: "（1社専用のため会社IDなし）" },
     ...over,
   };
 }
@@ -148,11 +148,10 @@ describe("buildIssueDraft", () => {
 
     // 原文（要約しない）
     expect(body).toContain("> 合計が右端で切れて読めません。");
-    // どこの話か
+    // どこの話か（実URL は載せない。route pattern だけ）
     expect(body).toContain("/vehicle/[vehicleNo]");
-    expect(body).toContain("/vehicle/1177?ym=2026-05");
     expect(body).toContain("app/(app)/vehicle/[vehicleNo]/page.tsx");
-    // いつ・誰が・どの版で
+    // いつ・どの版で
     expect(body).toContain("2026-08-15 10:00:00 JST");
     expect(body).toContain("abc123");
     // 環境
@@ -197,7 +196,81 @@ describe("buildIssueDraft", () => {
     const { body } = buildIssueDraft(detail(), { appOrigin: ORIGIN, shotUrl: null });
     expect(body).toContain("<details>");
     expect(body).toContain("<summary>環境（ブラウザ・OS・画面）</summary>");
-    expect(body).toContain("<summary>失敗した通信</summary>");
+    expect(body).toContain("<summary>失敗した通信（相関IDつき・サーバのログと突き合わせる用）</summary>");
+  });
+
+  /**
+   * 外へ出す量は、保存する量より少ない。
+   *
+   * Issue は編集しても履歴と通知メールが残り、実質取り消せない。読む人の範囲も
+   * 管理画面と違う。だから「管理画面では見えるが Issue には出さない」を固定する。
+   */
+  it("送った人が誰かは Issue に出さない（管理画面でだけ分かる）", () => {
+    const { body } = buildIssueDraft(detail(), { appOrigin: ORIGIN, shotUrl: null });
+
+    expect(body).not.toContain("入力担当");
+    expect(body).not.toContain("u1");
+    expect(body).not.toContain("平賀運送");
+    // 立場によって画面の見え方が変わるので、権限だけは残す。
+    expect(body).toContain("input_staff");
+    // 足りない分をたどれる導線は必ず載せる。
+    expect(body).toContain(`${ORIGIN}/admin/improvements/improve_abc`);
+  });
+
+  it("実URL は載せない（IDが埋まっていて、どのデータかまで分かってしまう）", () => {
+    const { body } = buildIssueDraft(detail(), { appOrigin: ORIGIN, shotUrl: null });
+    expect(body).not.toContain("/vehicle/1177");
+  });
+
+  it("失敗した通信は、エンドポイントと結果だけ。応答の中身は出さない", () => {
+    const item = detail({
+      diagnostics: diagnostics({
+        network: [
+          {
+            method: "GET",
+            url: "/api/vehicles/1177/monthly?ym=2026-05",
+            status: 500,
+            durationMs: 240,
+            requestId: "req-1",
+            cfRay: "8f-nrt",
+            responseExcerpt: '{"driverName":"山田太郎"}',
+            at: "10:00",
+            ok: false,
+          },
+        ],
+      }),
+    });
+    const { body } = buildIssueDraft(item, { appOrigin: ORIGIN, shotUrl: null });
+
+    expect(body).toContain("/api/vehicles/:id/monthly");
+    expect(body).not.toContain("1177");
+    expect(body).not.toContain("山田太郎");
+    // 突き合わせの印は残す（これが無いとサーバ側のログを引けない）。
+    expect(body).toContain("req-1");
+    expect(body).toContain("8f-nrt");
+  });
+
+  it("console 出力は件数だけ。中身は Issue に貼らない", () => {
+    const item = detail({
+      diagnostics: diagnostics({
+        console: [
+          { level: "error", message: "運賃 1,240,000 円の計算に失敗", stack: null, at: "10:00" },
+          { level: "warn", message: "再取得します", stack: null, at: "10:00" },
+        ],
+      }),
+    });
+    const { body } = buildIssueDraft(item, { appOrigin: ORIGIN, shotUrl: null });
+
+    expect(body).toContain("console 出力: error 1件 / warn 1件");
+    expect(body).not.toContain("1,240,000");
+  });
+
+  it("環境はブラウザ・OS・画面の大きさだけ（UserAgent は出さない）", () => {
+    const { body } = buildIssueDraft(detail(), { appOrigin: ORIGIN, shotUrl: null });
+
+    expect(body).toContain("Chrome 141");
+    expect(body).toContain("1440×900");
+    expect(body).not.toContain("Mozilla/5.0");
   });
 
   it("診断情報が無い要望でも文面が作れる", () => {

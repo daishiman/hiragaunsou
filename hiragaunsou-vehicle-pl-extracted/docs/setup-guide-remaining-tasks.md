@@ -290,6 +290,44 @@ GitHub Actionsで「PRを出すと自動でテストが走る」「mainにマー
 
 ---
 
+## タスク8(任意): 改善要望をGitHub Issueにするための設定
+
+### 何をするか
+
+管理画面の改善要望詳細から、システム管理者の操作でGitHub Issueを立てられるようにします。
+**設定しなくてもアプリは動きます。** 未設定のときは「Issueにする」だけが案内つきで断られ、
+下書き(何が外へ出るか)の確認はいつでもできます。
+
+### 手順
+
+1. 起票先のリポジトリを決めます。Issueには業務の言葉・エラー内容が載るため、**非公開(private)のリポジトリ**を選んでください。
+2. トークンを作ります(**fine-grained を推奨**)。
+   <https://github.com/settings/personal-access-tokens/new>
+   - Repository access: 起票先のリポジトリ**だけ**を指定
+   - Repository permissions: **Issues を Read and write**。それ以外は付けない(最小権限)
+   - 有効期限を設定した場合、**期限が切れると起票が止まります**(下書きの確認は続けられます)。期限の日付を控えてください
+   - fine-grained が使えない場合の代替: <https://github.com/settings/tokens/new?scopes=repo>
+     (classic token, repo スコープ。権限が広くなるため fine-grained を推奨)
+3. 登録します。トークンはコード・リポジトリに置きません。
+
+   ```bash
+   pnpm exec wrangler secret put GITHUB_ISSUE_TOKEN   # 手順2で作った値を貼る
+   pnpm exec wrangler secret put GITHUB_ISSUE_REPO    # owner/repo 形式
+   ```
+
+   登録後、値は画面にも出ません(控えは各自で保管してください)。
+
+4. (任意)画面の写しもIssueに貼りたい場合だけ、トークンに **Contents を Read and write** を足し、
+   `GITHUB_ISSUE_ATTACH_SHOT` に `true` を設定します。既定は貼らない設定で、
+   Issueには管理画面の該当詳細ページへのリンクが必ず載ります。
+
+### 確認方法
+
+改善要望の詳細画面 →「下書きを見る(起票しない)」→ 内容を読んでから「この内容で Issue にする」。
+1つの要望に対してIssueは1つだけ立ちます(起票済みの要望では押せる場所が出ません)。
+
+---
+
 ## 完了チェックリスト
 
 - [ ] タスク1: `WORKSPACE_DOMAINS`を実際のドメインに変更してpush(複数ドメインはカンマ区切りで追記可)
@@ -300,3 +338,4 @@ GitHub Actionsで「PRを出すと自動でテストが走る」「mainにマー
 - [ ] タスク5: 本番URLでのログイン・CSVインポートの動作確認
 - [ ] タスク6: PageSpeed Insightsでの表示速度計測
 - [x] タスク7: `hono`パッケージ削除
+- [ ] タスク8(任意): `GITHUB_ISSUE_TOKEN` / `GITHUB_ISSUE_REPO` を登録して改善要望のIssue起票を有効にする

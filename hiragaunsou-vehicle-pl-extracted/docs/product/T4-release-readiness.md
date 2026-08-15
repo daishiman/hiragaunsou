@@ -44,7 +44,15 @@
   「確認 → 起票 → 保存」だけでは同時押しを防げない。
 - `GITHUB_ISSUE_TOKEN` / `GITHUB_ISSUE_REPO` は**任意**。`wrangler.jsonc` の `secrets.required` には入れていない。
   未設定でもデプロイは通り、「Issueにする」だけが理由つきで断られる。
-- 権限は起票先リポジトリの Issues: write のみ（fine-grained token）。コード・リポジトリには置かず、
-  `wrangler secret put GITHUB_ISSUE_TOKEN` で登録する。
+- 権限は起票先リポジトリの Issues: Read and write のみ（fine-grained token）。コード・リポジトリには置かず、
+  `wrangler secret put GITHUB_ISSUE_TOKEN` で登録する。取得先URL・必要権限・期限切れの注意・classic tokenの代替は
+  README、`docs/setup-guide-remaining-tasks.md` タスク8、管理画面の案内（`GitHubTokenGuide`）の3か所に同じ内容で書いてある。
+- 画面の写しをIssueへ貼るのは `GITHUB_ISSUE_ATTACH_SHOT=true` のときだけ（既定は貼らない）。
+  貼るにはトークンに Contents: Read and write も要るため、既定を「貼らない」にして最小権限のまま使えるようにしてある。
+  貼らない場合もIssueには管理画面の該当詳細ページへのリンクが必ず載る。
+- 集める量・保存する量・外へ出す量は別々に決めてある。Issueに出さないものは
+  氏名・メール・会社名・実URL・レスポンス本文・console全件（`src/domain/rules/improvementIssue.ts` の冒頭に列挙、テストで固定）。
+- 黒塗りは元画像へ焼き込む（`app/_lib/annotate.ts`）。元画像は送信も保存もしない。
+  焼き込み後のピクセルから元が取れないことは `tests/lib/annotate.test.ts` で固定している。
 - 元に戻す場合: 直前のタグへ戻せば起票の操作と記録の表示が消える。既に立った Issue は GitHub 側に残る
   （こちらから消さない。手で閉じる）。

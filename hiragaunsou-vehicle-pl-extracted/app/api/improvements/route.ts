@@ -142,7 +142,8 @@ export async function POST(request: Request) {
             role: session.role,
             // 1社専用のアプリなので会社IDは持たない。空欄にすると
             // 「取り忘れ」と読まれるため、持っていないことを書いておく。
-            organization: "平賀運送（1社専用のため会社IDなし）",
+            // 会社名そのものは保存しない (Issue へ出さないものを持たない)。
+            companyId: "（1社専用のため会社IDなし）",
           },
         };
 

@@ -85,8 +85,11 @@ export function DiagnosticsPanel({ d }: { d: StoredDiagnostics | null }) {
         <NetworkList entries={d.network} empty="失敗した通信はありません。" />
       </Section>
 
-      <Section title={`直近のAPI呼び出し（${d.api.length}件）`}>
-        <NetworkList entries={d.api} empty="APIの呼び出しはありません。" />
+      <Section title={`遅かった通信（${d.slowApi.length}件）`}>
+        <NetworkList
+          entries={d.slowApi}
+          empty="3秒を超えた通信はありません。うまくいった通信は記録していません。"
+        />
       </Section>
 
       <Section title={`操作の足あと（${d.breadcrumbs.length}件）`}>

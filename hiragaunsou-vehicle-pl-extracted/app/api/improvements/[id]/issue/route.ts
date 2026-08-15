@@ -9,6 +9,7 @@ import {
   GitHubIssueClient,
   GitHubIssueError,
   githubIssueConfigOf,
+  shotPathOf,
 } from "../../../../../src/infrastructure/github/GitHubIssueClient";
 import { isSameOriginRequest } from "../../../../_lib/assertSameOrigin";
 
@@ -51,17 +52,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ message: "対象の要望が見つかりませんでした。" }, { status: 404 });
   }
 
-  const draft = buildIssueDraft(item, {
-    appOrigin: env.BETTER_AUTH_URL,
-    // 画像を社外から見える場所へ出さない。出してよいかは持ち主にしか決められないので、
-    // 既定は「Issueには載せず、管理画面で見る」にしておく。
-    shotUrl: null,
-  });
-
   if (dryRun) {
+    // 下書きでは画像を置きに行かない (置いた時点で外へ出てしまう)。
+    // 画像を貼る設定なら、貼られる場所だけを見せる。
+    const config = githubIssueConfigOf(env);
+    const draft = buildIssueDraft(item, {
+      appOrigin: env.BETTER_AUTH_URL,
+      shotUrl:
+        config?.attachShot && item.hasShot
+          ? `https://github.com/${config.repo}/blob/HEAD/${shotPathOf(item.id)}?raw=1`
+          : null,
+    });
     return NextResponse.json({
       dryRun: true,
-      configured: githubIssueConfigOf(env) !== null,
+      configured: config !== null,
       title: draft.title,
       body: draft.body,
       labels: draft.labels,
@@ -83,6 +87,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const config = githubIssueConfigOf(env);
   if (!config) {
+    const draft = buildIssueDraft(item, { appOrigin: env.BETTER_AUTH_URL, shotUrl: null });
     return NextResponse.json(
       {
         message:
@@ -107,7 +112,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   let issued;
   try {
-    issued = await new GitHubIssueClient(config).create(draft);
+    const client = new GitHubIssueClient(config);
+    // 画像を先に置いてから本文を組む。置けなければ null が返り、
+    // 本文は「管理画面で見てください」に切り替わる (起票自体は続く)。
+    const shotUrl =
+      item.hasShot && item.shot ? await client.uploadShot(item.id, item.shot) : null;
+    const draft = buildIssueDraft(item, { appOrigin: env.BETTER_AUTH_URL, shotUrl });
+    issued = await client.create(draft);
   } catch (e) {
     await repo.releaseIssuing(id);
     const message =

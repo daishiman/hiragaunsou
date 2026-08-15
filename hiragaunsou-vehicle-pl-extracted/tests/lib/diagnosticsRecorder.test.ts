@@ -66,6 +66,13 @@ describe("診断情報の記録", () => {
     expect(JSON.stringify(collectDiagnostics().console)).not.toContain("ふつうの記録");
   });
 
+  it("console.info も控えない（error と warn だけ残す）", () => {
+    const spy = vi.spyOn(console, "info").mockImplementation(() => {});
+    console.info("読み込みました");
+    spy.mockRestore();
+    expect(JSON.stringify(collectDiagnostics().console)).not.toContain("読み込みました");
+  });
+
   it("捕まえ損ねた例外を、発生場所つきで控える", () => {
     window.dispatchEvent(
       new ErrorEvent("error", {
@@ -134,8 +141,33 @@ describe("診断情報の記録", () => {
     // クエリの値は伏せ、どのAPIかは残す。
     expect(entry?.url).toContain("/api/vehicles");
     expect(entry?.url).not.toContain("2026-05");
-    // 自分のアプリ宛ての通信は、成功・失敗にかかわらずAPI履歴にも残る。
-    expect(d.api.at(-1)?.url).toContain("/api/vehicles");
+  });
+
+  it("うまくいった通信は残さない（速いものは記録そのものを作らない）", async () => {
+    innerFetch = async () => new Response("ok", { status: 200 });
+    await window.fetch("/api/vehicles?ym=2026-05");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const d = collectDiagnostics();
+    expect(d.network).toHaveLength(0);
+    expect(d.slowApi).toHaveLength(0);
+    // 記録は残さないが、速さの様子は数として分かる。
+    expect(typeof d.performance.medianApiMs).toBe("number");
+  });
+
+  it("3秒を超えた通信だけは、うまくいっていても残す", async () => {
+    // 「この画面が遅い」という要望のとき、遅かったこと自体が答えになる。
+    let clock = 0;
+    const nowSpy = vi.spyOn(performance, "now").mockImplementation(() => (clock += 3_500));
+    innerFetch = async () => new Response("ok", { status: 200 });
+    await window.fetch("/api/vehicles/1177/monthly");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    nowSpy.mockRestore();
+
+    const d = collectDiagnostics();
+    expect(d.slowApi.at(-1)?.url).toContain("/api/vehicles");
+    expect(d.slowApi.at(-1)?.durationMs).toBeGreaterThanOrEqual(3_000);
+    expect(d.performance.slowestApi?.durationMs).toBeGreaterThanOrEqual(3_000);
   });
 
   it("環境を取り、取れないものは取得不可と書く", () => {

@@ -10,6 +10,13 @@ import { DIAGNOSTICS_UNAVAILABLE, maskSensitive, maskUrl } from "./diagnosticsMa
  * 集める量に上限を置くのは、D1 に本文・画像と同じ1件として入るため。
  * 上限を超えたら「古いものから捨てる」。新しい方を捨てると、
  * 押した直後に出たエラー (一番知りたいもの) が真っ先に消える。
+ *
+ * 集めないと決めたもの (実装しない)。
+ *  - Cookie / localStorage / sessionStorage の中身
+ *  - リクエスト・レスポンスの本文まるごと (業務データそのもの)
+ *  - うまくいった通信の全件 (遅かったものだけ残す)
+ *  - DOM 全体のスナップショット、セッション録画
+ * どれも「あれば便利」だが、無くても再現はできる。持てば漏れる側の risk だけが残る。
  */
 
 export const DIAGNOSTICS_VERSION = 1;
@@ -22,13 +29,21 @@ export const DIAGNOSTICS_LIMITS = {
   console: 30,
   errors: 10,
   network: 15,
-  api: 20,
+  slowApi: 10,
   breadcrumbs: 30,
 } as const;
 
+/**
+ * 「異常に遅い」と見なす境目 (ミリ秒)。
+ *
+ * うまくいった通信は原則として残さない。残すのはここを超えたものだけ。
+ * 全件残すと、量の大半が「正常でした」の記録で埋まり、肝心の失敗が押し出される。
+ */
+export const SLOW_API_MS = 3_000;
+
 export interface ConsoleEntry {
-  /** error / warn / info。debug と log は量ばかり増えて手がかりにならないので集めない。 */
-  level: "error" | "warn" | "info";
+  /** error と warn だけ。info / log / debug は量ばかり増えて手がかりにならないので集めない。 */
+  level: "error" | "warn";
   message: string;
   stack: string | null;
   at: string;
@@ -95,8 +110,10 @@ export interface ClientDiagnostics {
   performance: DiagnosticsPerformance;
   console: ConsoleEntry[];
   errors: ErrorEntry[];
+  /** 失敗した通信だけ (4xx / 5xx / 到達しなかったもの)。 */
   network: NetworkEntry[];
-  api: NetworkEntry[];
+  /** うまくいった通信のうち、SLOW_API_MS を超えたものだけ。 */
+  slowApi: NetworkEntry[];
   breadcrumbs: Breadcrumb[];
   /** 集めきれなかった・捨てたものがあれば理由を書く。 */
   notes: string[];
@@ -106,7 +123,11 @@ export interface ClientDiagnostics {
 export interface StoredDiagnostics extends ClientDiagnostics {
   occurredAt: { utc: string; jst: string };
   screen: { path: string; routePattern: string; label: string; sourceFile: string };
-  reporter: { id: string; name: string; role: string; organization: string };
+  /**
+   * 送った人。氏名・メールは管理画面の中でだけ見せる (Issue には出さない)。
+   * 会社は1社専用なので id を固定値で持ち、会社名は保存しない。
+   */
+  reporter: { id: string; name: string; role: string; companyId: string };
 }
 
 /**
@@ -129,10 +150,18 @@ export function sanitizeClientDiagnostics(raw: unknown): ClientDiagnostics {
     },
     environment: sanitizeEnvironment(asRecord(src.environment)),
     performance: sanitizePerformance(asRecord(src.performance)),
-    console: asArray(src.console).slice(-DIAGNOSTICS_LIMITS.console).map(sanitizeConsole),
+    // level は先に絞る。後で捨てると、info で埋まった30件から2件しか残らないことがある。
+    console: asArray(src.console)
+      .filter((e) => e.level === "error" || e.level === "warn")
+      .slice(-DIAGNOSTICS_LIMITS.console)
+      .map(sanitizeConsole),
     errors: asArray(src.errors).slice(-DIAGNOSTICS_LIMITS.errors).map(sanitizeError),
     network: asArray(src.network).slice(-DIAGNOSTICS_LIMITS.network).map(sanitizeNetwork),
-    api: asArray(src.api).slice(-DIAGNOSTICS_LIMITS.api).map(sanitizeNetwork),
+    // 遅かったものだけを残す。成功した通信をブラウザ側が送ってきても、ここで落とす。
+    slowApi: asArray(src.slowApi)
+      .filter((e) => typeof e.durationMs === "number" && e.durationMs >= SLOW_API_MS)
+      .slice(-DIAGNOSTICS_LIMITS.slowApi)
+      .map(sanitizeNetwork),
     breadcrumbs: asArray(src.breadcrumbs).slice(-DIAGNOSTICS_LIMITS.breadcrumbs).map(sanitizeCrumb),
     notes,
   };
@@ -151,7 +180,7 @@ function trimToBudget(input: ClientDiagnostics): ClientDiagnostics {
   const result = { ...input };
   const shrinkers: { name: string; take: () => boolean }[] = [
     { name: "足あと", take: () => shift(result.breadcrumbs) },
-    { name: "API履歴", take: () => shift(result.api) },
+    { name: "遅かった通信", take: () => shift(result.slowApi) },
     { name: "失敗した通信", take: () => shift(result.network) },
     { name: "console出力", take: () => shift(result.console) },
     { name: "例外", take: () => shift(result.errors) },
@@ -242,9 +271,8 @@ function sanitizePerformance(src: Record<string, unknown>): DiagnosticsPerforman
 }
 
 function sanitizeConsole(src: Record<string, unknown>): ConsoleEntry {
-  const level = src.level;
   return {
-    level: level === "error" || level === "warn" ? level : "info",
+    level: src.level === "warn" ? "warn" : "error",
     message: maskSensitive(asString(src.message, ""), 500),
     stack: typeof src.stack === "string" ? maskSensitive(src.stack, 1500) : null,
     at: asTime(src.at),

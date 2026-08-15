@@ -15,7 +15,18 @@ describe("githubIssueConfigOf", () => {
   it("トークンと起票先が揃っていれば使える", () => {
     expect(
       githubIssueConfigOf({ GITHUB_ISSUE_TOKEN: "t", GITHUB_ISSUE_REPO: "daishiman/hiragaunsou" }),
-    ).toEqual({ token: "t", repo: "daishiman/hiragaunsou" });
+    ).toEqual({ token: "t", repo: "daishiman/hiragaunsou", attachShot: false });
+  });
+
+  it("画像を貼るのは、はっきり true と書いたときだけ", () => {
+    // 画像を貼るにはリポジトリへの書き込み権限が要る。
+    // 既定を「貼る」にすると、要らない権限を持たせる設定が既定になってしまう。
+    const base = { GITHUB_ISSUE_TOKEN: "t", GITHUB_ISSUE_REPO: "a/b" };
+    expect(githubIssueConfigOf(base)?.attachShot).toBe(false);
+    expect(githubIssueConfigOf({ ...base, GITHUB_ISSUE_ATTACH_SHOT: "1" })?.attachShot).toBe(false);
+    expect(githubIssueConfigOf({ ...base, GITHUB_ISSUE_ATTACH_SHOT: "true" })?.attachShot).toBe(
+      true,
+    );
   });
 
   it("どちらかが無ければ未設定として扱う（機能を止めず、下書きだけ使える）", () => {
@@ -47,7 +58,7 @@ describe("GitHubIssueClient", () => {
         status: 201,
       }),
     );
-    const client = new GitHubIssueClient({ token: "t", repo: "a/b" });
+    const client = new GitHubIssueClient({ token: "t", repo: "a/b", attachShot: false });
     expect(await client.create(draft)).toEqual({
       number: 5,
       url: "https://github.com/a/b/issues/5",
@@ -60,20 +71,54 @@ describe("GitHubIssueClient", () => {
 
   it("断られたときは、次にすることが分かる言葉で返す", async () => {
     fetchMock.mockResolvedValue(new Response("Bad credentials", { status: 403 }));
-    const client = new GitHubIssueClient({ token: "t", repo: "a/b" });
+    const client = new GitHubIssueClient({ token: "t", repo: "a/b", attachShot: false });
     await expect(client.create(draft)).rejects.toBeInstanceOf(GitHubIssueError);
     await expect(client.create(draft)).rejects.toThrow(/トークンの権限/);
   });
 
   it("起票先が無いときは設定を疑うよう伝える", async () => {
     fetchMock.mockResolvedValue(new Response("Not Found", { status: 404 }));
-    const client = new GitHubIssueClient({ token: "t", repo: "a/b" });
+    const client = new GitHubIssueClient({ token: "t", repo: "a/b", attachShot: false });
     await expect(client.create(draft)).rejects.toThrow(/リポジトリが見つかりません/);
   });
 
   it("応答が読めないときも、成功として扱わない", async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 201 }));
-    const client = new GitHubIssueClient({ token: "t", repo: "a/b" });
+    const client = new GitHubIssueClient({ token: "t", repo: "a/b", attachShot: false });
     await expect(client.create(draft)).rejects.toThrow(/読み取れませんでした/);
+  });
+
+  describe("画面の写しの置き方", () => {
+    const dataUrl = "data:image/jpeg;base64,QUJD";
+
+    it("貼らない設定なら、置きに行かない（余計な権限を使わない）", async () => {
+      const client = new GitHubIssueClient({ token: "t", repo: "a/b", attachShot: false });
+      expect(await client.uploadShot("improve_1", dataUrl)).toBeNull();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("貼る設定なら、焼き込み済みの1枚だけを置く", async () => {
+      fetchMock.mockResolvedValue(
+        new Response(
+          JSON.stringify({ content: { html_url: "https://github.com/a/b/blob/main/x.jpg" } }),
+          { status: 201 },
+        ),
+      );
+      const client = new GitHubIssueClient({ token: "t", repo: "a/b", attachShot: true });
+
+      expect(await client.uploadShot("improve_1", dataUrl)).toBe(
+        "https://github.com/a/b/blob/main/x.jpg?raw=1",
+      );
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe("https://api.github.com/repos/a/b/contents/improvement-shots/improve_1.jpg");
+      // data URL の頭は落として、中身だけを送る。
+      expect(JSON.parse(String(init.body)).content).toBe("QUJD");
+    });
+
+    it("置けなくても起票は止めない（画像より、要望が届くことを優先する）", async () => {
+      fetchMock.mockResolvedValue(new Response("Forbidden", { status: 403 }));
+      const client = new GitHubIssueClient({ token: "t", repo: "a/b", attachShot: true });
+      expect(await client.uploadShot("improve_1", dataUrl)).toBeNull();
+    });
   });
 });

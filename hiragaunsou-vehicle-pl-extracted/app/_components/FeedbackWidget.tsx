@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { AlertPanel } from "./AlertPanel";
 import { routeIdentityOf } from "../_lib/routeIdentity";
 import { collectDiagnostics } from "../_lib/diagnostics/recorder";
+import { MASK_COLOR, paintShapes, type Point, type Shape, type Tool } from "../_lib/annotate";
 import {
   IMPROVEMENT_BODY_MAX,
   IMPROVEMENT_SHOT_MAX_BYTES,
@@ -40,17 +41,6 @@ function safeCollectDiagnostics(): unknown {
  * 差し込むのは AppShell の1箇所だけ。画面ごとに置くと、置き忘れた画面が
  * 「意見を出せない画面」になる。
  */
-
-type Point = { x: number; y: number };
-
-type Shape =
-  | { kind: "pen"; color: string; points: Point[] }
-  | { kind: "rect"; color: string; from: Point; to: Point }
-  | { kind: "arrow"; color: string; from: Point; to: Point }
-  | { kind: "mask"; color: string; from: Point; to: Point }
-  | { kind: "text"; color: string; at: Point; text: string };
-
-type Tool = Shape["kind"];
 
 /** 撮った画像の長辺の上限。これ以上大きくしても読めるものは増えない。 */
 const MAX_EDGE = 1600;
@@ -324,57 +314,10 @@ export function FeedbackWidget() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(base, 0, 0, canvas.width, canvas.height);
 
-    const unit = Math.max(2, Math.round(canvas.width / 400));
+    // 元画像と同じ描画面へ印を焼き込む。別のレイヤーに描いて重ねる作りにはしない
+    // (黒塗りの下が残ってしまうため。app/_lib/annotate.ts の説明を参照)。
     const all = drawingRef.current ? [...shapes, drawingRef.current] : shapes;
-    for (const shape of all) {
-      ctx.lineWidth = unit;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.strokeStyle = shape.color;
-      ctx.fillStyle = shape.color;
-      if (shape.kind === "pen") {
-        ctx.beginPath();
-        shape.points.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
-        ctx.stroke();
-      } else if (shape.kind === "rect") {
-        ctx.strokeRect(
-          shape.from.x,
-          shape.from.y,
-          shape.to.x - shape.from.x,
-          shape.to.y - shape.from.y,
-        );
-      } else if (shape.kind === "mask") {
-        ctx.fillRect(
-          shape.from.x,
-          shape.from.y,
-          shape.to.x - shape.from.x,
-          shape.to.y - shape.from.y,
-        );
-      } else if (shape.kind === "arrow") {
-        const { from, to } = shape;
-        const angle = Math.atan2(to.y - from.y, to.x - from.x);
-        const head = unit * 5;
-        ctx.beginPath();
-        ctx.moveTo(from.x, from.y);
-        ctx.lineTo(to.x, to.y);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(to.x, to.y);
-        ctx.lineTo(to.x - head * Math.cos(angle - 0.4), to.y - head * Math.sin(angle - 0.4));
-        ctx.lineTo(to.x - head * Math.cos(angle + 0.4), to.y - head * Math.sin(angle + 0.4));
-        ctx.closePath();
-        ctx.fill();
-      } else {
-        const size = unit * 7;
-        ctx.font = `700 ${size}px sans-serif`;
-        ctx.textBaseline = "top";
-        // 濃い場所でも読めるよう、文字の周りを白で縁取る
-        ctx.strokeStyle = cssColor("paper");
-        ctx.lineWidth = unit;
-        ctx.strokeText(shape.text, shape.at.x, shape.at.y);
-        ctx.fillText(shape.text, shape.at.x, shape.at.y);
-      }
-    }
+    paintShapes(ctx, all, canvas.width);
   }, [shapes]);
 
   useEffect(() => {
@@ -393,8 +336,9 @@ export function FeedbackWidget() {
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!shot) return;
     const at = pointOf(e);
-    // 黒塗りは「隠す」ための道具なので、色は選ばせず必ず黒にする。
-    const c = tool === "mask" ? cssColor("ink") : cssColor(color);
+    // 黒塗りは「隠す」ための道具なので、色は選ばせず必ず不透明の黒にする
+    // (テーマの色を使うと、透明度が入ったときに下が読めてしまう)。
+    const c = tool === "mask" ? MASK_COLOR : cssColor(color);
     if (tool === "text") {
       const text = textDraft.trim();
       if (!text) {
@@ -445,6 +389,8 @@ export function FeedbackWidget() {
     try {
       let image: string | null = null;
       if (shot && canvasRef.current) {
+        // 送るのは書き込みを焼き込んだ後の1枚だけ。元画像 (shot.dataUrl) は送らない。
+        // 元画像も一緒に送ると、黒塗りは画面の上で隠しただけになる。
         image = exportCanvas(canvasRef.current);
         if (!image) {
           setError("画像が大きすぎます。範囲を狭めて撮り直してください。");

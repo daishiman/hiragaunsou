@@ -43,6 +43,29 @@ npm run deploy           # Cloudflareへデプロイ
   **Excel取込を後に実行した月は両者が同一値になり、差異が実際にはあっても「全N台が一致」と表示されます**(突合の空振り)。
   スキーマに書き込み元を持たせれば厳密化できますが、通常の運用順では起きないため制約として残しています。
 
+## 改善要望のGitHub起票(任意設定)
+
+管理画面の改善要望詳細から、システム管理者の操作でGitHub Issueを立てられます。未設定でもアプリは動き、
+「Issueにする」だけが案内つきで断られます(下書きの確認は未設定でもできます)。
+
+| 設定名 | 役割 |
+| --- | --- |
+| `GITHUB_ISSUE_TOKEN` | 起票用トークン。Workersのシークレットにだけ置く(コード・リポジトリには置かない) |
+| `GITHUB_ISSUE_REPO` | 起票先。`owner/repo` 形式 |
+| `GITHUB_ISSUE_ATTACH_SHOT` | `true` のときだけ画面の写しをIssueに貼る(既定は貼らない) |
+
+トークンの取得先と権限:
+
+- 推奨: <https://github.com/settings/personal-access-tokens/new> (fine-grained)
+  対象リポジトリに**起票先だけ**を指定し、Repository permissions の **Issues を Read and write**。それ以外は付けない。
+- 有効期限を設定した場合、**期限切れで起票が止まります**(下書きの確認は続けられます)。
+- 代替: <https://github.com/settings/tokens/new?scopes=repo> (classic token, repo スコープ)。権限が広くなるため fine-grained を推奨。
+- 画面の写しも貼る場合のみ、Contents を Read and write に足したうえで `GITHUB_ISSUE_ATTACH_SHOT=true` を設定します。
+
+```bash
+pnpm exec wrangler secret put GITHUB_ISSUE_TOKEN   # 登録後は画面にも出ません
+```
+
 ## ドキュメント
 
 - [詳細要件定義書](docs/requirement.md)

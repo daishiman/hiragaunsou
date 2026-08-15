@@ -81,11 +81,27 @@ describe("sanitizeClientDiagnostics", () => {
     expect(d.errors.length).toBeGreaterThan(0);
   });
 
-  it("console の level は error / warn 以外を info に倒す", () => {
+  it("console は error と warn だけ残す（info / debug は捨てる）", () => {
     const d = sanitizeClientDiagnostics({
-      console: [{ level: "debug", message: "x" }, { level: "error", message: "y" }],
+      console: [
+        { level: "debug", message: "x" },
+        { level: "info", message: "y" },
+        { level: "warn", message: "z" },
+        { level: "error", message: "w" },
+      ],
     });
-    expect(d.console.map((c) => c.level)).toEqual(["info", "error"]);
+    expect(d.console.map((c) => c.level)).toEqual(["warn", "error"]);
+  });
+
+  it("うまくいった通信は、ブラウザが送ってきても3秒未満なら捨てる", () => {
+    // 控える側を差し替えられても、保存する手前でもう一度ふるいにかける。
+    const d = sanitizeClientDiagnostics({
+      slowApi: [
+        { method: "GET", url: "/api/fast", durationMs: 120, status: 200 },
+        { method: "GET", url: "/api/slow", durationMs: 4200, status: 200 },
+      ],
+    });
+    expect(d.slowApi.map((n) => n.url)).toEqual(["/api/slow"]);
   });
 });
 

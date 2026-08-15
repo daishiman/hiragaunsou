@@ -144,7 +144,7 @@ describe("/api/improvements の投稿", () => {
         ...validPost,
         diagnostics: {
           environment: { browser: "Chrome 141" },
-          reporter: { id: "admin-1", name: "管理者", role: "admin", organization: "よその会社" },
+          reporter: { id: "admin-1", name: "管理者", role: "admin", companyId: "よその会社" },
           screen: { path: "/admin", routePattern: "/admin", label: "管理", sourceFile: "x" },
           occurredAt: { utc: "1999-01-01T00:00:00.000Z", jst: "1999-01-01 09:00:00 JST" },
         },
