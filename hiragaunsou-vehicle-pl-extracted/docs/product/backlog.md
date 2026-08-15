@@ -655,6 +655,21 @@ API を直接叩けば作れるが、管理画面には出していない。
 
 → 出し直しの操作が分かりにくくないかを、実際に1件やってみて確かめる。
 
+### 新: 手元は pnpm・CI は npm という食い違いを、pnpm に寄せて解消する — 実装する (2026-08-15 追加)
+
+手元の作業は pnpm、CI (`.github/workflows/hiragaunsou-vehicle-pl-ci.yml`) は `npm ci` を使っている。
+ロックファイルも `pnpm-lock.yaml` と `package-lock.json` の2本がある。
+このため、依存を1つ足したときに `pnpm-lock.yaml` だけが更新され、`package-lock.json` が
+置き去りになると、**手元の品質ゲートが全部通っているのに CI だけが install の段階で落ちる**。
+実際に `modern-screenshot` を足したときに起きた（今回は `npm install --package-lock-only` で追従させた）。
+
+→ **CI 側を pnpm に寄せる**のを第一候補とする（依頼者の方針が pnpm 統一のため）。
+   `pnpm/action-setup` を入れ、`npm ci` → `pnpm install --frozen-lockfile`、
+   各ステップの `npm run 〜` → `pnpm run 〜` に置き換え、`package-lock.json` を消して
+   ロックファイルを `pnpm-lock.yaml` 1本にする。キャッシュの指定も pnpm に変える。
+   デプロイのワークフローも同時に直さないと、CI だけ緑でデプロイが落ちる。
+   この作業は**依存の解決結果が変わりうる**ので、機能の変更を含まない単独のPRで行う。
+
 ---
 
 ## 完了した班の記録
