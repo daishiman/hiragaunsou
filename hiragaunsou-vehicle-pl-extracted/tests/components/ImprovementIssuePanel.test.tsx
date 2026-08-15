@@ -22,7 +22,7 @@ describe("ImprovementIssuePanel", () => {
     vi.stubGlobal("fetch", fetchMock);
   });
 
-  it("起票済みなら番号とURLだけを出し、押せる場所を作らない", () => {
+  it("起票済みなら番号とURLを出し、次に押せるのは新規作成ではなく更新にする", () => {
     render(
       <ImprovementIssuePanel
         id="improve_abc"
@@ -32,7 +32,11 @@ describe("ImprovementIssuePanel", () => {
     );
     expect(screen.getByText(/起票済みです/)).toBeTruthy();
     expect(screen.getByRole("link", { name: "Issue #12" })).toBeTruthy();
-    expect(screen.queryByRole("button")).toBeNull();
+    // 「Issue にする」(=2本目を立てる) 文言は出さない。押せるのは更新だけ。
+    expect(screen.queryByRole("button", { name: "この内容で Issue にする" })).toBeNull();
+    const update = screen.getByRole("button", { name: "この内容で Issue を更新する" });
+    // 送る内容を見るまでは押せない。外へ出るものを見ないまま押させない。
+    expect(update.hasAttribute("disabled")).toBe(true);
   });
 
   it("下書きを見るまでは起票できない", () => {

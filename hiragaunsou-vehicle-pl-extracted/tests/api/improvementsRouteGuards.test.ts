@@ -332,7 +332,7 @@ describe("/api/improvements/[id] の対応状況の更新", () => {
     const res = await PATCH(patch({ status: "dropped", note: "  " }), { params });
     expect(res.status).toBe(400);
     expect((await res.json()) as unknown).toEqual({
-      message: "見送りにする理由を入力してください。",
+      message: "「見送り」にする理由を入力してください。",
     });
     expect(updateHandlingMock).not.toHaveBeenCalled();
   });

@@ -16,6 +16,7 @@ import { dateTimeLabel } from "../../../../_lib/format";
 import { ImprovementHandlingForm } from "./ImprovementHandlingForm";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
 import { ImprovementIssuePanel } from "./ImprovementIssuePanel";
+import { ImprovementLifecyclePanel } from "./ImprovementLifecyclePanel";
 
 /**
  * /admin/improvements/[id]: 届いた要望1件の詳細 (manage_improvements=管理者専用)。
@@ -36,7 +37,8 @@ export default async function AdminImprovementDetailPage({
 
   const { id } = await params;
   const { env } = await getCloudflareContext({ async: true });
-  const item = await new D1ImprovementRepository(createDb(env.DB)).findById(id);
+  const repo = new D1ImprovementRepository(createDb(env.DB));
+  const [item, all, audit] = await Promise.all([repo.findById(id), repo.listAll(), repo.auditOf(id)]);
 
   if (!item) {
     return (
@@ -68,6 +70,7 @@ export default async function AdminImprovementDetailPage({
           <Badge tone={improvementStatusTone(item.status)}>
             {improvementStatusLabel(item.status)}
           </Badge>
+          {item.archivedAt !== null && <Badge tone="neutral">廃棄済み</Badge>}
           <span className="text-sm font-bold text-ink">{item.screenLabel}</span>
           <span className="ml-auto text-xs text-ink-muted">
             {item.reporterName || "利用者"}・{dateTimeLabel(item.createdAt.getTime())}
@@ -94,6 +97,19 @@ export default async function AdminImprovementDetailPage({
             <dt className="inline font-semibold">画面の大きさ: </dt>
             <dd className="inline">{item.viewport ?? "—"}</dd>
           </div>
+          {item.duplicateOfId && (
+            <div>
+              <dt className="inline font-semibold">まとめ先: </dt>
+              <dd className="inline">
+                <Link
+                  href={`/admin/improvements/${item.duplicateOfId}`}
+                  className="text-brand-deep underline"
+                >
+                  この要望がまとめられた先を開く
+                </Link>
+              </dd>
+            </div>
+          )}
           {item.handledAt && (
             <div>
               <dt className="inline font-semibold">最後に決めた人: </dt>
@@ -140,8 +156,44 @@ export default async function AdminImprovementDetailPage({
           id={item.id}
           currentStatus={item.status}
           currentNote={item.handledNote ?? ""}
+          currentDuplicateOfId={item.duplicateOfId}
+          siblings={all
+            .filter((r) => r.id !== item.id)
+            .map((r) => ({ id: r.id, label: `${r.screenLabel}: ${r.body.slice(0, 30)}` }))}
         />
       </div>
+
+      <ImprovementLifecyclePanel
+        id={item.id}
+        archived={item.archivedAt !== null}
+        canPurge={checkAccess(session, "purge_improvements")}
+      />
+
+      {/* 誰がいつ何をしたか。完全削除の記録もここに残る (記録自体は消さない) */}
+      {audit.length > 0 && (
+        <div className="card mt-3 px-4 py-4">
+          <p className="text-xs font-semibold text-ink">この要望に対して行われたこと</p>
+          <ul className="mt-2 space-y-1 text-xs text-ink-muted">
+            {audit.map((a, i) => (
+              <li key={i}>
+                {dateTimeLabel(a.at.getTime())}・{a.actorName}・{AUDIT_LABEL[a.action] ?? a.action}
+                {a.toStatus && `（${a.toStatus}）`}
+                {a.reason && `：${a.reason}`}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
+
+const AUDIT_LABEL: Record<string, string> = {
+  status_change: "状態を変えた",
+  archive: "廃棄した",
+  restore: "廃棄から戻した",
+  purge: "完全に削除した",
+  issue_create: "Issue を作った",
+  issue_update: "Issue を更新した",
+  issue_close: "Issue を閉じた",
+};

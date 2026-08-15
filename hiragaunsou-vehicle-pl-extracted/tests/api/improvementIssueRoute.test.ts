@@ -14,17 +14,25 @@ const ORIGIN = "https://hiragaunsou-vehicle-pl.daishimanju.workers.dev";
 const {
   sessionMock,
   findByIdMock,
+  findManyByIdsMock,
   beginIssuingMock,
   releaseIssuingMock,
   markIssuedMock,
+  markIssueSyncedMock,
+  detachIssueMock,
+  appendAuditMock,
   envMock,
   fetchMock,
 } = vi.hoisted(() => ({
   sessionMock: vi.fn(),
   findByIdMock: vi.fn(),
+  findManyByIdsMock: vi.fn(),
   beginIssuingMock: vi.fn(async () => true),
   releaseIssuingMock: vi.fn(async () => {}),
   markIssuedMock: vi.fn(async () => true),
+  markIssueSyncedMock: vi.fn(async () => {}),
+  detachIssueMock: vi.fn(async () => {}),
+  appendAuditMock: vi.fn(async () => {}),
   envMock: {
     DB: {},
     BETTER_AUTH_URL: "https://hiragaunsou-vehicle-pl.daishimanju.workers.dev",
@@ -40,9 +48,15 @@ vi.mock("../../src/infrastructure/db/client", () => ({ createDb: vi.fn(() => ({}
 
 class RepoMock {
   findById = findByIdMock;
+  findManyByIds = findManyByIdsMock;
   beginIssuing = beginIssuingMock;
   releaseIssuing = releaseIssuingMock;
   markIssued = markIssuedMock;
+  markIssueSynced = markIssueSyncedMock;
+  detachIssue = detachIssueMock;
+  appendAudit = appendAuditMock;
+  findShot = vi.fn(async () => null);
+  markIssueState = vi.fn(async () => {});
 }
 vi.mock("../../src/infrastructure/db/D1ImprovementRepository", () => ({
   D1ImprovementRepository: RepoMock,
@@ -81,6 +95,13 @@ const item = {
   diagnostics: null,
   githubIssueUrl: null as string | null,
   githubIssuedAt: null,
+  githubIssueState: null as string | null,
+  githubSyncedAt: null as Date | null,
+  githubContentHash: null as string | null,
+  githubSyncedFields: null as string | null,
+  archivedAt: null as Date | null,
+  duplicateOfId: null as string | null,
+  updatedAt: new Date("2026-08-15T01:00:00.000Z"),
 };
 
 function post(body: unknown, origin = ORIGIN): Request {
@@ -102,6 +123,11 @@ describe("/api/improvements/[id]/issue", () => {
     sessionMock.mockReset();
     findByIdMock.mockReset();
     findByIdMock.mockResolvedValue({ ...item });
+    findManyByIdsMock.mockReset();
+    findManyByIdsMock.mockResolvedValue([{ ...item }]);
+    markIssueSyncedMock.mockClear();
+    detachIssueMock.mockClear();
+    appendAuditMock.mockClear();
     beginIssuingMock.mockClear();
     beginIssuingMock.mockResolvedValue(true);
     releaseIssuingMock.mockClear();
@@ -137,6 +163,7 @@ describe("/api/improvements/[id]/issue", () => {
   it("見つからない要望は404", async () => {
     sessionMock.mockResolvedValue(adminSession);
     findByIdMock.mockResolvedValue(null);
+    findManyByIdsMock.mockResolvedValue([]);
     const res = await (await route())(post({}), { params });
     expect(res.status).toBe(404);
   });
@@ -154,15 +181,60 @@ describe("/api/improvements/[id]/issue", () => {
     expect(beginIssuingMock).not.toHaveBeenCalled();
   });
 
-  it("起票済みの要望は、押し直しても2本目を立てない", async () => {
+  it("起票済みの要望は、押し直しても2本目を立てない（既存を更新する）", async () => {
     sessionMock.mockResolvedValue(adminSession);
-    findByIdMock.mockResolvedValue({
+    const issued = {
       ...item,
       githubIssueNumber: 12,
       githubIssueUrl: "https://github.com/x/y/issues/12",
-    });
+      githubIssueState: "open",
+      githubContentHash: "ちがう指紋",
+    };
+    findByIdMock.mockResolvedValue(issued);
+    findManyByIdsMock.mockResolvedValue([issued]);
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ number: 12, html_url: "https://github.com/x/y/issues/12" }), {
+        status: 200,
+      }),
+    );
     const res = await (await route())(post({}), { params });
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(200);
+    // 新規作成 (POST /issues) は1度も呼ばない。呼ぶのは更新とコメントだけ。
+    const methods = fetchMock.mock.calls.map((c) => (c[1] as RequestInit).method);
+    expect(methods).not.toContain("POST_ISSUES");
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+    expect(urls.some((u) => /\/issues$/.test(u))).toBe(false);
+    expect(markIssuedMock).not.toHaveBeenCalled();
+    expect(beginIssuingMock).not.toHaveBeenCalled();
+  });
+
+  it("内容が変わっていなければ、押しても GitHub へ何も送らない", async () => {
+    sessionMock.mockResolvedValue(adminSession);
+    // 1回目: 起票する。このとき保存された指紋を、そのまま2回目の状態に使う。
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ number: 21, html_url: "https://github.com/x/y/issues/21" }), {
+        status: 201,
+      }),
+    );
+    await (await route())(post({}), { params });
+    const saved = markIssuedMock.mock.calls[0]?.[1] as { contentHash: string } | undefined;
+    expect(saved?.contentHash).toBeTruthy();
+
+    // 2回目: 何も直していない状態で押す。送るものが無いので通信は起きない。
+    fetchMock.mockClear();
+    findManyByIdsMock.mockResolvedValue([
+      {
+        ...item,
+        githubIssueNumber: 21,
+        githubIssueUrl: "https://github.com/x/y/issues/21",
+        githubIssueState: "open",
+        githubContentHash: saved?.contentHash ?? "",
+      },
+    ]);
+    const res = await (await route())(post({}), { params });
+    const json = (await res.json()) as { skipped?: boolean };
+    expect(res.status).toBe(200);
+    expect(json.skipped).toBe(true);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -196,11 +268,17 @@ describe("/api/improvements/[id]/issue", () => {
     const json = (await res.json()) as { issueNumber: number; issueUrl: string };
     expect(res.status).toBe(200);
     expect(json.issueNumber).toBe(21);
-    expect(markIssuedMock).toHaveBeenCalledWith("improve_abc", {
-      issueNumber: 21,
-      issueUrl: "https://github.com/x/y/issues/21",
-      issuedById: "admin-1",
-    });
+    expect(markIssuedMock).toHaveBeenCalledWith(
+      "improve_abc",
+      expect.objectContaining({
+        issueNumber: 21,
+        issueUrl: "https://github.com/x/y/issues/21",
+        issuedById: "admin-1",
+      }),
+    );
+    // 次に押したときへ向けて、送った内容の指紋を必ず控える (空更新を止める土台)。
+    const saved = markIssuedMock.mock.calls[0]?.[1] as { contentHash: string };
+    expect(saved.contentHash.length).toBeGreaterThan(0);
   });
 
   it("GitHub が断ったら権利を返して、次を試せるようにする", async () => {

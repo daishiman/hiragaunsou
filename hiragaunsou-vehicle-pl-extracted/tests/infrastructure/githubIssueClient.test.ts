@@ -79,7 +79,7 @@ describe("GitHubIssueClient", () => {
   it("起票先が無いときは設定を疑うよう伝える", async () => {
     fetchMock.mockResolvedValue(new Response("Not Found", { status: 404 }));
     const client = new GitHubIssueClient({ token: "t", repo: "a/b", attachShot: false });
-    await expect(client.create(draft)).rejects.toThrow(/リポジトリが見つかりません/);
+    await expect(client.create(draft)).rejects.toThrow(/リポジトリまたはIssueが見つかりません/);
   });
 
   it("応答が読めないときも、成功として扱わない", async () => {

@@ -58,10 +58,10 @@ describe("改善要望の状態", () => {
 describe("対応状況を保存するときのルール", () => {
   it("見送りは理由が無いと保存できない", () => {
     expect(improvementHandlingError("open", null, "dropped", null)).toBe(
-      "見送りにする理由を入力してください。",
+      "「見送り」にする理由を入力してください。",
     );
     expect(improvementHandlingError("open", null, "dropped", " ")).toBe(
-      "見送りにする理由を入力してください。",
+      "「見送り」にする理由を入力してください。",
     );
     expect(improvementHandlingError("open", null, "dropped", "別の画面で直したため")).toBeNull();
   });
@@ -137,7 +137,7 @@ describe("一覧の絞り込みと集計", () => {
   });
 
   it("0件の状態も欠かさず数える", () => {
-    expect(countImprovementsByStatus(rows)).toEqual({ open: 2, doing: 0, done: 1, dropped: 0 });
+    expect(countImprovementsByStatus(rows)).toEqual({ open: 2, doing: 0, done: 1, dropped: 0, invalid: 0, duplicate: 0 });
   });
 
   it("実URLではなく画面の単位で数え、多い順に並べる", () => {

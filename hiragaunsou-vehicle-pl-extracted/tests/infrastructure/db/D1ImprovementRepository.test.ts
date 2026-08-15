@@ -334,4 +334,90 @@ describe("D1ImprovementRepository", () => {
       expect((await repo.findById(id))?.status).toBe("open");
     });
   });
+
+  describe("しまう・戻す・完全に削除する", () => {
+    beforeEach(() => {
+      ctx.sqlite
+        .prepare(`INSERT INTO user (id, name, email, email_verified) VALUES (?, ?, ?, 1)`)
+        .run("admin-1", "今西", "imanishi@example.com");
+    });
+
+    it("廃棄すると既定の一覧から外れ、戻せばまた並ぶ", async () => {
+      const repo = new D1ImprovementRepository(ctx.db);
+      const id = await repo.save(submission());
+
+      await repo.updateLifecycle(id, { archivedAt: new Date(), actorId: "admin-1" });
+      expect((await repo.listAll())[0]?.archivedAt).toBeInstanceOf(Date);
+
+      await repo.updateLifecycle(id, { archivedAt: null, actorId: "admin-1" });
+      expect((await repo.listAll())[0]?.archivedAt).toBeNull();
+    });
+
+    it("完全削除では、本文だけでなく画像と診断情報も一緒に消える", async () => {
+      const repo = new D1ImprovementRepository(ctx.db);
+      const id = await repo.save(
+        submission({
+          shot: SHOT,
+          shotBytes: 1234,
+          diagnostics: { version: 1, environment: { browser: "Chrome 141" } } as never,
+        }),
+      );
+      expect((await repo.findById(id))?.shot).toBe(SHOT);
+
+      await repo.purge([id]);
+
+      expect(await repo.findById(id)).toBeNull();
+      // 画像と診断情報が残っていると、消したつもりの個人情報が残る。
+      const shots = ctx.sqlite
+        .prepare(`SELECT count(*) AS n FROM improvement_shot WHERE request_id = ?`)
+        .get(id) as { n: number };
+      const diags = ctx.sqlite
+        .prepare(`SELECT count(*) AS n FROM improvement_diagnostics WHERE request_id = ?`)
+        .get(id) as { n: number };
+      expect(shots.n).toBe(0);
+      expect(diags.n).toBe(0);
+    });
+
+    it("完全削除しても、いつ誰がなぜ消したかの記録は残る", async () => {
+      const repo = new D1ImprovementRepository(ctx.db);
+      const id = await repo.save(submission());
+      await repo.appendAudit([
+        {
+          requestId: id,
+          actorId: "admin-1",
+          actorName: "今西",
+          action: "purge",
+          fromStatus: "open",
+          toStatus: null,
+          reason: "本人から削除の依頼があったため",
+        },
+      ]);
+
+      await repo.purge([id]);
+
+      const audit = await repo.auditOf(id);
+      expect(audit).toHaveLength(1);
+      expect(audit[0]).toMatchObject({ action: "purge", reason: "本人から削除の依頼があったため" });
+    });
+
+    it("まとめ先を完全削除しても、まとめられた側は開ける", async () => {
+      const repo = new D1ImprovementRepository(ctx.db);
+      const parent = await repo.save(submission({ submissionKey: "key-parent" }));
+      const child = await repo.save(submission({ submissionKey: "key-child" }));
+      await repo.updateLifecycle(child, {
+        status: "duplicate",
+        note: "同じ話のため",
+        duplicateOfId: parent,
+        actorId: "admin-1",
+      });
+      expect((await repo.findById(child))?.duplicateOfId).toBe(parent);
+
+      await repo.purge([parent]);
+
+      const detail = await repo.findById(child);
+      expect(detail).not.toBeNull();
+      // 行き先が消えたリンクは残さない (開いても無い先へ飛ばさない)。
+      expect(detail?.duplicateOfId).toBeNull();
+    });
+  });
 });

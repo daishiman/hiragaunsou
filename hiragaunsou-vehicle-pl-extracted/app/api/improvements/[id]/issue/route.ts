@@ -4,28 +4,22 @@ import { getServerSession } from "../../../../../src/infrastructure/auth/session
 import { checkAccess } from "../../../../../src/infrastructure/auth/accessControl";
 import { createDb } from "../../../../../src/infrastructure/db/client";
 import { D1ImprovementRepository } from "../../../../../src/infrastructure/db/D1ImprovementRepository";
-import { buildIssueDraft } from "../../../../../src/domain/rules/improvementIssue";
-import {
-  GitHubIssueClient,
-  GitHubIssueError,
-  githubIssueConfigOf,
-  shotPathOf,
-} from "../../../../../src/infrastructure/github/GitHubIssueClient";
+import { syncIssues } from "../../../../../src/usecase/improvements/syncIssues";
+import { buildIssueSyncDeps } from "../../../../../src/usecase/improvements/issueSyncDeps";
 import { isSameOriginRequest } from "../../../../_lib/assertSameOrigin";
 
 /**
- * 改善要望を GitHub Issue にする。管理者の操作からしか動かない。
+ * 改善要望1件を GitHub Issue にする。管理者の操作からしか動かない。
  *
  * 利用者の投稿で勝手に起票しないのは、業務の中身がそのまま社外の場所へ出るため。
  * 誰かが押した1回だけ、内容を見た上で出す。
  *
  * 起票せずに文面だけ見る (dryRun) 道を必ず残す。起票先が決まる前でも
  * 「何が載るのか」を確かめられないと、出してよいかを判断できない。
+ *
+ * 中身の処理は一覧の一括送信と同じ syncIssues を通す。片方にだけ守りが入る
+ * (二重起票の防止・空更新の抑止・対象外の除外) 状態を作らないため。
  */
-
-/** 起票の権利を持てる時間。GitHubの応答待ちより十分長く、詰まったままにはならない長さ。 */
-const ISSUE_LEASE_MS = 60_000;
-
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession();
   if (!checkAccess(session, "manage_improvements") || !session) {
@@ -43,111 +37,72 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   } catch {
     raw = {};
   }
-  const dryRun = (raw as { dryRun?: unknown }).dryRun === true;
+  const body = raw as { dryRun?: unknown; reopenClosed?: unknown };
+  const dryRun = body.dryRun === true;
 
   const { id } = await params;
   const repo = new D1ImprovementRepository(createDb(env.DB));
-  const item = await repo.findById(id);
-  if (!item) {
+  const deps = buildIssueSyncDeps(env, repo, { id: session.id, name: session.name ?? "管理者" });
+  const report = await syncIssues([id], deps, {
+    dryRun,
+    reopenClosed: body.reopenClosed === true,
+  });
+
+  const plan = report.plan.items[0];
+  if (!plan) {
     return NextResponse.json({ message: "対象の要望が見つかりませんでした。" }, { status: 404 });
   }
 
   if (dryRun) {
-    // 下書きでは画像を置きに行かない (置いた時点で外へ出てしまう)。
-    // 画像を貼る設定なら、貼られる場所だけを見せる。
-    const config = githubIssueConfigOf(env);
-    const draft = buildIssueDraft(item, {
-      appOrigin: env.BETTER_AUTH_URL,
-      shotUrl:
-        config?.attachShot && item.hasShot
-          ? `https://github.com/${config.repo}/blob/HEAD/${shotPathOf(item.id)}?raw=1`
-          : null,
-    });
+    const draft = report.drafts[0];
     return NextResponse.json({
       dryRun: true,
-      configured: config !== null,
-      title: draft.title,
-      body: draft.body,
-      labels: draft.labels,
-      message: "起票はしていません。この内容で Issue が作られます。",
+      configured: report.configured,
+      kind: plan.kind,
+      title: draft?.title ?? "",
+      body: draft?.body ?? "",
+      labels: draft?.labels ?? [],
+      message:
+        plan.kind === "excluded"
+          ? `この要望は${plan.reason}。`
+          : plan.kind === "skip"
+            ? plan.reason
+            : plan.kind === "update"
+              ? "起票はしていません。この内容で既存の Issue が更新されます。"
+              : "起票はしていません。この内容で Issue が作られます。",
     });
   }
 
-  // 既に起票済みなら、ここで止める (押し直しても2本目は立たない)。
-  if (item.githubIssueNumber !== null) {
+  const result = report.results[0];
+  if (!result) {
+    return NextResponse.json({ message: "対象の要望が見つかりませんでした。" }, { status: 404 });
+  }
+
+  // 送らなかった (対象外・変更なし) ものは、失敗ではなく「何もしていない」として返す。
+  if (result.kind === "excluded" || result.kind === "skip") {
+    return NextResponse.json({ ok: true, skipped: true, message: result.message });
+  }
+
+  if (!result.ok) {
+    // 競合 (誰かが同じ要望を送っている最中) は、設定や通信の失敗と分ける。
+    // こちらは待てば通るので、画面の出し方も再試行を促す形になる。
+    const status = result.conflict ? 409 : report.configured ? 502 : 503;
     return NextResponse.json(
       {
-        message: `この要望は Issue #${item.githubIssueNumber} として起票済みです。`,
-        issueNumber: item.githubIssueNumber,
-        issueUrl: item.githubIssueUrl,
+        message: result.message,
+        issueNumber: result.issueNumber,
+        issueUrl: result.issueUrl,
+        // 送ろうとした中身は失敗しても読めるようにする。
+        body: report.drafts[0]?.body ?? "",
       },
-      { status: 409 },
-    );
-  }
-
-  const config = githubIssueConfigOf(env);
-  if (!config) {
-    const draft = buildIssueDraft(item, { appOrigin: env.BETTER_AUTH_URL, shotUrl: null });
-    return NextResponse.json(
-      {
-        message:
-          "起票先の設定がまだありません。GitHubの起票先リポジトリとトークンを登録すると押せるようになります（下書きの確認は今でもできます）。",
-        title: draft.title,
-        body: draft.body,
-        labels: draft.labels,
-      },
-      { status: 503 },
-    );
-  }
-
-  // GitHub へ投げる前に権利を取る。番号は投げた後にしか分からないため、
-  // 番号の有無だけを見ていると「投げている最中の2回目」を止められない。
-  const claimed = await repo.beginIssuing(id, ISSUE_LEASE_MS);
-  if (!claimed) {
-    return NextResponse.json(
-      { message: "いま起票の処理中です。少し待ってから画面を開き直してください。" },
-      { status: 409 },
-    );
-  }
-
-  let issued;
-  try {
-    const client = new GitHubIssueClient(config);
-    // 画像を先に置いてから本文を組む。置けなければ null が返り、
-    // 本文は「管理画面で見てください」に切り替わる (起票自体は続く)。
-    const shotUrl =
-      item.hasShot && item.shot ? await client.uploadShot(item.id, item.shot) : null;
-    const draft = buildIssueDraft(item, { appOrigin: env.BETTER_AUTH_URL, shotUrl });
-    issued = await client.create(draft);
-  } catch (e) {
-    await repo.releaseIssuing(id);
-    const message =
-      e instanceof GitHubIssueError ? e.message : "GitHubへ起票できませんでした。";
-    return NextResponse.json({ message }, { status: 502 });
-  }
-
-  const saved = await repo.markIssued(id, {
-    issueNumber: issued.number,
-    issueUrl: issued.url,
-    issuedById: session.id,
-  });
-  if (!saved) {
-    // 起票はできたのに結び付けだけ失敗した場合。番号を握り潰すと迷子の Issue になるので、
-    // 「作られたが結び付いていない」ことを URL 付きで伝える。
-    return NextResponse.json(
-      {
-        message: `Issue #${issued.number} は作成されましたが、要望との結び付けに失敗しました。重複していないか確認してください。`,
-        issueNumber: issued.number,
-        issueUrl: issued.url,
-      },
-      { status: 409 },
+      { status },
     );
   }
 
   return NextResponse.json({
     ok: true,
-    issueNumber: issued.number,
-    issueUrl: issued.url,
-    message: `Issue #${issued.number} を作成しました。`,
+    issueNumber: result.issueNumber,
+    issueUrl: result.issueUrl,
+    message: result.message,
   });
 }

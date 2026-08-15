@@ -12,7 +12,14 @@
 
 /* ───────────────────────── 状態 ───────────────────────── */
 
-export const IMPROVEMENT_STATUSES = ["open", "doing", "done", "dropped"] as const;
+export const IMPROVEMENT_STATUSES = [
+  "open",
+  "doing",
+  "done",
+  "dropped",
+  "invalid",
+  "duplicate",
+] as const;
 export type ImprovementStatus = (typeof IMPROVEMENT_STATUSES)[number];
 
 const STATUS_LABEL: Record<ImprovementStatus, string> = {
@@ -20,6 +27,8 @@ const STATUS_LABEL: Record<ImprovementStatus, string> = {
   doing: "対応中",
   done: "対応済み",
   dropped: "見送り",
+  invalid: "誤作成",
+  duplicate: "重複",
 };
 
 /** 画面に出す状態の呼び名。DBの値(open など)は画面に出さない。 */
@@ -32,13 +41,13 @@ export function improvementStatusLabel(status: ImprovementStatus): string {
  * 色だけで意味を伝えないよう、札には必ず上の呼び名を一緒に出す。
  *   未対応   caution — 読んで判断が要る
  *   対応中/対応済み brand — 手が入っている・終わっている
- *   見送り   neutral — 良し悪しではなく分類
+ *   見送り/誤作成/重複 neutral — 良し悪しではなく分類 (色で咎めない)
  */
 export function improvementStatusTone(
   status: ImprovementStatus,
 ): "danger" | "caution" | "brand" | "neutral" {
   if (status === "open") return "caution";
-  if (status === "dropped") return "neutral";
+  if (status === "dropped" || status === "invalid" || status === "duplicate") return "neutral";
   return "brand";
 }
 
@@ -53,8 +62,16 @@ export function isImprovementStatus(value: string): value is ImprovementStatus {
  * 「対応済み」「見送り」で終わりにはしない。取り違えて閉じたときに元へ戻せないと、
  * 要望そのものが消えたのと同じになるため、どの状態からでも戻せる。
  * 禁じるのは「何も変わらない保存」だけ (同じ状態・同じメモの押し直し)。
- * 見送りだけは理由を必須にする。理由の無い見送りは、送った人から見れば黙殺と同じ。
+ * 見送り・誤作成・重複は理由を必須にする。理由の無いまま脇へ寄せられた要望は、
+ * 送った人から見れば黙殺と同じで、後から見た人にも判断のやり直しができない。
  */
+export const REASON_REQUIRED_STATUSES = ["dropped", "invalid", "duplicate"] as const;
+
+/** その状態にするとき、理由の入力が要るか。 */
+export function requiresReason(status: ImprovementStatus): boolean {
+  return (REASON_REQUIRED_STATUSES as readonly string[]).includes(status);
+}
+
 export function improvementHandlingError(
   currentStatus: ImprovementStatus,
   currentNote: string | null,
@@ -63,7 +80,9 @@ export function improvementHandlingError(
 ): string | null {
   const before = currentNote?.trim() ?? "";
   const after = nextNote?.trim() ?? "";
-  if (nextStatus === "dropped" && after.length === 0) return "見送りにする理由を入力してください。";
+  if (requiresReason(nextStatus) && after.length === 0) {
+    return `「${improvementStatusLabel(nextStatus)}」にする理由を入力してください。`;
+  }
   if (currentStatus === nextStatus && before === after) return "変更する内容がありません。";
   return null;
 }
@@ -133,6 +152,8 @@ export interface ImprovementRow {
   routePattern: string;
   screenLabel: string;
   createdAt: Date;
+  /** 廃棄した日時。null なら通常の一覧に並ぶ。 */
+  archivedAt?: Date | null;
 }
 
 export interface ImprovementFilter {
@@ -142,11 +163,20 @@ export interface ImprovementFilter {
   routePattern?: string | null;
   /** この日時より後に届いたものだけ */
   since?: Date | null;
+  /**
+   * 廃棄したものの扱い。既定 ("active") は隠す。
+   * 押し間違いで廃棄したものを探せなくならないよう、"archived" で切り替えられる。
+   */
+  archive?: "active" | "archived" | "all";
 }
 
 /** 一覧の絞り込み。画面と API で同じ結果になるよう、ここだけで判定する。 */
 export function filterImprovements<T extends ImprovementRow>(rows: T[], filter: ImprovementFilter): T[] {
+  const archive = filter.archive ?? "active";
   return rows.filter((r) => {
+    const archived = r.archivedAt != null;
+    if (archive === "active" && archived) return false;
+    if (archive === "archived" && !archived) return false;
     if (filter.status && r.status !== filter.status) return false;
     if (filter.routePattern && r.routePattern !== filter.routePattern) return false;
     if (filter.since && r.createdAt.getTime() < filter.since.getTime()) return false;
@@ -156,7 +186,14 @@ export function filterImprovements<T extends ImprovementRow>(rows: T[], filter: 
 
 /** 状態ごとの件数。0件の状態も0として必ず並べる (欠けた札を作らない)。 */
 export function countImprovementsByStatus(rows: ImprovementRow[]): Record<ImprovementStatus, number> {
-  const counts: Record<ImprovementStatus, number> = { open: 0, doing: 0, done: 0, dropped: 0 };
+  const counts: Record<ImprovementStatus, number> = {
+    open: 0,
+    doing: 0,
+    done: 0,
+    dropped: 0,
+    invalid: 0,
+    duplicate: 0,
+  };
   for (const r of rows) counts[r.status] += 1;
   return counts;
 }

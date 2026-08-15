@@ -776,6 +776,35 @@ export const improvementRequest = sqliteTable(
      * 途中で落ちても、一定時間で自然に空くようにする (取りかかった時刻で判断する)。
      */
     githubIssuingAt: integer("github_issuing_at", { mode: "timestamp_ms" }),
+    /**
+     * Issue に載せた内容の指紋 (タイトル + 本文 + ラベルのSHA-256)。
+     *
+     * 一括送信で何度押されても、これが一致する件は GitHub へ投げない。
+     * 空の更新は Issue の履歴と通知だけを増やし、読む人には何も足さない。
+     */
+    githubContentHash: text("github_content_hash"),
+    /**
+     * Issue へ最後に送った時点の値 (状況・対応メモなど) の控え。
+     * 指紋だけでは「変わった」ことしか分からず、コメントに何が変わったかを書けない。
+     */
+    githubSyncedFields: text("github_synced_fields"),
+    /** 最後に確かめた GitHub 側の状態。open / closed / missing (消された・見つからない)。 */
+    githubIssueState: text("github_issue_state"),
+    githubSyncedAt: integer("github_synced_at", { mode: "timestamp_ms" }),
+    /**
+     * 「重複」にしたときの親。どの要望と同じ話なのかを必ず指させる。
+     * 指し先が無い「重複」は、後から見た人には消されたのと変わらない。
+     */
+    duplicateOfId: text("duplicate_of_id"),
+    /**
+     * 廃棄した日時 (論理削除)。入っていれば一覧の既定表示から外れる。
+     *
+     * 状態 (status) と別の列にするのは、この2つが直交するため。
+     * 「見送りにして廃棄」も「未対応のまま廃棄」もあり、状態に混ぜると
+     * 戻すときに元が何だったか分からなくなる。
+     */
+    archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
+    archivedById: text("archived_by_id").references(() => user.id, { onDelete: "set null" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
@@ -787,6 +816,7 @@ export const improvementRequest = sqliteTable(
     index("improvement_request_created_idx").on(table.createdAt),
     index("improvement_request_status_idx").on(table.status, table.createdAt),
     index("improvement_request_route_idx").on(table.routePattern, table.createdAt),
+    index("improvement_request_archived_idx").on(table.archivedAt),
     // 並んで届いた再送も1件に収める最後の砦 (id の一致だけに頼らない)
     uniqueIndex("improvement_request_submission_idx").on(table.reporterId, table.submissionKey),
     // 1つの要望に Issue は1つ。押し損ねて2回押されても2本立たない
@@ -813,6 +843,35 @@ export const improvementDiagnostics = sqliteTable("improvement_diagnostics", {
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .notNull(),
 });
+
+/**
+ * 改善要望に対して行った操作の記録 (状態変更・廃棄・完全削除)。
+ *
+ * request_id に外部キーを張らない。張ると完全削除でこの行まで一緒に消え、
+ * 「いつ誰が何をなぜ消したか」が残らなくなる。消した記録が消えるのでは監査にならない。
+ */
+export const improvementAudit = sqliteTable(
+  "improvement_audit",
+  {
+    id: text("id").primaryKey(),
+    requestId: text("request_id").notNull(),
+    actorId: text("actor_id"),
+    /** 退職などで利用者が消えても「誰がやったか」を残す。 */
+    actorName: text("actor_name").notNull().default(""),
+    /** status_change / archive / restore / purge / issue_create / issue_update / issue_close */
+    action: text("action").notNull(),
+    fromStatus: text("from_status"),
+    toStatus: text("to_status"),
+    reason: text("reason"),
+    at: integer("at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [
+    index("improvement_audit_request_idx").on(table.requestId, table.at),
+    index("improvement_audit_at_idx").on(table.at),
+  ],
+);
 
 /** 改善要望に添えられた画面の写し (注釈・黒塗りを焼き込んだ後の1枚)。 */
 export const improvementShot = sqliteTable("improvement_shot", {

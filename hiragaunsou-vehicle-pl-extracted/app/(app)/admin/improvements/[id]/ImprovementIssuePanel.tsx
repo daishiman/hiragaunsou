@@ -31,33 +31,6 @@ export function ImprovementIssuePanel({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
-  if (issueNumber !== null) {
-    return (
-      <div className="card mt-3 px-4 py-4">
-        <p className="text-xs font-semibold text-ink">GitHub Issue</p>
-        <p className="mt-1 text-sm text-ink">
-          この要望は{" "}
-          {issueUrl ? (
-            <a
-              href={issueUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="font-semibold text-brand-deep underline"
-            >
-              Issue #{issueNumber}
-            </a>
-          ) : (
-            <span className="font-semibold">Issue #{issueNumber}</span>
-          )}{" "}
-          として起票済みです。
-        </p>
-        <p className="mt-1 text-xs text-ink-muted">
-          1つの要望に Issue は1つです。作り直したいときは、GitHub側で閉じてから相談してください。
-        </p>
-      </div>
-    );
-  }
-
   async function call(dryRun: boolean) {
     setBusy(true);
     setError(null);
@@ -78,6 +51,8 @@ export function ImprovementIssuePanel({
       if (dryRun && res.ok) {
         setDraft(json.body ?? "");
         setConfigured(json.configured ?? false);
+        // 「変わっていないので送らない」「対象外なので送らない」も、押す前に伝える。
+        if (json.message) setDone(json.message);
         return;
       }
       if (!res.ok) {
@@ -95,13 +70,37 @@ export function ImprovementIssuePanel({
     }
   }
 
+  const issued = issueNumber !== null;
+
   return (
     <div className="card mt-3 px-4 py-4">
-      <p className="text-xs font-semibold text-ink">GitHub Issue にする</p>
-      <p className="mt-0.5 text-xs text-ink-muted">
-        送信時の記録をまとめて、そのまま直しに取りかかれる形の Issue を作ります。
-        押す前に、外へ出る中身を下書きで確認できます。
+      <p className="text-xs font-semibold text-ink">
+        {issued ? "GitHub Issue" : "GitHub Issue にする"}
       </p>
+      {issued ? (
+        <p className="mt-1 text-sm text-ink">
+          この要望は{" "}
+          {issueUrl ? (
+            <a
+              href={issueUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="font-semibold text-brand-deep underline"
+            >
+              Issue #{issueNumber}
+            </a>
+          ) : (
+            <span className="font-semibold">Issue #{issueNumber}</span>
+          )}{" "}
+          として起票済みです。1つの要望に Issue は1つで、送り直しても2本目は立ちません
+          （内容が変わっていれば本文を更新し、何が変わったかをコメントで残します）。
+        </p>
+      ) : (
+        <p className="mt-0.5 text-xs text-ink-muted">
+          送信時の記録をまとめて、そのまま直しに取りかかれる形の Issue を作ります。
+          押す前に、外へ出る中身を下書きで確認できます。
+        </p>
+      )}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button
@@ -110,7 +109,7 @@ export function ImprovementIssuePanel({
           onClick={() => void call(true)}
           disabled={busy}
         >
-          下書きを見る（起票しない）
+          {issued ? "送る内容を確認する" : "下書きを見る（起票しない）"}
         </button>
         <button
           type="button"
@@ -118,7 +117,7 @@ export function ImprovementIssuePanel({
           onClick={() => void call(false)}
           disabled={busy || draft === null}
         >
-          {busy ? "処理中…" : "この内容で Issue にする"}
+          {busy ? "処理中…" : issued ? "この内容で Issue を更新する" : "この内容で Issue にする"}
         </button>
         {draft === null && !busy && (
           <span className="text-xs text-ink-muted">

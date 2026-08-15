@@ -59,8 +59,44 @@ export function shotPathOf(improvementId: string): string {
   return `improvement-shots/${improvementId}.jpg`;
 }
 
+/**
+ * GitHub 側の Issue の状態。missing は「消された・見つからない」。
+ * 消えた番号を持ち続けると、その要望は以後ずっと更新も作成もできなくなるため、
+ * 見つからないことを1つの状態として持つ。
+ */
+export type RemoteIssueState = "open" | "closed" | "missing";
+
+/** 混み合っているときに待つ時間。段階的に延ばす (すぐ叩き直すと余計に断られる)。 */
+const RETRY_WAIT_MS = [1_000, 4_000];
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export class GitHubIssueClient {
   constructor(private readonly config: GitHubIssueConfig) {}
+
+  /**
+   * GitHub へ1回投げる。混み合って断られたときだけ待って投げ直す。
+   *
+   * 一括で何十件も続けて投げると、GitHub は 429 や 403 (secondary rate limit) で
+   * 断ってくる。ここで待って投げ直さないと、一括の後半だけが理由もなく失敗する。
+   * ただし何度も粘らない。粘るほど制限は長くなるので、2回までにして、
+   * それでも駄目なら理由を持って上へ返す (握り潰さず行に出す)。
+   */
+  private async send(url: string, init: RequestInit): Promise<Response> {
+    for (let attempt = 0; ; attempt += 1) {
+      const res = await fetch(url, init);
+      const retryable =
+        res.status === 429 ||
+        (res.status === 403 && res.headers.get("x-ratelimit-remaining") === "0");
+      if (!retryable || attempt >= RETRY_WAIT_MS.length) return res;
+
+      const header = res.headers.get("retry-after");
+      const fromHeader = header && /^\d+$/.test(header) ? Number(header) * 1000 : 0;
+      // 待てと言われた時間が長すぎる場合は待たずに返す (画面を何分も止めない)。
+      if (fromHeader > 30_000) return res;
+      await sleep(Math.max(fromHeader, RETRY_WAIT_MS[attempt] ?? 1_000));
+    }
+  }
 
   private headers(): Record<string, string> {
     return {
@@ -108,8 +144,23 @@ export class GitHubIssueClient {
     }
   }
 
+  /** 応答の中身は外へ出さない。GitHub が返す文言をそのまま画面へ出すと余計なことまで見えてしまう。 */
+  private fail(status: number, what: string): GitHubIssueError {
+    const hint =
+      status === 401 || status === 403
+        ? "GitHubへの接続が断られました。トークンの権限と有効期限を確認してください。"
+        : status === 404
+          ? "起票先のリポジトリまたはIssueが見つかりません。設定を確認してください。"
+          : status === 422
+            ? "Issueの内容をGitHubが受け付けませんでした（ラベルが無い可能性があります）。"
+            : status === 429
+              ? "GitHubが混み合っています。少し時間をおいて、残りだけ送り直してください。"
+              : `GitHubへ${what}できませんでした。時間をおいてお試しください。`;
+    return new GitHubIssueError(hint, status);
+  }
+
   async create(draft: IssueDraft): Promise<IssuedResult> {
-    const res = await fetch(`https://api.github.com/repos/${this.config.repo}/issues`, {
+    const res = await this.send(`https://api.github.com/repos/${this.config.repo}/issues`, {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify({
@@ -119,24 +170,100 @@ export class GitHubIssueClient {
       }),
     });
 
-    if (!res.ok) {
-      // 応答の中身は外へ出さない。トークンの取り違えのときに、
-      // GitHub が返す文言をそのまま画面へ出すと余計なことまで見えてしまう。
-      const hint =
-        res.status === 401 || res.status === 403
-          ? "GitHubへの接続が断られました。トークンの権限と有効期限を確認してください。"
-          : res.status === 404
-            ? "起票先のリポジトリが見つかりません。設定を確認してください。"
-            : res.status === 422
-              ? "Issueの内容をGitHubが受け付けませんでした（ラベルが無い可能性があります）。"
-              : "GitHubへ起票できませんでした。時間をおいてお試しください。";
-      throw new GitHubIssueError(hint, res.status);
-    }
+    if (!res.ok) throw this.fail(res.status, "起票");
 
     const json = (await res.json()) as { number?: unknown; html_url?: unknown };
     if (typeof json.number !== "number" || typeof json.html_url !== "string") {
       throw new GitHubIssueError("GitHubの応答を読み取れませんでした。", 502);
     }
     return { number: json.number, url: json.html_url };
+  }
+
+  /**
+   * 立ててある Issue の本文を最新に置き換える。
+   *
+   * 消えている (404) ときだけ例外にせず null を返す。GitHub 側で消された Issue を
+   * 更新できないのは失敗ではなく、「立て直す必要がある」という事実だから。
+   */
+  async update(issueNumber: number, draft: IssueDraft): Promise<IssuedResult | null> {
+    const res = await this.send(
+      `https://api.github.com/repos/${this.config.repo}/issues/${issueNumber}`,
+      {
+        method: "PATCH",
+        headers: this.headers(),
+        body: JSON.stringify({ title: draft.title, body: draft.body, labels: draft.labels }),
+      },
+    );
+    if (res.status === 404 || res.status === 410) return null;
+    if (!res.ok) throw this.fail(res.status, "更新");
+    const json = (await res.json()) as { number?: unknown; html_url?: unknown };
+    if (typeof json.number !== "number" || typeof json.html_url !== "string") {
+      throw new GitHubIssueError("GitHubの応答を読み取れませんでした。", 502);
+    }
+    return { number: json.number, url: json.html_url };
+  }
+
+  /**
+   * 変更の内容を Issue のコメントとして残す。
+   *
+   * 失敗しても例外にしない。本文の更新は済んでいるので、開いた人は最新を読める。
+   * 履歴の一言が残らないことより、本文の更新まで失敗扱いにして送り直させる方が害が大きい。
+   */
+  async comment(issueNumber: number, body: string): Promise<boolean> {
+    try {
+      const res = await this.send(
+        `https://api.github.com/repos/${this.config.repo}/issues/${issueNumber}/comments`,
+        { method: "POST", headers: this.headers(), body: JSON.stringify({ body }) },
+      );
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Issue を閉じる。既に閉じているものへ投げても GitHub 側で何も起きない。 */
+  async close(issueNumber: number): Promise<boolean> {
+    const res = await this.send(
+      `https://api.github.com/repos/${this.config.repo}/issues/${issueNumber}`,
+      {
+        method: "PATCH",
+        headers: this.headers(),
+        body: JSON.stringify({ state: "closed", state_reason: "not_planned" }),
+      },
+    );
+    return res.ok;
+  }
+
+  /** Issue を開き直す。閉じたあとに「やっぱり直す」と決め直したときだけ使う。 */
+  async reopen(issueNumber: number): Promise<boolean> {
+    const res = await this.send(
+      `https://api.github.com/repos/${this.config.repo}/issues/${issueNumber}`,
+      {
+        method: "PATCH",
+        headers: this.headers(),
+        body: JSON.stringify({ state: "open" }),
+      },
+    );
+    return res.ok;
+  }
+
+  /**
+   * GitHub 側で今どうなっているかを見る。
+   * 読めなかったときは null を返し、呼び出し側が「分からない」まま進めるようにする
+   * (状態を確かめられないことを、起票そのものの失敗にしない)。
+   */
+  async state(issueNumber: number): Promise<RemoteIssueState | null> {
+    try {
+      const res = await this.send(
+        `https://api.github.com/repos/${this.config.repo}/issues/${issueNumber}`,
+        { method: "GET", headers: this.headers() },
+      );
+      if (res.status === 404 || res.status === 410) return "missing";
+      if (!res.ok) return null;
+      const json = (await res.json()) as { state?: unknown };
+      return json.state === "closed" ? "closed" : "open";
+    } catch {
+      return null;
+    }
   }
 }

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ImprovementBulkTable, type BulkRow } from "./ImprovementBulkTable";
+import { issueExclusionReason } from "../../../../src/domain/rules/improvementLifecycle";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../../src/infrastructure/auth/accessControl";
@@ -22,7 +24,6 @@ import {
 } from "../../../../src/domain/rules/improvement";
 import { AccessDenied } from "../../../_components/AccessDenied";
 import { ScreenHeader } from "../../../_components/ScreenHeader";
-import { Badge } from "../../../_components/Badge";
 import { dateTimeLabel } from "../../../_lib/format";
 
 /**
@@ -40,7 +41,7 @@ import { dateTimeLabel } from "../../../_lib/format";
 export default async function AdminImprovementsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; screen?: string; period?: string }>;
+  searchParams: Promise<{ status?: string; screen?: string; period?: string; archive?: string }>;
 }) {
   const session = await getServerSession();
   if (!session) redirect("/sign-in");
@@ -54,29 +55,80 @@ export default async function AdminImprovementsPage({
   const period: ImprovementPeriod =
     params.period && isImprovementPeriod(params.period) ? params.period : "all";
   const screen = params.screen ?? null;
+  // 既定は廃棄したものを隠す。押し間違いで廃棄したものを探せなくならないよう、
+  // 「廃棄したもの」に切り替えれば同じ表で見られて、そこから戻せる。
+  const archive: "active" | "archived" | "all" =
+    params.archive === "archived" || params.archive === "all" ? params.archive : "active";
 
   const { env } = await getCloudflareContext({ async: true });
   const all = await new D1ImprovementRepository(createDb(env.DB)).listAll();
 
-  const counts = countImprovementsByStatus(all);
-  const byScreen = groupImprovementsByScreen(all);
+  // 件数の札は、いま見えている範囲 (廃棄の扱い) に合わせて数える。
+  // 表に7件しか出ていないのに札が20件と言う状態を作らない。
+  const inScope = filterImprovements(all, { archive });
+  const counts = countImprovementsByStatus(inScope);
+  const byScreen = groupImprovementsByScreen(inScope);
   const rows = filterImprovements(all, {
     status,
     routePattern: screen,
     since: improvementPeriodStart(period, new Date()),
+    archive,
   });
 
-  const linkTo = (next: { status?: string | null; screen?: string | null; period?: string }) => {
+  const linkTo = (next: {
+    status?: string | null;
+    screen?: string | null;
+    period?: string;
+    archive?: string;
+  }) => {
     const q = new URLSearchParams();
     const s = next.status === undefined ? status : next.status;
     const sc = next.screen === undefined ? screen : next.screen;
     const p = next.period ?? period;
+    const a = next.archive ?? archive;
     if (s) q.set("status", s);
     if (sc) q.set("screen", sc);
     if (p !== "all") q.set("period", p);
+    if (a !== "active") q.set("archive", a);
     const query = q.toString();
     return query ? `/admin/improvements?${query}` : "/admin/improvements";
   };
+
+  // 表に渡す形。Date と重い値をここで文字にしておく (クライアントへは軽い形だけ渡す)。
+  const tableRows: BulkRow[] = rows.map((r) => {
+    const excluded = issueExclusionReason({ status: r.status, archivedAt: r.archivedAt });
+    // 「更新あり」は内容の指紋ではなく時刻で見る。一覧の判定のために
+    // 全件の診断情報を読み直すのは重すぎるため。実際に送るかどうかは
+    // 送信時に指紋で厳密に判定する (変わっていなければ何も送らない)。
+    const outdated =
+      r.githubIssueNumber !== null &&
+      r.githubSyncedAt !== null &&
+      r.updatedAt.getTime() > r.githubSyncedAt.getTime();
+    return {
+      id: r.id,
+      status: r.status,
+      statusLabel: improvementStatusLabel(r.status),
+      statusTone: improvementStatusTone(r.status),
+      screenLabel: r.screenLabel,
+      body: r.body,
+      reporterName: r.reporterName,
+      createdAtLabel: dateTimeLabel(r.createdAt.getTime()),
+      hasShot: r.hasShot,
+      archived: r.archivedAt !== null,
+      issueNumber: r.githubIssueNumber,
+      issueUrl: r.githubIssueUrl,
+      issueState: excluded ? "excluded" : outdated ? "outdated" : r.githubIssueNumber !== null ? "issued" : "none",
+      issueStateNote: excluded
+        ? excluded
+        : r.githubIssueNumber === null
+          ? "まだ送っていません"
+          : outdated
+            ? "送ったあとに更新あり"
+            : r.githubIssueState === "closed"
+              ? "起票済み（閉じています）"
+              : "起票済み",
+    };
+  });
 
   return (
     <div>
@@ -97,7 +149,7 @@ export default async function AdminImprovementsPage({
           {/* 1. 状態ごとの件数。0件の状態も欠かさず並べる (無い札を探させない) */}
           <div className="mt-4 flex flex-wrap gap-2">
             <FilterLink href={linkTo({ status: null })} active={status === null}>
-              すべて {all.length}件
+              すべて {inScope.length}件
             </FilterLink>
             {IMPROVEMENT_STATUSES.map((s) => (
               <FilterLink key={s} href={linkTo({ status: s })} active={status === s}>
@@ -106,13 +158,23 @@ export default async function AdminImprovementsPage({
             ))}
           </div>
 
-          {/* 期間 */}
+          {/* 期間と、廃棄したものの表示 */}
           <div className="mt-2 flex flex-wrap gap-2">
             {IMPROVEMENT_PERIODS.map((p) => (
               <FilterLink key={p} href={linkTo({ period: p })} active={period === p}>
                 {IMPROVEMENT_PERIOD_LABEL[p]}
               </FilterLink>
             ))}
+            <span className="mx-1 self-center text-xs text-ink-muted">|</span>
+            <FilterLink href={linkTo({ archive: "active" })} active={archive === "active"}>
+              廃棄を除く
+            </FilterLink>
+            <FilterLink href={linkTo({ archive: "archived" })} active={archive === "archived"}>
+              廃棄したものだけ
+            </FilterLink>
+            <FilterLink href={linkTo({ archive: "all" })} active={archive === "all"}>
+              廃棄も含める
+            </FilterLink>
           </div>
 
           {/* 2. どの画面に集まっているか。実URLではなく画面の単位で数える */}
@@ -134,41 +196,17 @@ export default async function AdminImprovementsPage({
             </div>
           </div>
 
-          {/* 3. 届いた本文。1件ずつ長さが違うので、表ではなく1件1枚で読ませる */}
-          <div className="mt-5 space-y-3">
-            {rows.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-line bg-white px-6 py-10 text-center text-sm text-ink-muted">
-                この絞り込みに当てはまるものはありません。上の条件を広げてください。
-              </p>
-            ) : (
-              rows.map((r) => (
-                <Link
-                  key={r.id}
-                  href={`/admin/improvements/${r.id}`}
-                  className="card block px-4 py-3 hover:bg-brand-mist"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge tone={improvementStatusTone(r.status)}>
-                      {improvementStatusLabel(r.status)}
-                    </Badge>
-                    <span className="text-xs font-semibold text-ink">{r.screenLabel}</span>
-                    {r.hasShot && <Badge tone="neutral">画像あり</Badge>}
-                    {/* 一覧で「もう上げた要望か」が分かると、同じものを二度上げずに済む */}
-                    {r.githubIssueNumber !== null && (
-                      <Badge tone="neutral">Issue #{r.githubIssueNumber}</Badge>
-                    )}
-                    <span className="ml-auto text-xs text-ink-muted">
-                      {r.reporterName || "利用者"}・{dateTimeLabel(r.createdAt.getTime())}
-                    </span>
-                  </div>
-                  <p className="mt-1.5 line-clamp-3 text-sm text-ink">{r.body}</p>
-                  {r.handledNote && (
-                    <p className="mt-1 text-xs text-ink-muted">対応メモ: {r.handledNote}</p>
-                  )}
-                </Link>
-              ))
-            )}
-          </div>
+          {/* 3. 届いた本文。まとめて Issue に送る・まとめて整理する作業をするので表で並べる */}
+          {rows.length === 0 ? (
+            <p className="mt-5 rounded-xl border border-dashed border-line bg-white px-6 py-10 text-center text-sm text-ink-muted">
+              この絞り込みに当てはまるものはありません。上の条件を広げてください。
+            </p>
+          ) : (
+            <ImprovementBulkTable
+              rows={tableRows}
+              canPurge={checkAccess(session, "purge_improvements")}
+            />
+          )}
         </>
       )}
     </div>
