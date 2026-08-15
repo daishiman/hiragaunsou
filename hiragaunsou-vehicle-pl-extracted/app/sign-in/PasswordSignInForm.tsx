@@ -25,6 +25,12 @@ export function PasswordSignInForm() {
       setPending(false);
       return;
     }
+    // ここは router.push ではなく、ページごと読み込み直す。
+    // サインインで初めてセッションの Cookie が付くため、読み込み直さないと
+    // 画面の枠 (サイドバー・権限による出し分け) が「まだ未ログイン」の状態のまま残る。
+    // 権限で出し分ける画面を未ログインの状態で描くと、見えてはいけないものが
+    // 一瞬見える・見えるべきものが出ない、のどちらかが起きる。
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- 上記の理由で全体の読み込み直しが要る
     window.location.href = "/";
   }
 

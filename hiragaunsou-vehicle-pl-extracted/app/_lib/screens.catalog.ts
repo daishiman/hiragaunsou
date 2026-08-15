@@ -446,6 +446,41 @@ export const SCREENS: readonly ScreenDef[] = [
     kind: "tool",
     permission: "manage_imports",
   },
+  {
+    href: "/admin/improvements",
+    label: "改善要望",
+    title: "改善要望（各画面から届いた「使いにくい」）",
+    desc: "各画面の右下から届いた改善要望を読み、対応状況を決める",
+    lead: "各画面の右下にある「改善要望」から届いた声を、画面ごとにまとめて確認します。読んだら対応状況（未対応・対応中・対応済み・見送り）を決めてください。",
+    does: "届いた要望を読み、直すかどうかを決める",
+    notHere: {
+      text: "数字の間違いの申し送りではありません。数字の確認は今月のToDoで行います。",
+      href: "/todo",
+      linkLabel: "今月のToDo",
+    },
+    group: "account",
+    kind: "tool",
+    permission: "manage_improvements",
+  },
+  {
+    href: "/admin/improvements/tokens",
+    label: "Claude Code に渡した鍵",
+    title: "Claude Code に渡した鍵（使えるもの・止めたもの）",
+    desc: "改善要望を Claude Code へ渡すときに作られた鍵を見て、要らないものを止める",
+    lead: "改善要望を Claude Code に渡すと、その件だけを読める期限つきの鍵が1つできます。いま使える鍵を確認し、渡す相手が変わったときは期限を待たずに止めます。",
+    does: "使わなくなった鍵を止める・全件を読める鍵を作る",
+    notHere: {
+      text: "要望そのものを読む・渡すのは改善要望の一覧です。",
+      href: "/admin/improvements",
+      linkLabel: "改善要望",
+    },
+    group: "account",
+    kind: "tool",
+    permission: "manage_improvements",
+    // 改善要望の一覧から開く続きの画面。単体でアカウントメニューに並べても
+    // 「鍵とは何か」が分からないため、サイドバーには出さない。
+    hiddenFromNav: true,
+  },
 
   // ── 直した内容の反映(最下部) ────────────────────────────
   {

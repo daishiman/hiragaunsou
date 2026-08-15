@@ -135,6 +135,7 @@ describe("サイドバーとアカウントメニューの振り分け", () => {
       "/ai-settings",
       "/admin/users",
       "/admin/import-batches",
+      "/admin/improvements",
     ]);
   });
 

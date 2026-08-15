@@ -27,18 +27,21 @@ function inventoryHref(pageFile: string): string {
 
 describe("内部画面inventory", () => {
   it("実在する全page.tsxとSCREENSが双方向に一致する", () => {
-    const fileSystemRoutes = pageFiles(APP_ROOT).map(inventoryHref).sort();
+    // 一覧と詳細が同じprefixに並ぶ画面 (例: /admin/improvements と
+    // /admin/improvements/[id]) は、台帳では1件として持つ。
+    // 詳細は一覧から開く続きであって、独立した行き先ではない。
+    const fileSystemRoutes = [...new Set(pageFiles(APP_ROOT).map(inventoryHref))].sort();
     const registeredRoutes = SCREENS.map((screen) => screen.href).sort();
 
     expect(registeredRoutes).toEqual(fileSystemRoutes);
-    expect(registeredRoutes).toHaveLength(23);
+    expect(registeredRoutes).toHaveLength(25);
   });
 
-  it("表示画面25面とredirect alias 1本の構成を固定する", () => {
+  it("表示画面27面とredirect alias 1本の構成を固定する", () => {
     const visibleExternalSurfaces = ["/sign-in", "not-found"] as const;
     const redirectAliases = ["/reset-password"] as const;
 
-    expect(SCREENS.length + visibleExternalSurfaces.length).toBe(25);
+    expect(SCREENS.length + visibleExternalSurfaces.length).toBe(27);
     expect(redirectAliases).toHaveLength(1);
   });
 });

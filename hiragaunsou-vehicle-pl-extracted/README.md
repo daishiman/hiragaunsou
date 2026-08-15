@@ -43,6 +43,31 @@ npm run deploy           # Cloudflareへデプロイ
   **Excel取込を後に実行した月は両者が同一値になり、差異が実際にはあっても「全N台が一致」と表示されます**(突合の空振り)。
   スキーマに書き込み元を持たせれば厳密化できますが、通常の運用順では起きないため制約として残しています。
 
+## 改善要望を Claude Code へ渡す
+
+管理画面の改善要望から、システム管理者の操作で **Claude Code 向けの指示文** を発行できます。
+外部サービスの設定は要りません(トークンの登録も不要です)。
+
+- 一覧で選んで「選んだものを Claude Code に渡す」、または詳細画面の「Claude Code に渡す」を押す
+- 発行と同時に、その件だけを読める **期限つきの鍵** (既定7日・最長30日) が1本できる
+- 画面に出る文をコピーして Claude Code に貼ると、`GET /api/instructions` を読んで直し始める
+
+| 入口 | 役割 |
+| --- | --- |
+| `GET /api/instructions` | 鍵の範囲をまとめて読む。既定は Markdown、`?format=json` で構造化 |
+| `GET /api/instructions/<id>` | 1件だけ読む |
+| `GET /api/instructions/shot/<id>?exp=&sig=` | 画面の写し。署名と期限が合ったときだけ配る(24時間) |
+
+守り:
+
+- 指示文は **鍵が無ければ1件も読めない**(`Authorization: Bearer <鍵>`)。鍵は発行済みの件だけを開ける
+- 鍵の平文は発行の応答1回きり。保存するのは指紋(SHA-256)だけで、管理画面には出ない
+- 鍵は一覧から即時に止められる(`/admin/improvements/tokens`)。要望を完全削除すると鍵も自動で止まる
+- 本文に混ざったメール・電話・カード番号・トークンらしい文字は伏せてから渡す
+- 画像の署名鍵は `BETTER_AUTH_SECRET` から導くため、追加のシークレットは不要
+
+利用者向けの手順は [Claude Code でこの改善要望を直す手順](docs/product/claude-code-improvement-guide.md) にあります。
+
 ## ドキュメント
 
 - [詳細要件定義書](docs/requirement.md)

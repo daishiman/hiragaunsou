@@ -50,6 +50,10 @@ export function ResetPasswordForm() {
     }
     setDone(true);
     setPending(false);
+    // ここは router.push ではなく、ページごと読み込み直す (サインインの画面と同じ理由)。
+    // パスワードを決めた直後に初めてセッションの Cookie が付くため、読み込み直さないと
+    // 画面の枠が「まだ未ログイン」の状態のまま残る。
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- 上記の理由で全体の読み込み直しが要る
     window.location.href = "/";
   }
 
