@@ -15,6 +15,7 @@
 export const IMPROVEMENT_STATUSES = [
   "open",
   "doing",
+  "review",
   "done",
   "dropped",
   "invalid",
@@ -25,6 +26,7 @@ export type ImprovementStatus = (typeof IMPROVEMENT_STATUSES)[number];
 const STATUS_LABEL: Record<ImprovementStatus, string> = {
   open: "未対応",
   doing: "対応中",
+  review: "レビュー待ち",
   done: "対応済み",
   dropped: "見送り",
   invalid: "誤作成",
@@ -40,8 +42,12 @@ export function improvementStatusLabel(status: ImprovementStatus): string {
  * 状態の札の色。色相は増やさない (docs/design-system.md §2) ので4つの中から選ぶ。
  * 色だけで意味を伝えないよう、札には必ず上の呼び名を一緒に出す。
  *   未対応   caution — 読んで判断が要る
- *   対応中/対応済み brand — 手が入っている・終わっている
+ *   対応中/レビュー待ち/対応済み brand — 手が入っている・終わっている
  *   見送り/誤作成/重複 neutral — 良し悪しではなく分類 (色で咎めない)
+ *
+ * レビュー待ちを brand に寄せるのは、これが「止まっている」ではなく
+ * 「直し終えて確認を待っている」状態だから。caution にすると、対応中より
+ * 先へ進んだのに札が後戻りして見え、一覧の並びと印象が食い違う。
  */
 export function improvementStatusTone(
   status: ImprovementStatus,
@@ -186,14 +192,12 @@ export function filterImprovements<T extends ImprovementRow>(rows: T[], filter: 
 
 /** 状態ごとの件数。0件の状態も0として必ず並べる (欠けた札を作らない)。 */
 export function countImprovementsByStatus(rows: ImprovementRow[]): Record<ImprovementStatus, number> {
-  const counts: Record<ImprovementStatus, number> = {
-    open: 0,
-    doing: 0,
-    done: 0,
-    dropped: 0,
-    invalid: 0,
-    duplicate: 0,
-  };
+  // 一覧を手で書き写さない。状態を1つ足したときに、ここだけ直し忘れて
+  // 「札は出るのに件数が数えられない」状態になるのを防ぐ。
+  const counts = Object.fromEntries(IMPROVEMENT_STATUSES.map((s) => [s, 0])) as Record<
+    ImprovementStatus,
+    number
+  >;
   for (const r of rows) counts[r.status] += 1;
   return counts;
 }

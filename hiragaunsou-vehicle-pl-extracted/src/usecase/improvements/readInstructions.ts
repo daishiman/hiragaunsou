@@ -7,7 +7,14 @@ import {
   buildInstruction,
   type StructuredInstruction,
 } from "../../domain/rules/improvementInstruction";
-import { hashAccessToken, tokenAllows, tokenRejection } from "../../domain/rules/instructionAccess";
+import {
+  hashAccessToken,
+  readRejection,
+  tokenActorName,
+  tokenAllows,
+  tokenRejection,
+} from "../../domain/rules/instructionAccess";
+import { applyHandoffEvent } from "../../domain/rules/instructionHandoff";
 import { type InstructionDeps, shotUrlFor } from "./publishInstructions";
 
 /**
@@ -28,11 +35,18 @@ export interface AuthorizedToken {
   record: InstructionTokenRecord;
 }
 
-/** 鍵を確かめる。断る理由は日本語で返す (Claude Code の画面にそのまま出る)。 */
+/**
+ * 鍵を確かめる。断る理由は日本語で返す (Claude Code の画面にそのまま出る)。
+ *
+ * need で「この口に必要な力」を指定する。read だけ持つ鍵で状態を変えに来た場合も、
+ * status:any だけ持つ鍵で指示文を読みに来た場合も、ここで止まる。
+ * 力の確認を口ごとに書き分けないのは、片方にだけ入った確認がもう片方から抜けるため。
+ */
 export async function authorizeToken(
   rawToken: string | null,
   tokens: InstructionTokenRepository,
   now: Date = new Date(),
+  need: "read" | "none" = "read",
 ): Promise<{ token: InstructionTokenRecord } | { error: string }> {
   if (!rawToken) {
     return { error: "鍵がありません。Authorization: Bearer <鍵> を付けて呼んでください。" };
@@ -40,6 +54,10 @@ export async function authorizeToken(
   const record = await tokens.findByHash(await hashAccessToken(rawToken));
   const rejection = tokenRejection(record, now);
   if (rejection !== null || !record) return { error: rejection ?? "この鍵は使えません。" };
+  if (need === "read") {
+    const denied = readRejection(record);
+    if (denied) return { error: denied };
+  }
   return { token: record };
 }
 
@@ -92,18 +110,33 @@ export async function readInstructions(
 
   if (fetched.length > 0) {
     await deps.repo.markFetched(fetched);
-    await deps.repo.appendAudit(
-      fetched.map((id) => ({
+
+    // 読み取ったことを鍵に紐づけて控える。「自分が取得した要望だけ状態を進められる」の
+    // 根拠になる記録なので、指示文を返す前ではなく返す確定後にまとめて書く。
+    await deps.tokens.recordClaims(token.id, fetched);
+
+    // 取りに来た時点で「対応中」にする。取得と着手のあいだに人の操作を挟むと、
+    // 直している最中の件が一覧では未対応のまま残り、二重に着手される。
+    const actorName = tokenActorName(token);
+    const audit: Parameters<typeof deps.repo.appendAudit>[0] = [];
+    for (const id of fetched) {
+      const before = byId.get(id)?.status;
+      const outcome = before ? applyHandoffEvent(before, "fetched") : null;
+      if (outcome?.nextStatus) {
+        await deps.repo.recordHandoff(id, { status: outcome.nextStatus });
+      }
+      audit.push({
         requestId: id,
         actorId: null,
         // 誰が読んだかは鍵の名前で残す。人ではなく鍵が読みに来るため。
-        actorName: `鍵: ${token.name || token.id}`,
+        actorName,
         action: "instruction_fetch" as const,
-        fromStatus: null,
-        toStatus: null,
-        reason: "Claude Code が指示文を読み取りました。",
-      })),
-    );
+        fromStatus: before ?? null,
+        toStatus: outcome?.nextStatus ?? null,
+        reason: outcome?.reason ?? "Claude Code が指示文を読み取りました。",
+      });
+    }
+    await deps.repo.appendAudit(audit);
     await deps.tokens.touch(token.id);
   }
 

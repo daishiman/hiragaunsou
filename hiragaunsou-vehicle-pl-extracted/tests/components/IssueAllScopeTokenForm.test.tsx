@@ -100,7 +100,7 @@ describe("IssueAllScopeTokenForm", () => {
     await userEvent.click(screen.getByRole("button", { name: "作る内容を確認する" }));
     await userEvent.click(screen.getByRole("button", { name: "この内容で鍵を作る" }));
 
-    const box = await screen.findByLabelText("Claude Code に貼る文");
+    const box = await screen.findByLabelText("開発者に渡す案内");
     expect((box as HTMLTextAreaElement).value).toBe(COMMAND);
     expect(screen.getByText(/発行済みのすべてを読める鍵が入っています/)).toBeTruthy();
     const shown = screen.queryAllByText(COMMAND);
@@ -121,6 +121,6 @@ describe("IssueAllScopeTokenForm", () => {
         screen.getByText("全件を読める鍵の有効期間は1日〜3日で指定してください。"),
       ).toBeTruthy(),
     );
-    expect(screen.queryByLabelText("Claude Code に貼る文")).toBeNull();
+    expect(screen.queryByLabelText("開発者に渡す案内")).toBeNull();
   });
 });

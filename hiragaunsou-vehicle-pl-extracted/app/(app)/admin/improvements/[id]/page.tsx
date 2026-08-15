@@ -119,6 +119,25 @@ export default async function AdminImprovementDetailPage({
               </dd>
             </div>
           )}
+          {item.prUrl && (
+            <div>
+              <dt className="inline font-semibold">直したときの確認依頼: </dt>
+              <dd className="inline">
+                {/*
+                  外部サイトへ出るリンクなので rel を付ける。番号だけを出すのは、
+                  URL をそのまま並べると一覧の行が読めなくなるため。
+                */}
+                <a
+                  href={item.prUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="text-brand-deep underline"
+                >
+                  #{item.prNumber ?? "—"} を開く
+                </a>
+              </dd>
+            </div>
+          )}
           {item.handledAt && (
             <div>
               <dt className="inline font-semibold">最後に決めた人: </dt>
@@ -219,4 +238,5 @@ const AUDIT_LABEL: Record<string, string> = {
   instruction_fetch: "Claude Code が指示文を読み込んだ",
   token_issue: "渡すための鍵を作った",
   token_revoke: "渡すための鍵を失効させた",
+  handoff: "直した結果が伝わってきた",
 };

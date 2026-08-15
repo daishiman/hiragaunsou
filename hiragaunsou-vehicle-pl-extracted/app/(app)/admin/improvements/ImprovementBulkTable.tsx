@@ -252,7 +252,7 @@ export function ImprovementBulkTable({ rows, canPurge }: { rows: BulkRow[]; canP
       await navigator.clipboard.writeText(handoff.command);
       setCopied(true);
     } catch {
-      setError("コピーできませんでした。下の文字を選んでコピーしてください。");
+      setError("コピーできませんでした。下の文字を選んで写してください。");
     }
   }
 
@@ -431,11 +431,11 @@ export function ImprovementBulkTable({ rows, canPurge }: { rows: BulkRow[]; canP
         </div>
       )}
 
-      {/* 渡し方。コピー1回・貼り付け1回で終わる形にする。
-          鍵の平文はここでしか出ない (保存しているのは指紋だけ)。 */}
+      {/* 渡し方。鍵の平文はここでしか出ない (保存しているのは指紋だけ)。
+          渡す相手は開発者ひとりで、預け先は 1Password。Claude の入力欄は通さない。 */}
       {handoff && (
         <div className="border-x border-line bg-subtle px-3 py-3">
-          <p className="text-sm font-semibold text-ink">下の文をコピーして、Claude Code に貼ってください</p>
+          <p className="text-sm font-semibold text-ink">下の案内を開発者に渡してください（Claude Code には貼りません）</p>
           <p className="mt-1 text-xs text-ink-muted">
             この文には鍵が入っています。いま渡した件だけが読めます。
             {handoff.expiresAt && `期限は ${new Date(handoff.expiresAt).toLocaleString("ja-JP")} です。`}
@@ -443,10 +443,10 @@ export function ImprovementBulkTable({ rows, canPurge }: { rows: BulkRow[]; canP
           </p>
           <textarea
             readOnly
-            className="mt-2 h-28 w-full rounded-[var(--radius-control)] border border-line bg-white p-2 font-mono text-[11px] text-ink"
+            className="mt-2 h-48 w-full rounded-[var(--radius-control)] border border-line bg-white p-2 font-mono text-[11px] text-ink"
             value={handoff.command}
             onFocus={(e) => e.currentTarget.select()}
-            aria-label="Claude Code に貼る文"
+            aria-label="開発者に渡す案内"
           />
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <button type="button" className="btn btn-primary pressable" onClick={() => void copyCommand()}>

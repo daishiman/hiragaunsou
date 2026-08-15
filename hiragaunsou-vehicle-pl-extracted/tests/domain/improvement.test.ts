@@ -137,7 +137,18 @@ describe("一覧の絞り込みと集計", () => {
   });
 
   it("0件の状態も欠かさず数える", () => {
-    expect(countImprovementsByStatus(rows)).toEqual({ open: 2, doing: 0, done: 1, dropped: 0, invalid: 0, duplicate: 0 });
+    // 状態を1つ足したら、ここも必ず落ちる。
+    // 「札は出るのに件数が数えられない」状態を見逃さないための落ち方なので、
+    // 足りない状態を書き足して直す (数え方の側を緩めない)。
+    expect(countImprovementsByStatus(rows)).toEqual({
+      open: 2,
+      doing: 0,
+      review: 0,
+      done: 1,
+      dropped: 0,
+      invalid: 0,
+      duplicate: 0,
+    });
   });
 
   it("実URLではなく画面の単位で数え、多い順に並べる", () => {

@@ -22,24 +22,32 @@ const {
   findManyByIdsMock,
   findShotMock,
   markFetchedMock,
+  recordHandoffMock,
+  findByIdMock,
   appendAuditMock,
   issueMock,
   listMock,
   findByHashMock,
   revokeMock,
   touchMock,
+  recordClaimsMock,
+  hasClaimMock,
   envMock,
 } = vi.hoisted(() => ({
   sessionMock: vi.fn(),
   findManyByIdsMock: vi.fn(async () => [] as unknown[]),
   findShotMock: vi.fn(async () => null as string | null),
   markFetchedMock: vi.fn(async () => {}),
+  recordHandoffMock: vi.fn(async () => {}),
+  findByIdMock: vi.fn(async () => null as unknown),
   appendAuditMock: vi.fn(async () => {}),
   issueMock: vi.fn(async () => {}),
   listMock: vi.fn(async () => [] as unknown[]),
   findByHashMock: vi.fn(async () => null as unknown),
   revokeMock: vi.fn(async () => true),
   touchMock: vi.fn(async () => {}),
+  recordClaimsMock: vi.fn(async () => {}),
+  hasClaimMock: vi.fn(async () => true),
   envMock: {
     DB: {},
     BETTER_AUTH_URL: "https://hiragaunsou-vehicle-pl.daishimanju.workers.dev",
@@ -57,6 +65,8 @@ class RepoMock {
   findManyByIds = findManyByIdsMock;
   findShot = findShotMock;
   markFetched = markFetchedMock;
+  recordHandoff = recordHandoffMock;
+  findById = findByIdMock;
   appendAudit = appendAuditMock;
 }
 vi.mock("../../src/infrastructure/db/D1ImprovementRepository", () => ({
@@ -70,6 +80,8 @@ class TokenRepoMock {
   revoke = revokeMock;
   touch = touchMock;
   revokeForRequests = vi.fn(async () => []);
+  recordClaims = recordClaimsMock;
+  hasClaim = hasClaimMock;
 }
 vi.mock("../../src/infrastructure/db/D1InstructionTokenRepository", () => ({
   D1InstructionTokenRepository: TokenRepoMock,
@@ -77,6 +89,7 @@ vi.mock("../../src/infrastructure/db/D1InstructionTokenRepository", () => ({
 
 import { hashAccessToken, signShotUrl } from "../../src/domain/rules/instructionAccess";
 import { shotSecretOf } from "../../src/usecase/improvements/instructionDeps";
+import { sanitizeClientDiagnostics } from "../../src/domain/rules/diagnostics";
 
 const adminSession = {
   id: "admin-1",
@@ -96,6 +109,8 @@ function tokenRecord(over: Record<string, unknown> = {}) {
     id: "tok_1",
     name: "2件を渡すための鍵",
     scopeIds: ["a", "b"],
+    abilities: ["read", "status:own"],
+    companyId: null,
     tokenHash: "hash",
     createdByName: "管理者",
     createdAt: new Date("2026-08-15T02:00:00.000Z"),
@@ -406,7 +421,7 @@ describe("/api/improvements/tokens（鍵を配る）", () => {
     expect(issueMock).not.toHaveBeenCalled();
   });
 
-  it("作った鍵の平文はこの応答だけ。保存するのは指紋で、貼れる形まで返す", async () => {
+  it("作った鍵の平文はこの応答だけ。保存するのは指紋で、預け方の案内まで返す", async () => {
     sessionMock.mockResolvedValue(adminSession);
     findManyByIdsMock.mockResolvedValue([row("a")]);
     const { POST } = await tokensRoute();
@@ -420,8 +435,10 @@ describe("/api/improvements/tokens（鍵を配る）", () => {
 
     expect(json.token.startsWith("hgcc_")).toBe(true);
     expect(json.masked.length).toBeLessThan(json.token.length);
-    expect(json.command).toContain(`${ORIGIN}/api/instructions`);
+    // 開発者が 1Password へ預けるまでの案内。鍵は入るが、Claude に貼る形にはしない
     expect(json.command).toContain(json.token);
+    expect(json.command).toContain("Claude Code に貼らないでください");
+    expect(json.command).not.toContain("curl");
     expect(json.scopeIds).toEqual(["a"]);
 
     // 保存側へ渡すのは指紋だけ
@@ -567,5 +584,125 @@ describe("画像の署名に使う鍵", () => {
   it("ログインの鍵そのままではなく、用途名を混ぜたものを使う", () => {
     expect(shotSecretOf(envMock)).toBe(`${SECRET}:improvement-shot`);
     expect(shotSecretOf({})).toBe(":improvement-shot");
+  });
+});
+
+/**
+ * 鍵で読む口を通しても、伏せ字が効いていること。
+ *
+ * 管理画面は「ログインした人しか見ない」前提で作れるが、この口の出口は Claude Code で、
+ * 返した文字はそのまま会話の履歴に残る。取り消す手段が無い以上、
+ * 管理画面と同じ強さでは足りず、**この経路でも確かに落ちていること** を別に固定する。
+ *
+ * 伏せ字は保存の時点で掛かる設計なので、ここでは実際の入り口と同じ
+ * sanitizeClientDiagnostics を通した値を読ませて、経路の途中で素の値へ
+ * 戻る箇所が無いことを見る。
+ */
+describe("鍵で読んだ指示文にも伏せ字が効く", () => {
+  /** 混ざり得るものを、混ざり方を変えて全部入れる。 */
+  const LEAKS = {
+    email: "tanaka.hanako@hiragaunsou.co.jp",
+    bearer: "Bearer sk-live-AbCdEfGhIjKlMnOpQrStUvWx",
+    jwt: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyMSJ9.SflKxwRJSMeKKF2QT4fwpM",
+    phone: "090-1234-5678",
+    card: "4111 1111 1111 1111",
+    password: "hunter2",
+  };
+
+  function ladenDiagnostics() {
+    const client = sanitizeClientDiagnostics({
+      referrer: `https://app.test/list?email=${LEAKS.email}&token=hgcc_LEAKED_TOKEN_VALUE_0001`,
+      build: { id: "abc123", commit: "abc123" },
+      environment: {
+        userAgent: `Mozilla/5.0 (${LEAKS.bearer})`,
+        browser: "Chrome 141",
+        os: "Windows 11",
+        viewport: "1440×900",
+        language: "ja",
+        timezone: "Asia/Tokyo",
+        online: true,
+      },
+      performance: { pageLoadMs: 820, medianApiMs: 120 },
+      console: [
+        { level: "error", at: "2026-08-15 10:00:00", text: `cookie: ${LEAKS.jwt}` },
+      ],
+      errors: [
+        {
+          at: "2026-08-15 10:00:00",
+          kind: "error",
+          message: `保存に失敗: password=${LEAKS.password} 連絡先 ${LEAKS.phone}`,
+          source: "app/(app)/vehicle/page.tsx",
+          stack: `at save (${LEAKS.email})`,
+        },
+      ],
+      network: [
+        {
+          method: "POST",
+          url: `https://app.test/api/save?token=hgcc_LEAKED_TOKEN_VALUE_0002`,
+          status: 500,
+          durationMs: 300,
+          at: "2026-08-15 10:00:00",
+          ok: false,
+          responseExcerpt: `{"owner":"${LEAKS.email}","card":"${LEAKS.card}"}`,
+        },
+      ],
+      slowApi: [],
+      breadcrumbs: [{ at: "2026-08-15 10:00:00", kind: "click", detail: LEAKS.email }],
+      notes: [],
+    });
+    return {
+      ...client,
+      occurredAt: { utc: "2026-08-15T01:00:00.000Z", jst: "2026-08-15 10:00:00 JST" },
+      screen: {
+        path: "/vehicle/1177",
+        routePattern: "/vehicle/[vehicleNo]",
+        label: "車両別の収支",
+        sourceFile: "app/(app)/vehicle/[vehicleNo]/page.tsx",
+      },
+      reporter: {
+        id: "u1",
+        name: "入力担当",
+        role: "input_staff",
+        companyId: "（1社専用のため会社IDなし）",
+      },
+    };
+  }
+
+  /** 落ちていること・跡が残っていることを、まとめて見る。 */
+  function expectMasked(body: string) {
+    for (const [name, value] of Object.entries(LEAKS)) {
+      expect(body, `${name} が素のまま返っています`).not.toContain(value);
+    }
+    // 鍵そのものの形も残らない
+    expect(body).not.toMatch(/hgcc_[A-Za-z0-9_-]{10,}/);
+    // 消した跡は残す。跡まで消すと「元から無かった」と読み違える
+    expect(body).toContain("[マスク");
+  }
+
+  it("1件だけ読む口でも落ちている", async () => {
+    findByHashMock.mockResolvedValue(tokenRecord());
+    findManyByIdsMock.mockResolvedValue([row("a", { diagnostics: ladenDiagnostics() })]);
+    const res = await (await oneRoute())(read("/api/instructions/a", "hgcc_x"), {
+      params: Promise.resolve({ id: "a" }),
+    });
+    expect(res.status).toBe(200);
+    expectMasked(await res.text());
+  });
+
+  it("まとめて読む口でも落ちている", async () => {
+    findByHashMock.mockResolvedValue(tokenRecord());
+    findManyByIdsMock.mockResolvedValue([row("a", { diagnostics: ladenDiagnostics() })]);
+    const res = await (await listRoute())(read("/api/instructions", "hgcc_x"));
+    expect(res.status).toBe(200);
+    expectMasked(await res.text());
+  });
+
+  it("format=json の構造化データでも落ちている（Markdown 以外の出口を塞ぐ）", async () => {
+    findByHashMock.mockResolvedValue(tokenRecord());
+    findManyByIdsMock.mockResolvedValue([row("a", { diagnostics: ladenDiagnostics() })]);
+    const res = await (await listRoute())(read("/api/instructions?format=json", "hgcc_x"));
+    expect(res.status).toBe(200);
+    // 形を問わず、返した文字の全部で見る
+    expectMasked(JSON.stringify(await res.json()));
   });
 });
