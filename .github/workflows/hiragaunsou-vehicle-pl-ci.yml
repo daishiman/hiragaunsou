@@ -35,46 +35,56 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # パッケージマネージャは pnpm 1本。手元と CI で別のものを使うと、依存を1つ足したとき
+      # 片方のロックファイルだけが更新され、手元の品質ゲートが全部通っているのに
+      # CI だけ install で落ちる (実際に起きた)。バージョンは package.json の
+      # packageManager から読ませ、ここには書かない (2箇所に持つと片方だけ古くなる)。
+      # アプリの package.json はリポジトリ直下ではなくサブフォルダにある。
+      # 場所を教えないと packageManager を読めず「pnpm のバージョンが分からない」で止まる。
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: hiragaunsou-vehicle-pl-extracted/package.json
+
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "npm"
-          cache-dependency-path: hiragaunsou-vehicle-pl-extracted/package-lock.json
+          cache: "pnpm"
+          cache-dependency-path: hiragaunsou-vehicle-pl-extracted/pnpm-lock.yaml
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Lint
-        run: npm run lint
+        run: pnpm run lint
 
       - name: Typecheck
-        run: npm run typecheck
+        run: pnpm run typecheck
 
       # coverageはthresholds(statements/branches/functions/lines 80%)を下回るとexit 1になるため、
       # PRゲートとしてそのまま利用する(vitest.config.tsのcoverage.thresholds参照)。
       - name: Test with coverage gate
-        run: npm run coverage
+        run: pnpm run coverage
 
       - name: Build for Cloudflare
-        run: npm run cf:build
+        run: pnpm run cf:build
 
       # OpenNext生成物を含むworker型を生成できることを検証する。
       # `--check` はRunnerごとのOpenNext出力差でハッシュが非決定的になるため使わず、
       # 型安全性は上記のTypecheckとCloudflare本番ビルドで担保する。
       - name: Generate Cloudflare types
-        run: npm run cf-typegen
+        run: pnpm run cf-typegen
 
       # 本番依存だけを対象に、High/Criticalの既知脆弱性をリリースゲートにする。
       - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=high
+        run: pnpm audit --prod --audit-level high
 
       - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       # セッションテーブル等が無いとgetServerSession()内のクエリ自体が失敗するため、
       # ローカルD1にもマイグレーションを適用してから起動する。
       - name: Apply D1 migrations (local, for E2E)
-        run: npm run db:migrate:local
+        run: pnpm run db:migrate:local
 
       # Google OAuth自体は呼ばない(招待経由のメール/パスワード作成パスでログイン後の画面も検証する)ため、
       # secretsはcreateAuth()の初期化が落ちないためのダミー値で足りる。
@@ -85,7 +95,7 @@ jobs:
       # 他のE2Eに埋めると「どこが壊れたのか」がログの中で埋もれる。
       # 検査器自身の数値判定は、最大・境界値を含む単体テストと100% coverageに固定する。
       - name: 文字重なり判定の境界値 (100% coverage)
-        run: npm run test:coverage:overlap-geometry
+        run: pnpm run test:coverage:overlap-geometry
 
       # 順番は通常E2Eより先。見た目が壊れているPRは、
       # その後の業務フローE2Eが終わるのを待たずに落とす。
@@ -95,7 +105,7 @@ jobs:
           BETTER_AUTH_URL: http://localhost:3000
           GOOGLE_CLIENT_ID: ci-dummy-client-id
           GOOGLE_CLIENT_SECRET: ci-dummy-client-secret
-        run: npm run test:e2e:overlap
+        run: pnpm run test:e2e:overlap
 
       # 重なり検査で失敗したとき、どう重なっていたのかを画像で残す
       # (失敗メッセージの文字だけでは、意図した重ねなのかの判断がつかないことがある)。
@@ -114,4 +124,4 @@ jobs:
           BETTER_AUTH_URL: http://localhost:3000
           GOOGLE_CLIENT_ID: ci-dummy-client-id
           GOOGLE_CLIENT_SECRET: ci-dummy-client-secret
-        run: npm run test:e2e -- --grep-invert @overlap
+        run: pnpm run test:e2e -- --grep-invert @overlap
