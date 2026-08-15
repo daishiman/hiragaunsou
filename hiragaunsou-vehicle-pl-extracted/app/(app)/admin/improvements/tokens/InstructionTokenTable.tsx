@@ -17,6 +17,8 @@ export interface TokenRow {
   id: string;
   name: string;
   scopeLabel: string;
+  /** その鍵にできること。読めない鍵 (CI用) があるので、範囲だけでは強さが分からない。 */
+  abilityLabel: string;
   createdLabel: string;
   expiresLabel: string;
   usageLabel: string;
@@ -106,6 +108,7 @@ export function InstructionTokenTable({ rows }: { rows: TokenRow[] }) {
               <th scope="col" className="px-3 py-2">状態</th>
               <th scope="col" className="px-3 py-2">鍵</th>
               <th scope="col" className="px-3 py-2">読める範囲</th>
+              <th scope="col" className="px-3 py-2">できること</th>
               <th scope="col" className="px-3 py-2">期限</th>
               <th scope="col" className="px-3 py-2">使われ方</th>
               <th scope="col" className="px-3 py-2" />
@@ -126,6 +129,7 @@ export function InstructionTokenTable({ rows }: { rows: TokenRow[] }) {
                   <p className="mt-0.5 font-normal text-[11px] text-ink-muted">{r.createdLabel}</p>
                 </td>
                 <td className="px-3 py-2 text-xs text-ink-muted">{r.scopeLabel}</td>
+                <td className="px-3 py-2 text-xs text-ink-muted">{r.abilityLabel}</td>
                 <td className="px-3 py-2 text-xs text-ink-muted">{r.expiresLabel}</td>
                 <td className="px-3 py-2 text-xs text-ink-muted">{r.usageLabel}</td>
                 <td className="px-3 py-2">

@@ -6,12 +6,18 @@
  * 指示文を読める鍵を手に入れられる状態を作らないため。
  */
 
+import type { TokenAbility } from "../rules/instructionAccess";
+
 /** 一覧に出す1件。平文の鍵は含まない (発行時以外はどこからも取り出せない)。 */
 export interface InstructionTokenSummary {
   id: string;
   name: string;
   /** 開けてよい要望の id。空配列なら発行済みのすべて。 */
   scopeIds: string[];
+  /** できること (read / status:own / status:any)。 */
+  abilities: TokenAbility[];
+  /** 属する会社。単一テナントのいまは必ず null (マルチテナント化時の焼き込み先)。 */
+  companyId: string | null;
   createdByName: string;
   createdAt: Date;
   expiresAt: Date;
@@ -36,7 +42,21 @@ export interface InstructionTokenRepository {
     createdById: string;
     createdByName: string;
     expiresAt: Date;
+    abilities: TokenAbility[];
+    /** 単一テナントのいまは null 固定。マルチテナント化時にここへ会社IDを入れる。 */
+    companyId: string | null;
   }): Promise<void>;
+
+  /**
+   * その鍵が指示文を読み取ったことを控える。
+   *
+   * 「自分が取得した要望だけ状態を進められる」の根拠になる記録。
+   * 同じ件を読み直しても増えないよう、既にあれば何もしない。
+   */
+  recordClaims(tokenId: string, requestIds: string[]): Promise<void>;
+
+  /** その鍵がその要望を読み取っているか。 */
+  hasClaim(tokenId: string, requestId: string): Promise<boolean>;
 
   /** 管理画面に出す一覧 (新しい順)。失効済みも含めて出す。 */
   list(): Promise<InstructionTokenSummary[]>;

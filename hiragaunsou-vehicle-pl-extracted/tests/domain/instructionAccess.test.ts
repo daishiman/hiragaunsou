@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   bearerTokenOf,
-  claudeCodeCommand,
+  tokenSetupNote,
   generateAccessToken,
   hashAccessToken,
   maskToken,
@@ -143,14 +143,24 @@ describe("bearerTokenOf", () => {
   });
 });
 
-describe("claudeCodeCommand（そのまま貼れる形）", () => {
-  it("取りに行く先と、してほしいことが1つの塊になっている", () => {
-    const command = claudeCodeCommand("https://example.workers.dev/", "hgcc_abc");
-    expect(command).toContain("https://example.workers.dev/api/instructions");
+describe("tokenSetupNote（鍵を手元に置いてもらう案内）", () => {
+  it("鍵の預け先と、設定ファイルに書く1行が分かる", () => {
+    const note = tokenSetupNote("https://example.workers.dev/", "hgcc_abc");
+    expect(note).toContain("hgcc_abc");
+    expect(note).toContain("1Password");
+    // 設定ファイルには鍵そのものではなく、在りかを書く
+    expect(note).toContain('HGCC_TOKEN="op://');
+    expect(note).toContain("https://example.workers.dev");
     // 末尾のスラッシュが二重にならない
-    expect(command).not.toContain("dev//api");
-    expect(command).toContain("Bearer hgcc_abc");
-    expect(command).toContain("受け入れ条件");
+    expect(note).not.toContain("dev//");
+  });
+
+  it("Claude に貼る文にはしない（貼れば鍵が履歴に残り、取り消せない）", () => {
+    const note = tokenSetupNote("https://example.workers.dev", "hgcc_abc");
+    expect(note).toContain("Claude Code に貼らないでください");
+    // 鍵を自分で付けて叩く形を教えない。教えると人がそのまま Claude へ渡す。
+    expect(note).not.toContain("curl");
+    expect(note).not.toContain("Bearer");
   });
 });
 

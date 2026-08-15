@@ -1,5 +1,13 @@
 import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  sqliteTable,
+  text,
+  integer,
+  real,
+  index,
+  uniqueIndex,
+  primaryKey,
+} from "drizzle-orm/sqlite-core";
 import { user } from "./auth-schema";
 
 /**
@@ -770,6 +778,15 @@ export const improvementRequest = sqliteTable(
      */
     archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
     archivedById: text("archived_by_id").references(() => user.id, { onDelete: "set null" }),
+    /**
+     * 直したときの確認依頼 (GitHub の Pull Request) の指し先。
+     *
+     * 状態が「レビュー待ち」「対応済み」でも、どの修正のことか辿れないと
+     * 「本当に直ったのか」を管理画面だけでは確かめられない。番号と URL を両方持つのは、
+     * 画面には短い番号を出し、リンク先は URL をそのまま使うため。
+     */
+    prUrl: text("pr_url"),
+    prNumber: integer("pr_number"),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
@@ -853,6 +870,20 @@ export const improvementAccessToken = sqliteTable(
     tokenHash: text("token_hash").notNull().unique(),
     /** 開けてよい要望の id (JSON配列)。空配列なら発行済みのすべて。 */
     scopeIds: text("scope_ids").notNull().default("[]"),
+    /**
+     * できること (JSON配列)。read / status:own / status:any の3つだけ。
+     * 既定を read だけにしてあるので、この列が入る前に発行された鍵は
+     * これまでどおり「読むだけ」になる (足した列で権限が増えない)。
+     */
+    abilities: text("abilities").notNull().default('["read"]'),
+    /**
+     * この鍵が属する会社の id。単一の会社しか扱っていないいまは必ず null。
+     *
+     * マルチテナントにするときに会社IDを焼き込むのは **ここ1点**。
+     * 発行時にセッションの会社IDを入れ、参照側は tokenCompanyRejection() で弾く
+     * (呼ぶ場所は instructionAccess.ts に用意済み)。
+     */
+    companyId: text("company_id"),
     createdById: text("created_by_id").references(() => user.id, { onDelete: "set null" }),
     createdByName: text("created_by_name").notNull().default(""),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
@@ -865,6 +896,31 @@ export const improvementAccessToken = sqliteTable(
     useCount: integer("use_count").notNull().default(0),
   },
   (table) => [index("improvement_access_token_expires_idx").on(table.expiresAt)],
+);
+
+/**
+ * その鍵が、どの要望の指示文を実際に読み取ったか。
+ *
+ * 「自分が取得した要望だけ状態を進められる」を、権限の文字列ではなく事実で決めるための表。
+ * 読んだ記録が無ければ状態を動かせないので、鍵の力の範囲が
+ * 「実際にやった仕事」と自動的に一致する。
+ *
+ * request_id に外部キーを張らないのは improvement_audit と同じ理由で、
+ * 要望を完全削除したあとも「その鍵が何を読んだか」を数えられるようにするため。
+ */
+export const improvementTokenClaim = sqliteTable(
+  "improvement_token_claim",
+  {
+    tokenId: text("token_id").notNull(),
+    requestId: text("request_id").notNull(),
+    claimedAt: integer("claimed_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.tokenId, table.requestId] }),
+    index("improvement_token_claim_request_idx").on(table.requestId),
+  ],
 );
 
 /**

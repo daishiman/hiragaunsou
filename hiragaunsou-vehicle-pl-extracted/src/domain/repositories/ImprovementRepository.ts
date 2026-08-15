@@ -38,6 +38,9 @@ export interface ImprovementListItem {
   archivedAt: Date | null;
   /** 「重複」にしたときのまとめ先。 */
   duplicateOfId: string | null;
+  /** 直したときの確認依頼 (PR) の指し先。まだ無ければ null。 */
+  prUrl: string | null;
+  prNumber: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -69,6 +72,12 @@ export interface ImprovementAuditEntry {
     | "instruction_fetch"
     | "token_issue"
     | "token_revoke"
+    /**
+     * 鍵から届いた出来事による状態変更 (PR作成・マージ・取り下げ)。
+     * status_change と分けるのは、人が判断して変えたのか、
+     * 起きたことをそのまま写しただけなのかを後から数え分けるため。
+     */
+    | "handoff"
     /** 保存期間を過ぎて、画面の写しと診断情報を自動で消した記録。 */
     | "retention_sweep";
   fromStatus: string | null;
@@ -116,6 +125,20 @@ export interface ImprovementRepository {
 
   /** Claude Code が読み取ったことを控える (取込済みにする)。 */
   markFetched(ids: string[]): Promise<void>;
+
+  /**
+   * 鍵から届いた出来事 (取得・PR作成・マージ・取り下げ) を要望に反映する。
+   *
+   * updateLifecycle と分けてあるのは、こちらの操作者が人ではなく鍵だから。
+   * 人の id (actorId) を必須にしている口に無理やり通すと、
+   * 「誰が閉じたのか」を後から見たときに人の仕業と見分けられなくなる。
+   *
+   * pr を undefined にすると控えを触らない。null を渡すと控えを消す。
+   */
+  recordHandoff(
+    id: string,
+    input: { status?: ImprovementStatus; pr?: { url: string; number: number } | null },
+  ): Promise<void>;
 
   /** 発行済みの指示文を取り下げる。読めなくなるが、版と記録は残す。 */
   withdrawInstruction(id: string): Promise<void>;

@@ -9,6 +9,7 @@ import { ScreenHeader } from "../../../../_components/ScreenHeader";
 import { dateTimeLabel } from "../../../../_lib/format";
 import { InstructionTokenTable, type TokenRow } from "./InstructionTokenTable";
 import { IssueAllScopeTokenForm } from "./IssueAllScopeTokenForm";
+import { IssueCiTokenForm } from "./IssueCiTokenForm";
 
 /**
  * /admin/improvements/tokens: Claude Code に渡した鍵の一覧 (システム管理者専用)。
@@ -34,7 +35,12 @@ export default async function InstructionTokensPage() {
   const rows: TokenRow[] = list.map((t) => ({
     id: t.id,
     name: t.name,
-    scopeLabel: t.scopeIds.length === 0 ? "発行済みのすべて" : `${t.scopeIds.length}件`,
+    scopeLabel: t.abilities.includes("read")
+      ? t.scopeIds.length === 0
+        ? "発行済みのすべて"
+        : `${t.scopeIds.length}件`
+      : "読めません",
+    abilityLabel: abilityLabelOf(t.abilities),
     createdLabel: `${t.createdByName}・${dateTimeLabel(t.createdAt.getTime())}`,
     expiresLabel: dateTimeLabel(t.expiresAt.getTime()),
     usageLabel:
@@ -68,6 +74,7 @@ export default async function InstructionTokensPage() {
 
       {/* 作る入口は一覧の前に置く。一覧の下に置くと、鍵が増えるほど遠ざかる */}
       <IssueAllScopeTokenForm />
+      <IssueCiTokenForm />
 
       {rows.length === 0 ? (
         <div className="mt-4 rounded-xl border border-dashed border-line bg-white px-6 py-12 text-center">
@@ -81,4 +88,16 @@ export default async function InstructionTokensPage() {
       )}
     </div>
   );
+}
+
+/**
+ * その鍵にできることを、日本語1行で言い切る。
+ *
+ * 「read」「status:own」のような内部の言葉は画面に出さない。この画面を見るのは
+ * システム管理者だが、判断に要るのは「何ができる鍵か」であって符号ではない。
+ */
+function abilityLabelOf(abilities: readonly string[]): string {
+  if (abilities.includes("status:any")) return "状態の更新だけ（GitHub Actions 用）";
+  if (abilities.includes("status:own")) return "読む／取得した件の状態を進める";
+  return "読むだけ";
 }

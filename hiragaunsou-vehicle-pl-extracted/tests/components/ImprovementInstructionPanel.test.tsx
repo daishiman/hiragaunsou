@@ -53,7 +53,7 @@ describe("ImprovementInstructionPanel", () => {
     renderPanel();
     expect(screen.getByRole("button", { name: "渡す文を確認する" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /発行/ })).toBeNull();
-    expect(screen.queryByLabelText("Claude Code に貼る文")).toBeNull();
+    expect(screen.queryByLabelText("開発者に渡す案内")).toBeNull();
   });
 
   it("確認すると、何が起きるかと外へ出る全文が出る（まだ鍵は出ない）", async () => {
@@ -70,7 +70,7 @@ describe("ImprovementInstructionPanel", () => {
     expect(screen.getByText(/合計が右端で切れています/)).toBeTruthy();
     expect(screen.getByText(/\/vehicle\/1177/)).toBeTruthy();
     // 鍵はまだどこにも無い。
-    expect(screen.queryByLabelText("Claude Code に貼る文")).toBeNull();
+    expect(screen.queryByLabelText("開発者に渡す案内")).toBeNull();
   });
 
   it("確認した内容で発行すると、鍵の入った文が1回だけ出て、下書きは片付く", async () => {
@@ -89,7 +89,7 @@ describe("ImprovementInstructionPanel", () => {
     await waitFor(() => screen.getByRole("button", { name: "この内容で発行して、渡す文を出す" }));
     await userEvent.click(screen.getByRole("button", { name: "この内容で発行して、渡す文を出す" }));
 
-    const box = await screen.findByLabelText("Claude Code に貼る文");
+    const box = await screen.findByLabelText("開発者に渡す案内");
     expect((box as HTMLTextAreaElement).value).toBe(COMMAND);
     // 鍵が出ている箇所はこの1つだけ。画面のどこかに二重に残さない。
     const shown = screen.queryAllByText(COMMAND);
@@ -116,7 +116,7 @@ describe("ImprovementInstructionPanel", () => {
     await userEvent.click(screen.getByRole("button", { name: "この内容で発行して、渡す文を出す" }));
 
     await waitFor(() => expect(screen.getByText("いま別の発行が動いています。")).toBeTruthy());
-    expect(screen.queryByLabelText("Claude Code に貼る文")).toBeNull();
+    expect(screen.queryByLabelText("開発者に渡す案内")).toBeNull();
   });
 
   it("通信できないときは、その旨を出して止まる", async () => {
