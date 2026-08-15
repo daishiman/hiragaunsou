@@ -1,21 +1,30 @@
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Db } from "./client";
-import { improvementAccessToken } from "./schema";
-import { chunkIdsForD1 } from "./d1Limits";
+import { improvementAccessToken, improvementTokenClaim } from "./schema";
+import { chunkForD1, chunkIdsForD1 } from "./d1Limits";
 import type {
   InstructionTokenRecord,
   InstructionTokenRepository,
   InstructionTokenSummary,
 } from "../../domain/repositories/InstructionTokenRepository";
-import { parseScopeIds } from "../../domain/rules/instructionAccess";
+import {
+  parseAbilities,
+  parseScopeIds,
+  type TokenAbility,
+} from "../../domain/rules/instructionAccess";
 
 type Row = typeof improvementAccessToken.$inferSelect;
+
+/** 読み取りの控えが1行あたり使うバインドの数 (values で並べる項目数と揃える)。 */
+export const CLAIM_COLUMNS = 2;
 
 function toSummary(r: Row): InstructionTokenSummary {
   return {
     id: r.id,
     name: r.name,
     scopeIds: parseScopeIds(r.scopeIds),
+    abilities: parseAbilities(r.abilities),
+    companyId: r.companyId,
     createdByName: r.createdByName,
     createdAt: r.createdAt,
     expiresAt: r.expiresAt,
@@ -43,16 +52,45 @@ export class D1InstructionTokenRepository implements InstructionTokenRepository 
     createdById: string;
     createdByName: string;
     expiresAt: Date;
+    abilities: TokenAbility[];
+    companyId: string | null;
   }): Promise<void> {
     await this.db.insert(improvementAccessToken).values({
       id: input.id,
       name: input.name,
       tokenHash: input.tokenHash,
       scopeIds: JSON.stringify(input.scopeIds),
+      abilities: JSON.stringify(input.abilities),
+      companyId: input.companyId,
       createdById: input.createdById,
       createdByName: input.createdByName,
       expiresAt: input.expiresAt,
     });
+  }
+
+  async recordClaims(tokenId: string, requestIds: string[]): Promise<void> {
+    if (requestIds.length === 0) return;
+    // 同じ件を読み直したときに主キーで落ちないよう、既にあれば何もしない。
+    // 「読んだ最初の時刻」を残したいので、上書きではなく無視にする。
+    const values = requestIds.map((requestId) => ({ tokenId, requestId }));
+    const statements = chunkForD1(values, CLAIM_COLUMNS).map((chunk) =>
+      this.db.insert(improvementTokenClaim).values(chunk).onConflictDoNothing(),
+    );
+    await this.db.batch(statements as unknown as Parameters<Db["batch"]>[0]);
+  }
+
+  async hasClaim(tokenId: string, requestId: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ requestId: improvementTokenClaim.requestId })
+      .from(improvementTokenClaim)
+      .where(
+        and(
+          eq(improvementTokenClaim.tokenId, tokenId),
+          eq(improvementTokenClaim.requestId, requestId),
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
   }
 
   async list(): Promise<InstructionTokenSummary[]> {

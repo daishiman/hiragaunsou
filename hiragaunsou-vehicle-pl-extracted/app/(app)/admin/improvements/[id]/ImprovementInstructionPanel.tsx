@@ -120,7 +120,7 @@ export function ImprovementInstructionPanel({
       await navigator.clipboard.writeText(handoff.command);
       setCopied(true);
     } catch {
-      setError("コピーできませんでした。下の文字を選んでコピーしてください。");
+      setError("コピーできませんでした。下の文字を選んで写してください。");
     }
   }
 
@@ -175,7 +175,7 @@ export function ImprovementInstructionPanel({
       {handoff && (
         <div className="mt-3 rounded-[var(--radius-control)] border border-line bg-subtle p-3">
           <p className="text-xs font-semibold text-ink">
-            下の文をコピーして、Claude Code に貼ってください
+            下の案内を開発者に渡してください（Claude Code には貼りません）
           </p>
           <p className="mt-1 text-[11px] text-ink-muted">
             この文には鍵が入っています。この1件だけが読めます。
@@ -185,10 +185,10 @@ export function ImprovementInstructionPanel({
           </p>
           <textarea
             readOnly
-            className="mt-2 h-28 w-full rounded-[var(--radius-control)] border border-line bg-white p-2 font-mono text-[11px] text-ink"
+            className="mt-2 h-48 w-full rounded-[var(--radius-control)] border border-line bg-white p-2 font-mono text-[11px] text-ink"
             value={handoff.command}
             onFocus={(e) => e.currentTarget.select()}
-            aria-label="Claude Code に貼る文"
+            aria-label="開発者に渡す案内"
           />
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <button

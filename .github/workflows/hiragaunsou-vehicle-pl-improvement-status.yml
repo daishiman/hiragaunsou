@@ -1,0 +1,78 @@
+name: hiragaunsou-vehicle-pl Improvement Status
+
+# 確認依頼(PR)が閉じられたとき、その PR が直した改善要望の状態を進める。
+#   マージされた   → 対応済み
+#   マージせず閉じた → 対応中へ戻す(まだ直っていないため)
+#
+# 人が管理画面を開いて押す運用にしない。押し忘れた件が「レビュー待ち」のまま残り、
+# 一覧が実態とずれていく。実際に起きたこと(マージ)をそのまま状態にする。
+#
+# どの要望を直した PR かは、PR の本文に書かれた要望の id (improve_… ) で判断する。
+# id が1つも書かれていない PR は、改善要望とは関係ない PR なので何もしない。
+on:
+  pull_request:
+    types: [closed]
+
+# 書き込みは一切しない。要望の状態更新は Cloudflare 側の API へ行う。
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 対象の改善要望を PR 本文から拾う
+        id: pick
+        env:
+          # 本文をシェルの中に直接展開しない(本文に任意の文字列が入るため)。
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          ids=$(printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" |
+            grep -o 'improve_[0-9a-f]\{24\}' | sort -u | tr '\n' ' ')
+          echo "ids=$ids" >> "$GITHUB_OUTPUT"
+          if [ -z "$ids" ]; then
+            echo "改善要望の id が本文に無いため、何もしません。"
+          else
+            echo "対象: $ids"
+          fi
+
+      - name: 要望の状態を進める
+        if: steps.pick.outputs.ids != ''
+        env:
+          # 状態を更新することしかできない鍵。指示文は読めない。
+          # 手元の開発者に渡す鍵とは別物で、こちらは GitHub Secrets に置く。
+          # 発行は管理画面の「GitHub Actions 用の鍵」から行う。
+          TOKEN: ${{ secrets.IMPROVEMENT_STATUS_TOKEN }}
+          APP_URL: ${{ secrets.IMPROVEMENT_APP_URL }}
+          IDS: ${{ steps.pick.outputs.ids }}
+          MERGED: ${{ github.event.pull_request.merged }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -u
+          if [ -z "${TOKEN:-}" ] || [ -z "${APP_URL:-}" ]; then
+            echo "::warning::IMPROVEMENT_STATUS_TOKEN / IMPROVEMENT_APP_URL が未設定のため、状態を更新しませんでした。"
+            exit 0
+          fi
+          if [ "$MERGED" = "true" ]; then event="pr_merged"; else event="pr_closed"; fi
+
+          failed=0
+          for id in $IDS; do
+            # -s と --fail-with-body で、鍵を含むヘッダを出さずに本文だけ見る。
+            # -v や -i は使わない(リクエストヘッダがログに出る)。
+            body=$(printf '{"event":"%s","prUrl":"%s"}' "$event" "$PR_URL")
+            if curl -sS --fail-with-body -X PATCH \
+                 -H "Authorization: Bearer $TOKEN" \
+                 -H "content-type: application/json" \
+                 -d "$body" \
+                 "$APP_URL/api/instructions/$id/status" > /tmp/out.json 2>/tmp/err.txt; then
+              echo "$id: $(cat /tmp/out.json)"
+            else
+              # 失敗の中身もそのまま出さない。鍵は本文に入らないが、
+              # curl のエラー出力にリクエストの情報が混じる形は避ける。
+              echo "::warning::$id の状態を更新できませんでした。"
+              failed=1
+            fi
+          done
+          # 1件失敗しても他は進める。全体を落とすと、直った件まで未更新のまま残る。
+          exit 0

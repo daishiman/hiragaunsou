@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { getTableColumns } from "drizzle-orm";
-import { improvementAudit, rawIngestion, reviewFlag, vehiclePl } from "../../src/infrastructure/db/schema";
+import {
+  improvementAudit,
+  improvementTokenClaim,
+  rawIngestion,
+  reviewFlag,
+  vehiclePl,
+} from "../../src/infrastructure/db/schema";
 import { chunkForD1, chunkIdsForD1, D1_MAX_BOUND_PARAMS } from "../../src/infrastructure/db/d1Limits";
 import { RAW_INGESTION_COLUMNS } from "../../src/infrastructure/db/D1ImportBatchRepository";
 import { REVIEW_FLAG_COLUMNS } from "../../src/infrastructure/db/D1ReviewFlagRepository";
 import { AUDIT_COLUMNS } from "../../src/infrastructure/db/D1ImprovementRepository";
+import { CLAIM_COLUMNS } from "../../src/infrastructure/db/D1InstructionTokenRepository";
 import {
   LIFECYCLE_BULK_MAX,
   PUBLISH_BULK_MAX,
@@ -55,6 +62,30 @@ describe("D1のバインドパラメータ予算", () => {
     const ids = Array.from({ length: RETENTION_SWEEP_MAX * 2 }, (_, i) => `improve_${i}`);
     for (const chunk of chunkIdsForD1(ids)) {
       expect(chunk.length).toBeLessThanOrEqual(D1_MAX_BOUND_PARAMS);
+    }
+  });
+
+  it("CLAIM_COLUMNS が improvement_token_claim の列数を超えない", () => {
+    // recordClaims は既定値を持つ claimed_at を省くため、完全一致はしない。
+    expect(CLAIM_COLUMNS).toBeLessThanOrEqual(columnCount(improvementTokenClaim));
+  });
+
+  it("鍵の範囲が全件でも、取得の控えは分けて入れる", () => {
+    // 全件を読める鍵で読むと、範囲は件数の上限を持たない。
+    // 分けずに入れると、要望が51件を超えた日から本番だけ落ちる。
+    const ids = Array.from({ length: 500 }, (_, i) => `improve_${i}`);
+    for (const chunk of chunkForD1(ids, CLAIM_COLUMNS)) {
+      expect(chunk.length * CLAIM_COLUMNS).toBeLessThanOrEqual(D1_MAX_BOUND_PARAMS);
+    }
+  });
+
+  it("読み取った印を付けるときも、SET の分を差し引いて分ける", () => {
+    // markFetched は id を where に並べ、加えて SET で2個使う。
+    // 差し引きを忘れると、ちょうど100件のときだけ落ちる。
+    const ids = Array.from({ length: 500 }, (_, i) => `improve_${i}`);
+    const SET_PARAMS = 2;
+    for (const chunk of chunkIdsForD1(ids, SET_PARAMS)) {
+      expect(chunk.length + SET_PARAMS).toBeLessThanOrEqual(D1_MAX_BOUND_PARAMS);
     }
   });
 

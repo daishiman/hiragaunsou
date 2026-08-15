@@ -48,6 +48,15 @@ export const TOKEN_ALL_SCOPE_REASON_MIN = 5;
  */
 export const ALL_SCOPE_AUDIT_ID = "(全件を読める鍵)";
 
+/**
+ * CI 用の鍵の記録を、どの要望に紐づけるか。
+ *
+ * この鍵も範囲を持たない (どの件でも状態だけは進められる)。同じ理由で、
+ * 決まった名前で1行残す。ここを空にすると、GitHub Secrets に置いた鍵が
+ * 「いつ誰が作ったか分からないまま動き続ける」ことになる。
+ */
+export const CI_TOKEN_AUDIT_ID = "(CIが状態を更新する鍵)";
+
 /** 全件を読める鍵を断る理由 (作ってよいなら null)。 */
 export function allScopeTokenRejection(input: { reason: string; days: number }): string | null {
   if (input.reason.trim().length < TOKEN_ALL_SCOPE_REASON_MIN) {
@@ -93,11 +102,65 @@ export function tokenExpiresAt(now: Date, days: number): Date {
   return new Date(now.getTime() + clamped * 24 * 60 * 60 * 1000);
 }
 
+/* ───────────────────────── 鍵にできること ───────────────────────── */
+
+/**
+ * 鍵に持たせる権限。この3つ以外は作らない。
+ *
+ *   read       … 指示文を読む
+ *   status:own … 自分が読み取った要望だけ、状態を進める (手元の開発者用)
+ *   status:any … 読まずに状態だけ進める (GitHub Actions 用)
+ *
+ * 「読む」と「書く」を1つにまとめないのが肝心なところ。CI に渡す鍵は
+ * PR がマージされたことを伝えるだけでよく、要望の中身 (利用者が書いた文・画面の写し) を
+ * 読める必要が無い。まとめてしまうと、GitHub Secrets が漏れた時点で
+ * 個人情報を含む指示文まで全部読まれる。
+ *
+ * status:own と status:any を分けるのも同じ理由で、手元の開発者用の鍵に
+ * 「触っていない要望まで閉じられる」力を持たせない。
+ */
+export const TOKEN_ABILITIES = ["read", "status:own", "status:any"] as const;
+export type TokenAbility = (typeof TOKEN_ABILITIES)[number];
+
+/** 手元の開発者に渡す鍵の既定。読んで、読んだ件だけ進められる。 */
+export const DEVELOPER_ABILITIES: TokenAbility[] = ["read", "status:own"];
+/** GitHub Actions に置く鍵。状態を進めることしかできない (指示文は読めない)。 */
+export const CI_ABILITIES: TokenAbility[] = ["status:any"];
+
+export function isTokenAbility(value: string): value is TokenAbility {
+  return (TOKEN_ABILITIES as readonly string[]).includes(value);
+}
+
+export function parseAbilities(raw: string | null): TokenAbility[] {
+  if (!raw) return ["read"];
+  try {
+    const v = JSON.parse(raw) as unknown;
+    if (!Array.isArray(v)) return ["read"];
+    const list = v.filter((x): x is TokenAbility => typeof x === "string" && isTokenAbility(x));
+    // 空になったら「読むだけ」に落とす。権限の列が壊れていたときに
+    // 何でもできる鍵になるのではなく、一番弱い鍵になる側へ倒す。
+    return list.length > 0 ? list : ["read"];
+  } catch {
+    return ["read"];
+  }
+}
+
 export interface TokenRecord {
   expiresAt: Date;
   revokedAt: Date | null;
   /** 開けられる要望の id。空なら「発行済みのすべて」。 */
   scopeIds: string[];
+  /** できること。既存の鍵 (列が無かった頃のもの) は読むだけとして扱う。 */
+  abilities: TokenAbility[];
+  /**
+   * この鍵が属する会社の id。
+   *
+   * いまは単一の会社しか扱っておらず、会社の表そのものが無いので必ず null。
+   * マルチテナントにするときに会社IDを焼き込むのは **ここ1点** で、
+   * 発行時にセッションの会社IDを入れ、参照側は tokenCompanyRejection() で弾く。
+   * 鍵ごとに会社を持たせておけば、要望の取り違えは「鍵が違う」で止まる。
+   */
+  companyId: string | null;
 }
 
 /** 鍵が使えない理由 (使えるなら null)。断る理由は必ず日本語で返す。 */
@@ -120,6 +183,53 @@ export function tokenAllows(token: TokenRecord, requestId: string): boolean {
   return token.scopeIds.length === 0 || token.scopeIds.includes(requestId);
 }
 
+/** 鍵が「読む」ことを許されているか (許されないなら理由を返す)。 */
+export function readRejection(token: TokenRecord): string | null {
+  if (token.abilities.includes("read")) return null;
+  return "この鍵では指示文を読めません（状態を進めるためだけの鍵です）。";
+}
+
+/**
+ * 鍵が「状態を進める」ことを許されているか。
+ *
+ * status:own の鍵は、自分がその要望の指示文を読み取っていることが条件。
+ * 読んでいない件まで閉じられると、手元の1本で他人の作業を「対応済み」にできてしまう。
+ * 読み取りの記録 (claim) を条件にすることで、権限の範囲が
+ * 「実際にやった仕事」と自動的に一致する。
+ */
+export function statusChangeRejection(token: TokenRecord, hasClaim: boolean): string | null {
+  if (token.abilities.includes("status:any")) return null;
+  if (!token.abilities.includes("status:own")) {
+    return "この鍵では状態を変えられません。";
+  }
+  if (!hasClaim) {
+    return "この鍵で取得していない要望です。指示文を取得してから状態を進めてください。";
+  }
+  return null;
+}
+
+/**
+ * 会社の境界。単一の会社しか無いいまは必ず通る。
+ *
+ * マルチテナント化のときは、要望側にも会社IDを持たせてここへ渡す。
+ * 呼ぶ場所を先に作っておくのは、後から「どこで確かめるか」を探し直すと
+ * 抜けが出るため (通っている道の上に置いておく)。
+ */
+export function tokenCompanyRejection(
+  token: TokenRecord,
+  requestCompanyId: string | null,
+): string | null {
+  if (token.companyId === null || requestCompanyId === null) return null;
+  if (token.companyId === requestCompanyId) return null;
+  return "この鍵では扱えない要望です。";
+}
+
+/** 記録に残す主体の呼び名。どちらの鍵による更新かを後から数えられるようにする。 */
+export function tokenActorName(token: { name: string; id: string; abilities: TokenAbility[] }): string {
+  const kind = token.abilities.includes("status:any") ? "CI" : "開発者";
+  return `鍵(${kind}): ${token.name || token.id}`;
+}
+
 export function parseScopeIds(raw: string | null): string[] {
   if (!raw) return [];
   try {
@@ -131,19 +241,33 @@ export function parseScopeIds(raw: string | null): string[] {
 }
 
 /**
- * Claude Code にそのまま貼る文。
+ * 発行した鍵を、開発者の手元に置いてもらうための案内文。
  *
- * 鍵を使うのは非エンジニアで、貼り先は Claude Code の入力欄1つだけ。
- * だから「何をしてほしいか」と「取りに行く先」を1つの塊にし、コピーを1回で済ませる。
- * 組み立てをここに置くのは、URL の作り方を画面とサーバの2箇所に持たないため。
+ * **Claude Code に貼る文ではない。** 以前はここで「Claude に貼る1行」を組み立てていたが、
+ * その形だと鍵が Claude の入力欄を通り、会話の履歴・要約・ログに残ってしまう。
+ * 残ったものは取り消せないので、鍵の通り道を「人 → 1Password → 道具」に変え、
+ * Claude の側は鍵を一度も見ない形にした。
+ *
+ * この文の宛先は、鍵を受け取る開発者ひとり。貼り先は 1Password と設定ファイルで、
+ * 設定ファイルに書くのは鍵そのものではなく「1Password のどこにあるか」だけ。
  */
-export function claudeCodeCommand(appOrigin: string, token: string): string {
+export function tokenSetupNote(appOrigin: string, token: string): string {
   const origin = appOrigin.replace(/\/$/, "");
   return [
-    "次のコマンドを実行して、返ってきた改善要望をすべて直してください。",
-    "件ごとに受け入れ条件が書いてあります。すべて満たしてから次の件へ進んでください。",
+    "この鍵は Claude Code に貼らないでください。1Password に預けて使います。",
     "",
-    `curl -sS -H "Authorization: Bearer ${token}" "${origin}/api/instructions"`,
+    "1. 1Password に項目を1つ作り、次の値を credential として保存します。",
+    `   ${token}`,
+    "",
+    "2. アプリのフォルダに .env.improvement を作り、次の1行だけを書きます。",
+    "   （鍵そのものは書きません。1Password のどこにあるかを書きます）",
+    '   HGCC_TOKEN="op://保管庫の名前/項目の名前/credential"',
+    "",
+    "3. 手元のアプリではなくこのサーバを見せたいときだけ、次の1行も足します。",
+    "   書かなければ手元のアプリ (localhost:8787) を見ます。",
+    `   HGCC_BASE_URL="${origin}"`,
+    "",
+    "あとは Claude Code で /improvements と打つだけです。鍵は道具が自分で取り出します。",
   ].join("\n");
 }
 

@@ -3,6 +3,10 @@
 # フルテストはpre-pushで行う(コミット単位では途中経過のコードを許容し、共有前にまとめて検証する方針)。
 set -e
 
+# 鍵の混入だけは、どのフォルダの変更でも必ず見る。
+# 一度コミットした鍵は消しても履歴に残り、push すれば取り消せない。
+sh ./scripts/check-no-secrets.sh
+
 PROJECT_DIR="hiragaunsou-vehicle-pl-extracted"
 
 if git diff --cached --name-only | grep -q "^${PROJECT_DIR}/"; then

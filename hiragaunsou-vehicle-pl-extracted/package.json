@@ -20,6 +20,7 @@
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "improvement": "sh ./scripts/improvement.sh",
     "test:e2e": "playwright test",
     "test:e2e:overlap": "playwright test --grep @overlap"
   },

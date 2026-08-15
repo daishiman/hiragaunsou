@@ -127,6 +127,9 @@ function makeRepo(rows: ImprovementDetail[]) {
     markFetched: vi.fn(async (ids: string[]) => {
       calls.push(`fetched:${ids.join(",")}`);
     }),
+    recordHandoff: vi.fn(async (id: string, input: { status?: string }) => {
+      calls.push(`handoff:${id}:${input.status ?? "-"}`);
+    }),
     appendAudit: vi.fn(async () => {
       calls.push("audit");
     }),
@@ -149,6 +152,8 @@ function tokenRecord(over: Partial<InstructionTokenRecord> = {}): InstructionTok
     id: "tok_1",
     name: "2件を渡すための鍵",
     scopeIds: ["a", "b"],
+    abilities: ["read", "status:own"],
+    companyId: null,
     tokenHash: "hash",
     createdByName: "管理者",
     createdAt: new Date("2026-08-15T02:00:00.000Z"),
@@ -164,8 +169,15 @@ function tokenRecord(over: Partial<InstructionTokenRecord> = {}): InstructionTok
 function makeTokens(record: InstructionTokenRecord | null) {
   const touch = vi.fn(async () => {});
   const findByHash = vi.fn(async () => record);
-  const tokens = { touch, findByHash } as unknown as InstructionTokenRepository;
-  return { tokens, touch, findByHash };
+  const recordClaims = vi.fn(async () => {});
+  const hasClaim = vi.fn(async () => true);
+  const tokens = {
+    touch,
+    findByHash,
+    recordClaims,
+    hasClaim,
+  } as unknown as InstructionTokenRepository;
+  return { tokens, touch, findByHash, recordClaims, hasClaim };
 }
 
 beforeEach(() => {
@@ -377,7 +389,9 @@ describe("readInstructions", () => {
     expect(audit.map((a) => a.action)).toEqual(["instruction_fetch", "instruction_fetch"]);
     // 読みに来るのは人ではなく鍵なので、actorId は残らず名前で追う
     expect(audit[0]?.actorId).toBeNull();
-    expect(audit[0]?.actorName).toBe("鍵: 2件を渡すための鍵");
+    // 「開発者」か「CI」かまで残す。どちらの主体が状態を動かしたのかを
+    // 後から数え分けられないと、CI が勝手に閉じた件を見つけられない。
+    expect(audit[0]?.actorName).toBe("鍵(開発者): 2件を渡すための鍵");
     expect(touch).toHaveBeenCalledWith("tok_1");
   });
 
