@@ -16,6 +16,12 @@ declare global {
      * この鍵を知っている人間だけがAPIキーを復号できるため、絶対に漏らさないこと。
      */
     API_KEY_ENCRYPTION_SECRET: string;
+    /**
+     * 改善要望に付いてくる画面の写しと診断情報を持ち続ける日数。
+     * 未設定なら90日 (RETENTION_DAYS_DEFAULT)。7〜365日の範囲外・読めない値は既定に倒す。
+     * 短くしたいときだけ設定する。要望の本文と対応の記録はこの設定では消えない。
+     */
+    IMPROVEMENT_RETENTION_DAYS?: string;
     /** /usage 概算費用計算用。未設定時はDEFAULT_USAGE_PRICING(Haiku 4.5相当)にフォールバックする */
     ANTHROPIC_PRICE_IN_USD_PER_M?: string;
     ANTHROPIC_PRICE_OUT_USD_PER_M?: string;

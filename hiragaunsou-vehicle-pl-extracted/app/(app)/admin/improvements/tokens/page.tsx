@@ -8,6 +8,7 @@ import { AccessDenied } from "../../../../_components/AccessDenied";
 import { ScreenHeader } from "../../../../_components/ScreenHeader";
 import { dateTimeLabel } from "../../../../_lib/format";
 import { InstructionTokenTable, type TokenRow } from "./InstructionTokenTable";
+import { IssueAllScopeTokenForm } from "./IssueAllScopeTokenForm";
 
 /**
  * /admin/improvements/tokens: Claude Code に渡した鍵の一覧 (システム管理者専用)。
@@ -64,6 +65,9 @@ export default async function InstructionTokensPage() {
         screen="/admin/improvements/tokens"
         lead={`改善要望を Claude Code に渡すと、その件だけを読める鍵が1つできます。いま使える鍵は${active}件です。渡す相手が変わったときや、貼り先を間違えたときは、期限を待たずにここで止めてください。止めた鍵では、その瞬間から1件も読めなくなります。`}
       />
+
+      {/* 作る入口は一覧の前に置く。一覧の下に置くと、鍵が増えるほど遠ざかる */}
+      <IssueAllScopeTokenForm />
 
       {rows.length === 0 ? (
         <div className="mt-4 rounded-xl border border-dashed border-line bg-white px-6 py-12 text-center">

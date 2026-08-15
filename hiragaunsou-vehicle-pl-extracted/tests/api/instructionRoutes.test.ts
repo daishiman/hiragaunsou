@@ -434,6 +434,65 @@ describe("/api/improvements/tokens（鍵を配る）", () => {
     const audit = appendAuditMock.mock.calls[0]?.[0] as unknown as { action: string }[];
     expect(audit.map((a) => a.action)).toEqual(["token_issue"]);
   });
+
+  /**
+   * 発行済みのすべてを読める鍵。
+   *
+   * 一番強い鍵なので、重みは画面ではなくここ (サーバ側) で掛ける。画面の作りだけで
+   * 止めていると、API を直に叩けば理由なし・長い期限の全件鍵が作れてしまう。
+   */
+  describe("発行済みのすべてを読める鍵", () => {
+    it("理由が短ければ作らない（後から「なぜ全件か」を辿れなくなる）", async () => {
+      sessionMock.mockResolvedValue(adminSession);
+      const { POST } = await tokensRoute();
+      const res = await POST(post({ ids: [], reason: "確認", days: 1 }));
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { message: string }).message).toContain("5文字以上");
+      expect(issueMock).not.toHaveBeenCalled();
+    });
+
+    it("期限が3日を超えるなら断る（黙って縮めない）", async () => {
+      sessionMock.mockResolvedValue(adminSession);
+      const { POST } = await tokensRoute();
+      const res = await POST(post({ ids: [], reason: "まとめて棚卸しするため", days: 7 }));
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { message: string }).message).toContain("3日");
+      expect(issueMock).not.toHaveBeenCalled();
+    });
+
+    it("期限を指定しなければ1日。範囲は空のまま作る", async () => {
+      sessionMock.mockResolvedValue(adminSession);
+      const { POST } = await tokensRoute();
+      const res = await POST(post({ ids: [], reason: "まとめて棚卸しするため" }));
+      expect(res.status).toBe(200);
+
+      const saved = issueMock.mock.calls[0]?.[0] as unknown as {
+        scopeIds: string[];
+        expiresAt: Date;
+      };
+      expect(saved.scopeIds).toEqual([]);
+      const hours = (saved.expiresAt.getTime() - Date.now()) / 3_600_000;
+      expect(hours).toBeGreaterThan(23);
+      expect(hours).toBeLessThanOrEqual(24);
+    });
+
+    it("紐づけ先の要望が無くても、作った記録は必ず1行残る", async () => {
+      sessionMock.mockResolvedValue(adminSession);
+      const { POST } = await tokensRoute();
+      await POST(post({ ids: [], reason: "まとめて棚卸しするため", days: 2 }));
+
+      const audit = appendAuditMock.mock.calls[0]?.[0] as unknown as {
+        requestId: string;
+        action: string;
+        reason: string;
+      }[];
+      expect(audit).toHaveLength(1);
+      expect(audit[0]!.action).toBe("token_issue");
+      expect(audit[0]!.requestId).toBe("(全件を読める鍵)");
+      // 書いた理由がそのまま記録に残る。
+      expect(audit[0]!.reason).toContain("まとめて棚卸しするため");
+    });
+  });
 });
 
 describe("/api/improvements/tokens/[id]（鍵を止める）", () => {

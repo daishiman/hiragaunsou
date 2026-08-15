@@ -299,7 +299,10 @@ GitHub Actionsで「PRを出すと自動でテストが走る」「mainにマー
 導いています(シークレットを増やすほど、登録し忘れて本番だけ落ちる箇所が増えるため)。
 
 以前あった `GITHUB_ISSUE_TOKEN` / `GITHUB_ISSUE_REPO` / `GITHUB_ISSUE_ATTACH_SHOT` は不要になりました。
-登録済みの場合は、使われないまま残しておく理由がないので消してください。
+**2026-08-15 に本番を確認したところ、この3つは登録されていませんでした**
+(本番にあるのは `BETTER_AUTH_SECRET` / `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` の3つだけ)。
+そのため、消す作業は要りません。もし別の環境に登録済みなら、使われないまま残しておく理由がないので
+次のコマンドで消してください。
 
 ```bash
 pnpm exec wrangler secret delete GITHUB_ISSUE_TOKEN

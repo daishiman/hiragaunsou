@@ -22,6 +22,43 @@ export const TOKEN_DEFAULT_DAYS = 7;
 /** 鍵に許す最長の寿命 (日)。これ以上は選べない。 */
 export const TOKEN_MAX_DAYS = 30;
 
+/**
+ * 「全件を読める鍵」だけに課す重み。
+ *
+ * 範囲を空にした鍵は、発行済みの要望をすべて開ける。1本漏れると全部が読まれるので、
+ * 渡した件だけの鍵と同じ手軽さで作れてはいけない。重みの付け方は次の2つにした。
+ *
+ *   - 期限を短くする … 既定1日・最長3日 (渡した件だけの鍵は既定7日・最長30日)
+ *   - 理由を必ず書かせる … 後から見た人が「なぜ全件なのか」を辿れる
+ *
+ * 押す手数をわざと増やすのではなく、残るもの (期限と理由) を増やす形にしている。
+ * 手数だけ増やしても、慣れれば素通りするだけで安全にはならない。
+ */
+export const TOKEN_ALL_SCOPE_DEFAULT_DAYS = 1;
+export const TOKEN_ALL_SCOPE_MAX_DAYS = 3;
+
+/** 全件を読める鍵の理由に求める最小の長さ。「対応」「確認」だけで通らない長さにする。 */
+export const TOKEN_ALL_SCOPE_REASON_MIN = 5;
+
+/**
+ * 全件を読める鍵の記録を、どの要望に紐づけるか。
+ *
+ * 範囲を持たない鍵なので、紐づけ先の要望が1件も無い。記録を書かないと
+ * 「一番強い鍵だけ記録が残らない」ことになるため、この決まった名前で残す。
+ */
+export const ALL_SCOPE_AUDIT_ID = "(全件を読める鍵)";
+
+/** 全件を読める鍵を断る理由 (作ってよいなら null)。 */
+export function allScopeTokenRejection(input: { reason: string; days: number }): string | null {
+  if (input.reason.trim().length < TOKEN_ALL_SCOPE_REASON_MIN) {
+    return `全件を読める鍵は、何のために作るのかを${TOKEN_ALL_SCOPE_REASON_MIN}文字以上で書いてください（記録に残ります）。`;
+  }
+  if (!Number.isFinite(input.days) || input.days < 1 || input.days > TOKEN_ALL_SCOPE_MAX_DAYS) {
+    return `全件を読める鍵の有効期間は1日〜${TOKEN_ALL_SCOPE_MAX_DAYS}日で指定してください。`;
+  }
+  return null;
+}
+
 export interface IssuedToken {
   /** 平文。発行の応答にだけ入れ、保存しない。 */
   token: string;

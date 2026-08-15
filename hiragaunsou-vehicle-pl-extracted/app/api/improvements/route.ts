@@ -27,6 +27,8 @@ import {
 } from "../../../src/domain/rules/diagnostics";
 import { isSameOriginRequest } from "../../_lib/assertSameOrigin";
 import { isAcceptableScreenPath, routeIdentityOf } from "../../_lib/routeIdentity";
+import { retentionDaysOf } from "../../../src/domain/rules/improvementRetention";
+import { sweepRetention } from "../../../src/usecase/improvements/sweepRetention";
 
 /**
  * 改善要望の受け口。
@@ -44,7 +46,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { env } = await getCloudflareContext({ async: true });
+  const { env, ctx } = await getCloudflareContext({ async: true });
   if (!isSameOriginRequest(request, env.BETTER_AUTH_URL)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -147,8 +149,9 @@ export async function POST(request: Request) {
           },
         };
 
+  let id: string;
   try {
-    const id = await repo.save({
+    id = await repo.save({
       reporterId: session.id,
       reporterName: session.name,
       submissionKey: input.submissionKey,
@@ -162,7 +165,6 @@ export async function POST(request: Request) {
       shotBytes: shot ? shotBytesOf(shot) : 0,
       diagnostics,
     });
-    return NextResponse.json({ id, message: "改善要望を送りました。ありがとうございます。" });
   } catch {
     // D1 の例外には画像の中身が含まれ得るため、そのまま外へ出さない。
     return NextResponse.json(
@@ -170,6 +172,30 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+
+  // 受け取れた回のついでに、保存期間を過ぎた写しと診断情報を落とす。
+  // 溜まるのは要望が届いたときだけなので、増える速さと掃除する速さが自然に釣り合う。
+  scheduleRetentionSweep(ctx, repo, env.IMPROVEMENT_RETENTION_DAYS);
+
+  return NextResponse.json({ id, message: "改善要望を送りました。ありがとうございます。" });
+}
+
+/**
+ * 掃除を裏で走らせる。送った人を待たせず、失敗しても送信は成功のままにする。
+ *
+ * 掃除がうまくいかなかったせいで「送れませんでした」と返るのは筋が違う
+ * (送った人には何の関係もない)。消し残しは次に要望が届いたときに続きから消える。
+ */
+function scheduleRetentionSweep(
+  ctx: { waitUntil?: (promise: Promise<unknown>) => void } | undefined,
+  repo: D1ImprovementRepository,
+  configuredDays: string | undefined,
+): void {
+  const sweeping = sweepRetention(repo, {
+    now: new Date(),
+    days: retentionDaysOf(configuredDays),
+  }).catch(() => undefined);
+  ctx?.waitUntil?.(sweeping);
 }
 
 /**

@@ -14,6 +14,10 @@ import {
   instructionStateLabel,
 } from "../../../../../src/domain/rules/improvementInstructionSync";
 import { publishExclusionReason } from "../../../../../src/domain/rules/improvementLifecycle";
+import {
+  retentionDaysOf,
+  retentionNoticeText,
+} from "../../../../../src/domain/rules/improvementRetention";
 import { AccessDenied } from "../../../../_components/AccessDenied";
 import { PageHead } from "../../../../_components/PageHead";
 import { Badge } from "../../../../_components/Badge";
@@ -149,6 +153,14 @@ export default async function AdminImprovementDetailPage({
       )}
 
       <DiagnosticsPanel d={item.diagnostics} />
+
+      {/*
+        いつ消えるかを、消える前に出しておく。あとから「あったはずの写しが無い」と
+        言われてから説明するより、見えている場所に置いておく方が早い。
+      */}
+      <p className="mt-2 text-[11px] text-ink-muted">
+        {retentionNoticeText(retentionDaysOf(env.IMPROVEMENT_RETENTION_DAYS))}
+      </p>
 
       <ImprovementInstructionPanel
         id={item.id}

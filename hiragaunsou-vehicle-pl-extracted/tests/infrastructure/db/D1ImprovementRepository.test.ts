@@ -472,4 +472,92 @@ describe("D1ImprovementRepository", () => {
       expect(detail?.duplicateOfId).toBeNull();
     });
   });
+
+  /**
+   * 保存期間を過ぎた写し・診断情報の掃除。
+   *
+   * 画面の写しには、映り込んだ数字も名前もそのまま残る。持ち続ける理由が無くなった
+   * 分から落としていくが、本文と記録まで消すと「何を直すと決めたか」が失われる。
+   * ここで固定するのは「重い方だけが消え、判断の跡は残る」こと。
+   */
+  describe("保存期間を過ぎた写し・診断情報の掃除", () => {
+    /** その要望の写し・診断情報を、指定の時刻に届いたことにする。 */
+    function ageAttachments(id: string, at: Date) {
+      for (const table of ["improvement_shot", "improvement_diagnostics"]) {
+        ctx.sqlite
+          .prepare(`UPDATE ${table} SET created_at = ? WHERE request_id = ?`)
+          .run(at.getTime(), id);
+      }
+    }
+
+    function withAttachments(over: Partial<ImprovementSubmission> = {}) {
+      return submission({
+        shot: SHOT,
+        shotBytes: 1234,
+        diagnostics: { version: 1, environment: { browser: "Chrome 141" } } as never,
+        ...over,
+      });
+    }
+
+    const CUTOFF = new Date("2026-08-15T00:00:00.000Z");
+
+    it("境目より前の写しと診断情報は、揃って消える", async () => {
+      const repo = new D1ImprovementRepository(ctx.db);
+      const id = await repo.save(withAttachments());
+      ageAttachments(id, new Date("2026-05-01T00:00:00.000Z"));
+
+      const swept = await repo.sweepExpiredAttachments(CUTOFF, 100);
+
+      expect(swept.requestIds).toEqual([id]);
+      expect(swept.shots).toBe(1);
+      expect(swept.diagnostics).toBe(1);
+      // 片方だけ残ると、消したつもりの手がかりが残る。
+      expect((await repo.findById(id))?.shot).toBeNull();
+      expect((await repo.findById(id))?.diagnostics).toBeNull();
+    });
+
+    it("消えるのは重い方だけで、本文と記録は残る", async () => {
+      const repo = new D1ImprovementRepository(ctx.db);
+      const id = await repo.save(withAttachments());
+      ageAttachments(id, new Date("2026-05-01T00:00:00.000Z"));
+
+      await repo.sweepExpiredAttachments(CUTOFF, 100);
+
+      const detail = await repo.findById(id);
+      expect(detail).not.toBeNull();
+      expect(detail?.body).toBe("合計が右端で切れています");
+    });
+
+    it("境目より後に届いた分は消さない", async () => {
+      const repo = new D1ImprovementRepository(ctx.db);
+      const id = await repo.save(withAttachments());
+      ageAttachments(id, new Date("2026-08-14T23:59:59.000Z"));
+
+      const swept = await repo.sweepExpiredAttachments(
+        new Date("2026-08-14T00:00:00.000Z"),
+        100,
+      );
+
+      expect(swept.requestIds).toEqual([]);
+      expect((await repo.findById(id))?.shot).toBe(SHOT);
+    });
+
+    it("1回に消す件数には上限があり、残りは次の回に持ち越す", async () => {
+      const repo = new D1ImprovementRepository(ctx.db);
+      const ids = [];
+      for (const key of ["key-1", "key-2", "key-3"]) {
+        const id = await repo.save(withAttachments({ submissionKey: key }));
+        ageAttachments(id, new Date("2026-05-01T00:00:00.000Z"));
+        ids.push(id);
+      }
+
+      const first = await repo.sweepExpiredAttachments(CUTOFF, 2);
+      expect(first.requestIds).toHaveLength(2);
+
+      const second = await repo.sweepExpiredAttachments(CUTOFF, 2);
+      expect(second.requestIds).toHaveLength(1);
+      // 3件とも、いずれかの回で消えている。
+      expect([...first.requestIds, ...second.requestIds].sort()).toEqual([...ids].sort());
+    });
+  });
 });

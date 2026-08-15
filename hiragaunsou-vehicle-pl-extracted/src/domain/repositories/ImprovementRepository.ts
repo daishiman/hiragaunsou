@@ -68,7 +68,9 @@ export interface ImprovementAuditEntry {
     /** Claude Code が指示文を読み取った記録。誰が読んだかは鍵の名前で残す。 */
     | "instruction_fetch"
     | "token_issue"
-    | "token_revoke";
+    | "token_revoke"
+    /** 保存期間を過ぎて、画面の写しと診断情報を自動で消した記録。 */
+    | "retention_sweep";
   fromStatus: string | null;
   toStatus: string | null;
   reason: string | null;
@@ -147,6 +149,18 @@ export interface ImprovementRepository {
    * 画像だけが残る・記録だけが残る状態を作らないよう、1つの batch で消す。
    */
   purge(ids: string[]): Promise<void>;
+
+  /**
+   * 保存期間を過ぎた分の、画面の写しと診断情報だけを消す (本文と記録は残す)。
+   *
+   * 完全削除と同じで、写しだけ残る・診断情報だけ残るという中途半端な状態を作らない。
+   * 同じ要望の2つを1つの batch で消し、消した要望の id を返す (記録を書くために使う)。
+   * limit で1回に扱う量を切る。残った分は次の掃除で続きから消える。
+   */
+  sweepExpiredAttachments(
+    cutoff: Date,
+    limit: number,
+  ): Promise<{ requestIds: string[]; shots: number; diagnostics: number }>;
 
   /** 操作の記録を残す。完全削除しても消えない表に書く。 */
   appendAudit(entries: ImprovementAuditEntry[]): Promise<void>;

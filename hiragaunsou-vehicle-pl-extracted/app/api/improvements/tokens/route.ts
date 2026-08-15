@@ -6,9 +6,12 @@ import { createDb } from "../../../../src/infrastructure/db/client";
 import { D1ImprovementRepository } from "../../../../src/infrastructure/db/D1ImprovementRepository";
 import { D1InstructionTokenRepository } from "../../../../src/infrastructure/db/D1InstructionTokenRepository";
 import {
+  ALL_SCOPE_AUDIT_ID,
+  allScopeTokenRejection,
   claudeCodeCommand,
   generateAccessToken,
   maskToken,
+  TOKEN_ALL_SCOPE_DEFAULT_DAYS,
   TOKEN_DEFAULT_DAYS,
   TOKEN_MAX_DAYS,
   tokenExpiresAt,
@@ -49,13 +52,24 @@ export async function POST(request: Request) {
   } catch {
     raw = {};
   }
-  const body = raw as { name?: unknown; ids?: unknown; days?: unknown };
+  const body = raw as { name?: unknown; ids?: unknown; days?: unknown; reason?: unknown };
   const name = typeof body.name === "string" ? body.name.trim().slice(0, 60) : "";
   const ids = Array.isArray(body.ids)
     ? body.ids.filter((v): v is string => typeof v === "string" && v.length > 0)
     : [];
-  const days = typeof body.days === "number" && Number.isFinite(body.days) ? body.days : TOKEN_DEFAULT_DAYS;
-  if (days < 1 || days > TOKEN_MAX_DAYS) {
+  const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 200) : "";
+  // 範囲が空なら「発行済みのすべてを読める鍵」。既定の期限も別に持つ。
+  const allScope = ids.length === 0;
+  const defaultDays = allScope ? TOKEN_ALL_SCOPE_DEFAULT_DAYS : TOKEN_DEFAULT_DAYS;
+  const days =
+    typeof body.days === "number" && Number.isFinite(body.days) ? body.days : defaultDays;
+
+  if (allScope) {
+    // 全件を読める鍵だけは、理由と短い期限をサーバ側で必ず確かめる。
+    // 画面の作りに頼ると、API を直に叩けば重みを外せることになる。
+    const rejection = allScopeTokenRejection({ reason, days });
+    if (rejection) return NextResponse.json({ message: rejection }, { status: 400 });
+  } else if (days < 1 || days > TOKEN_MAX_DAYS) {
     return NextResponse.json(
       { message: `鍵の有効期間は1日〜${TOKEN_MAX_DAYS}日で指定してください。` },
       { status: 400 },
@@ -95,19 +109,31 @@ export async function POST(request: Request) {
   });
 
   // 鍵を作ったこと自体も記録に残す。範囲に入れた要望それぞれに書く。
-  if (ids.length > 0) {
-    await repo.appendAudit(
-      ids.map((requestId) => ({
-        requestId,
-        actorId: session.id,
-        actorName: session.name ?? "管理者",
-        action: "token_issue" as const,
-        fromStatus: null,
-        toStatus: null,
-        reason: `鍵「${name || id}」を発行（期限 ${expiresAt.toISOString()}）`,
-      })),
-    );
-  }
+  // 全件を読める鍵は紐づけ先の要望が無いので、決まった名前で1行だけ残す
+  // (一番強い鍵の記録だけが残らない、という穴を作らないため)。
+  await repo.appendAudit(
+    allScope
+      ? [
+          {
+            requestId: ALL_SCOPE_AUDIT_ID,
+            actorId: session.id,
+            actorName: session.name ?? "管理者",
+            action: "token_issue" as const,
+            fromStatus: null,
+            toStatus: null,
+            reason: `発行済みのすべてを読める鍵「${name || id}」を発行（期限 ${expiresAt.toISOString()}）。理由: ${reason}`,
+          },
+        ]
+      : ids.map((requestId) => ({
+          requestId,
+          actorId: session.id,
+          actorName: session.name ?? "管理者",
+          action: "token_issue" as const,
+          fromStatus: null,
+          toStatus: null,
+          reason: `鍵「${name || id}」を発行（期限 ${expiresAt.toISOString()}）`,
+        })),
+  );
 
   return NextResponse.json({
     id,
