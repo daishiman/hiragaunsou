@@ -179,6 +179,22 @@ describe("acceptanceCriteriaOf（直ったと判定できる条件）", () => {
     expect(criteria.filter((c) => c.includes("正常に応答すること"))).toHaveLength(3);
   });
 
+  it("条件の中で場所を「上・下」で指さない（複数件を連結すると上下がずれるため）", () => {
+    for (const d of [
+      diagnostics({
+        errors: [{ kind: "uncaught", message: "boom", stack: null, source: null, at: "1" }],
+      }),
+      diagnostics({ network: [network({ status: 404 })] }),
+      diagnostics(),
+      null,
+    ]) {
+      for (const c of acceptanceCriteriaOf(detail(), d, instructionKindOf(d))) {
+        expect(c).not.toMatch(/[上下]の/);
+        expect(c).not.toContain("下に挙げた");
+      }
+    }
+  });
+
   it("使いやすさは、他の画面と作法を揃えることまで条件にする", () => {
     const criteria = acceptanceCriteriaOf(detail(), diagnostics(), "使いやすさ").join("\n");
     expect(criteria).toContain("入力の作法");

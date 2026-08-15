@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createTestDb } from "./testDbHelper";
+import { createTestDb, withBatchShim } from "./testDbHelper";
 import { D1InstructionTokenRepository } from "../../../src/infrastructure/db/D1InstructionTokenRepository";
 
 /**
@@ -33,7 +33,7 @@ describe("D1InstructionTokenRepository", () => {
   }
 
   beforeEach(() => {
-    ctx = createTestDb();
+    ctx = withBatchShim(createTestDb());
     repo = new D1InstructionTokenRepository(ctx.db);
   });
 

@@ -1,24 +1,14 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import { createTestDb } from "./testDbHelper";
+import { createTestDb, withBatchShim } from "./testDbHelper";
 import {
   D1ImprovementRepository,
   improvementRequestId,
 } from "../../../src/infrastructure/db/D1ImprovementRepository";
 import type { ImprovementSubmission } from "../../../src/domain/repositories/ImprovementRepository";
 
-/**
- * better-sqlite3 のドライバに `.batch()` は無いので、渡された文を順に流すだけの
- * 代役を置く。全部戻る／戻らないは D1 側の保証なのでここでは再現していない。
- * このテストで確かめるのは「本文と画像が1件として揃うか」という結果の方。
- */
+/** このテストで確かめるのは「本文と画像が1件として揃うか」という結果の方。 */
 function createDb() {
-  const ctx = createTestDb();
-  ctx.db.batch = async (statements: PromiseLike<unknown>[]) => {
-    const results: unknown[] = [];
-    for (const stmt of statements) results.push(await stmt);
-    return results;
-  };
-  return ctx;
+  return withBatchShim(createTestDb());
 }
 
 const SHOT = "data:image/png;base64,iVBORw0KGgo=";

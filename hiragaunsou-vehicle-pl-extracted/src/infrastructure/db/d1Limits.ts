@@ -25,3 +25,21 @@ export function chunkForD1<T>(rows: readonly T[], columnsPerRow: number): T[][] 
   }
   return chunks;
 }
+
+/**
+ * `WHERE id IN (…)` のような、id を1個ずつバインドする文のための分割。
+ *
+ * otherParams は同じ文の中で id 以外に使うバインドの数 (SET の値など)。
+ * これを数え忘れると、id だけ 100 個に収めたのに合計で上限を超える。
+ */
+export function chunkIdsForD1<T>(ids: readonly T[], otherParams = 0): T[][] {
+  const room = D1_MAX_BOUND_PARAMS - otherParams;
+  if (room < 1) {
+    throw new Error(
+      `id以外のバインドが${otherParams}個あり、D1の上限(${D1_MAX_BOUND_PARAMS})にidを入れる余地がありません。`,
+    );
+  }
+  const chunks: T[][] = [];
+  for (let i = 0; i < ids.length; i += room) chunks.push(ids.slice(i, i + room));
+  return chunks;
+}

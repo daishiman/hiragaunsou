@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Db } from "./client";
 import { improvementAccessToken } from "./schema";
+import { chunkIdsForD1 } from "./d1Limits";
 import type {
   InstructionTokenRecord,
   InstructionTokenRepository,
@@ -102,15 +103,19 @@ export class D1InstructionTokenRepository implements InstructionTokenRepository 
     });
     if (targets.length === 0) return [];
 
-    await this.db
-      .update(improvementAccessToken)
-      .set({ revokedAt: new Date(), revokedReason: reason })
-      .where(
-        inArray(
-          improvementAccessToken.id,
-          targets.map((r) => r.id),
-        ),
-      );
+    // 期限切れの鍵も revokedAt が空のまま残るため、対象は運用年数に応じて増える。
+    // D1 は1文に 100 個までしかバインドを取らない。SET で2個使うので、98本ずつ分ける。
+    const now = new Date();
+    const statements = chunkIdsForD1(
+      targets.map((r) => r.id),
+      2,
+    ).map((chunk) =>
+      this.db
+        .update(improvementAccessToken)
+        .set({ revokedAt: now, revokedReason: reason })
+        .where(inArray(improvementAccessToken.id, chunk)),
+    );
+    await this.db.batch(statements as unknown as Parameters<Db["batch"]>[0]);
     return targets.map((r) => r.name || r.id);
   }
 

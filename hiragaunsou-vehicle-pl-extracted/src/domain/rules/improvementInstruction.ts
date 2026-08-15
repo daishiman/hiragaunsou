@@ -139,12 +139,15 @@ export function acceptanceCriteriaOf(
   kind: InstructionKind,
 ): string[] {
   const criteria: string[] = [];
-  const steps = d?.breadcrumbs.length ? "下の再現手順" : `${item.screenLabel} を開く操作`;
+  // 条件の中で位置を「上／下」で指さない。指示文は1件ずつ渡すこともあれば
+  // 複数件を1つの文書に連結して渡すこともあり、連結すると上下の関係がずれる。
+  // 参照は見出しの名前で書き、どちらの渡し方でも同じ意味になるようにする。
+  const steps = d?.breadcrumbs.length ? "「再現手順」の操作" : `${item.screenLabel} を開く操作`;
 
   if (kind === "不具合") {
     if (d && d.errors.length > 0) {
       criteria.push(
-        `${steps}をたどっても、下に挙げた例外（${d.errors[0]?.message ?? "例外"}）が出ないこと`,
+        `${steps}をたどっても、例外（${d.errors[0]?.message ?? "例外"}）が出ないこと`,
       );
     }
     const failed = d?.network.filter((n) => n.status === null || n.status >= 500) ?? [];
@@ -163,7 +166,7 @@ export function acceptanceCriteriaOf(
     criteria.push("原因が利用者の入力にある場合は、何が足りないかを画面に日本語で出すこと");
   } else {
     criteria.push(
-      `${item.screenLabel} で、利用者が書いた不便（下の「利用者が書いたこと」）が解消していること`,
+      `${item.screenLabel} で、「利用者が書いたこと」に書かれた不便が解消していること`,
     );
     criteria.push(
       "入力の作法（空欄の意味・自動計算値の扱い・Enter の挙動）と、現在地・退避先の固定表示を、他の画面と揃えること",
@@ -173,7 +176,7 @@ export function acceptanceCriteriaOf(
   // どの種類でも共通。ここを外すと「直したつもり」が通ってしまう。
   criteria.push("直した内容を確かめるテストを追加し、直す前のコードでは落ちることを確認すること");
   criteria.push("`pnpm run typecheck` `pnpm run lint` `pnpm run test` がすべて通ること");
-  criteria.push("`pnpm run preview`（http://localhost:8787）で、上の再現手順をたどって直っていること");
+  criteria.push(`\`pnpm run preview\`（http://localhost:8787）で、${steps}をたどって直っていること`);
   return criteria;
 }
 
