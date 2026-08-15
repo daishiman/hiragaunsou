@@ -33,26 +33,32 @@
 - 元に戻す場合: アプリを直前のタグへ戻せば、要望の投稿口と管理画面は消える。追加した表は残るが、
   他の機能は一切参照していないため実害は無い（消す必要が出たときだけ、別のマイグレーションで落とす）。
 
-## 送信時の記録・GitHub Issue 起票の追加分 (2026-08-15)
+## 送信時の記録・Claude Code への引き渡しの追加分 (2026-08-15)
 
-- マイグレーションは `0023_add_improvement_diagnostics.sql` の1本。新しい表 `improvement_diagnostics` と、
-  `improvement_request` への列追加（`github_issue_number` / `github_issue_url` / `github_issued_at` /
-  `github_issued_by_id` / `github_issuing_at`）のみ。既存の列は変えていないため埋め戻しは不要。
+- マイグレーションは3本。`0023_add_improvement_diagnostics.sql`（新しい表 `improvement_diagnostics`）、
+  `0024_add_improvement_lifecycle.sql`（廃棄・重複のための列）、
+  `0025_replace_github_issue_with_instruction.sql`（GitHub 用の列を落とし、`improvement_instruction` と
+  `instruction_access_token` を追加）。既存の業務データの表・列は変えていないため埋め戻しは不要。
 - **ここでも順番はマイグレーション → デプロイで固定する。** 逆にすると、新しいアプリが存在しない列を読んで本番が落ちる。
-- 二重起票の防止は `github_issuing_at`（作業中の印、60秒で自然に切れる）と、
-  `github_issue_number` の一意索引の2段で行う。番号は GitHub に投げた後にしか分からないため、
-  「確認 → 起票 → 保存」だけでは同時押しを防げない。
-- `GITHUB_ISSUE_TOKEN` / `GITHUB_ISSUE_REPO` は**任意**。`wrangler.jsonc` の `secrets.required` には入れていない。
-  未設定でもデプロイは通り、「Issueにする」だけが理由つきで断られる。
-- 権限は起票先リポジトリの Issues: Read and write のみ（fine-grained token）。コード・リポジトリには置かず、
-  `wrangler secret put GITHUB_ISSUE_TOKEN` で登録する。取得先URL・必要権限・期限切れの注意・classic tokenの代替は
-  README、`docs/setup-guide-remaining-tasks.md` タスク8、管理画面の案内（`GitHubTokenGuide`）の3か所に同じ内容で書いてある。
-- 画面の写しをIssueへ貼るのは `GITHUB_ISSUE_ATTACH_SHOT=true` のときだけ（既定は貼らない）。
-  貼るにはトークンに Contents: Read and write も要るため、既定を「貼らない」にして最小権限のまま使えるようにしてある。
-  貼らない場合もIssueには管理画面の該当詳細ページへのリンクが必ず載る。
-- 集める量・保存する量・外へ出す量は別々に決めてある。Issueに出さないものは
-  氏名・メール・会社名・実URL・レスポンス本文・console全件（`src/domain/rules/improvementIssue.ts` の冒頭に列挙、テストで固定）。
+- 二重発行の防止は3段。①内容の指紋が同じなら実行しない ②60秒で切れる作業中の印（リース）
+  ③`improvement_instruction.request_id` を**主キー**にして、1要望1指示文を DB 側で保証する。
+  アプリの処理だけに頼らない（別タブ・再送で抜けるため）。
+- **追加のシークレットは無い。** `wrangler.jsonc` の `secrets.required` は
+  `BETTER_AUTH_SECRET` / `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` のまま。
+  画面の写しの署名鍵は `BETTER_AUTH_SECRET` に用途名を混ぜて導く（設定を1つ増やすたびに、
+  登録し忘れて本番だけ落ちる箇所が増えるため）。GitHub 連携で使っていた
+  `GITHUB_ISSUE_TOKEN` / `GITHUB_ISSUE_REPO` / `GITHUB_ISSUE_ATTACH_SHOT` は不要になった。
+  **登録済みの環境では `wrangler secret delete` で消すこと**（使われない鍵を残す理由が無い）。
+- 指示文の取得（`/api/instructions`）は**ログイン Cookie ではなく鍵**で通る唯一の口。無認証では1件も読めない。
+  鍵は「範囲つき（発行した件だけ）・期限つき（既定7日・最長30日）・いつでも失効できる」の3点で守る。
+  平文は発行の応答1回きりで、保存するのは指紋（SHA-256）だけ。
+- 画面の写しは自前の期限つき署名URL（24時間）で配る。画像を外のサービスへ置かない
+  （置いた瞬間に、消す権限も期限もこちらの手を離れる）。署名が違う・期限切れ・画像が無いはすべて同じ 404 を返す。
+- 集める量・保存する量・渡す量は別々に決めてある。指示文に出さないのは氏名・メール・実URL
+  （`src/domain/rules/improvementInstruction.ts` の冒頭に列挙、`tests/domain/improvementInstruction.test.ts` で固定）。
+  本文に混ざった値の形の秘密は `maskSensitive` を必ず通す。
 - 黒塗りは元画像へ焼き込む（`app/_lib/annotate.ts`）。元画像は送信も保存もしない。
   焼き込み後のピクセルから元が取れないことは `tests/lib/annotate.test.ts` で固定している。
-- 元に戻す場合: 直前のタグへ戻せば起票の操作と記録の表示が消える。既に立った Issue は GitHub 側に残る
-  （こちらから消さない。手で閉じる）。
+- 完全削除では、本文・写し・診断情報に加えて**発行済みの指示文とその件を読める鍵も無効化する**（記録は残す）。
+- 元に戻す場合: 直前のタグへ戻せば発行の操作と記録の表示が消える。すでに配った鍵は
+  `/admin/improvements/tokens` から止める（外部サービスには何も残らない）。
