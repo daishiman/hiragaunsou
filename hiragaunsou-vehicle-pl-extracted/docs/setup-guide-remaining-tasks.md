@@ -290,6 +290,37 @@ GitHub Actionsで「PRを出すと自動でテストが走る」「mainにマー
 
 ---
 
+## タスク8: 改善要望を Claude Code へ渡すための設定 → **設定作業なし**
+
+### 何をするか
+
+**何もしなくても使えます。** 改善要望を Claude Code に渡す機能は、外部サービスの設定を必要としません。
+指示文を読むための鍵は管理画面から発行し、画面の写しに使う署名鍵は既存の `BETTER_AUTH_SECRET` から
+導いています(シークレットを増やすほど、登録し忘れて本番だけ落ちる箇所が増えるため)。
+
+以前あった `GITHUB_ISSUE_TOKEN` / `GITHUB_ISSUE_REPO` / `GITHUB_ISSUE_ATTACH_SHOT` は不要になりました。
+**2026-08-15 に本番を確認したところ、この3つは登録されていませんでした**
+(本番にあるのは `BETTER_AUTH_SECRET` / `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` の3つだけ)。
+そのため、消す作業は要りません。もし別の環境に登録済みなら、使われないまま残しておく理由がないので
+次のコマンドで消してください。
+
+```bash
+pnpm exec wrangler secret delete GITHUB_ISSUE_TOKEN
+pnpm exec wrangler secret delete GITHUB_ISSUE_REPO
+pnpm exec wrangler secret delete GITHUB_ISSUE_ATTACH_SHOT
+```
+
+### 確認方法
+
+1. 改善要望の一覧で1件に印を付け、「選んだものを Claude Code に渡す」を押す。
+2. 「Claude Code に渡す文をそのまま読む」を開いて中身を確認し、「この内容で実行する」を押す。
+3. 出てきた文を「コピーする」で写し、Claude Code に貼る。要望が読み込まれれば成功です。
+4. 「Claude Code に渡した鍵を見る・止める」に、いま作った鍵が「使えます」で並びます。
+
+利用者向けの手順書: `docs/product/claude-code-improvement-guide.md`
+
+---
+
 ## 完了チェックリスト
 
 - [ ] タスク1: `WORKSPACE_DOMAINS`を実際のドメインに変更してpush(複数ドメインはカンマ区切りで追記可)
@@ -300,3 +331,4 @@ GitHub Actionsで「PRを出すと自動でテストが走る」「mainにマー
 - [ ] タスク5: 本番URLでのログイン・CSVインポートの動作確認
 - [ ] タスク6: PageSpeed Insightsでの表示速度計測
 - [x] タスク7: `hono`パッケージ削除
+- [x] タスク8: 改善要望を Claude Code へ渡す機能は設定作業なし(不要になった `GITHUB_ISSUE_*` は登録済みなら削除)

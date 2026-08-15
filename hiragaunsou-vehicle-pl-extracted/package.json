@@ -21,6 +21,7 @@
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "improvement": "sh ./scripts/improvement.sh",
     "test:e2e": "playwright test",
     "test:e2e:overlap": "playwright test --grep @overlap"
   },
@@ -34,6 +35,7 @@
     "encoding-japanese": "^2.2.0",
     "fflate": "^0.8.3",
     "jose": "^6.1.3",
+    "modern-screenshot": "^4.7.0",
     "next": "^16.2.12"
   },
   "devDependencies": {

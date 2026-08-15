@@ -17,6 +17,8 @@ import { signOut } from "../_lib/authClient";
 import { useHoverTooltip } from "./useHoverTooltip";
 import { IconButton } from "./IconButton";
 import { SidebarAccountMenu } from "./SidebarAccountMenu";
+import { FeedbackWidget } from "./FeedbackWidget";
+import { DiagnosticsRecorder } from "./DiagnosticsRecorder";
 
 /**
  * サイドバーを隠しているかどうかを覚えておくキー。
@@ -134,7 +136,9 @@ export function AppShell({ userName, userRole, role, badges, children }: AppShel
       <aside
         id="app-sidebar"
         className={[
-          "fixed inset-y-0 left-0 z-50 flex w-56 flex-col overflow-y-auto border-r border-line bg-white",
+          // app-sidebar は改善要望のスクリーンショットで「貼り付いて見えている位置」を
+          // 再現するための目印も兼ねる (FeedbackWidget が参照する)。
+          "app-sidebar fixed inset-y-0 left-0 z-50 flex w-56 flex-col overflow-y-auto border-r border-line bg-white",
           "transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0",
           navOpen ? "translate-x-0" : "-translate-x-full",
           // PCで隠しているときだけ消す。SPのオフキャンバスは今までどおり動く。
@@ -209,7 +213,7 @@ export function AppShell({ userName, userRole, role, badges, children }: AppShel
           高さを固定する。下に貼り付ける工程タブ (StickyStepHeader) が
           この高さを基準に位置を決めるため、中身によって伸び縮みすると重なる。
         */}
-        <header className="sticky top-0 z-30 flex h-[var(--app-header-h)] items-center gap-2 border-b border-line bg-white/95 px-4 backdrop-blur lg:px-6">
+        <header className="app-header sticky top-0 z-30 flex h-[var(--app-header-h)] items-center gap-2 border-b border-line bg-white/95 px-4 backdrop-blur lg:px-6">
           {/*
             サイドバーの開閉。幅によって「開閉するもの」が違うので2つ用意するが、
             画面に出るのは常にどちらか1つだけ。どちらも同じ位置の同じ大きさのアイコンで、
@@ -266,6 +270,18 @@ export function AppShell({ userName, userRole, role, badges, children }: AppShel
           <p>車両収支管理システム — 平賀運送</p>
         </footer>
       </div>
+
+      {/*
+        改善要望はここ1箇所だけに置く。画面ごとに置くと、置き忘れた画面が
+        「意見を出せない画面」になる (どの画面からでも同じ場所に出るのが大事)。
+      */}
+      <FeedbackWidget />
+
+      {/*
+        画面の裏で控えを始める。要望が届いてから「そのときエラーは出ていましたか」と
+        聞き直さずに済むよう、開いた瞬間から控える。
+      */}
+      <DiagnosticsRecorder />
     </div>
   );
 }
