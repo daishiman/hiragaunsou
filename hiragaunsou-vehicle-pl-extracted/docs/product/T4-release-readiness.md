@@ -32,3 +32,19 @@
   ブラウザ側で縮小・圧縮してから送るため、通常の画面1枚は 100〜300KB に収まる。
 - 元に戻す場合: アプリを直前のタグへ戻せば、要望の投稿口と管理画面は消える。追加した表は残るが、
   他の機能は一切参照していないため実害は無い（消す必要が出たときだけ、別のマイグレーションで落とす）。
+
+## 送信時の記録・GitHub Issue 起票の追加分 (2026-08-15)
+
+- マイグレーションは `0023_add_improvement_diagnostics.sql` の1本。新しい表 `improvement_diagnostics` と、
+  `improvement_request` への列追加（`github_issue_number` / `github_issue_url` / `github_issued_at` /
+  `github_issued_by_id` / `github_issuing_at`）のみ。既存の列は変えていないため埋め戻しは不要。
+- **ここでも順番はマイグレーション → デプロイで固定する。** 逆にすると、新しいアプリが存在しない列を読んで本番が落ちる。
+- 二重起票の防止は `github_issuing_at`（作業中の印、60秒で自然に切れる）と、
+  `github_issue_number` の一意索引の2段で行う。番号は GitHub に投げた後にしか分からないため、
+  「確認 → 起票 → 保存」だけでは同時押しを防げない。
+- `GITHUB_ISSUE_TOKEN` / `GITHUB_ISSUE_REPO` は**任意**。`wrangler.jsonc` の `secrets.required` には入れていない。
+  未設定でもデプロイは通り、「Issueにする」だけが理由つきで断られる。
+- 権限は起票先リポジトリの Issues: write のみ（fine-grained token）。コード・リポジトリには置かず、
+  `wrangler secret put GITHUB_ISSUE_TOKEN` で登録する。
+- 元に戻す場合: 直前のタグへ戻せば起票の操作と記録の表示が消える。既に立った Issue は GitHub 側に残る
+  （こちらから消さない。手で閉じる）。
