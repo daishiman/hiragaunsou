@@ -757,41 +757,6 @@ export const improvementRequest = sqliteTable(
     handledNote: text("handled_note"),
     handledAt: integer("handled_at", { mode: "timestamp_ms" }),
     /**
-     * GitHub へ起票したときの番号とURL。
-     * 「まだ起票していない」と「起票した」を1件の中で持つことで、
-     * 押すたびに Issue が増えるのを DB の側で止められる (画面の制御だけに頼らない)。
-     */
-    githubIssueNumber: integer("github_issue_number"),
-    githubIssueUrl: text("github_issue_url"),
-    githubIssuedAt: integer("github_issued_at", { mode: "timestamp_ms" }),
-    githubIssuedById: text("github_issued_by_id").references(() => user.id, {
-      onDelete: "set null",
-    }),
-    /**
-     * 起票の作業中を示す印 (取りかかった時刻)。
-     *
-     * 番号は GitHub から返ってきて初めて分かるので、番号の列だけでは
-     * 「GitHubへ投げている最中」を止められない。先にこの印を取った人だけが
-     * 投げられるようにして、二重起票を通信の前に断つ。
-     * 途中で落ちても、一定時間で自然に空くようにする (取りかかった時刻で判断する)。
-     */
-    githubIssuingAt: integer("github_issuing_at", { mode: "timestamp_ms" }),
-    /**
-     * Issue に載せた内容の指紋 (タイトル + 本文 + ラベルのSHA-256)。
-     *
-     * 一括送信で何度押されても、これが一致する件は GitHub へ投げない。
-     * 空の更新は Issue の履歴と通知だけを増やし、読む人には何も足さない。
-     */
-    githubContentHash: text("github_content_hash"),
-    /**
-     * Issue へ最後に送った時点の値 (状況・対応メモなど) の控え。
-     * 指紋だけでは「変わった」ことしか分からず、コメントに何が変わったかを書けない。
-     */
-    githubSyncedFields: text("github_synced_fields"),
-    /** 最後に確かめた GitHub 側の状態。open / closed / missing (消された・見つからない)。 */
-    githubIssueState: text("github_issue_state"),
-    githubSyncedAt: integer("github_synced_at", { mode: "timestamp_ms" }),
-    /**
      * 「重複」にしたときの親。どの要望と同じ話なのかを必ず指させる。
      * 指し先が無い「重複」は、後から見た人には消されたのと変わらない。
      */
@@ -819,10 +784,87 @@ export const improvementRequest = sqliteTable(
     index("improvement_request_archived_idx").on(table.archivedAt),
     // 並んで届いた再送も1件に収める最後の砦 (id の一致だけに頼らない)
     uniqueIndex("improvement_request_submission_idx").on(table.reporterId, table.submissionKey),
-    // 1つの要望に Issue は1つ。押し損ねて2回押されても2本立たない
-    // (SQLite の unique は NULL 同士を別物として扱うので、未起票は何件あってもよい)。
-    uniqueIndex("improvement_request_issue_idx").on(table.githubIssueNumber),
   ],
+);
+
+/**
+ * 改善要望から発行した、Claude Code 向けの指示文。
+ *
+ * 主キーを request_id にしてあるのが肝心なところ。「1つの要望に指示文は1つ」を
+ * アプリのロジックではなく DB が保証する。同時に2回押されても、2行目は入らない。
+ * 発行の権利 (publishing_at) もこの行で取るので、権利の取り合いも同じ表で決まる。
+ *
+ * 要望を完全削除すると、この行も一緒に消える (cascade)。指示文はアプリの中にしか
+ * 無いので、消してくれと言われたら本当に消せる。
+ */
+export const improvementInstruction = sqliteTable(
+  "improvement_instruction",
+  {
+    requestId: text("request_id")
+      .primaryKey()
+      .references(() => improvementRequest.id, { onDelete: "cascade" }),
+    /** 何版目か。内容が変わったときだけ上がる (同じ内容で押しても上がらない)。 */
+    version: integer("version").notNull().default(0),
+    /**
+     * 発行した内容の指紋 (見出し + 本文の SHA-256)。
+     * 一括発行で何度押されても、これが一致する件は何もしない。
+     */
+    hash: text("hash"),
+    /** published / fetched (Claude Code が取りに来た) / withdrawn (取り下げ)。 */
+    state: text("state").notNull().default("published"),
+    /**
+     * 最後に発行した時点の値 (状況・対応メモなど) の控え。
+     * 指紋だけでは「変わった」ことしか分からず、何が変わったかを書けない。
+     */
+    syncedFields: text("synced_fields"),
+    publishedAt: integer("published_at", { mode: "timestamp_ms" }),
+    publishedById: text("published_by_id").references(() => user.id, { onDelete: "set null" }),
+    /**
+     * 発行の作業中を示す印 (取りかかった時刻)。
+     * 途中で落ちても、一定時間で自然に空く (取りかかった時刻で判断する)。
+     */
+    publishingAt: integer("publishing_at", { mode: "timestamp_ms" }),
+    /** Claude Code が最後に読み取った時刻。 */
+    fetchedAt: integer("fetched_at", { mode: "timestamp_ms" }),
+    fetchCount: integer("fetch_count").notNull().default(0),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [index("improvement_instruction_state_idx").on(table.state, table.publishedAt)],
+);
+
+/**
+ * 指示文を読むための鍵。
+ *
+ * 平文は保存しない (token_hash だけ)。DB を読める人が鍵を使えてはいけないため。
+ * 範囲 (scope_ids) と期限 (expires_at) を必ず持たせる。「全部をいつまでも読める鍵」を
+ * 配ると、渡した先の管理がこちらの手を離れる。
+ */
+export const improvementAccessToken = sqliteTable(
+  "improvement_access_token",
+  {
+    id: text("id").primaryKey(),
+    /** 何のために発行したか (画面に出す覚え書き)。 */
+    name: text("name").notNull().default(""),
+    tokenHash: text("token_hash").notNull().unique(),
+    /** 開けてよい要望の id (JSON配列)。空配列なら発行済みのすべて。 */
+    scopeIds: text("scope_ids").notNull().default("[]"),
+    createdById: text("created_by_id").references(() => user.id, { onDelete: "set null" }),
+    createdByName: text("created_by_name").notNull().default(""),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+    revokedReason: text("revoked_reason"),
+    lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
+    useCount: integer("use_count").notNull().default(0),
+  },
+  (table) => [index("improvement_access_token_expires_idx").on(table.expiresAt)],
 );
 
 /**
@@ -858,7 +900,11 @@ export const improvementAudit = sqliteTable(
     actorId: text("actor_id"),
     /** 退職などで利用者が消えても「誰がやったか」を残す。 */
     actorName: text("actor_name").notNull().default(""),
-    /** status_change / archive / restore / purge / issue_create / issue_update / issue_close */
+    /**
+     * status_change / archive / restore / purge /
+     * instruction_publish / instruction_revise / instruction_withdraw / instruction_fetch /
+     * token_issue / token_revoke
+     */
     action: text("action").notNull(),
     fromStatus: text("from_status"),
     toStatus: text("to_status"),

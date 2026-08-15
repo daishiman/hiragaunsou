@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ImprovementBulkTable, type BulkRow } from "./ImprovementBulkTable";
-import { issueExclusionReason } from "../../../../src/domain/rules/improvementLifecycle";
+import { publishExclusionReason } from "../../../../src/domain/rules/improvementLifecycle";
+import {
+  displayStateOf,
+  instructionStateLabel,
+} from "../../../../src/domain/rules/improvementInstructionSync";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getServerSession } from "../../../../src/infrastructure/auth/session";
 import { checkAccess } from "../../../../src/infrastructure/auth/accessControl";
@@ -96,14 +100,11 @@ export default async function AdminImprovementsPage({
 
   // 表に渡す形。Date と重い値をここで文字にしておく (クライアントへは軽い形だけ渡す)。
   const tableRows: BulkRow[] = rows.map((r) => {
-    const excluded = issueExclusionReason({ status: r.status, archivedAt: r.archivedAt });
-    // 「更新あり」は内容の指紋ではなく時刻で見る。一覧の判定のために
-    // 全件の診断情報を読み直すのは重すぎるため。実際に送るかどうかは
-    // 送信時に指紋で厳密に判定する (変わっていなければ何も送らない)。
-    const outdated =
-      r.githubIssueNumber !== null &&
-      r.githubSyncedAt !== null &&
-      r.updatedAt.getTime() > r.githubSyncedAt.getTime();
+    // 状態の決め方は一覧・発行・取得で1箇所に寄せる (displayStateOf)。
+    // 画面側で条件を書き直すと、表の表示と実行結果が食い違う。
+    const state = displayStateOf(r);
+    const excluded = publishExclusionReason(r);
+    const version = r.instruction?.version ?? 0;
     return {
       id: r.id,
       status: r.status,
@@ -115,18 +116,9 @@ export default async function AdminImprovementsPage({
       createdAtLabel: dateTimeLabel(r.createdAt.getTime()),
       hasShot: r.hasShot,
       archived: r.archivedAt !== null,
-      issueNumber: r.githubIssueNumber,
-      issueUrl: r.githubIssueUrl,
-      issueState: excluded ? "excluded" : outdated ? "outdated" : r.githubIssueNumber !== null ? "issued" : "none",
-      issueStateNote: excluded
-        ? excluded
-        : r.githubIssueNumber === null
-          ? "まだ送っていません"
-          : outdated
-            ? "送ったあとに更新あり"
-            : r.githubIssueState === "closed"
-              ? "起票済み（閉じています）"
-              : "起票済み",
+      instructionState: state,
+      instructionStateLabel: instructionStateLabel(state),
+      instructionNote: instructionNoteOf(state, excluded, version),
     };
   });
 
@@ -136,6 +128,14 @@ export default async function AdminImprovementsPage({
         screen="/admin/improvements"
         lead={`各画面の右下から届いた声です。全${all.length}件のうち、未対応が${counts.open}件あります。`}
       />
+
+      {/* 渡した鍵の管理はここからしか辿れない。渡す操作と同じ画面に置くと、
+          渡すたびに目に入って本来の作業 (直すものを決める) の邪魔になる */}
+      <div className="mt-1">
+        <Link href="/admin/improvements/tokens" className="text-xs text-brand-deep underline">
+          Claude Code に渡した鍵を見る・止める
+        </Link>
+      </div>
 
       {all.length === 0 ? (
         <div className="rounded-xl border border-dashed border-line bg-white px-6 py-12 text-center">
@@ -196,7 +196,7 @@ export default async function AdminImprovementsPage({
             </div>
           </div>
 
-          {/* 3. 届いた本文。まとめて Issue に送る・まとめて整理する作業をするので表で並べる */}
+          {/* 3. 届いた本文。まとめて Claude Code に渡す・まとめて整理するので表で並べる */}
           {rows.length === 0 ? (
             <p className="mt-5 rounded-xl border border-dashed border-line bg-white px-6 py-10 text-center text-sm text-ink-muted">
               この絞り込みに当てはまるものはありません。上の条件を広げてください。
@@ -211,6 +211,23 @@ export default async function AdminImprovementsPage({
       )}
     </div>
   );
+}
+
+/**
+ * 指示文の列に添える一言。状態の名前だけでは「次に何をすればいいか」が分からないので、
+ * 対象外はその理由を、発行済みは版を出す。
+ */
+function instructionNoteOf(
+  state: ReturnType<typeof displayStateOf>,
+  excluded: string | null,
+  version: number,
+): string {
+  if (state === "excluded") return excluded ?? "渡す対象ではありません";
+  if (state === "done") return "対応が終わっています";
+  if (state === "none") return "まだ渡していません";
+  if (state === "outdated") return `v${version} を渡したあとに内容が変わりました`;
+  if (state === "fetched") return `v${version} を Claude Code が読み込みました`;
+  return `v${version} を渡し済み（まだ読まれていません）`;
 }
 
 /** 絞り込みの札。押せるものはタッチでも 44px 以上を保つ (feedback-chip と同じ決まり)。 */

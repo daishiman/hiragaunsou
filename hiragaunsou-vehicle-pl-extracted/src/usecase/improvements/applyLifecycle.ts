@@ -3,15 +3,16 @@ import type {
   ImprovementRepository,
   ImprovementAuditEntry,
 } from "../../domain/repositories/ImprovementRepository";
-import type { GitHubIssueClient } from "../../infrastructure/github/GitHubIssueClient";
+import type { InstructionTokenRepository } from "../../domain/repositories/InstructionTokenRepository";
 import {
   lifecycleActionLabel,
-  shouldCloseIssue,
+  purgedNoteOf,
+  shouldWithdrawInstruction,
   statusAfter,
+  withdrawalNoteOf,
   type LifecycleAction,
 } from "../../domain/rules/improvementLifecycle";
 import { improvementStatusLabel } from "../../domain/rules/improvement";
-import { closeIssueFor, notePurgedIssue } from "./syncIssues";
 
 /**
  * 改善要望の状態を変える・廃棄する・完全に削除する処理 (1件でも一括でも同じ道を通る)。
@@ -19,11 +20,15 @@ import { closeIssueFor, notePurgedIssue } from "./syncIssues";
  * 一括の途中で失敗しても、そこまでに成功した分は確定させる。全部やり直しにすると、
  * 50件のうち49件が終わっていても最初からになり、実務では使えない。
  * 失敗した行だけを画面に残して、そこだけやり直せるようにする。
+ *
+ * 直さないと決めたもの (見送り・誤作成・重複・廃棄) は、発行済みの指示文も取り下げる。
+ * 管理画面では消したつもりなのに、Claude Code からはまだ読める、という状態を残さない。
  */
 
 export interface LifecycleDeps {
   repo: ImprovementRepository;
-  client: GitHubIssueClient | null;
+  /** 完全削除のときに、その要望を読める鍵を止めるために使う。 */
+  tokens: InstructionTokenRepository;
   actorId: string;
   actorName: string;
 }
@@ -34,8 +39,8 @@ export interface LifecyclePlanItem {
   kind: "apply" | "skip";
   /** skip のときの理由、apply のときは「何が起きるか」。 */
   note: string;
-  /** この操作に伴って閉じる Issue の番号 (閉じないなら null)。 */
-  closingIssueNumber: number | null;
+  /** この操作に伴って指示文を取り下げるか。 */
+  withdrawsInstruction: boolean;
 }
 
 export interface LifecycleRowResult extends LifecyclePlanItem {
@@ -46,11 +51,13 @@ export interface LifecycleRowResult extends LifecyclePlanItem {
 export interface LifecycleReport {
   dryRun: boolean;
   action: LifecycleAction;
-  counts: { apply: number; skip: number; missing: number; closeIssue: number };
+  counts: { apply: number; skip: number; missing: number; withdraw: number };
   items: LifecyclePlanItem[];
   results: LifecycleRowResult[];
   /** 実行前に見せる内訳の文章。確認ダイアログにそのまま出す。 */
   summary: string;
+  /** 完全削除で止めた鍵の名前。何を止めたかを画面に出すために返す。 */
+  revokedTokens: string[];
 }
 
 export interface LifecycleInput {
@@ -74,6 +81,12 @@ function skipReason(action: LifecycleAction, row: ImprovementDetail): string | n
   return null;
 }
 
+/** いま指示文が読める状態か (取り下げる意味があるか)。 */
+function instructionIsLive(row: ImprovementDetail): boolean {
+  const i = row.instruction;
+  return i !== null && i.state !== "withdrawn";
+}
+
 export async function applyLifecycle(
   input: LifecycleInput,
   deps: LifecycleDeps,
@@ -82,11 +95,11 @@ export async function applyLifecycle(
   const byId = new Map(rows.map((r) => [r.id, r]));
   const missing = input.ids.filter((id) => !byId.has(id)).length;
 
-  // 「重複」のまとめ先の Issue 番号。閉じるコメントに載せて、どこへ集約したのかを追えるようにする。
-  let parentIssueNumber: number | null = null;
+  // 「重複」のまとめ先。取り下げの記録に載せて、どこへ集約したのかを追えるようにする。
+  let parentLabel: string | null = null;
   if (input.action === "duplicate" && input.duplicateOfId) {
     const parent = await deps.repo.findById(input.duplicateOfId);
-    parentIssueNumber = parent?.githubIssueNumber ?? null;
+    parentLabel = parent ? `${parent.screenLabel}（${parent.id}）` : null;
   }
 
   const nextStatus = statusAfter(input.action);
@@ -98,20 +111,25 @@ export async function applyLifecycle(
     if (!row) continue;
     const skip = skipReason(input.action, row);
     if (skip !== null) {
-      items.push({ id, screenLabel: row.screenLabel, kind: "skip", note: skip, closingIssueNumber: null });
+      items.push({
+        id,
+        screenLabel: row.screenLabel,
+        kind: "skip",
+        note: skip,
+        withdrawsInstruction: false,
+      });
       continue;
     }
-    const closes =
-      row.githubIssueNumber !== null &&
-      row.githubIssueState !== "closed" &&
+    const withdraws =
+      instructionIsLive(row) &&
       (input.action === "purge" ||
-        shouldCloseIssue(nextStatus ?? row.status, archived || row.archivedAt !== null));
+        shouldWithdrawInstruction(nextStatus ?? row.status, archived || row.archivedAt !== null));
     items.push({
       id,
       screenLabel: row.screenLabel,
       kind: "apply",
       note: noteOf(input.action, row),
-      closingIssueNumber: closes ? row.githubIssueNumber : null,
+      withdrawsInstruction: withdraws,
     });
   }
 
@@ -119,12 +137,20 @@ export async function applyLifecycle(
     apply: items.filter((i) => i.kind === "apply").length,
     skip: items.filter((i) => i.kind === "skip").length,
     missing,
-    closeIssue: items.filter((i) => i.closingIssueNumber !== null).length,
+    withdraw: items.filter((i) => i.withdrawsInstruction).length,
   };
   const summary = summaryOf(input.action, counts);
 
   if (input.dryRun) {
-    return { dryRun: true, action: input.action, counts, items, results: [], summary };
+    return {
+      dryRun: true,
+      action: input.action,
+      counts,
+      items,
+      results: [],
+      summary,
+      revokedTokens: [],
+    };
   }
 
   const results: LifecycleRowResult[] = [];
@@ -150,12 +176,9 @@ export async function applyLifecycle(
           action: "purge",
           fromStatus: row.status,
           toStatus: null,
-          reason: input.reason,
+          reason: purgedNoteOf({ actorName: deps.actorName, reason: input.reason }),
         });
         purgeTargets.push(row.id);
-        if (item.closingIssueNumber !== null) {
-          await notePurgedIssue(item.closingIssueNumber, input.reason, deps);
-        }
         results.push({ ...item, ok: true, message: "完全に削除しました。" });
         continue;
       }
@@ -174,34 +197,35 @@ export async function applyLifecycle(
         actorId: deps.actorId,
         actorName: deps.actorName,
         action:
-          input.action === "archive" ? "archive" : input.action === "restore" ? "restore" : "status_change",
+          input.action === "archive"
+            ? "archive"
+            : input.action === "restore"
+              ? "restore"
+              : "status_change",
         fromStatus: row.status,
         toStatus: nextStatus ?? row.status,
         reason: input.reason,
       });
 
       let message = `${lifecycleActionLabel(input.action)}ました。`;
-      if (item.closingIssueNumber !== null) {
-        const closed = await closeIssueFor(
-          {
-            issueNumber: item.closingIssueNumber,
-            status: nextStatus ?? row.status,
-            archived: archived || row.archivedAt !== null,
-            reason: input.reason,
-            parentIssueNumber,
-          },
-          deps,
-        );
-        if (closed.closed) await deps.repo.markIssueState(row.id, "closed");
-        message = `${message} ${closed.message}`;
+      if (item.withdrawsInstruction) {
+        const note = withdrawalNoteOf({
+          status: nextStatus ?? row.status,
+          archived: archived || row.archivedAt !== null,
+          reason: input.reason,
+          parentLabel,
+          actorName: deps.actorName,
+        });
+        await deps.repo.withdrawInstruction(row.id);
+        message = `${message} 発行済みの指示文を取り下げました（Claude Code からは読めなくなります）。`;
         audits.push({
           requestId: row.id,
           actorId: deps.actorId,
           actorName: deps.actorName,
-          action: "issue_close",
+          action: "instruction_withdraw",
           fromStatus: null,
           toStatus: null,
-          reason: closed.message,
+          reason: note,
         });
       }
       results.push({ ...item, ok: true, message });
@@ -209,7 +233,8 @@ export async function applyLifecycle(
       results.push({
         ...item,
         ok: false,
-        message: e instanceof Error ? e.message : "この行だけ失敗しました。もう一度実行してください。",
+        message:
+          e instanceof Error ? e.message : "この行だけ失敗しました。もう一度実行してください。",
       });
     }
   }
@@ -217,9 +242,32 @@ export async function applyLifecycle(
   // 記録を先に確定させてから本体を消す。順番を逆にすると、消えた後に記録が書けず、
   // 「誰にも説明できない削除」が残る。
   if (audits.length > 0) await deps.repo.appendAudit(audits);
-  if (purgeTargets.length > 0) await deps.repo.purge(purgeTargets);
 
-  return { dryRun: false, action: input.action, counts, items, results, summary };
+  let revokedTokens: string[] = [];
+  if (purgeTargets.length > 0) {
+    // 鍵を先に止めてから消す。逆にすると、消えた直後の一瞬だけ生きた鍵が残り、
+    // その間に読まれても記録の側では説明がつかない。
+    revokedTokens = await deps.tokens.revokeForRequests(
+      purgeTargets,
+      "対象の改善要望が完全に削除されたため",
+    );
+    if (revokedTokens.length > 0) {
+      await deps.repo.appendAudit(
+        purgeTargets.map((id) => ({
+          requestId: id,
+          actorId: deps.actorId,
+          actorName: deps.actorName,
+          action: "token_revoke" as const,
+          fromStatus: null,
+          toStatus: null,
+          reason: `完全削除にともない鍵を失効: ${revokedTokens.join(" / ")}`,
+        })),
+      );
+    }
+    await deps.repo.purge(purgeTargets);
+  }
+
+  return { dryRun: false, action: input.action, counts, items, results, summary, revokedTokens };
 }
 
 function noteOf(action: LifecycleAction, row: ImprovementDetail): string {
@@ -229,6 +277,7 @@ function noteOf(action: LifecycleAction, row: ImprovementDetail): string {
     const parts = ["本文"];
     if (row.hasShot) parts.push("画面の写し");
     parts.push("診断情報");
+    if (instructionIsLive(row)) parts.push("発行済みの指示文");
     return `${parts.join("・")}を消します（戻せません）`;
   }
   const next = statusAfter(action);
@@ -237,11 +286,11 @@ function noteOf(action: LifecycleAction, row: ImprovementDetail): string {
 
 function summaryOf(
   action: LifecycleAction,
-  counts: { apply: number; skip: number; missing: number; closeIssue: number },
+  counts: { apply: number; skip: number; missing: number; withdraw: number },
 ): string {
   const lines = [`${lifecycleActionLabel(action)}: ${counts.apply}件`];
   if (counts.skip > 0) lines.push(`何も変わらないため実行しない: ${counts.skip}件`);
   if (counts.missing > 0) lines.push(`見つからない（すでに消えている）: ${counts.missing}件`);
-  if (counts.closeIssue > 0) lines.push(`あわせて閉じる GitHub Issue: ${counts.closeIssue}件`);
+  if (counts.withdraw > 0) lines.push(`あわせて取り下げる指示文: ${counts.withdraw}件`);
   return lines.join(" / ");
 }

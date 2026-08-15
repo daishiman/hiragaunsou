@@ -9,13 +9,18 @@ import {
   improvementStatusLabel,
   improvementStatusTone,
 } from "../../../../../src/domain/rules/improvement";
+import {
+  displayStateOf,
+  instructionStateLabel,
+} from "../../../../../src/domain/rules/improvementInstructionSync";
+import { publishExclusionReason } from "../../../../../src/domain/rules/improvementLifecycle";
 import { AccessDenied } from "../../../../_components/AccessDenied";
 import { PageHead } from "../../../../_components/PageHead";
 import { Badge } from "../../../../_components/Badge";
 import { dateTimeLabel } from "../../../../_lib/format";
 import { ImprovementHandlingForm } from "./ImprovementHandlingForm";
 import { DiagnosticsPanel } from "./DiagnosticsPanel";
-import { ImprovementIssuePanel } from "./ImprovementIssuePanel";
+import { ImprovementInstructionPanel } from "./ImprovementInstructionPanel";
 import { ImprovementLifecyclePanel } from "./ImprovementLifecyclePanel";
 
 /**
@@ -145,10 +150,13 @@ export default async function AdminImprovementDetailPage({
 
       <DiagnosticsPanel d={item.diagnostics} />
 
-      <ImprovementIssuePanel
+      <ImprovementInstructionPanel
         id={item.id}
-        issueNumber={item.githubIssueNumber}
-        issueUrl={item.githubIssueUrl}
+        stateLabel={instructionStateLabel(displayStateOf(item))}
+        note={
+          publishExclusionReason(item) ??
+          (item.instruction ? `v${item.instruction.version}` : "まだ渡していません")
+        }
       />
 
       <div className="mt-3">
@@ -193,7 +201,10 @@ const AUDIT_LABEL: Record<string, string> = {
   archive: "廃棄した",
   restore: "廃棄から戻した",
   purge: "完全に削除した",
-  issue_create: "Issue を作った",
-  issue_update: "Issue を更新した",
-  issue_close: "Issue を閉じた",
+  instruction_publish: "指示文を発行した",
+  instruction_revise: "指示文を更新した",
+  instruction_withdraw: "指示文を取り下げた",
+  instruction_fetch: "Claude Code が指示文を読み込んだ",
+  token_issue: "渡すための鍵を作った",
+  token_revoke: "渡すための鍵を失効させた",
 };

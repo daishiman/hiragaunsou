@@ -34,14 +34,14 @@ describe("内部画面inventory", () => {
     const registeredRoutes = SCREENS.map((screen) => screen.href).sort();
 
     expect(registeredRoutes).toEqual(fileSystemRoutes);
-    expect(registeredRoutes).toHaveLength(24);
+    expect(registeredRoutes).toHaveLength(25);
   });
 
-  it("表示画面26面とredirect alias 1本の構成を固定する", () => {
+  it("表示画面27面とredirect alias 1本の構成を固定する", () => {
     const visibleExternalSurfaces = ["/sign-in", "not-found"] as const;
     const redirectAliases = ["/reset-password"] as const;
 
-    expect(SCREENS.length + visibleExternalSurfaces.length).toBe(26);
+    expect(SCREENS.length + visibleExternalSurfaces.length).toBe(27);
     expect(redirectAliases).toHaveLength(1);
   });
 });

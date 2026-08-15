@@ -122,7 +122,7 @@ export function ImprovementLifecyclePanel({
             <li>本文・画面の写し・診断情報をまとめて消します。</li>
             <li>いつ・誰が・なぜ消したかの記録だけは残ります（記録は消えません）。</li>
             <li>
-              すでに立っている GitHub Issue は消しません。「元データは削除済み」と書き残します。
+              この要望を読むために配ってあった鍵も、あわせて止めます（以後この件は読めません）。
             </li>
           </ul>
           <label className="mt-2 block text-xs font-semibold text-ink" htmlFor="purge_reason">

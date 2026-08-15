@@ -218,13 +218,14 @@ describe("D1ImprovementRepository", () => {
   });
 
   /**
-   * 二重起票の防止。
+   * 1つの要望に指示文は1つ。
    *
-   * Issue の番号は GitHub へ投げた後にしか分からない。だから「番号があるか」だけを
-   * 見ていると、投げている最中の2回目を止められない。投げる前に権利を取り、
-   * 取れた人だけが投げる形にしてあるかを、ここで確かめる。
+   * 二重に発行されると、Claude Code が同じ改善を2回やることになる。防ぎ方は3段で、
+   * ここで確かめるのは下の2段 (保存の側)。
+   *   - 発行の権利を1人だけが取る (リース)
+   *   - improvement_instruction の主キーが request_id なので、そもそも2行にならない
    */
-  describe("GitHub Issue の起票", () => {
+  describe("指示文の発行", () => {
     beforeEach(() => {
       const insert = ctx.sqlite.prepare(
         `INSERT INTO user (id, name, email, email_verified) VALUES (?, ?, ?, 1)`,
@@ -233,93 +234,124 @@ describe("D1ImprovementRepository", () => {
       insert.run("admin-2", "山田", "yamada@example.com");
     });
 
-    it("起票の権利は1人しか取れない", async () => {
+    const published = (version: number, hash: string, by = "admin-1") => ({
+      version,
+      hash,
+      syncedFields: null,
+      publishedById: by,
+    });
+
+    /**
+     * 実際の発行と同じ順で1版出す。
+     * 権利を取らずに書き込む道は用意していない (取らずに書けると二重発行が通る)。
+     */
+    async function publish(
+      repo: D1ImprovementRepository,
+      id: string,
+      version: number,
+      hash: string,
+      by = "admin-1",
+    ) {
+      await repo.beginPublishing(id, 60_000);
+      return repo.markPublished(id, published(version, hash, by));
+    }
+
+    it("発行の権利は1人しか取れない", async () => {
       const repo = new D1ImprovementRepository(ctx.db);
       const id = await repo.save(submission());
-      expect(await repo.beginIssuing(id, 60_000)).toBe(true);
-      expect(await repo.beginIssuing(id, 60_000)).toBe(false);
+      expect(await repo.beginPublishing(id, 60_000)).toBe(true);
+      expect(await repo.beginPublishing(id, 60_000)).toBe(false);
     });
 
     it("取りかかったまま落ちても、時間が経てば次の人が試せる", async () => {
       const repo = new D1ImprovementRepository(ctx.db);
       const id = await repo.save(submission());
-      expect(await repo.beginIssuing(id, 60_000)).toBe(true);
+      expect(await repo.beginPublishing(id, 60_000)).toBe(true);
       // 権利を持てる時間を 0 にすると、直前に取った印も古いものとして扱われる。
-      expect(await repo.beginIssuing(id, 0)).toBe(true);
+      expect(await repo.beginPublishing(id, 0)).toBe(true);
     });
 
     it("失敗して権利を返せば、すぐ次を試せる", async () => {
       const repo = new D1ImprovementRepository(ctx.db);
       const id = await repo.save(submission());
-      await repo.beginIssuing(id, 60_000);
-      await repo.releaseIssuing(id);
-      expect(await repo.beginIssuing(id, 60_000)).toBe(true);
+      await repo.beginPublishing(id, 60_000);
+      await repo.releasePublishing(id);
+      expect(await repo.beginPublishing(id, 60_000)).toBe(true);
     });
 
-    it("番号を結び付けたら、もう権利は取れない（2本目が立たない）", async () => {
+    it("発行し終えたら権利は返り、次の版を出せる", async () => {
       const repo = new D1ImprovementRepository(ctx.db);
       const id = await repo.save(submission());
-      await repo.beginIssuing(id, 60_000);
-      expect(
-        await repo.markIssued(id, {
-          issueNumber: 12,
-          issueUrl: "https://github.com/x/y/issues/12",
-          issuedById: "admin-1",
-        }),
-      ).toBe(true);
-      expect(await repo.beginIssuing(id, 0)).toBe(false);
+      await repo.beginPublishing(id, 60_000);
+      expect(await repo.markPublished(id, published(1, "指紋1"))).toBe(true);
+      expect(await repo.beginPublishing(id, 60_000)).toBe(true);
+      expect(await repo.markPublished(id, published(2, "指紋2", "admin-2"))).toBe(true);
+      expect((await repo.findById(id))?.instruction).toMatchObject({
+        version: 2,
+        hash: "指紋2",
+        state: "published",
+      });
     });
 
-    it("同じ要望へ2回目の結び付けはできない（後から来た番号で上書きしない）", async () => {
+    it("古い版が、あとから新しい版を踏み潰さない", async () => {
       const repo = new D1ImprovementRepository(ctx.db);
       const id = await repo.save(submission());
-      await repo.markIssued(id, {
-        issueNumber: 12,
-        issueUrl: "https://github.com/x/y/issues/12",
-        issuedById: "admin-1",
-      });
-      expect(
-        await repo.markIssued(id, {
-          issueNumber: 13,
-          issueUrl: "https://github.com/x/y/issues/13",
-          issuedById: "admin-2",
-        }),
-      ).toBe(false);
-      const item = await repo.findById(id);
-      expect(item?.githubIssueNumber).toBe(12);
-      expect(item?.githubIssueUrl).toBe("https://github.com/x/y/issues/12");
+      await publish(repo, id, 1, "指紋1");
+      await publish(repo, id, 2, "指紋2");
+      // 遅れて届いた v2 は、すでに v2 がある以上もう一度は通さない。
+      expect(await publish(repo, id, 2, "遅れて届いた", "admin-2")).toBe(false);
+      expect((await repo.findById(id))?.instruction).toMatchObject({ version: 2, hash: "指紋2" });
     });
 
-    it("同じ番号を別の要望へ結び付けようとすると、DBが受け付けない", async () => {
-      const repo = new D1ImprovementRepository(ctx.db);
-      const a = await repo.save(submission());
-      const b = await repo.save(
-        submission({ submissionKey: "0b7f6f1e-0000-4000-8000-000000000002" }),
-      );
-      await repo.markIssued(a, {
-        issueNumber: 12,
-        issueUrl: "https://github.com/x/y/issues/12",
-        issuedById: "admin-1",
-      });
-      await expect(
-        repo.markIssued(b, {
-          issueNumber: 12,
-          issueUrl: "https://github.com/x/y/issues/12",
-          issuedById: "admin-1",
-        }),
-      ).rejects.toThrow(/UNIQUE constraint failed/);
-    });
-
-    it("一覧にも起票済みかどうかが出る", async () => {
+    it("何度発行しても、指示文の行は1件しか作られない", async () => {
       const repo = new D1ImprovementRepository(ctx.db);
       const id = await repo.save(submission());
-      expect((await repo.listAll())[0]?.githubIssueNumber).toBeNull();
-      await repo.markIssued(id, {
-        issueNumber: 7,
-        issueUrl: "https://github.com/x/y/issues/7",
-        issuedById: "admin-1",
-      });
-      expect((await repo.listAll())[0]?.githubIssueNumber).toBe(7);
+      await publish(repo, id, 1, "指紋1");
+      await publish(repo, id, 2, "指紋2");
+      await publish(repo, id, 3, "指紋3");
+      const n = ctx.sqlite
+        .prepare(`SELECT count(*) AS n FROM improvement_instruction WHERE request_id = ?`)
+        .get(id) as { n: number };
+      expect(n.n).toBe(1);
+    });
+
+    it("読み込まれたことを控えると、状態と回数が進む", async () => {
+      const repo = new D1ImprovementRepository(ctx.db);
+      const id = await repo.save(submission());
+      await publish(repo, id, 1, "指紋1");
+
+      await repo.markFetched([id]);
+      expect((await repo.findById(id))?.instruction).toMatchObject({ state: "fetched" });
+      const first = ctx.sqlite
+        .prepare(`SELECT fetch_count AS c FROM improvement_instruction WHERE request_id = ?`)
+        .get(id) as { c: number };
+      expect(first.c).toBe(1);
+
+      await repo.markFetched([id]);
+      const second = ctx.sqlite
+        .prepare(`SELECT fetch_count AS c FROM improvement_instruction WHERE request_id = ?`)
+        .get(id) as { c: number };
+      expect(second.c).toBe(2);
+    });
+
+    it("取り下げた指示文は、読み込まれたことにならない", async () => {
+      const repo = new D1ImprovementRepository(ctx.db);
+      const id = await repo.save(submission());
+      await publish(repo, id, 1, "指紋1");
+      await repo.withdrawInstruction(id);
+
+      await repo.markFetched([id]);
+
+      // 取り下げたものが、読まれた拍子に生き返ってはいけない。
+      expect((await repo.findById(id))?.instruction).toMatchObject({ state: "withdrawn" });
+    });
+
+    it("一覧にも発行済みかどうかが出る", async () => {
+      const repo = new D1ImprovementRepository(ctx.db);
+      const id = await repo.save(submission());
+      expect((await repo.listAll())[0]?.instruction).toBeNull();
+      await publish(repo, id, 1, "指紋1");
+      expect((await repo.listAll())[0]?.instruction).toMatchObject({ version: 1 });
     });
   });
 
@@ -376,6 +408,26 @@ describe("D1ImprovementRepository", () => {
         .get(id) as { n: number };
       expect(shots.n).toBe(0);
       expect(diags.n).toBe(0);
+    });
+
+    it("完全削除では、発行済みの指示文も一緒に消える", async () => {
+      const repo = new D1ImprovementRepository(ctx.db);
+      const id = await repo.save(submission());
+      await repo.beginPublishing(id, 60_000);
+      await repo.markPublished(id, {
+        version: 1,
+        hash: "指紋1",
+        syncedFields: null,
+        publishedById: "admin-1",
+      });
+
+      await repo.purge([id]);
+
+      // 指示文が残っていると、消したはずの本文が読み直されて組み立てられる。
+      const n = ctx.sqlite
+        .prepare(`SELECT count(*) AS n FROM improvement_instruction WHERE request_id = ?`)
+        .get(id) as { n: number };
+      expect(n.n).toBe(0);
     });
 
     it("完全削除しても、いつ誰がなぜ消したかの記録は残る", async () => {

@@ -5,7 +5,7 @@ import { checkAccess } from "../../../../src/infrastructure/auth/accessControl";
 import { createDb } from "../../../../src/infrastructure/db/client";
 import { D1ImprovementRepository } from "../../../../src/infrastructure/db/D1ImprovementRepository";
 import { applyLifecycle } from "../../../../src/usecase/improvements/applyLifecycle";
-import { buildIssueSyncDeps } from "../../../../src/usecase/improvements/issueSyncDeps";
+import { D1InstructionTokenRepository } from "../../../../src/infrastructure/db/D1InstructionTokenRepository";
 import {
   isLifecycleAction,
   lifecycleRequestError,
@@ -64,8 +64,9 @@ export async function POST(request: Request) {
   const error = lifecycleRequestError({ action, ids, reason, duplicateOfId });
   if (error) return NextResponse.json({ message: error }, { status: 400 });
 
-  const repo = new D1ImprovementRepository(createDb(env.DB));
-  const deps = buildIssueSyncDeps(env, repo, { id: session.id, name: session.name ?? "管理者" });
+  const db = createDb(env.DB);
+  const repo = new D1ImprovementRepository(db);
+  const tokens = new D1InstructionTokenRepository(db);
   const report = await applyLifecycle(
     {
       action,
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
       duplicateOfId,
       dryRun: body.dryRun === true,
     },
-    { repo, client: deps.client, actorId: session.id, actorName: session.name ?? "管理者" },
+    { repo, tokens, actorId: session.id, actorName: session.name ?? "管理者" },
   );
 
   return NextResponse.json(report);

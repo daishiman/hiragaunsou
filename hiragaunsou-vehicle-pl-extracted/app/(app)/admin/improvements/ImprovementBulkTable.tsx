@@ -6,23 +6,27 @@ import { useRouter } from "next/navigation";
 import { AlertPanel } from "../../../_components/AlertPanel";
 import { Badge } from "../../../_components/Badge";
 import {
-  ISSUE_BULK_MAX,
+  PUBLISH_BULK_MAX,
   LIFECYCLE_BULK_MAX,
   actionRequiresReason,
   lifecycleActionLabel,
   type LifecycleAction,
 } from "../../../../src/domain/rules/improvementLifecycle";
+import {
+  planSummaryText,
+  type InstructionSyncPlan,
+} from "../../../../src/domain/rules/improvementInstructionSync";
 
 /**
  * 改善要望の一覧 (表) と、選んだものへの一括操作。
  *
  * 表にしたのは「同じことを何件も続けてやる」画面だから。1件1枚のカードは
- * 読むのには向くが、10件を Issue に送る作業には向かない (実際に使った人から
+ * 読むのには向くが、10件を Claude Code に渡す作業には向かない (実際に使った人から
  * 「1件ずつしか送れないのが使いにくい」と言われた)。
  *
  * どの操作も次の3段で進む。段を飛ばせる作りにしない。
  *   1. 選ぶ  … 何を対象にしたかが常に見えている
- *   2. 下見  … 「新しく作る N件 / 更新する M件 / 送らない K件」を先に出す
+ *   2. 下見  … 「新しく発行 N件 / 内容を更新 M件 / 何もしない K件」を先に出す
  *   3. 実行  … 結果は行ごとに出す。失敗した行だけ選び直して再実行できる
  *
  * まとめて成功・まとめて失敗にしない。50件のうち1件が失敗しただけで
@@ -40,11 +44,10 @@ export interface BulkRow {
   createdAtLabel: string;
   hasShot: boolean;
   archived: boolean;
-  issueNumber: number | null;
-  issueUrl: string | null;
-  /** 未起票 / 起票済み / 更新あり / 対象外 のどれか。 */
-  issueState: "none" | "issued" | "outdated" | "excluded";
-  issueStateNote: string;
+  /** 未発行 / 発行済み / 更新あり / 取込済み / 対応完了 / 対象外 のどれか。 */
+  instructionState: "none" | "published" | "outdated" | "fetched" | "done" | "excluded";
+  instructionStateLabel: string;
+  instructionNote: string;
 }
 
 interface RowResult {
@@ -53,8 +56,14 @@ interface RowResult {
   message: string;
 }
 
+interface Draft {
+  id: string;
+  title: string;
+  markdown: string;
+}
+
 type Pending =
-  | { kind: "issue"; summary: string; details: string[] }
+  | { kind: "publish"; summary: string; details: string[]; drafts: Draft[] }
   | { kind: "lifecycle"; action: LifecycleAction; summary: string; details: string[] }
   | { kind: "purge"; summary: string; details: string[]; count: number };
 
@@ -66,7 +75,8 @@ export function ImprovementBulkTable({ rows, canPurge }: { rows: BulkRow[]; canP
   const [action, setAction] = useState<LifecycleAction>("archive");
   const [reason, setReason] = useState("");
   const [duplicateOfId, setDuplicateOfId] = useState("");
-  const [reopenClosed, setReopenClosed] = useState(false);
+  const [handoff, setHandoff] = useState<{ command: string; expiresAt: string } | null>(null);
+  const [copied, setCopied] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
   const [results, setResults] = useState<Map<string, RowResult>>(new Map());
   const [busy, setBusy] = useState(false);
@@ -115,27 +125,22 @@ export function ImprovementBulkTable({ rows, canPurge }: { rows: BulkRow[]; canP
     }
     setBusy(true);
     try {
-      if (kind === "issue") {
-        const { ok, json } = await post("/api/improvements/issues", { ids, dryRun: true, reopenClosed });
+      if (kind === "publish") {
+        const { ok, json } = await post("/api/improvements/instructions", { ids, dryRun: true });
         if (!ok) {
           setError(String(json.message ?? "確認できませんでした。"));
           return;
         }
-        const counts = (json.counts ?? {}) as Record<string, number | undefined>;
-        const items = (json.items ?? []) as { id: string; kind: string; reason?: string }[];
+        const plan = json.plan as InstructionSyncPlan;
+        const drafts = (json.drafts ?? []) as Draft[];
         setPending({
-          kind: "issue",
-          summary: [
-            `新しく Issue を作る: ${counts.create}件`,
-            `すでにある Issue を更新する: ${counts.update}件`,
-            `変わっていないため送らない: ${counts.skip}件`,
-            `対象外のため送らない: ${counts.excluded}件`,
-            ...((counts.missing ?? 0) > 0 ? [`見つからない: ${counts.missing}件`] : []),
-          ].join(" / "),
-          details: items.map((i) => {
+          kind: "publish",
+          summary: planSummaryText(plan),
+          details: plan.items.map((i) => {
             const row = rows.find((r) => r.id === i.id);
-            return `${row?.screenLabel ?? i.id}: ${labelOfIssueKind(i.kind)}${i.reason ? `（${i.reason}）` : ""}`;
+            return `${row?.screenLabel ?? i.id}: ${i.reason}`;
           }),
+          drafts,
         });
         return;
       }
@@ -175,8 +180,8 @@ export function ImprovementBulkTable({ rows, canPurge }: { rows: BulkRow[]; canP
     setError(null);
     try {
       const [url, payload] =
-        pending.kind === "issue"
-          ? (["/api/improvements/issues", { ids, reopenClosed }] as const)
+        pending.kind === "publish"
+          ? (["/api/improvements/instructions", { ids }] as const)
           : pending.kind === "purge"
             ? (["/api/improvements/purge", { ids, reason, confirmCount: pending.count }] as const)
             : ([
@@ -201,12 +206,53 @@ export function ImprovementBulkTable({ rows, canPurge }: { rows: BulkRow[]; canP
           ? `${list.length}件を処理しました。`
           : `${list.length - failed.length}件を処理しました。${failed.length}件は失敗したので選んだまま残しています。`,
       );
+
+      // 発行できた件だけを開ける鍵を、その場で作って貼れる形にする。
+      // 「発行する」と「渡す」を別の画面に分けると、非エンジニアが渡し方を探すことになる。
+      if (pending.kind === "publish") {
+        const okIds = list.filter((r) => r.ok).map((r) => r.id);
+        await handOff(okIds);
+      }
+
       setPending(null);
       router.refresh();
     } catch {
       setError("通信できませんでした。時間をおいてお試しください。");
     } finally {
       setBusy(false);
+    }
+  }
+
+  /**
+   * 発行できた件を開ける鍵を作り、そのまま貼れる形にして画面へ出す。
+   *
+   * 鍵は「この回に渡した件だけ」を範囲に持つ。全件を開ける鍵を配ると、
+   * 渡し終わったあとも他の要望が読める鍵が手元に残ることになる。
+   */
+  async function handOff(okIds: string[]) {
+    setHandoff(null);
+    setCopied(false);
+    if (okIds.length === 0) return;
+    const { ok, json } = await post("/api/improvements/tokens", {
+      ids: okIds,
+      name: `${okIds.length}件を渡すための鍵`,
+    });
+    if (!ok) {
+      setError(
+        String(json.message ?? "指示文は発行できましたが、渡すための鍵を作れませんでした。"),
+      );
+      return;
+    }
+    setHandoff({ command: String(json.command ?? ""), expiresAt: String(json.expiresAt ?? "") });
+  }
+
+  async function copyCommand() {
+    if (!handoff) return;
+    try {
+      await navigator.clipboard.writeText(handoff.command);
+      setCopied(true);
+    } catch {
+      setError("コピーできませんでした。下の文字を選んでコピーしてください。");
     }
   }
 
@@ -228,10 +274,10 @@ export function ImprovementBulkTable({ rows, canPurge }: { rows: BulkRow[]; canP
             <button
               type="button"
               className="btn btn-primary pressable"
-              onClick={() => void preview("issue")}
+              onClick={() => void preview("publish")}
               disabled={busy || ids.length === 0}
             >
-              選んだものを Issue に送る
+              選んだものを Claude Code に渡す
             </button>
           </span>
         </div>
@@ -305,7 +351,7 @@ export function ImprovementBulkTable({ rows, canPurge }: { rows: BulkRow[]; canP
         )}
 
         <p className="mt-2 text-[11px] text-ink-muted">
-          一度に送れる Issue は{ISSUE_BULK_MAX}件、状態の変更は{LIFECYCLE_BULK_MAX}件までです。
+          一度に渡せる指示文は{PUBLISH_BULK_MAX}件、状態の変更は{LIFECYCLE_BULK_MAX}件までです。
           超えた分は黙って切り捨てず、選び直しをお願いします。
         </p>
       </div>
@@ -314,8 +360,8 @@ export function ImprovementBulkTable({ rows, canPurge }: { rows: BulkRow[]; canP
       {pending && (
         <div className="border-x border-line bg-subtle px-3 py-3">
           <p className="text-sm font-semibold text-ink">
-            {pending.kind === "issue"
-              ? "この内容で GitHub に送ります"
+            {pending.kind === "publish"
+              ? "この内容で指示文を発行します"
               : pending.kind === "purge"
                 ? `${pending.count}件を完全に削除します。元に戻せません。`
                 : `${lifecycleActionLabel(pending.action)}前の確認`}
@@ -323,8 +369,8 @@ export function ImprovementBulkTable({ rows, canPurge }: { rows: BulkRow[]; canP
           <p className="mt-1 text-xs text-ink">{pending.summary}</p>
           {pending.kind === "purge" && (
             <p className="mt-1 text-xs text-danger">
-              本文・画面の写し・診断情報をまとめて消します。すでに立っている GitHub Issue は消さず、
-              「元データは削除済み」と書き残します。
+              本文・画面の写し・診断情報に加えて、発行済みの指示文と、その件を開ける鍵もまとめて消します。
+              消した記録 (いつ・誰が) だけは残ります。
             </p>
           )}
           <details className="mt-2">
@@ -337,15 +383,22 @@ export function ImprovementBulkTable({ rows, canPurge }: { rows: BulkRow[]; canP
               ))}
             </ul>
           </details>
-          {pending.kind === "issue" && (
-            <label className="mt-2 flex items-center gap-2 text-xs text-ink">
-              <input
-                type="checkbox"
-                checked={reopenClosed}
-                onChange={(e) => setReopenClosed(e.target.checked)}
-              />
-              閉じている Issue は開き直す（既定では開き直さず、本文の更新とコメントだけ）
-            </label>
+          {pending.kind === "publish" && pending.drafts.length > 0 && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs font-semibold text-ink">
+                Claude Code に渡す文をそのまま読む（{pending.drafts.length}件）
+              </summary>
+              {/* 押す前に、外へ出る中身をそのまま読めるようにする。
+                  要約だけを見せると、載ってはいけないものが載っていても気づけない。 */}
+              {pending.drafts.map((d) => (
+                <div key={d.id} className="mt-2">
+                  <p className="text-[11px] font-semibold text-ink">{d.title}</p>
+                  <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded-[var(--radius-control)] border border-line bg-white p-2 text-[11px] text-ink-muted">
+                    {d.markdown}
+                  </pre>
+                </div>
+              ))}
+            </details>
           )}
           <div className="mt-3 flex flex-wrap gap-2">
             <button
@@ -378,6 +431,35 @@ export function ImprovementBulkTable({ rows, canPurge }: { rows: BulkRow[]; canP
         </div>
       )}
 
+      {/* 渡し方。コピー1回・貼り付け1回で終わる形にする。
+          鍵の平文はここでしか出ない (保存しているのは指紋だけ)。 */}
+      {handoff && (
+        <div className="border-x border-line bg-subtle px-3 py-3">
+          <p className="text-sm font-semibold text-ink">下の文をコピーして、Claude Code に貼ってください</p>
+          <p className="mt-1 text-xs text-ink-muted">
+            この文には鍵が入っています。いま渡した件だけが読めます。
+            {handoff.expiresAt && `期限は ${new Date(handoff.expiresAt).toLocaleString("ja-JP")} です。`}
+            この画面を閉じるともう一度は出せません（そのときは、もう一度渡し直してください）。
+          </p>
+          <textarea
+            readOnly
+            className="mt-2 h-28 w-full rounded-[var(--radius-control)] border border-line bg-white p-2 font-mono text-[11px] text-ink"
+            value={handoff.command}
+            onFocus={(e) => e.currentTarget.select()}
+            aria-label="Claude Code に貼る文"
+          />
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button type="button" className="btn btn-primary pressable" onClick={() => void copyCommand()}>
+              コピーする
+            </button>
+            {copied && <span className="text-xs text-ink-muted">コピーしました。</span>}
+            <button type="button" className="btn pressable" onClick={() => setHandoff(null)}>
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="overflow-x-auto rounded-b-xl border border-t-0 border-line bg-white">
         <table className="min-w-full text-sm">
           <thead className="bg-subtle text-left text-xs text-ink-muted">
@@ -393,7 +475,7 @@ export function ImprovementBulkTable({ rows, canPurge }: { rows: BulkRow[]; canP
               <th scope="col" className="px-3 py-2">状態</th>
               <th scope="col" className="px-3 py-2">画面</th>
               <th scope="col" className="px-3 py-2">内容</th>
-              <th scope="col" className="px-3 py-2">起票</th>
+              <th scope="col" className="px-3 py-2">指示文</th>
               <th scope="col" className="px-3 py-2">届いた日時</th>
             </tr>
           </thead>
@@ -428,19 +510,16 @@ export function ImprovementBulkTable({ rows, canPurge }: { rows: BulkRow[]; canP
                     )}
                   </td>
                   <td className="px-3 py-2 text-xs">
-                    {r.issueNumber !== null && r.issueUrl ? (
-                      <a
-                        href={r.issueUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="font-semibold text-brand-deep underline"
-                      >
-                        #{r.issueNumber}
-                      </a>
-                    ) : (
-                      <span className="text-ink-muted">未起票</span>
-                    )}
-                    <p className="text-[11px] text-ink-muted">{r.issueStateNote}</p>
+                    <span
+                      className={
+                        r.instructionState === "none" || r.instructionState === "excluded"
+                          ? "text-ink-muted"
+                          : "font-semibold text-brand-deep"
+                      }
+                    >
+                      {r.instructionStateLabel}
+                    </span>
+                    <p className="text-[11px] text-ink-muted">{r.instructionNote}</p>
                   </td>
                   <td className="px-3 py-2 text-xs text-ink-muted">
                     {r.reporterName || "利用者"}
@@ -455,11 +534,4 @@ export function ImprovementBulkTable({ rows, canPurge }: { rows: BulkRow[]; canP
       </div>
     </div>
   );
-}
-
-function labelOfIssueKind(kind: string): string {
-  if (kind === "create") return "新しく Issue を作ります";
-  if (kind === "update") return "すでにある Issue を更新します";
-  if (kind === "skip") return "変わっていないので送りません";
-  return "対象外";
 }

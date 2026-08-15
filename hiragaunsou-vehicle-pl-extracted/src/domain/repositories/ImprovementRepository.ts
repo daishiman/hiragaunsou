@@ -1,5 +1,6 @@
 import type { StoredDiagnostics } from "../rules/diagnostics";
 import type { ImprovementStatus } from "../rules/improvement";
+import type { InstructionState, StoredInstruction } from "../rules/improvementInstructionSync";
 
 /** 画面から届いた1件の要望 (保存する前の形)。 */
 export interface ImprovementSubmission {
@@ -31,13 +32,8 @@ export interface ImprovementListItem {
   reporterName: string;
   handledNote: string | null;
   hasShot: boolean;
-  /** 起票済みなら Issue 番号。一覧で「もう上げた要望か」が分かる。 */
-  githubIssueNumber: number | null;
-  githubIssueUrl: string | null;
-  /** 最後に確かめた GitHub 側の状態 (open / closed / missing)。 */
-  githubIssueState: string | null;
-  /** 最後に Issue へ送った日時。これより後に更新されていれば「更新あり」。 */
-  githubSyncedAt: Date | null;
+  /** 発行済みの指示文 (未発行なら null)。一覧で「もう渡した要望か」が分かる。 */
+  instruction: StoredInstruction | null;
   /** 廃棄した日時。null なら通常の一覧に並ぶ。 */
   archivedAt: Date | null;
   /** 「重複」にしたときのまとめ先。 */
@@ -54,13 +50,6 @@ export interface ImprovementDetail extends ImprovementListItem {
   handledByName: string | null;
   handledAt: Date | null;
   diagnostics: StoredDiagnostics | null;
-  /** GitHub へ起票済みなら、その番号とURL。 */
-  githubIssueNumber: number | null;
-  githubIssueUrl: string | null;
-  githubIssuedAt: Date | null;
-  /** 前回 Issue へ送った内容の指紋と、そのときの値の控え。 */
-  githubContentHash: string | null;
-  githubSyncedFields: string | null;
 }
 
 /** 状態を変えた・廃棄した・消した記録。完全削除しても残す。 */
@@ -73,9 +62,13 @@ export interface ImprovementAuditEntry {
     | "archive"
     | "restore"
     | "purge"
-    | "issue_create"
-    | "issue_update"
-    | "issue_close";
+    | "instruction_publish"
+    | "instruction_revise"
+    | "instruction_withdraw"
+    /** Claude Code が指示文を読み取った記録。誰が読んだかは鍵の名前で残す。 */
+    | "instruction_fetch"
+    | "token_issue"
+    | "token_revoke";
   fromStatus: string | null;
   toStatus: string | null;
   reason: string | null;
@@ -92,56 +85,50 @@ export interface ImprovementRepository {
     id: string,
     input: { status: ImprovementStatus; note: string | null; handledById: string },
   ): Promise<void>;
+  /* ── 指示文の発行 ── */
+
   /**
-   * 起票の作業に取りかかる権利を1人だけに渡す。
+   * 発行の作業に取りかかる権利を1人だけに渡す。
    *
-   * true が返った人だけが GitHub へ投げてよい。番号は投げた後にしか分からないため、
-   * 番号の列だけでは「投げている最中の2回目」を止められない。
-   * 落ちたまま印が残らないよう、取りかかった時刻が古くなったら空いたものとして扱う。
+   * true が返った人だけが指示文を書き込んでよい。同時に押されたとき、
+   * 版が競って上書きし合うのを防ぐ。落ちたまま印が残らないよう、
+   * 取りかかった時刻が古くなったら空いたものとして扱う。
    */
-  beginIssuing(id: string, leaseMs: number): Promise<boolean>;
-  /** 起票に失敗したときに印を外す。次の人がすぐ試せるようにする。 */
-  releaseIssuing(id: string): Promise<void>;
+  beginPublishing(id: string, leaseMs: number): Promise<boolean>;
+  /** 発行に失敗したときに印を外す。次の人がすぐ試せるようにする。 */
+  releasePublishing(id: string): Promise<void>;
+
   /**
-   * 起票した Issue を1件に結び付ける。
-   *
-   * 既に結び付いていれば書き換えず false を返す。押し直しや二重送信で
-   * Issue が増えるのを、画面の制御ではなく保存の側で止めるため。
+   * 発行した指示文を書き込む。取り下げてあったものは、ここで発行済みに戻る。
+   * 版が期待どおりでなければ (誰かが先に上げていたら) 何もせず false を返す。
    */
-  markIssued(
+  markPublished(
     id: string,
     input: {
-      issueNumber: number;
-      issueUrl: string;
-      issuedById: string;
-      contentHash: string;
+      version: number;
+      hash: string;
       syncedFields: string;
+      publishedById: string;
     },
   ): Promise<boolean>;
 
-  /* ── 一括起票と一生の管理でだけ使うもの ── */
+  /** Claude Code が読み取ったことを控える (取込済みにする)。 */
+  markFetched(ids: string[]): Promise<void>;
+
+  /** 発行済みの指示文を取り下げる。読めなくなるが、版と記録は残す。 */
+  withdrawInstruction(id: string): Promise<void>;
+
+  /* ── 一括操作でだけ使うもの ── */
 
   /**
    * 選ばれた件をまとめて読む。画像そのものは読まない (25件分の画像は数十MBになる)。
-   * 画像が要る場面 (Issue へ貼る設定のとき) だけ findShot で1件ずつ取る。
+   * 画像が要る場面だけ findShot で1件ずつ取る。
    */
   findManyByIds(ids: string[]): Promise<ImprovementDetail[]>;
   findShot(id: string): Promise<string | null>;
 
-  /** 更新した Issue の指紋と控えを書き戻す。番号は変えない。 */
-  markIssueSynced(
-    id: string,
-    input: { contentHash: string; syncedFields: string; state: string | null },
-  ): Promise<void>;
-
-  /** GitHub 側で見えた状態 (open / closed / missing) を控える。 */
-  markIssueState(id: string, state: string): Promise<void>;
-
-  /**
-   * 見つからなくなった Issue との結び付きを外す。
-   * 外さないと、その要望は以後ずっと更新も作成もできない番号を握り続ける。
-   */
-  detachIssue(id: string): Promise<void>;
+  /** 指示文の状態だけを直接書き換える (取り込みの記録など)。 */
+  setInstructionState(id: string, state: InstructionState): Promise<void>;
 
   /** 状態・理由・まとめ先・廃棄を1件に反映する。 */
   updateLifecycle(

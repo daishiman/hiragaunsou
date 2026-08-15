@@ -69,15 +69,18 @@ export function actionRequiresReason(action: LifecycleAction): boolean {
 /**
  * 1回の一括操作で扱える件数の上限。
  *
- * 上限を置くのは、GitHub への通信が件数分だけ並ぶため。1リクエストの中で
- * いくらでも投げられる作りにすると、途中で Worker の実行時間や GitHub の
- * 制限に当たり、どこまで進んだか分からない終わり方をする。
+ * 上限を置くのは、1件ごとに診断情報を読み直して指示文を組み立てるため。
+ * いくらでも扱える作りにすると、途中で Worker の実行時間や D1 の制限に当たり、
+ * どこまで進んだか分からない終わり方をする。
  * 超えた分は黙って切り捨てず、画面に「上限を超えています」と出して選び直させる。
  */
 export const LIFECYCLE_BULK_MAX = 50;
 
-/** 1回の一括起票で扱える件数の上限。GitHub への通信を伴うので、状態変更より厳しくする。 */
-export const ISSUE_BULK_MAX = 25;
+/**
+ * 1回の一括発行で扱える件数の上限。
+ * 指示文の組み立ては1件あたりの読み込みが重いので、状態変更より厳しくする。
+ */
+export const PUBLISH_BULK_MAX = 25;
 
 export interface LifecycleRequest {
   action: LifecycleAction;
@@ -122,76 +125,81 @@ export function lifecycleRequestError(req: LifecycleRequest): string | null {
   return null;
 }
 
-/* ───────────────────────── 起票の対象か ───────────────────────── */
+/* ───────────────────────── 指示文を渡す対象か ───────────────────────── */
 
-export interface IssueEligibility {
+export interface PublishEligibility {
   status: ImprovementStatus;
   archivedAt: Date | null;
 }
 
 /**
- * 一括起票の対象から外す理由 (対象なら null)。
+ * 一括発行の対象から外す理由 (対象なら null)。
  *
- * 見送り・誤作成・重複・廃棄は「直さないと決めたもの」なので、選ばれていても送らない。
+ * 見送り・誤作成・重複・廃棄は「直さないと決めたもの」なので、選ばれていても渡さない。
  * 選択から黙って消すのではなく、内訳に「対象外 K件」として理由つきで出す
- * (黙って減らすと、送ったつもりの件が届いていないことに気づけない)。
+ * (黙って減らすと、渡したつもりの件が渡っていないことに気づけない)。
  */
-export function issueExclusionReason(row: IssueEligibility): string | null {
-  if (row.archivedAt != null) return "廃棄済みのため送りません";
-  if (row.status === "dropped") return "見送りのため送りません";
-  if (row.status === "invalid") return "誤作成のため送りません";
-  if (row.status === "duplicate") return "重複のため送りません";
+export function publishExclusionReason(row: PublishEligibility): string | null {
+  if (row.archivedAt != null) return "廃棄済みのため渡しません";
+  if (row.status === "dropped") return "見送りのため渡しません";
+  if (row.status === "invalid") return "誤作成のため渡しません";
+  if (row.status === "duplicate") return "重複のため渡しません";
   return null;
 }
 
-/** 状態を変えたときに、既に立っている Issue を閉じるべきか。 */
-export function shouldCloseIssue(status: ImprovementStatus, archived: boolean): boolean {
+/**
+ * 状態を変えたときに、発行済みの指示文を取り下げるべきか。
+ *
+ * 取り下げると、Claude Code からは読めなくなる (取り込み済みでも次は届かない)。
+ * 直さないと決めたものを、外から読める場所に残し続けないため。
+ */
+export function shouldWithdrawInstruction(status: ImprovementStatus, archived: boolean): boolean {
   return archived || status === "dropped" || status === "invalid" || status === "duplicate";
 }
 
-/** Issue を閉じるときに添える一言。なぜ閉じたのかが Issue だけで分かるようにする。 */
-export function closingCommentOf(input: {
+/**
+ * 指示文を取り下げるときに残す一言。
+ *
+ * 記録 (監査) と管理画面に出る。なぜ読めなくなったのかが、後から見た人に分かるようにする。
+ */
+export function withdrawalNoteOf(input: {
   status: ImprovementStatus;
   archived: boolean;
   reason: string | null;
-  parentIssueNumber: number | null;
+  parentLabel: string | null;
   actorName: string;
 }): string {
   const head = input.archived
-    ? "この改善要望は管理画面で廃棄されました。"
-    : `この改善要望は管理画面で「${improvementStatusLabel(input.status)}」になりました。`;
-  const lines = [head, ""];
+    ? "廃棄されたため、指示文を取り下げました。"
+    : `「${improvementStatusLabel(input.status)}」になったため、指示文を取り下げました。`;
+  const lines = [head];
   if (input.status === "duplicate") {
     lines.push(
-      input.parentIssueNumber !== null
-        ? `まとめ先: #${input.parentIssueNumber}`
-        : "まとめ先の要望はまだ Issue になっていません。",
-      "",
+      input.parentLabel !== null
+        ? `まとめ先: ${input.parentLabel}`
+        : "まとめ先の要望は、まだ指示文を発行していません。",
     );
   }
   const reason = input.reason?.trim();
-  if (reason) lines.push("理由:", "", `> ${reason.replace(/\n/g, "\n> ")}`, "");
+  if (reason) lines.push(`理由: ${reason.replace(/\n/g, " ")}`);
   lines.push(`操作した人: ${input.actorName || "管理者"}`);
-  lines.push("", "この Issue は自動で閉じられました。作業を続ける場合は開き直してください。");
+  lines.push("状態を戻しても、指示文は自動では出し直しません（もう一度渡す操作が要ります）。");
   return lines.join("\n");
 }
 
 /**
- * 元データを完全削除したときに Issue へ残す一言。
+ * 完全削除したときに記録へ残す一言。
  *
- * Issue そのものは消さない。GitHub の Issue は通知も履歴も残り、消しても取り消しにならないため、
- * 「無かったこと」にはできない。代わりに、元を見に行っても無いことをその場に書き残す。
+ * 指示文はこのアプリの中にしか無いので、元データと一緒に消える。
+ * 消えたことと、その鍵が使えなくなることを、記録の側に書き残す。
  */
-export function purgedCommentOf(input: { actorName: string; reason: string | null }): string {
+export function purgedNoteOf(input: { actorName: string; reason: string | null }): string {
   const lines = [
-    "この Issue のもとになった改善要望は、管理画面で完全に削除されました。",
-    "",
-    "- 本文・画面の写し・送信時の記録は残っていません。",
-    "- 上に載っている管理画面へのリンクは開いても見つかりません。",
-    "",
+    "本文・画面の写し・送信時の記録・発行済みの指示文を、まとめて完全に削除しました。",
+    "この要望を読むために配ってあった鍵も、あわせて失効させました。",
   ];
   const reason = input.reason?.trim();
-  if (reason) lines.push("理由:", "", `> ${reason.replace(/\n/g, "\n> ")}`, "");
+  if (reason) lines.push(`理由: ${reason.replace(/\n/g, " ")}`);
   lines.push(`操作した人: ${input.actorName || "管理者"}`);
   return lines.join("\n");
 }
