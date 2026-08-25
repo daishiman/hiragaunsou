@@ -7,7 +7,7 @@
 #   $CLOUDFLARE_API_TOKEN (required)
 #
 # Args:
-#   --account-id <id>   Cloudflare account ID
+#   --account-index <number> Masked candidate number from auth-probe
 #   --sitekey <key>     Widget sitekey to look up
 #
 # Outputs JSON. Exit 0 on success, 1 on failure.
@@ -24,17 +24,32 @@
 
 set -uo pipefail
 
+script_dir=$(cd -- "$(dirname -- "$0")" && pwd)
+# shellcheck source=account-context.sh
+# shellcheck disable=SC1091
+. "$script_dir/account-context.sh"
+
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --account-id) ACCOUNT_ID="$2"; shift 2 ;;
+    --account-index) ACCOUNT_INDEX="$2"; shift 2 ;;
     --sitekey)    SITEKEY="$2"; shift 2 ;;
     *) echo "fetch-secret: unknown arg $1" >&2; exit 2 ;;
   esac
 done
 
 : "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN must be set}"
-: "${ACCOUNT_ID:?--account-id required}"
 : "${SITEKEY:?--sitekey required}"
+
+if ! turnstile_require_user_api_token; then
+  echo "fetch-secret: Turnstileは専用User API Tokenを使ってください。Account API TokenとGlobal API Keyは非対応です。" >&2
+  exit 2
+fi
+
+if ! turnstile_resolve_account "${ACCOUNT_INDEX:-}"; then
+  echo "fetch-secret: Account候補番号を解決できません。auth-probeを再実行してください。" >&2
+  exit 2
+fi
+ACCOUNT_ID="$TURNSTILE_ACCOUNT_ID"
 
 tmp=$(mktemp)
 http_code=$(curl -sS -w "%{http_code}" -o "$tmp" \

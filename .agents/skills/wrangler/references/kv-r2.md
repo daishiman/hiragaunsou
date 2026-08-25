@@ -62,6 +62,10 @@ pnpm wrangler r2 bucket list
 # バケット情報を取得
 pnpm wrangler r2 bucket info my-bucket
 
+# Worker経由で使う非公開バケットの公開状態を確認
+pnpm wrangler r2 bucket dev-url get my-bucket
+pnpm wrangler r2 bucket domain list my-bucket
+
 # 削除
 pnpm wrangler r2 bucket delete my-bucket
 ```
@@ -88,3 +92,7 @@ pnpm wrangler r2 object delete my-bucket/path/file.txt
   ]
 }
 ```
+
+Worker binding経由で認可して配信するバケットは、`r2.dev`とCustom Domainを有効にしない。`dev-url get`が`Public access ... is disabled`、`domain list`が空であることを確認する。存在確認のために実データや検証用オブジェクトをアップロードしない。
+
+複数Cloudflare Accountがある場合は`pnpm wrangler whoami`を先に実行する。新規の自社アプリはチーム用共有Accountを既定にし、個人Accountへ同名バケットを作らない。既存バケットが別Accountにある場合は移行判断で停止する。

@@ -9,7 +9,7 @@
 #                           a manually-created token)
 #
 # Args:
-#   --account-id <id>             Cloudflare account ID (only used when CLOUDFLARE_API_TOKEN is set)
+#   --account-index <number>      Masked candidate number from auth-probe
 #   --sitekey <key>               Widget sitekey
 #   --expected-domains <a,b,c>    Comma-separated domains that must appear in the widget's domains array
 #
@@ -19,12 +19,17 @@
 
 set -uo pipefail
 
-ACCOUNT_ID=""
+script_dir=$(cd -- "$(dirname -- "$0")" && pwd)
+# shellcheck source=account-context.sh
+# shellcheck disable=SC1091
+. "$script_dir/account-context.sh"
+
+ACCOUNT_INDEX="${CLOUDFLARE_ACCOUNT_INDEX:-}"
 SITEKEY=""
 EXPECTED_DOMAINS=""
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --account-id)       ACCOUNT_ID="$2"; shift 2 ;;
+    --account-index)    ACCOUNT_INDEX="$2"; shift 2 ;;
     --sitekey)          SITEKEY="$2"; shift 2 ;;
     --expected-domains) EXPECTED_DOMAINS="$2"; shift 2 ;;
     *) echo "validate: unknown arg $1" >&2; exit 2 ;;
@@ -71,11 +76,24 @@ esac
 # Check 2: hostname / widget domains registered. Optional — requires a
 # Cloudflare API token. When the token isn't available (e.g. post-dashboard
 # success-card flow), skip this check and report `hostname_check: skipped`.
-if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "$ACCOUNT_ID" ] || [ -z "$EXPECTED_DOMAINS" ]; then
-  echo "validate: skipping hostname check (CLOUDFLARE_API_TOKEN, --account-id, or --expected-domains not provided)" >&2
+if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "$ACCOUNT_INDEX" ] || [ -z "$EXPECTED_DOMAINS" ]; then
+  echo "validate: skipping hostname check (CLOUDFLARE_API_TOKEN, --account-index, or --expected-domains not provided)" >&2
   echo '{"status":"ok","hostname_check":"skipped"}'
   exit 0
 fi
+
+if ! turnstile_require_user_api_token; then
+  echo "validate: hostname確認にはTurnstile専用User API Tokenを使ってください。" >&2
+  echo '{"status":"error","check":"hostname","detail":"unsupported token type"}'
+  exit 1
+fi
+
+if ! turnstile_resolve_account "$ACCOUNT_INDEX"; then
+  echo "validate: Account候補番号を解決できません。auth-probeを再実行してください。" >&2
+  echo '{"status":"error","check":"hostname","detail":"account selection unavailable"}'
+  exit 1
+fi
+ACCOUNT_ID="$TURNSTILE_ACCOUNT_ID"
 
 widget=$(curl -sS \
   "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/challenges/widgets/$SITEKEY" \

@@ -16,7 +16,7 @@ description: Webアプリの準備→要件定義→設計→実装→公開→�
 
 1. **成果物先行**: `app-excellence/references/artifact-first-delivery.md` の **Evidence → Decide → Draft → Validate → Diff** を全ステージへ適用する。通常は事前質問ゼロ。候補を依頼者に丸投げせず、最有力案を1つ選び、動く成果物を先に出す。
 2. **スキルは自動発火に任せない**。この定義に書かれたタイミングで、必ず利用中のクライアントのスキル機能を使って対象の `SKILL.md` をロードする。「読んだつもり」で進めることを禁止する。
-3. **Cloudflare の操作は必ず Cloudflare MCP 経由**。Workers/D1/KV/R2 の作成・照会は利用可能な Cloudflare MCP ツールを使い、Cloudflare の仕様確認はCloudflare公式ドキュメント用MCPを優先する。MCP自体が未接続ならセットアップを再実行し、認証待ちサーバーだけ利用者へloginを案内する。
+3. **Cloudflare は用途別の正規経路を使う**。仕様確認はCloudflare公式ドキュメント用MCP、Account・既存リソースの読み取り確認は利用可能なCloudflare MCPを優先する。作成・secret・migration・deployは対象の専用Skillに従い、deployは`wrangler` CLIを使う。MCPが未接続でも作成操作へ進まず、公式ドキュメントと読み取り専用のWrangler確認で不足事実を埋める。認証待ちの場合だけ利用者本人へloginを案内する。
 4. **ステージゲートを飛ばさない**。ゲートは内部品質条件であり、依頼者の返答待ちではない。事実が不足しても可逆な仮説を記録して進める。
 5. **依頼者に見せる確認・デプロイ前の最終確認は必ず `pnpm run preview`(Workersランタイム、localhost:8787)で行う**。`pnpm dev`(3000)での確認をもって「動いた」と判断しない。
 6. **main にマージされた版だけがデプロイされる**。デプロイ前にコミット、デプロイ後にタグ(`v1`, `v2`…)。git履歴が唯一の正本であり、これが「元に戻せる」ことの保証になる。
@@ -94,10 +94,13 @@ description: Webアプリの準備→要件定義→設計→実装→公開→�
 
 - **必ずロード**: `cloudflare-secure-deploy` + `wrangler`
 - cloudflare-secure-deploy の手順(migrations先行・secrets設定・gotchas回避)に厳密に従う。
+- **Cloudflare Accountを最初に固定する**: チーム用共有Accountと個人Accountの両方がある新規構築では、チーム用Accountを推奨して既定選択する。個人Accountは依頼者の明示指定時だけ使う。既存Worker/D1/R2が個人側にある場合はチーム側へ複製せず、移行タスクとして判断を求める。特定の有料プラン契約は別の承認境界。
 - D1 の作成・マイグレーション状態の確認は Cloudflare MCP で行い、デプロイ実行は wrangler CLI で行う。
 - **git 運用**: 初回リリースまでは main へ直接コミットでよい。デプロイ直前にコミットし、デプロイ後に本番URL確認が済んだらタグを打つ(`git tag v1`)。**追加開発は必ずブランチ+PR**(追加開発モード参照)。
 - **手元からデプロイするときの必須確認**: `wrangler` は git のコミットではなく**その場の作業ツリー**をビルドする。実行直前に `git status --porcelain` と `git diff --stat` が空であることを確認する。特定コミットを確実に出すなら `git worktree add --detach <パス> <commit>` を使う。
-- **初回リリースが済んだら、その場で CI/CD を導入する**: Skill `ci-cd-pipeline` をロードし、`ci.yml` / `deploy.yml` / `migrate.yml` と `smoke.sh` を設置する。**2回目以降のデプロイは main へのマージで自動的に行われる状態にし、手元からの `wrangler deploy` は緊急時のみとする**。上記の「作業ツリーをビルドする」問題が構造的に消えるため、これが最も確実な再発防止になる。認証情報の登録は利用者本人に依頼する(代行しない)。
+- **初回リリースが済んだら、その場で CI/CD を導入する**: Skill `ci-cd-pipeline` をロードし、共通`detect-pm` Action、`ci.yml` / `deploy.yml` / `migrate.yml`、`smoke.sh` を設置する。**2回目以降のデプロイは main のCI成功後に自動的に行われる状態にし、手元からの `wrangler deploy` は緊急時のみとする**。上記の「作業ツリーをビルドする」問題が構造的に消えるため、これが最も確実な再発防止になる。
+- **非エンジニア向けCloudflare handoffを完成させてから待つ**: repo・Wrangler package・Worker/D1/R2・固定URL・チーム用Accountを自動発見し、`ci-cd-pipeline`のgeneratorで`docs/cloudflare-credentials-setup.md`と`.cloudflare/setup-production.mjs`を生成する。利用者にはAccount API Tokenを作ってhelperを1回実行してもらう。Tokenをチャットへ貼らせず、AIは登録名だけを確認する。既存Worker secretはローテーション承認なしに上書きしない。
+- `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`はGitHub `production` Environment secret、`APP_URL`はRepository variableへ登録する。Deploy/Migrate jobの`environment: production`とmain限定を確認し、CI成功SHAとDeploy SHA、2回のsmokeが一致するまで完了扱いにしない。
 
 ## ステージ6: 品質ゲート・リリース判定
 
@@ -105,7 +108,7 @@ description: Webアプリの準備→要件定義→設計→実装→公開→�
 - **デプロイ後に本番URLで**: `web-perf` をロードして Core Web Vitals を計測し、問題があれば改善して再デプロイ。
 - **AI機能ありの場合**: `llm-cost-simulator` をロードしてコスト試算を成果物に含める。
 - **リリース判定は裁定ルール1に従う**: mvp-first §4 の4項目充足 + launch-security CRITICAL ゼロ。CRITICAL 以外の指摘は残課題リストに記録してリリースする。
-- ロールバック確認は「直前タグに `git checkout`(または revert)して `wrangler deploy` すれば戻せる状態か」で判定する。
+- ロールバック確認は「対象変更を`git revert`し、CI/CD導入済みならmainのCI成功後に同じDeploy経路で再公開できる状態か」で判定する。CI/CD未導入の初回公開または記録を残す緊急対応だけ、cleanな確定コミットから`wrangler deploy`する。
 
 # 追加開発モード(既存アプリを育てる)
 

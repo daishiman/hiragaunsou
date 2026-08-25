@@ -1,6 +1,6 @@
 # AI開発エージェントキット セットアップマニュアル【Windows版】
 
-**バージョン 1.10.2**
+**バージョン 1.10.4**
 
 ## このキットは何?
 
@@ -248,7 +248,7 @@ Codexでは `app-orchestrator.toml` をcustom agentとして利用し、同じ�
 | `/build-app` / `$build-app` | 新しいアプリを最初から公開まで作る |
 | `/improve-app` / `$improve-app` | 公開済みのアプリに機能追加・改善を1件ずつ行う |
 | `/undo-app` / `$undo-app` | 直前の変更を取り消して、アプリを1つ前の状態に戻す |
-| `/setup-cicd` / `$setup-cicd` | 自動チェックと自動公開のしくみ(CI/CD)を導入する |
+| `/setup-cicd` / `$setup-cicd` | チーム用Cloudflare設定、秘密値の安全な登録、自動チェック・自動公開をまとめて導入する |
 
 Codex では `$...` のスキル形式を使ってください。非推奨の `/prompts:build-app` などは標準では入らず、`--legacy-prompts` を指定した場合だけ旧互換として入ります。
 
@@ -274,7 +274,7 @@ Codex では `$...` のスキル形式を使ってください。非推奨の `/
 | turnstile-spin | 問い合わせフォームのボット対策 |
 | cloudflare-email-service | メール送信機能の作り方 |
 | solo-git-flow | 個人開発の変更管理(ブランチ・プルリク・Issue)の進め方 |
-| ci-cd-pipeline | 自動チェック・自動公開のしくみ(GitHub Actions)の作り方と費用の抑え方 |
+| ci-cd-pipeline | 非エンジニア向けCloudflare設定票と1コマンド登録、自動チェック・自動公開の作り方 |
 | design-judgment | テンプレート感を業務構造の反映不足として診断・改善する判断基準 |
 
 ---

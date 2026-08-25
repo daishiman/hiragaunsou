@@ -4,7 +4,8 @@ description: >
   GitHub Actions で CI(自動検査)と CD(自動デプロイ)を、無料枠に収まる最小構成で構築・運用するためのスキル。
   「CIを入れて」「CDを組んで」「自動デプロイしたい」「GitHub Actions」「ワークフロー」「テストを自動で回したい」
   「マージしたら勝手に公開されるようにして」「デプロイを自動化して」「CIが落ちた」「Actionsが失敗する」
-  「デプロイの手作業をなくしたい」などの文脈で必ず使用する。デプロイ先が Cloudflare Workers の場合は
+  「デプロイの手作業をなくしたい」「Cloudflareの設定が分からない」「非エンジニア向け手順を作って」などの文脈で必ず使用する。
+  デプロイ先が Cloudflare Workers の場合は
   Skill cloudflare-secure-deploy を併用する(D1マイグレーションの扱いが最重要)。ブランチ・PR・タグの規約は
   Skill solo-git-flow に従う。手動デプロイを繰り返している状況を見つけたら、依頼されていなくても
   このスキルの §0 を読んで導入可否を判断すること。
@@ -16,14 +17,34 @@ description: >
 **CI/CD の本質は自動化による時短ではなく、「言ったこと」と「実際に起きたこと」の乖離を機械が検出することにある。**
 
 - ワークフロー全文: `references/workflows.md`
-- パッケージマネージャ判別(npm / yarn / pnpm 共通化): `assets/detect-pm.yml`
+- Node.js・パッケージマネージャ共通部品(npm / yarn / pnpm): `assets/detect-pm.yml` → `.github/actions/detect-pm/action.yml`
 - 無料枠の実数と削減手法: `references/cost-control.md`
 - 失敗パターンと対処: `references/troubleshooting.md`
-- そのまま置ける雛形: `assets/ci.yml` / `assets/deploy.yml` / `assets/migrate.yml`
+- そのまま置ける雛形: `assets/ci.yml` / `assets/deploy.yml` / `assets/migrate.yml`（共通部品も必ず配置する）
+- 非エンジニア向けCloudflare設定票: `assets/cloudflare-credentials-guide.md.template`
+- 設定票と秘密値非表示helperの生成: `scripts/generate-cloudflare-credentials-guide.mjs`
+- 資格情報ガイド・helper・workflowの退行検査: `scripts/validate-cloudflare-credentials-guide.mjs`
+- GitHub対象リポジトリの安全な自動検出: `scripts/detect-github-repository.mjs`
+- 自動検出と停止診断の実動テスト: `scripts/test-auto-discovery.mjs`
 
 ---
 
 ## §0. 入れる前の判断
+
+### GitHubの操作対象を最初に確定する
+
+owner/repoやremote名を手入力・固定値で決めない。現在のgit remote、現在ブランチの追跡remote、`gh repo view`を照合する読み取り専用helperを使う。
+
+```bash
+node <skill>/scripts/detect-github-repository.mjs
+```
+
+- `status: ok`: `recommended.repository`、`recommended.remote`、`recommended.default_branch`を以後の`GITHUB_REPOSITORY`、`GIT_REMOTE`、`GITHUB_DEFAULT_BRANCH`として採用する。候補比較の質問はせず、非エンジニアには「このリポジトリを使います」と推奨値を短く提示して進む。
+- `status: multiple`: 認証情報を除いた候補だけを示してremoteを1つ選んでもらい、`--remote <選択名>`で再実行する。remote URLをチャットへ貼らせない。
+- `status: unconfigured`: 既存GitHubリポジトリへ接続するか、新規作成するかだけを質問する。remoteの追加やリポジトリ作成は外部状態を変えるため、承認前に実行しない。
+- `status: gh_auth_required`: 所有者本人に`gh auth login`を依頼する。認証コードやTokenを受け取らない。
+
+helperはremote URLに埋め込まれたuserinfoを出力せず、GitHubとして正規化できたowner/repoだけを候補表示する。以後の`gh`操作には必ず`--repo "$GITHUB_REPOSITORY"`を付け、作業フォルダの推測に戻らない。
 
 ### 手動デプロイが実際に生む事故(実例)
 
@@ -51,7 +72,7 @@ description: >
 ### まず自分のリポジトリがどちらか確認する
 
 ```bash
-gh repo view --json isPrivate -q '.isPrivate'
+gh repo view "$GITHUB_REPOSITORY" --json isPrivate -q '.isPrivate'
 ```
 
 | | GitHub Actions の料金 |
@@ -91,7 +112,7 @@ gh repo view --json isPrivate -q '.isPrivate'
 | ファイル | いつ走るか | 何をするか | 壊すもの |
 |---|---|---|---|
 | `ci.yml` | PR作成時・更新時 | 型チェック → テスト → (必要なら)ビルド | **なし**(検査だけ) |
-| `deploy.yml` | main への push | ビルド → 本番公開 → スモークテスト → タグ | **本番アプリ** |
+| `deploy.yml` | main のCI成功後 | CIが検査したSHAをビルド → 本番公開 → スモークテスト | **本番アプリ** |
 | `migrate.yml` | **手動起動のみ** | バックアップ → DBの構造変更を適用 | **本番データ** |
 
 **この3分割には理由がある**: 壊せるものの重さが3段階で違うので、トリガーの厳しさも3段階にする。検査は誰でもいつでも、公開はマージという明示的な操作で、**データの変更は人が起動したときだけ**。
@@ -127,36 +148,97 @@ on:
 
 ---
 
-## §3. シークレット(本人が設定する)
+## §3. Cloudflare Accountとシークレット
 
-**代行しない。** APIトークンは認証情報であり、他者が扱うべきものではない。利用者本人に手順を伝えて実行してもらう。
+### Account選択の既定
 
-必要なもの(Cloudflare の場合):
+Cloudflareでは1ユーザーが複数Accountへ所属できる。新規の自社アプリで「チーム用共有Account」と「個人Account」の両方がある場合、**チーム用Accountを既定選択**する。個人Accountは利用者が明示指定した場合だけ使う。
 
-| 名前 | 取得場所 |
-|---|---|
-| `CLOUDFLARE_API_TOKEN` | Cloudflare ダッシュボード → 右上のアイコン → プロフィール → API トークン → トークンを作成 |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare ダッシュボードのURL、または `wrangler whoami` の出力 |
+優先順:
 
-### トークンの権限は最小にする
+1. 既存`wrangler.jsonc`と既存Worker/D1/R2の所有Account（勝手に複製しない）
+2. 新規構築なら複数メンバーが参加するチーム用Account
+3. 個人Accountは明示指定時のみ
 
-「Edit Cloudflare Workers」テンプレートは手軽だが**必要以上に広い**。カスタムトークンで以下だけを付ける:
+既存リソースが個人側にありチーム運用へ変えたい場合は、同名リソースを作らず**移行タスクとして停止**する。料金プラン変更も承認なしに行わない。Cloudflare公式の名称はAccountであり、「チーム用Account」と特定の有料プラン名を混同しない。
+
+### AIが先に行うこと
+
+secretを依頼する前に、repo・package manager・Wrangler実行package・Worker/D1/R2名・固定本番URLをコードから発見する。`wrangler whoami`、リソース一覧、R2公開状態、GitHub Environment/variable/secretの**名前だけ**をread-only確認する。
+
+不足R2/D1/Workerの作成、`wrangler login`、既存Worker secretの更新は外部状態を変えるため無条件実行しない。必要性と対象を示し、利用者の承認または所有者操作へ渡す。
+
+### 所有者に残す操作
+
+API Token値をAIへ渡させない。AIは次を必ず生成する。
+
+1. `docs/cloudflare-credentials-setup.md`（画面名、入力値、成功条件、停止条件、復旧まで含む）
+2. `.cloudflare/setup-production.mjs`（秘密値を非表示入力し、ファイル・ログ・引数へ残さない）
+
+生成例:
+
+```bash
+node <skill>/scripts/generate-cloudflare-credentials-guide.mjs \
+  --auto \
+  --account-name "<既存所有Accountの表示名>"
+```
+
+`--auto`（または完全な無引数起動）は、GitHub owner/repoと既定ブランチ、git管理下の単一Wrangler設定、lockfileからpackage manager、Worker/D1/R2名、Wrangler設定またはGitHub Repository variableの`APP_URL`を読み取り専用で検出する。monorepoではWrangler設定ディレクトリをpackage managerの`--dir` / `--prefix` / `--cwd`で固定するため、repository rootからhelperを実行しても対象設定を見失わない。workerd再導入コマンドも同じpackage managerから生成し、lockfileを壊さない。
+
+Wrangler設定があることだけでは、Cloudflare上に既存resourceがある証明にならない。`--auto`のAccount modeは新規構築として`team`を既定にする。AIがread-only照合でWorker/D1/R2の既存所有先を確認できた場合だけ`--account-mode existing`を渡し、その所有先を優先する。teamかpersonalかを客観判定できない既存Accountをteamと表示しない。明示的な個人利用だけ`personal`を選ぶ。Account名はAccount IDから推測せず、不足として停止して表示名だけを求める。Wrangler設定やD1/R2、lockfile、`APP_URL`が複数・不一致なら候補と対応する明示引数を示して生成前に停止する。
+
+自動検出で決められない値を明示する場合の完全指定例:
+
+```bash
+node <skill>/scripts/generate-cloudflare-credentials-guide.mjs \
+  --app-name "<アプリ名>" \
+  --repo "$GITHUB_REPOSITORY" \
+  --worker "<worker>" \
+  --d1 "<database_name>" \
+  --r2 "<bucket>" \
+  --app-url "https://<production-origin>" \
+  --account-name "<チーム用Account名>" \
+  --account-mode team \
+  --wrangler-command-json '["pnpm","--filter","<package>","exec","wrangler"]' \
+  --install-command-json '["pnpm","install","--force","--frozen-lockfile"]' \
+  --auth-password-secret AUTH_PASSWORD \
+  --session-secret SESSION_SECRET
+```
+
+存在しないD1/R2/Worker secretの引数は省く。既存出力を更新するときは、AIが差分を確認した後だけ`--force`を使う。
+
+生成後とSkill更新時は次を必ず通す。
+
+```bash
+node <skill>/scripts/validate-cloudflare-credentials-guide.mjs
+node <skill>/scripts/test-auto-discovery.mjs
+node .cloudflare/setup-production.mjs --dry-run
+```
+
+所有者はチーム用Accountで**account-owned API Token**を作り、生成済みhelperを1回実行する。継続的CI/CDを個人の在籍や権限に依存させないため、`My Profile > API Tokens`のuser tokenは既定にしない。
+
+Token権限は使用機能だけに限定する。
 
 | 種別 | 権限 | 必要な理由 |
 |---|---|---|
-| アカウント | Workers Scripts : 編集 | デプロイに必須 |
-| アカウント | D1 : 編集 | マイグレーション適用に必要(migrate.yml を使う場合のみ) |
-| アカウント | Workers R2 Storage : 編集 | R2 を使う場合のみ |
+| Account | Account Settings : Read | 対象Account確認 |
+| Account | Workers Scripts : Edit | デプロイ |
+| Account | D1 : Edit | `migrate.yml`を使う場合だけ |
+| Account | Workers R2 Storage : Edit | R2を使う場合だけ |
 
-**アカウントリソースは対象を自分のアカウント1つに絞る。**「すべてのアカウント」にしない。
+Account Resourcesはチーム用Account1件に限定し、全Account・全Zone・Global API Key・R2 API Tokenを使わない。
 
-登録は本人がこれを実行:
+GitHubへの登録先はRepository secretではなく、`production` **Environment secret**で固定する。
 
 ```bash
-gh secret set CLOUDFLARE_API_TOKEN     # 実行後、値の入力を求められる
-gh secret set CLOUDFLARE_ACCOUNT_ID
-gh secret list                          # 登録できたか確認(値は表示されない)
+gh secret set CLOUDFLARE_API_TOKEN --env production --repo "$GITHUB_REPOSITORY"
+gh secret set CLOUDFLARE_ACCOUNT_ID --env production --repo "$GITHUB_REPOSITORY"
+gh secret list --env production --repo "$GITHUB_REPOSITORY"
 ```
+
+`deploy.yml`と`migrate.yml`のjobには`environment: production`が必要。これがないとEnvironment secretを読めない。
+
+Worker secretは先に`wrangler secret list`で名前を確認する。存在する`AUTH_PASSWORD`や`SESSION_SECRET`を通常セットアップで上書きしない。更新はローテーションであり、ログイン不能・全セッション失効の影響を説明してから所有者が明示実行する。
 
 ### やってはいけないこと
 
@@ -175,13 +257,16 @@ CI の価値は**マージを止めること**にある。「落ちても無視�
 導入したら**ブランチ保護を必ず設定する**(これをしないと CI は単なる飾りになる):
 
 ```bash
-gh api -X PUT repos/{owner}/{repo}/branches/main/protection \
+GITHUB_DEFAULT_BRANCH_API="$(node -p 'encodeURIComponent(process.argv[1])' "$GITHUB_DEFAULT_BRANCH")"
+gh api -X PUT "repos/$GITHUB_REPOSITORY/branches/$GITHUB_DEFAULT_BRANCH_API/protection" \
   -f 'required_status_checks[strict]=true' \
-  -f 'required_status_checks[contexts][]=ci' \
+  -f 'required_status_checks[contexts][]=verify' \
   -F 'enforce_admins=false' \
   -F 'required_pull_request_reviews=null' \
   -F 'restrictions=null'
 ```
+
+`verify`は`assets/ci.yml`の`jobs:`直下にあるジョブ名である。ワークフロー名`CI`や別名`ci`を指定すると必須チェックが永久にPendingになるため、コピー先の実ファイルでもジョブ名が一致することを確認する。
 
 - `enforce_admins=false` にする理由: 個人開発では緊急時に自分で回避できる逃げ道を残す。ただし**使ったら理由を記録する**。
 - `required_pull_request_reviews=null`: レビュアーが自分だけなので承認は要求しない(solo-git-flow §0-5 と整合)。
@@ -227,11 +312,11 @@ gh api -X PUT repos/{owner}/{repo}/branches/main/protection \
 ### 失敗したときに戻せること
 
 ```bash
-wrangler rollback              # 直前のバージョンへ戻す(直近100バージョンまで)
 wrangler deployments list      # どのバージョンがいつ公開されたか
+wrangler rollback              # CI/CDを待てない緊急時だけ。理由と対象versionを記録する
 ```
 
-**スモークテストが落ちたらワークフローを失敗させる。** 「デプロイは成功したがアプリは壊れている」を緑で通さない。自動ロールバックまで入れるかは判断が分かれる(壊れたまま公開し続けるリスク vs 誤検知で正常なものを巻き戻すリスク)。**まずは「失敗を通知して止める」だけにし、戻すのは人が判断する**のが安全。
+**スモークテストが落ちたらワークフローを失敗させる。** 「デプロイは成功したがアプリは壊れている」を緑で通さない。自動ロールバックはせず、人が原因を確認して対象変更を`git revert`し、mainのCI成功後に同じDeploy経路で戻す。`wrangler rollback`はCI/CDを待てない緊急時のみに限定する。
 
 ---
 
@@ -239,15 +324,16 @@ wrangler deployments list      # どのバージョンがいつ公開された�
 
 ```bash
 # 1. 雛形を置く
-mkdir -p .github/workflows .github/scripts
+mkdir -p .github/workflows .github/scripts .github/actions/detect-pm
 cp <skill>/assets/ci.yml      .github/workflows/ci.yml
 cp <skill>/assets/deploy.yml  .github/workflows/deploy.yml
 cp <skill>/assets/migrate.yml .github/workflows/migrate.yml
+cp <skill>/assets/detect-pm.yml .github/actions/detect-pm/action.yml
 cp <skill>/assets/smoke.sh    .github/scripts/smoke.sh
 chmod +x .github/scripts/smoke.sh   # ワークフローは bash 経由で呼ぶので必須ではないが、手元で試しやすくなる
 
 # 2. プロジェクトに合わせて書き換える
-#    - パッケージマネージャ(npm/yarn/pnpm)はロックファイルから自動判別するので変更不要
+#    - パッケージマネージャ(npm/yarn/pnpm)は共通Actionがロックファイルから自動判別するので変更不要
 #    - Nodeバージョンと、呼んでいるスクリプト名が package.json の scripts と
 #      一致しているかは必ず確認する(typecheck / test / deploy / db:backup / db:migrate:remote)
 #    - migrate.yml の <DB名> を実際の D1 データベース名に置き換える
@@ -259,28 +345,34 @@ chmod +x .github/scripts/smoke.sh   # ワークフローは bash 経由で呼ぶ
 APP_URL=https://<本番URL> bash .github/scripts/smoke.sh
 #    CI の中でしか試せない状態にすると、直すたびに push して数分待つことになる
 
-# 4. 本番URLを Variables に登録する(シークレットではない。公開情報)
-gh variable set APP_URL --body "https://<本番URL>"
+# 4. AIがCloudflare Account/リソース/GitHub設定をread-only診断する
+#    新規構築はチーム用Accountを既定にし、個人Accountへは自動で進まない
 
-# 5. シークレットを本人が登録する(§3)
+# 5. 非エンジニア向け作業票と秘密値非表示helperを生成する(§3)
 
-# 6. CI だけ先に有効化する。deploy.yml と migrate.yml はこの時点では置くだけで、
+# 6. 本番URLを Variables に登録する(シークレットではない。公開情報)
+gh variable set APP_URL --body "https://<本番URL>" --repo "$GITHUB_REPOSITORY"
+
+# 7. 所有者がAccount API Tokenを作り、生成済みhelperを1回実行する
+#    AIへtokenを貼らない
+
+# 8. CI だけ先に有効化する。deploy.yml と migrate.yml はこの時点では置くだけで、
 #    main にマージするまで走らない
 
-# 7. 実際に PR を出して CI が緑になることを確認する
-gh pr create ...
-gh run list -L 3
-gh run watch                  # 実行中のジョブを追う
+# 9. 実際に PR を出して CI が緑になることを確認する
+gh pr create --repo "$GITHUB_REPOSITORY" ...
+gh run list --repo "$GITHUB_REPOSITORY" -L 3
+gh run watch --repo "$GITHUB_REPOSITORY"  # 実行中のジョブを追う
 
-# 8. わざと失敗させて、赤くなることを確認する(重要)
+# 10. わざと失敗させて、赤くなることを確認する(重要)
 #    落ちないことを確認しただけでは「本当に検査しているか」が分からない
 
-# 9. ブランチ保護を設定する(§4)
+# 11. ブランチ保護を設定する(§4)
 
-# 10. CD を有効化する。最初の1回は手動デプロイと同じ結果になるか見届ける
+# 12. CI成功後の自動CDを有効化する。workflow_runのSHAがmainと一致するまで見届ける
 ```
 
-**手順8を飛ばさない。** テストを1つわざと壊して CI が赤くなるのを見るまで、その CI は「動いているように見えるだけ」かもしれない。今回の対象プロジェクトでは、回答期間の設定が画面に表示されるのに判定にまったく使われていないという不具合が実在した。**表示されているから効いている、とは限らない。**
+**手順10を飛ばさない。** テストを1つわざと壊して CI が赤くなるのを見るまで、その CI は「動いているように見えるだけ」かもしれない。今回の対象プロジェクトでは、回答期間の設定が画面に表示されるのに判定にまったく使われていないという不具合が実在した。**表示されているから効いている、とは限らない。**
 
 ---
 
@@ -288,10 +380,10 @@ gh run watch                  # 実行中のジョブを追う
 
 | やること | 頻度 |
 |---|---|
-| `gh run list -L 5` で直近の結果を見る | PR を出したとき |
+| `gh run list --repo "$GITHUB_REPOSITORY" -L 5` で直近の結果を見る | PR を出したとき |
 | 落ちた CI を放置しない | 即時。1件放置すると全体が形骸化する |
 | Dependabot の PR を処理する | 週1回。**放置された Dependabot の失敗が並んでいるリポジトリは、CI 全体が信用されていない証拠** |
-| ワークフローの実行時間を確認する | 月1回。private なら消費分も(`gh api /repos/{owner}/{repo}/actions/timing`) |
+| ワークフローの実行時間を確認する | 月1回。private なら消費分も(`gh api "repos/$GITHUB_REPOSITORY/actions/timing"`) |
 
 ---
 
@@ -312,11 +404,18 @@ gh run watch                  # 実行中のジョブを追う
 
 ## §9. 検収チェックリスト
 
+- [ ] GitHubのowner/repo/remoteをhelperで検出し、`status: ok`の推奨値を全GitHub操作で共用した
+- [ ] 複数・未設定・`gh`未認証以外では、利用者にリポジトリの調査や候補選択を求めていない
 - [ ] リポジトリが public か private か確認し、private なら §1 のコスト対策を全て入れた
 - [ ] `runs-on` が `ubuntu-latest` のみ
 - [ ] 全ジョブに `timeout-minutes` がある
 - [ ] `concurrency` で古い実行をキャンセルする設定がある
 - [ ] シークレットは**本人が**登録した(代行していない)
+- [ ] 複数Accountならチーム用Accountを既定選択し、個人Accountを暗黙選択していない
+- [ ] 非エンジニア向け設定票と秘密値非表示helperを生成した
+- [ ] `production` Environment secretへ登録し、workflow jobに`environment: production`がある
+- [ ] `production`がmainだけを許可する
+- [ ] 既存Worker secretをローテーション承認なしに上書きしていない
 - [ ] APIトークンの権限を必要最小限に絞った
 - [ ] **わざと失敗させて CI が赤くなることを確認した**
 - [ ] ブランチ保護を設定した(使えないプランなら運用ルールとして記録した)

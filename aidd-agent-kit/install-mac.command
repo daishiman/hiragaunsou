@@ -3,13 +3,18 @@
 # =====================================================
 #  AI開発エージェントキット インストーラー (Mac用)
 #  Claude Code と OpenAI Codex の両方へ同時導入します
-#  v1.10.2
+#  バージョンは VERSION を正本とする
 # =====================================================
 
 set -Ee
 cd "$(dirname "$0")"
 
-KIT_VERSION="1.10.2"
+[ -f VERSION ] || { echo "[エラー] VERSION が見つかりません。" >&2; exit 1; }
+KIT_VERSION=$(tr -d '\r\n' < VERSION)
+case "$KIT_VERSION" in
+  [0-9]*.[0-9]*.[0-9]*) ;;
+  *) echo "[エラー] VERSION の形式が不正です。" >&2; exit 1 ;;
+esac
 INSTALL_HOME="${AIDD_TARGET_HOME:-$HOME}"
 while case "$INSTALL_HOME" in *'//'*) true ;; *) false ;; esac; do
   INSTALL_HOME=${INSTALL_HOME//\/\//\/}

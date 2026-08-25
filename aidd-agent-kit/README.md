@@ -1,6 +1,6 @@
 # AI開発エージェントキット
 
-**バージョン 1.10.2**
+**バージョン 1.10.4**
 
 Claude Code と OpenAI Codex の両方に、「プロの開発ノウハウ集」と「開発を自動で進める司令塔(app-orchestrator)」を同時に追加するキットです。
 
@@ -239,6 +239,21 @@ aidd-agent-kit/
 ```
 
 ## 変更履歴
+
+### 1.10.4
+
+- 英語主体だったCloudflare・Email Service・Durable Objects・Web Performance・Workers Best Practices・Turnstileの操作面を日本語化し、製品名・API・CLI・設定キーは原文のまま扱う境界を明確にしました
+- Cloudflare汎用Skillを製品選択とAccount文脈の責務所有者に整理し、専用Skill・MCP・Wrangler・CI/CDの役割重複とロールバック経路の矛盾を解消しました
+- CI必須チェック名を実在する`verify`へ統一し、user-owned tokenの誤使用、Cloudflare Account IDの露出、`npx`固定を退行検査で防ぐようにしました
+- `VERSION`をバージョンの正本とし、Claude CodeとCodex双方のmanifest・実配置・日本語操作面を同じ検証で照合するようにしました
+
+### 1.10.3
+
+- 非エンジニア向けCloudflare設定票と、API Token・Worker secretを画面やログへ出さず登録するOS共通helperをプロジェクト値から生成できるようにしました
+- Cloudflareでチーム用共有Accountと個人Accountがある場合、新規の自社アプリはチーム用Accountを既定選択し、既存リソースが個人側なら重複作成せず移行判断で停止するようにしました
+- GitHubのCloudflare資格情報を`production` Environment secretへ統一し、Deploy/Migrate雛形へ`environment: production`とmain限定前提を追加しました
+- DeployをmainのCI成功SHAから起動する構成へ変更し、手動Deployでもtypecheck/testを迂回しないようにしました
+- Account-owned API Token、最小権限、R2非公開、workerd CPU不一致、既存secret上書き防止、Token漏えい・rollbackの手順をSkillへ統合しました
 
 ### 1.10.2
 

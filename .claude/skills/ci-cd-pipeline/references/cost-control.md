@@ -45,7 +45,7 @@ concurrency:
 ### 3.2 キャッシュを使う
 
 ```yaml
-- uses: actions/setup-node@v4
+- uses: actions/setup-node@v7
   with:
     node-version: 20
     cache: ${{ steps.pm.outputs.name }}   # npm / yarn / pnpm のいずれか
@@ -53,7 +53,7 @@ concurrency:
 
 インストールが毎回ネットワークから全部落とすのを防ぐ。依存関係の量にもよるが、1回あたり30秒〜1分縮む。キャッシュ自体の保存容量は10GBまで無料。
 
-pnpm を使う場合だけ、`setup-node` **より前に** `pnpm/action-setup@v4` を置くこと。順番が逆だと `cache: pnpm` が「pnpm が見つからない」で落ちる。雛形ではロックファイルから判別して自動でこの順に並ぶようにしてある（`assets/detect-pm.yml`）。
+pnpm を使う場合だけ、`setup-node` **より前に** `pnpm/action-setup@v6` を置くこと。順番が逆だと `cache: pnpm` が「pnpm が見つからない」で落ちる。この順序は共通Composite Action（`assets/detect-pm.yml`）が一元管理するため、各workflowへ同じ処理を複製しない。
 
 ### 3.3 paths-ignore で無駄な起動を止める
 
@@ -107,7 +107,7 @@ timeout-minutes: 10
 コマンドでも取れる。
 
 ```bash
-gh api /repos/{owner}/{repo}/actions/workflows --jq '.workflows[] | "\(.name)\t\(.state)\t\(.path)"'
+gh api "repos/$GITHUB_REPOSITORY/actions/workflows" --jq '.workflows[] | "\(.name)\t\(.state)\t\(.path)"'
 ```
 
 止め忘れたワークフローがないかの確認に使う。

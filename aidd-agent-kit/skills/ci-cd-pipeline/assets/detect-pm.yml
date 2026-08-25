@@ -1,68 +1,56 @@
-# パッケージマネージャ判別ステップ（3本のワークフローに共通して埋め込むもの）
-#
-# ci.yml / deploy.yml / migrate.yml の各ファイルには、すでにこの内容が
-# 埋め込んである。このファイルは「なぜこう書くのか」の説明と、
-# 自分でワークフローを追加するときの貼り付け元として置いてある。
-#
-# なぜ判別するのか:
-#   npm / yarn / pnpm でコマンド名も引数も違う。雛形をどれか1つに固定すると、
-#   別のプロジェクトに持っていったとき静かに壊れる（`pnpm: command not found`）。
-#   判別の根拠には「設定に書いた宣言」ではなく **ロックファイルが実在するか** を使う。
-#   宣言は書き換え忘れるが、ロックファイルは実際に入れた事実の痕跡なのでズレない。
-#
-# 判別の優先順:
-#   pnpm-lock.yaml → yarn.lock → それ以外は npm
-#   （複数ある場合は上から。移行途中で2つ残っていることがあるため順序を固定する）
+name: Node.jsとパッケージマネージャを準備
+description: ロックファイルからnpm・yarn・pnpmを判別し、Node.js 22と依存関係を再現可能な形で準備する
 
-steps:
-  - uses: actions/checkout@v5
+outputs:
+  name:
+    description: 判別したパッケージマネージャ名
+    value: ${{ steps.detect.outputs.name }}
+  run:
+    description: package.jsonのscriptを実行するコマンド
+    value: ${{ steps.detect.outputs.run }}
+  exec:
+    description: ローカルバイナリを実行するコマンド
+    value: ${{ steps.detect.outputs.exec }}
 
-  - name: パッケージマネージャを判別
-    id: pm
-    run: |
-      if [ -f pnpm-lock.yaml ]; then
-        echo "name=pnpm"                              >> "$GITHUB_OUTPUT"
-        echo "install=pnpm install --frozen-lockfile" >> "$GITHUB_OUTPUT"
-        echo "run=pnpm run"                           >> "$GITHUB_OUTPUT"
-      elif [ -f yarn.lock ]; then
-        # Yarn は v1 と v2以降（Berry）で引数が違う。.yarnrc.yml があれば Berry。
-        if [ -f .yarnrc.yml ]; then
-          echo "install=yarn install --immutable"        >> "$GITHUB_OUTPUT"
+runs:
+  using: composite
+  steps:
+    # 宣言ではなく実在するロックファイルを根拠にする。移行途中で複数ある場合の
+    # 優先順は pnpm → yarn → npm に固定する。
+    - name: パッケージマネージャを判別
+      id: detect
+      shell: bash
+      run: |
+        if [ -f pnpm-lock.yaml ]; then
+          echo "name=pnpm" >> "$GITHUB_OUTPUT"
+          echo "install=pnpm install --frozen-lockfile" >> "$GITHUB_OUTPUT"
+          echo "run=pnpm run" >> "$GITHUB_OUTPUT"
+          echo "exec=pnpm exec" >> "$GITHUB_OUTPUT"
+        elif [ -f yarn.lock ]; then
+          if [ -f .yarnrc.yml ]; then
+            echo "install=yarn install --immutable" >> "$GITHUB_OUTPUT"
+          else
+            echo "install=yarn install --frozen-lockfile" >> "$GITHUB_OUTPUT"
+          fi
+          echo "name=yarn" >> "$GITHUB_OUTPUT"
+          echo "run=yarn run" >> "$GITHUB_OUTPUT"
+          echo "exec=yarn" >> "$GITHUB_OUTPUT"
         else
-          echo "install=yarn install --frozen-lockfile"  >> "$GITHUB_OUTPUT"
+          echo "name=npm" >> "$GITHUB_OUTPUT"
+          echo "install=npm ci" >> "$GITHUB_OUTPUT"
+          echo "run=npm run" >> "$GITHUB_OUTPUT"
+          echo "exec=npx" >> "$GITHUB_OUTPUT"
         fi
-        echo "name=yarn"    >> "$GITHUB_OUTPUT"
-        echo "run=yarn run" >> "$GITHUB_OUTPUT"
-      else
-        # npm install ではなく npm ci。install だとロックファイルを書き換えることがあり、
-        # CI とローカルで入るものがズレる。
-        echo "name=npm"    >> "$GITHUB_OUTPUT"
-        echo "install=npm ci" >> "$GITHUB_OUTPUT"
-        echo "run=npm run" >> "$GITHUB_OUTPUT"
-      fi
-      echo "判別結果: $(grep '^name=' "$GITHUB_OUTPUT" | tail -1)"
 
-  # pnpm のときだけ pnpm 本体を入れる。
-  # setup-node の cache: pnpm より先に置くこと（順番が逆だと「pnpm が見つからない」で落ちる）。
-  - uses: pnpm/action-setup@v4
-    if: steps.pm.outputs.name == 'pnpm'
-    # バージョンは package.json の packageManager から読ませる。
-    # ここで version: を指定すると、packageManager がある repo では
-    # 「Multiple versions of pnpm specified」で落ちる。
+    # setup-nodeのcache判定より先にpnpmを用意する。
+    - uses: pnpm/action-setup@v6
+      if: ${{ steps.detect.outputs.name == 'pnpm' }}
 
-  - uses: actions/setup-node@v4
-    with:
-      # wrangler が Node 22 以上を要求する。20 だと cf-typegen で落ちる。
-      node-version: 22
-      # npm / yarn / pnpm のいずれもこのキーワードでキャッシュできる
-      cache: ${{ steps.pm.outputs.name }}
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 22
+        cache: ${{ steps.detect.outputs.name }}
 
-  - name: 依存関係のインストール
-    run: ${{ steps.pm.outputs.install }}
-
-  # 以降、スクリプトの実行はすべてこの形で書く
-  #   run: ${{ steps.pm.outputs.run }} typecheck
-  #   run: ${{ steps.pm.outputs.run }} test
-  #
-  # 注意: `npm run test` / `yarn run test` / `pnpm run test` はいずれも有効なので、
-  # `run` に統一しておけば3種すべてで同じ書き方が通る。
+    - name: 依存関係を固定バージョンでインストール
+      shell: bash
+      run: ${{ steps.detect.outputs.install }}

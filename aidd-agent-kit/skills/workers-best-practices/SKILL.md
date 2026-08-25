@@ -1,24 +1,26 @@
 ---
 name: workers-best-practices
-description: Reviews and authors Cloudflare Workers code against production best practices. Load when writing new Workers, reviewing Worker code, configuring wrangler.jsonc, or checking for common Workers anti-patterns (streaming, floating promises, global state, secrets, bindings, observability). Biases towards retrieval from Cloudflare docs over pre-trained knowledge.
+description: Cloudflare Workersのコードを本番運用品質のベストプラクティスに照らして作成・レビューする。新しいWorkerの実装、Workerコードのレビュー、wrangler.jsoncの設定、streaming・floating promises・global state・secrets・bindings・observabilityなどのanti-pattern確認で使用する。事前学習の記憶よりCloudflare公式ドキュメントからの取得を優先する。
 ---
 
-Your knowledge of Cloudflare Workers APIs, types, and configuration may be outdated. **Prefer retrieval over pre-training** for any Workers code task — writing or reviewing.
+# Cloudflare Workers ベストプラクティス
 
-## Retrieval Sources
+Cloudflare WorkersのAPI、型、設定は更新される可能性がある。Workersコードの作成・レビューでは、**事前学習の記憶ではなく最新資料の取得を優先する**。
 
-Fetch the **latest** versions before writing or reviewing Workers code. Do not rely on baked-in knowledge for API signatures, config fields, or binding shapes.
+## 最新情報の取得元
 
-| Source | How to retrieve | Use for |
-|--------|----------------|---------|
-| Workers best practices | Fetch `https://developers.cloudflare.com/workers/best-practices/workers-best-practices/` | Canonical rules, patterns, anti-patterns |
-| Workers types | See `references/review.md` for retrieval steps | API signatures, handler types, binding types |
-| Wrangler config schema | `node_modules/wrangler/config-schema.json` | Config fields, binding shapes, allowed values |
-| Cloudflare docs | Search tool or `https://developers.cloudflare.com/workers/` | API reference, compatibility dates/flags |
+Workersコードを書く・レビューする前に最新版を取得する。API signature、設定field、binding形状を、このSkillに埋め込まれた知識だけで決めない。
 
-## FIRST: Fetch Latest References
+| 取得元 | 取得方法 | 用途 |
+|--------|----------|------|
+| Workers best practices | `https://developers.cloudflare.com/workers/best-practices/workers-best-practices/`を取得 | 正式なrules、patterns、anti-patterns |
+| Workers types | `references/review.md`の取得手順を参照 | API signatures、handler types、binding types |
+| Wrangler config schema | `node_modules/wrangler/config-schema.json` | 設定fields、binding形状、許可値 |
+| Cloudflare docs | 検索toolまたは`https://developers.cloudflare.com/workers/` | API reference、compatibility dates/flags |
 
-Before reviewing or writing Workers code, retrieve the current best practices page and relevant type definitions. If the project's `node_modules` has an older version, **prefer the latest published version**.
+## 最初に最新referenceを取得する
+
+レビューや実装の前に、現在のbest practicesページと必要な型定義を取得する。プロジェクトの`node_modules`が古い場合は、**公開済みの最新版を優先**する。
 
 ```bash
 # Fetch latest workers types
@@ -28,100 +30,104 @@ mkdir -p /tmp/workers-types-latest && \
 # Types at /tmp/workers-types-latest/package/index.d.ts
 ```
 
-## Reference Documentation
+## 補足reference
 
-- `references/rules.md` — all best practice rules with code examples and anti-patterns
-- `references/review.md` — type validation, config validation, binding access patterns, review process
+- `references/rules.md` — code examplesとanti-patternsを含む全best practice rules
+- `references/review.md` — 型・設定・binding access patternの検証とreview process
 
-## Rules Quick Reference
+## Rules早見表
 
-### Configuration
+### 設定
 
-| Rule | Summary |
-|------|---------|
-| Compatibility date | Set `compatibility_date` to today on new projects; update periodically on existing ones |
-| nodejs_compat | Enable the `nodejs_compat` flag — many libraries depend on Node.js built-ins |
-| wrangler types | Run `wrangler types` to generate `Env` — never hand-write binding interfaces |
-| Secrets | Use `wrangler secret put`, never hardcode secrets in config or source |
-| wrangler.jsonc | Use JSONC config for non-secret settings — newer features are JSON-only |
+| Rule | 要点 |
+|------|------|
+| Compatibility date | 新規projectは`compatibility_date`を当日に設定し、既存projectは定期更新する |
+| nodejs_compat | 多くのlibraryがNode.js built-insへ依存するため`nodejs_compat` flagを有効化する |
+| wrangler types | `wrangler types`で`Env`を生成し、binding interfaceを手書きしない |
+| Secrets | `wrangler secret put`を使い、configやsourceへsecretをhardcodeしない |
+| wrangler.jsonc | 非secret設定にはJSONC configを使う。新しい機能にはJSONのみ対応するものがある |
 
-### Request & Response Handling
+### RequestとResponse
 
-| Rule | Summary |
-|------|---------|
-| Streaming | Stream large/unknown payloads — never `await response.text()` on unbounded data |
-| waitUntil | Use `ctx.waitUntil()` for post-response work; do not destructure `ctx` |
+| Rule | 要点 |
+|------|------|
+| Streaming | 大きさが不明または大容量のpayloadはstreamし、無制限のdataへ`await response.text()`しない |
+| waitUntil | response後の処理には`ctx.waitUntil()`を使い、`ctx`をdestructureしない |
 
 ### Architecture
 
-| Rule | Summary |
-|------|---------|
-| Bindings over REST | Use in-process bindings (KV, R2, D1, Queues) — not the Cloudflare REST API |
-| Queues & Workflows | Move async/background work off the critical path |
-| Service bindings | Use service bindings for Worker-to-Worker calls — not public HTTP |
-| Hyperdrive | Always use Hyperdrive for external PostgreSQL/MySQL connections |
+| Rule | 要点 |
+|------|------|
+| Bindings over REST | KV、R2、D1、QueuesはCloudflare REST APIでなくin-process bindingを使う |
+| Queues & Workflows | async/background処理をcritical pathから分離する |
+| Service bindings | Worker間呼び出しはpublic HTTPでなくservice bindingを使う |
+| Hyperdrive | 外部PostgreSQL/MySQL接続には常にHyperdriveを使う |
 
 ### Observability
 
-| Rule | Summary |
-|------|---------|
-| Logs & Traces | Enable `observability` in config with `head_sampling_rate`; use structured JSON logging |
+| Rule | 要点 |
+|------|------|
+| Logs & Traces | configで`observability`と`head_sampling_rate`を有効化し、structured JSON loggingを使う |
 
-### Code Patterns
+### Code patterns
 
-| Rule | Summary |
-|------|---------|
-| No global request state | Never store request-scoped data in module-level variables |
-| Floating promises | Every Promise must be `await`ed, `return`ed, `void`ed, or passed to `ctx.waitUntil()` |
+| Rule | 要点 |
+|------|------|
+| No global request state | request固有dataをmodule-level変数へ保存しない |
+| Floating promises | 全Promiseを`await`、`return`、`void`、または`ctx.waitUntil()`のいずれかで扱う |
 
 ### Security
 
-| Rule | Summary |
-|------|---------|
-| Web Crypto | Use `crypto.randomUUID()` / `crypto.getRandomValues()` — never `Math.random()` for security |
-| No passThroughOnException | Use explicit try/catch with structured error responses |
+| Rule | 要点 |
+|------|------|
+| Web Crypto | security用途には`crypto.randomUUID()` / `crypto.getRandomValues()`を使い、`Math.random()`を使わない |
+| No passThroughOnException | 明示的なtry/catchとstructured error responseを使う |
 
-## Anti-Patterns to Flag
+## 検出するanti-patterns
 
-| Anti-pattern | Why it matters |
+| Anti-pattern | 問題になる理由 |
 |-------------|----------------|
-| `await response.text()` on unbounded data | Memory exhaustion — 128 MB limit |
-| Hardcoded secrets in source or config | Credential leak via version control |
-| `Math.random()` for tokens/IDs | Predictable, not cryptographically secure |
-| Bare `fetch()` without `await` or `waitUntil` | Floating promise — dropped result, swallowed error |
-| Module-level mutable variables for request state | Cross-request data leaks, stale state, I/O errors |
-| Cloudflare REST API from inside a Worker | Unnecessary network hop, auth overhead, added latency |
-| `ctx.passThroughOnException()` as error handling | Hides bugs, makes debugging impossible |
-| Hand-written `Env` interface | Drifts from actual wrangler config bindings |
-| Direct string comparison for secret values | Timing side-channel — use `crypto.subtle.timingSafeEqual` |
-| Destructuring `ctx` (`const { waitUntil } = ctx`) | Loses `this` binding — throws "Illegal invocation" at runtime |
-| `any` on `Env` or handler params | Defeats type safety for all binding access |
-| `as unknown as T` double-cast | Hides real type incompatibilities — fix the design |
-| `implements` on platform base classes (instead of `extends`) | Legacy — loses `this.ctx`, `this.env`. Applies to DurableObject, WorkerEntrypoint, Workflow |
-| `env.X` inside platform base class | Should be `this.env.X` in classes extending DurableObject, WorkerEntrypoint, etc. |
+| 無制限のdataに`await response.text()` | 128 MB制限に達するmemory exhaustion |
+| source/configにsecretをhardcode | version control経由のcredential漏えい |
+| token/ID生成に`Math.random()` | 予測可能で暗号学的に安全でない |
+| `await`も`waitUntil`もない裸の`fetch()` | floating promiseにより結果やerrorが失われる |
+| request stateをmodule-level mutable変数へ保存 | request間data漏えい、stale state、I/O error |
+| Worker内からCloudflare REST APIを呼ぶ | 不要なnetwork hop、認証負荷、latency増加 |
+| error handlingに`ctx.passThroughOnException()` | bugを隠し、debug不能にする |
+| `Env` interfaceの手書き | 実際のwrangler config bindingとdriftする |
+| secret値の直接文字列比較 | timing side-channel。`crypto.subtle.timingSafeEqual`を使う |
+| `ctx`のdestructure（`const { waitUntil } = ctx`） | `this` bindingが失われ、runtimeで`Illegal invocation` |
+| `any` on `Env` or handler params | binding access全体のtype safetyを失う |
+| `as unknown as T`のdouble-cast | 実際の型不整合を隠す。designを修正する |
+| platform base classへの`implements` | legacy。`this.ctx`、`this.env`を失うため`extends`を使う |
+| platform base class内の`env.X` | DurableObject、WorkerEntrypoint等をextendsするclassでは`this.env.X`を使う |
 
-## Review Workflow
+## レビュー手順
 
-1. **Retrieve** — fetch latest best practices page, workers types, and wrangler schema
-2. **Read full files** — not just diffs; context matters for binding access patterns
-3. **Check types** — binding access, handler signatures, no `any`, no unsafe casts (see `references/review.md`)
-4. **Check config** — compatibility_date, nodejs_compat, observability, secrets, binding-code consistency
-5. **Check patterns** — streaming, floating promises, global state, serialization boundaries
-6. **Check security** — crypto usage, secret handling, timing-safe comparisons, error handling
-7. **Validate with tools** — `pnpm tsc --noEmit`, lint for `no-floating-promises`
-8. **Reference rules** — see `references/rules.md` for each rule's correct pattern
+1. **Retrieve** — 最新best practices、workers types、wrangler schemaを取得する
+2. **Read full files** — diffだけでなくfile全体を読み、binding accessの文脈を確認する
+3. **Check types** — binding access、handler signatures、`any`、unsafe castsを確認する（`references/review.md`参照）
+4. **Check config** — `compatibility_date`、`nodejs_compat`、observability、secrets、bindingとcodeの一致を確認する
+5. **Check patterns** — streaming、floating promises、global state、serialization boundariesを確認する
+6. **Check security** — crypto、secret handling、timing-safe comparison、error handlingを確認する
+7. **Validate with tools** — `pnpm tsc --noEmit`と`no-floating-promises` lintを実行する
+8. **Reference rules** — 各ruleの正しいpatternを`references/rules.md`で確認する
 
-## Scope
+## 対象範囲
 
-This skill covers Workers-specific best practices and code review. For related topics:
+このSkillはWorkers固有のbest practicesとcode reviewを扱う。関連領域は次を使う。
 
-- **Durable Objects**: load the `durable-objects` skill
-- **Workflows**: see [Rules of Workflows](https://developers.cloudflare.com/workflows/build/rules-of-workflows/)
-- **Wrangler CLI commands**: load the `wrangler` skill
+- **Durable Objects**: `durable-objects` Skillをloadする
+- **Workflows**: [Rules of Workflows](https://developers.cloudflare.com/workflows/build/rules-of-workflows/)を参照する
+- **Wrangler CLI commands**: `wrangler` Skillをloadする
 
-## Principles
+## 最終出力
 
-- **Be certain.** Retrieve before flagging. If unsure about an API, config field, or pattern, fetch the docs first.
-- **Provide evidence.** Reference line numbers, tool output, or docs links.
-- **Focus on what developers will copy.** Workers code in examples and docs gets pasted into production.
-- **Correctness over completeness.** A concise example that works beats a comprehensive one with errors.
+レビュー結果は、重要度順に「対象file/line、観測した事実、該当rule、影響、最小の修正案、実行した検証」を日本語で報告する。問題がなければ、確認した範囲と未検証事項を明示する。
+
+## 原則
+
+- **断定前に取得する。** API、config field、patternに確信がなければ、指摘前に公式資料を取得する。
+- **根拠を示す。** line number、tool output、docs linkを添える。
+- **開発者がコピーする箇所を優先する。** examplesやdocsのWorkers codeは本番へコピーされる。
+- **網羅性より正確性。** 動く短いexampleは、errorを含む包括的なexampleよりよい。

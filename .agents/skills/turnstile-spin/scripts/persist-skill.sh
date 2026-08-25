@@ -67,9 +67,27 @@ mkdir -p "$TARGET_DIR"
 
 # Install the canonical bundle from cloudflare/skills via degit. This writes
 # SKILL.md, scripts/, references/, templates/, tests/ into $TARGET_DIR.
-if ! npx --yes degit cloudflare/skills/skills/turnstile-spin "$TARGET_DIR" >/dev/null 2>&1; then
+run_degit() {
+  if [ -f pnpm-lock.yaml ] || [ -f pnpm-workspace.yaml ]; then
+    pnpm dlx degit cloudflare/skills/skills/turnstile-spin "$TARGET_DIR"
+  elif [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
+    npx --yes degit cloudflare/skills/skills/turnstile-spin "$TARGET_DIR"
+  elif [ -f yarn.lock ]; then
+    yarn dlx degit cloudflare/skills/skills/turnstile-spin "$TARGET_DIR"
+  elif command -v pnpm >/dev/null 2>&1; then
+    pnpm dlx degit cloudflare/skills/skills/turnstile-spin "$TARGET_DIR"
+  elif command -v npm >/dev/null 2>&1; then
+    npx --yes degit cloudflare/skills/skills/turnstile-spin "$TARGET_DIR"
+  elif command -v yarn >/dev/null 2>&1; then
+    yarn dlx degit cloudflare/skills/skills/turnstile-spin "$TARGET_DIR"
+  else
+    return 127
+  fi
+}
+
+if ! run_degit >/dev/null 2>&1; then
   echo "persist-skill: degit failed; cannot fetch cloudflare/skills/skills/turnstile-spin." >&2
-  echo "persist-skill: ensure your network can reach github.com and try again, or install manually." >&2
+  echo "persist-skill: ensure the repository package manager can reach github.com and try again, or install manually." >&2
   echo "{\"status\":\"error\",\"reason\":\"degit_failed\"}"
   exit 1
 fi

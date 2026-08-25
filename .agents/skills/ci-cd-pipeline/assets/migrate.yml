@@ -16,11 +16,6 @@ name: Migrate
 on:
   workflow_dispatch:
     inputs:
-      environment:
-        description: 対象環境
-        type: choice
-        options: [production]
-        required: true
       confirm:
         description: 本番DBを変更します。よければ APPLY と入力してください
         type: string
@@ -38,6 +33,11 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # CLOUDFLARE_*はRepository secretではなく、このEnvironmentへ登録する。
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
     steps:
       - name: 入力確認
@@ -47,52 +47,19 @@ jobs:
           echo "::error::confirm に APPLY と入力されていません。中止します。"
           exit 1
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - name: パッケージマネージャを判別
+      - name: Node.jsと依存関係を準備
         id: pm
+        uses: ./.github/actions/detect-pm
+
+      - name: 本番設定を検証
         run: |
-          if [ -f pnpm-lock.yaml ]; then
-            echo "name=pnpm"                              >> "$GITHUB_OUTPUT"
-            echo "install=pnpm install --frozen-lockfile" >> "$GITHUB_OUTPUT"
-            echo "run=pnpm run"                           >> "$GITHUB_OUTPUT"
-            echo "exec=pnpm exec"                         >> "$GITHUB_OUTPUT"
-          elif [ -f yarn.lock ]; then
-            if [ -f .yarnrc.yml ]; then
-              echo "install=yarn install --immutable"       >> "$GITHUB_OUTPUT"
-            else
-              echo "install=yarn install --frozen-lockfile" >> "$GITHUB_OUTPUT"
-            fi
-            echo "name=yarn"    >> "$GITHUB_OUTPUT"
-            echo "run=yarn run" >> "$GITHUB_OUTPUT"
-            echo "exec=yarn"    >> "$GITHUB_OUTPUT"
-          else
-            echo "name=npm"       >> "$GITHUB_OUTPUT"
-            echo "install=npm ci" >> "$GITHUB_OUTPUT"
-            echo "run=npm run"    >> "$GITHUB_OUTPUT"
-            echo "exec=npx"       >> "$GITHUB_OUTPUT"
-          fi
-
-      - uses: pnpm/action-setup@v4
-        if: steps.pm.outputs.name == 'pnpm'
-        # バージョンは package.json の packageManager から読ませる。
-        # ここで version: を指定すると、packageManager がある repo では
-        # 「Multiple versions of pnpm specified」で落ちる。
-
-      - uses: actions/setup-node@v4
-        with:
-          # wrangler が Node 22 以上を要求する。20 だと cf-typegen で落ちる。
-          node-version: 22
-          cache: ${{ steps.pm.outputs.name }}
-
-      - name: 依存関係のインストール（${{ steps.pm.outputs.name }}）
-        run: ${{ steps.pm.outputs.install }}
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::productionのCLOUDFLARE_API_TOKENが未登録です"; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::productionのCLOUDFLARE_ACCOUNT_IDが未登録です"; exit 1; }
 
       # 先にバックアップ。ここが失敗したらマイグレーションには進ませない。
       - name: バックアップ取得
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: ${{ steps.pm.outputs.run }} db:backup
 
       # 後から取り出せるように残す。
@@ -100,22 +67,16 @@ jobs:
       # 全員取得できる。個人情報を含むデータベースでは保管期間を短くしておく。
       - name: バックアップを保管
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: d1-backup-${{ github.run_id }}
           path: backup.sql
           retention-days: 14
 
       - name: 未適用のマイグレーションを表示
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: ${{ steps.pm.outputs.exec }} wrangler d1 migrations list <DB名> --remote
 
       - name: マイグレーション適用
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: ${{ steps.pm.outputs.run }} db:migrate:remote
 
 # このあと必ず Deploy を実行すること。

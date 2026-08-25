@@ -32,8 +32,9 @@ diagnose_pair() {
     warnings=$((warnings + 1))
     [ "$STRICT" -eq 0 ] || errors=$((errors + 1))
   else
-    echo "[NG:DIFF] $kind '$name' が${left_scope}/${right_scope}で異なります。実行時の選択が曖昧です。"
-    errors=$((errors + 1))
+    echo "[WARN:DIFF] $kind '$name' が${left_scope}/${right_scope}で異なります。このrepositoryではproject scopeを正本として扱います。"
+    warnings=$((warnings + 1))
+    [ "$STRICT" -eq 0 ] || errors=$((errors + 1))
   fi
 }
 

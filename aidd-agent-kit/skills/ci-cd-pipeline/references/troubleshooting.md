@@ -56,12 +56,38 @@ CI を入れると、main に入っていないものは deploy が起動しな�
 
 | 原因 | 確認方法 |
 |---|---|
-| シークレット名の打ち間違い | `gh secret list` で名前を確認。`CLOUDFLARE_API_TOKEN` と `CF_API_TOKEN` の混在が多い |
+| シークレット名・scopeの違い | `gh secret list --env production --repo "$GITHUB_REPOSITORY"`で確認。Deploy/Migrate jobに`environment: production`が必要 |
 | トークンの権限不足 | Cloudflare ダッシュボードでトークンの権限を確認（Workers Scripts:Edit / D1:Edit / R2:Edit） |
 | トークンの期限切れ | 作成時に有効期限を設定していると切れる |
 | fork からの PR | **fork の PR にはシークレットが渡らない**。仕様であり、正しい動作 |
 
 シークレットの値をログに出して確認しようとしないこと。GitHub は自動でマスクするが、加工した文字列（Base64 にする、先頭数文字だけ出すなど）はマスクを回避してしまい、そのまま public なログに残る。
+
+### 2.1.1 Account違い（code 7003 / object identifier invalid）
+
+チーム用共有Accountと個人Accountの両方に所属していると起きやすい。新規構築はチーム用Accountを既定にするが、既存Worker/D1/R2がある場合はその所有Accountと`wrangler.jsonc`を先に照合する。
+
+```bash
+pnpm wrangler whoami
+pnpm wrangler r2 bucket list
+```
+
+別Accountへ同名リソースを作って解決しない。チーム移行が必要なら別タスクとして停止する。
+
+### 2.1.2 workerdのplatform/CPU不一致
+
+`You installed workerd on another platform`、`workerd-darwin-64`、`workerd-darwin-arm64`が出た場合、別環境の`node_modules`が残っている。`pnpm-workspace.yaml`の`supportedArchitectures`を確認してから入れ直す。
+
+```bash
+pnpm install --force --frozen-lockfile
+pnpm wrangler --version
+```
+
+lockfileを削除したり、別package managerへ切り替えたりしない。
+
+### 2.1.3 R2が画面に見えない
+
+`wrangler whoami`とブラウザのAccountを照合し、`r2 bucket list`を見る。本当に存在しない場合も診断中に勝手に作らず、対象Account・bucket名・課金有無を示して承認後だけ作成する。Worker binding経由なら`r2.dev`とCustom Domainは無効のままにする。
 
 ### 2.2 ビルドは通るのに本番で落ちる
 
@@ -99,9 +125,9 @@ du -sh .open-next/assets/* | sort -h | tail -20
 ```bash
 git switch -c ci-check
 # テストの期待値を1つ書き換える
-git commit -am "確認用: わざと壊す" && git push -u origin ci-check
+git commit -am "確認用: わざと壊す" && git push -u "$GIT_REMOTE" ci-check
 # → PR を作り、CI が赤くなることを目で見る
-git push origin --delete ci-check   # 確認できたら消す
+git push "$GIT_REMOTE" --delete ci-check   # 確認できたら消す
 ```
 
 これをやらないと「設定したつもりで、実は何もチェックしていない」ことに気づけない。**表示されているから効いている、とは限らない。**
@@ -140,13 +166,24 @@ npx wrangler d1 execute hr-evaluation-db --remote --file=backup.sql
 
 理由: 「本当に壊れている」のか「まだアイソレータが古いだけ」なのかを機械は区別できない。自動ロールバックは、正常なデプロイを勝手に巻き戻す事故を生む。人が判断する。
 
+### 4.4 secretはコードrollbackで戻らない
+
+`AUTH_PASSWORD`等を更新すると旧パスワードは使えず、`SESSION_SECRET`等を更新すると既存セッションが無効になる。通常セットアップでは`wrangler secret list`を先に確認し、同名があれば上書きしない。
+
+戻す必要がある場合は、パスワードマネージャー等に保存した旧値を所有者が再登録する。値がなければ新しく発行し、全利用者の再ログイン等の影響を受け入れる。Workerコードのrollbackでは解決しない。
+
+### 4.5 API Tokenを紛失・漏えいした
+
+- 紛失: 値は再表示できない。新Tokenを作り、Deploy成功後に旧Tokenを削除する。
+- 漏えい疑い: Git履歴修正より先に即時失効。Actionsを止め、Audit Logsとdeployment履歴を確認してから新Tokenへ交換する。
+
 ## 5. 調べ方
 
 ```bash
-gh run list --limit 10                    # 直近の実行一覧
-gh run view <run-id> --log-failed         # 失敗したステップのログだけ
-gh run watch                              # 実行中のものを追いかける
-gh secret list                            # 登録済みシークレットの「名前」（値は見られない）
+gh run list --repo "$GITHUB_REPOSITORY" --limit 10             # 直近の実行一覧
+gh run view --repo "$GITHUB_REPOSITORY" <run-id> --log-failed  # 失敗したステップのログだけ
+gh run watch --repo "$GITHUB_REPOSITORY"                       # 実行中のものを追いかける
+gh secret list --repo "$GITHUB_REPOSITORY"                     # 登録済みシークレットの「名前」（値は見られない）
 npx wrangler deployments list             # 本番に出ているバージョンの履歴
 npx wrangler tail                         # 本番のログをその場で見る
 ```

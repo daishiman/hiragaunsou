@@ -2,7 +2,8 @@
 
 ## Prerequisites
 
-**API Token**: Create at https://dash.cloudflare.com/profile/api-tokens
+**API Token**: Create an account-owned token in the selected team Account at
+https://dash.cloudflare.com/?to=/:account/api-tokens
 - Permission: `Zone.WAF Edit` or `Zone.Firewall Services Edit`
 - Zone Resources: Include specific zones or all zones
 

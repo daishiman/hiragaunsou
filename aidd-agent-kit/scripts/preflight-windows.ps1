@@ -132,15 +132,18 @@ function Test-SkillMetadata {
     }
 
     $descriptionHead = $descriptionMatch.Groups['value'].Value.Trim()
+    $descriptionText = $descriptionHead
     if ($descriptionHead -match '^[>|](?:[1-9][+-]?|[+-][1-9]?)?(?:[ \t]+#.*)?$') {
         $hasBlockBody = $false
+        $descriptionLines = @()
         $tail = $metadata.Substring(
             $descriptionMatch.Index + $descriptionMatch.Length
         )
         foreach ($line in ($tail -split '\r?\n')) {
             if ($line -match '^[ \t]+\S') {
                 $hasBlockBody = $true
-                break
+                $descriptionLines += $line.Trim()
+                continue
             }
             if ($line -match '^\S') {
                 break
@@ -153,6 +156,7 @@ function Test-SkillMetadata {
                 -Path $FilePath `
                 -Message 'Block scalar description is empty.'
         }
+        $descriptionText = $descriptionLines -join "`n"
     }
     elseif ([string]::IsNullOrWhiteSpace($descriptionHead)) {
         Throw-PreflightFailure `
@@ -160,6 +164,17 @@ function Test-SkillMetadata {
             -Category 'description' `
             -Path $FilePath `
             -Message 'Description is empty.'
+    }
+
+    $japanesePattern = '[ぁ-んァ-ヶ一-龯々ー]'
+    $bodyStart = $frontmatter.Index + $frontmatter.Length
+    $body = $text.Substring($bodyStart)
+    if ($descriptionText -notmatch $japanesePattern -or $body -notmatch $japanesePattern) {
+        Throw-PreflightFailure `
+            -Stage 'skill' `
+            -Category 'japanese-interface' `
+            -Path $FilePath `
+            -Message 'Skill description and operating instructions must include Japanese.'
     }
 
     if ($SeenNames.ContainsKey($ExpectedName)) {

@@ -4,7 +4,15 @@ setlocal EnableExtensions EnableDelayedExpansion
 title AI開発エージェントキット インストーラー (Windows)
 cd /d "%~dp0"
 
-set "KIT_VERSION=1.10.2"
+if not exist "%~dp0VERSION" (
+  echo [エラー] VERSION が見つかりません。
+  exit /b 1
+)
+set /p KIT_VERSION=<"%~dp0VERSION"
+if not defined KIT_VERSION (
+  echo [エラー] VERSION が空です。
+  exit /b 1
+)
 if defined AIDD_TARGET_HOME (
   set "INSTALL_HOME=%AIDD_TARGET_HOME%"
 ) else (
