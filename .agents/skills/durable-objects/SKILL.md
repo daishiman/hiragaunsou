@@ -1,63 +1,63 @@
 ---
 name: durable-objects
-description: Create and review Cloudflare Durable Objects. Use when building stateful coordination (chat rooms, multiplayer games, booking systems), implementing RPC methods, SQLite storage, alarms, WebSockets, or reviewing DO code for best practices. Covers Workers integration, wrangler config, and testing with Vitest. Biases towards retrieval from Cloudflare docs over pre-trained knowledge.
+description: Cloudflare Durable Objects の実装とレビューに使用する。チャットルーム、マルチプレイ、予約システムなどの状態を持つ協調処理、RPC methods、SQLite storage、alarms、WebSockets、Workers統合、wrangler設定、Vitestでのテストを扱う。事前学習の知識より最新のCloudflare docsの取得を優先する。
 ---
 
-# Durable Objects
+# Durable Objects の実装・レビュー
 
-Build stateful, coordinated applications on Cloudflare's edge using Durable Objects.
+Durable Objectsを使い、Cloudflare edge上に状態を持つ協調型アプリケーションを実装する。
 
-## Retrieval Sources
+## 最新情報の取得先
 
-Your knowledge of Durable Objects APIs and configuration may be outdated. **Prefer retrieval over pre-training** for any Durable Objects task.
+Durable Objects APIsや設定は更新されるため、**事前学習の知識より最新の公式情報を優先する**。API signature、設定項目、制限値を記憶だけで断定しない。
 
-| Resource | URL |
+| 用途 | URL |
 |----------|-----|
-| Docs | https://developers.cloudflare.com/durable-objects/ |
+| 概要・機能 | https://developers.cloudflare.com/durable-objects/ |
 | API Reference | https://developers.cloudflare.com/durable-objects/api/ |
 | Best Practices | https://developers.cloudflare.com/durable-objects/best-practices/ |
-| Examples | https://developers.cloudflare.com/durable-objects/examples/ |
+| 公式例 | https://developers.cloudflare.com/durable-objects/examples/ |
 
-Fetch the relevant doc page when implementing features.
+実装前に該当ページとプロジェクトのWrangler config schema / Workers typesを確認する。本Skillと最新の公式情報が食い違う場合は公式情報を優先し、不明なAPIや設定を推測で補わない。
 
-## When to Use
+## 使う場面
 
-- Creating new Durable Object classes for stateful coordination
-- Implementing RPC methods, alarms, or WebSocket handlers
-- Reviewing existing DO code for best practices
-- Configuring wrangler.jsonc/toml for DO bindings and migrations
-- Writing tests with `@cloudflare/vitest-pool-workers`
-- Designing sharding strategies and parent-child relationships
+- 協調処理のために新しいDurable Object classを作る
+- RPC methods、alarms、WebSocket handlersを実装する
+- 既存のDOコードをBest Practicesに照らしてレビューする
+- `wrangler.jsonc` / `wrangler.toml`にDO bindingsとmigrationsを設定する
+- `@cloudflare/vitest-pool-workers`でテストする
+- sharding戦略やparent-child関係を設計する
 
-## Reference Documentation
+## 詳細リファレンス
 
-- `./references/rules.md` - Core rules, storage, concurrency, RPC, alarms
-- `./references/testing.md` - Vitest setup, unit/integration tests, alarm testing
-- `./references/workers.md` - Workers handlers, types, wrangler config, observability
+- `./references/rules.md` - 中核ルール、storage、concurrency、RPC、alarms
+- `./references/testing.md` - Vitest設定、unit/integration tests、alarm testing
+- `./references/workers.md` - Workers handlers、types、wrangler config、observability
 
-Search: `blockConcurrencyWhile`, `idFromName`, `getByName`, `setAlarm`, `sql.exec`
+検索キーワード: `blockConcurrencyWhile`, `idFromName`, `getByName`, `setAlarm`, `sql.exec`
 
-## Core Principles
+## 中核原則
 
-### Use Durable Objects For
+### Durable Objectsが適する用途
 
-| Need | Example |
+| 必要な性質 | 例 |
 |------|---------|
-| Coordination | Chat rooms, multiplayer games, collaborative docs |
-| Strong consistency | Inventory, booking systems, turn-based games |
-| Per-entity storage | Multi-tenant SaaS, per-user data |
-| Persistent connections | WebSockets, real-time notifications |
-| Scheduled work per entity | Subscription renewals, game timeouts |
+| 複数利用者の協調 | チャットルーム、マルチプレイ、共同編集 |
+| Strong consistency | 在庫、予約システム、ターン制ゲーム |
+| entity単位のstorage | Multi-tenant SaaS、利用者ごとのデータ |
+| 持続接続 | WebSockets、real-time notifications |
+| entity単位の予定処理 | 契約更新、ゲームのtimeout |
 
-### Do NOT Use For
+### 使わない用途
 
-- Stateless request handling (use plain Workers)
-- Maximum global distribution needs
-- High fan-out independent requests
+- statelessなrequest handling、plain Workersで十分な処理
+- 最大限のglobal distributionが優先される処理
+- 互いに独立したhigh fan-out requests
 
-## Quick Reference
+## 実装早見表
 
-### Wrangler Configuration
+### Wrangler設定
 
 ```jsonc
 // wrangler.jsonc
@@ -69,7 +69,7 @@ Search: `blockConcurrencyWhile`, `idFromName`, `getByName`, `setAlarm`, `sql.exe
 }
 ```
 
-### Basic Durable Object Pattern
+### 基本パターン
 
 ```typescript
 import { DurableObject } from "cloudflare:workers";
@@ -109,25 +109,25 @@ export default {
 };
 ```
 
-## Critical Rules
+## 必須ルール
 
-1. **Model around coordination atoms** - One DO per chat room/game/user, not one global DO
-2. **Use `getByName()` for deterministic routing** - Same input = same DO instance
-3. **Use SQLite storage** - Configure `new_sqlite_classes` in migrations
-4. **Initialize in constructor** - Use `blockConcurrencyWhile()` for schema setup only
-5. **Use RPC methods** - Not fetch() handler (compatibility date >= 2024-04-03)
-6. **Persist first, cache second** - Always write to storage before updating in-memory state
-7. **One alarm per DO** - `setAlarm()` replaces any existing alarm
+1. **coordination atomで分ける** - 1つのglobal DOに集約せず、chat room / game / userごとに1 DOとする
+2. **deterministic routingに`getByName()`を使う** - 同じ入力は同じDO instanceへ導く
+3. **SQLite storageを使う** - migrationsで`new_sqlite_classes`を設定する
+4. **constructorで初期化する** - `blockConcurrencyWhile()`はschema setupだけに使う
+5. **RPC methodsを使う** - `fetch()` handlerで代用しない。compatibility dateの要件は実装時に最新docsで確認する
+6. **persistを先、cacheを後にする** - in-memory stateを更新する前にstorageへ書き込む
+7. **alarmは1 DOに1つ** - `setAlarm()`は既存alarmを置き換える
 
-## Anti-Patterns (NEVER)
+## 禁止パターン
 
-- Single global DO handling all requests (bottleneck)
-- Using `blockConcurrencyWhile()` on every request (kills throughput)
-- Storing critical state only in memory (lost on eviction/crash)
-- Using `await` between related storage writes (breaks atomicity)
-- Holding `blockConcurrencyWhile()` across `fetch()` or external I/O
+- 1つのglobal DOで全requestsを処理する。bottleneckになる
+- 毎requestで`blockConcurrencyWhile()`を使いthroughputを落とす
+- 重要なstateをmemoryだけに保持する。eviction / crashで失われる
+- 関連するstorage writesの間に`await`を挟みatomicityを壊す
+- `fetch()`や外部I/Oをまたいで`blockConcurrencyWhile()`を保持する
 
-## Stub Creation
+## Stubの作成
 
 ```typescript
 // Deterministic - preferred for most cases
@@ -142,7 +142,7 @@ const id = env.MY_DO.newUniqueId();
 const stub = env.MY_DO.get(id);
 ```
 
-## Storage Operations
+## Storage操作
 
 ```typescript
 // SQL (synchronous, recommended)
@@ -154,7 +154,7 @@ await this.ctx.storage.put("key", value);
 const val = await this.ctx.storage.get<Type>("key");
 ```
 
-## Alarms
+## Alarmsの実装
 
 ```typescript
 // Schedule (replaces existing)
@@ -170,7 +170,7 @@ async alarm(): Promise<void> {
 await this.ctx.storage.deleteAlarm();
 ```
 
-## Testing Quick Start
+## テストの最小例
 
 ```typescript
 import { env } from "cloudflare:test";
@@ -184,3 +184,9 @@ describe("MyDO", () => {
   });
 });
 ```
+
+## 検証と報告
+
+- プロジェクト既存のtypecheck / testコマンドと`@cloudflare/vitest-pool-workers`の対象テストを実行する。実行できない検証は未実施理由を明記する。
+- bindings、migrations、class名、生成された`Env`型が一致することを確認する。新規のremote migrationや破壊的変更は、ユーザーの明示依頼がなければ実行しない。
+- 最終報告は「選んだDO分割単位」「設定・実装の変更」「実行した検証と結果」「未検証項目・残るリスク」の順で簡潔に日本語で示す。

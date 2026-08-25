@@ -1,4 +1,4 @@
-# CD: main に入ったものを本番に配る。
+# CD: main のCIが成功したものだけを本番に配る。
 #
 # 手元からの `wrangler deploy` と決定的に違う点:
 #   wrangler は git のコミットではなく「その場の作業ツリー」をビルドする。
@@ -7,13 +7,16 @@
 #   CI のランナーは毎回まっさらなチェックアウトしか持たないため、
 #   作業ツリー = コミット が常に一致する。この問題が構造的に消える。
 #
+# CLOUDFLARE_*はGitHubのproduction Environment secret、APP_URLはRepository variableを使う。
 # npm / yarn / pnpm のどれでもそのまま動く（ロックファイルから自動判別する）。
 name: Deploy
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
-  # 再デプロイしたいときのため
+  # 再デプロイしたいときのため。main以外はjob条件とEnvironmentで止める。
   workflow_dispatch:
 
 concurrency:
@@ -26,47 +29,33 @@ permissions:
 
 jobs:
   deploy:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # CLOUDFLARE_*はRepository secretではなく、このEnvironmentへ登録する。
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      APP_URL: ${{ vars.APP_URL }}
 
     steps:
-      - uses: actions/checkout@v5
-
-      - name: パッケージマネージャを判別
-        id: pm
-        run: |
-          if [ -f pnpm-lock.yaml ]; then
-            echo "name=pnpm"                              >> "$GITHUB_OUTPUT"
-            echo "install=pnpm install --frozen-lockfile" >> "$GITHUB_OUTPUT"
-            echo "run=pnpm run"                           >> "$GITHUB_OUTPUT"
-          elif [ -f yarn.lock ]; then
-            if [ -f .yarnrc.yml ]; then
-              echo "install=yarn install --immutable"       >> "$GITHUB_OUTPUT"
-            else
-              echo "install=yarn install --frozen-lockfile" >> "$GITHUB_OUTPUT"
-            fi
-            echo "name=yarn"    >> "$GITHUB_OUTPUT"
-            echo "run=yarn run" >> "$GITHUB_OUTPUT"
-          else
-            echo "name=npm"       >> "$GITHUB_OUTPUT"
-            echo "install=npm ci" >> "$GITHUB_OUTPUT"
-            echo "run=npm run"    >> "$GITHUB_OUTPUT"
-          fi
-
-      - uses: pnpm/action-setup@v4
-        if: steps.pm.outputs.name == 'pnpm'
-        # バージョンは package.json の packageManager から読ませる。
-        # ここで version: を指定すると、packageManager がある repo では
-        # 「Multiple versions of pnpm specified」で落ちる。
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
         with:
-          # wrangler が Node 22 以上を要求する。20 だと cf-typegen で落ちる。
-          node-version: 22
-          cache: ${{ steps.pm.outputs.name }}
+          # workflow_runではCIが検査したmainのcommitそのものをcheckoutする。
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
-      - name: 依存関係のインストール（${{ steps.pm.outputs.name }}）
-        run: ${{ steps.pm.outputs.install }}
+      - name: 本番設定を検証
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "::error::productionのCLOUDFLARE_API_TOKENが未登録です"; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "::error::productionのCLOUDFLARE_ACCOUNT_IDが未登録です"; exit 1; }
+          test -n "$APP_URL" || { echo "::error::Repository VariableのAPP_URLが未登録です"; exit 1; }
+
+      - name: Node.jsと依存関係を準備
+        id: pm
+        uses: ./.github/actions/detect-pm
 
       # Cloudflare のバインディング（DB接続など）の型定義を生成する。
       # このファイルは Git 管理外なので、まっさらなチェックアウトには存在しない。
@@ -80,10 +69,12 @@ jobs:
       - name: 型チェック
         run: ${{ steps.pm.outputs.run }} typecheck
 
+      # workflow_dispatchでも品質検査を迂回しない。自動経路は直前のCI成功で検査済み。
+      - name: テスト（手動実行時）
+        if: github.event_name == 'workflow_dispatch'
+        run: ${{ steps.pm.outputs.run }} test
+
       - name: デプロイ
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: ${{ steps.pm.outputs.run }} deploy
 
       # --- ここから配ったあとの確認 ---
@@ -97,16 +88,12 @@ jobs:
         run: sleep 30
 
       - name: スモークテスト（1回目）
-        env:
-          APP_URL: ${{ vars.APP_URL }}
         run: bash .github/scripts/smoke.sh
 
       - name: 2回目までの待機
         run: sleep 90
 
       - name: スモークテスト（2回目）
-        env:
-          APP_URL: ${{ vars.APP_URL }}
         run: bash .github/scripts/smoke.sh
 
       - name: 失敗したときの案内
@@ -114,8 +101,8 @@ jobs:
         run: |
           echo "::error::デプロイ後の確認に失敗しました。"
           echo "自動では元に戻していません。以下で状況を確認し、人が判断してください。"
-          echo "  npx wrangler deployments list"
-          echo "  npx wrangler rollback [deployment-id]"
+          echo "  プロジェクトで使っているWranglerコマンドで deployments list を確認"
+          echo "  必要なら所有者判断で rollback [deployment-id]"
           echo "『本当に壊れている』のか『まだ古いプロセスが残っているだけ』なのかを"
           echo "機械は区別できないため、ロールバックは自動実行していません。"
 

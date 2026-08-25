@@ -215,7 +215,8 @@ not http.headers["user-agent"] contains "bot"
 
 ### API Token (Recommended)
 ```bash
-# Create token at: https://dash.cloudflare.com/profile/api-tokens
+# Create an account-owned token in the selected team Account:
+# https://dash.cloudflare.com/?to=/:account/api-tokens
 # Required permissions: Zone.Snippets:Edit, Zone.Rules:Edit
 export CLOUDFLARE_API_TOKEN="your_token_here"
 ```
@@ -224,4 +225,4 @@ export CLOUDFLARE_API_TOKEN="your_token_here"
 ```bash
 export CLOUDFLARE_EMAIL="your@email.com"
 export CLOUDFLARE_API_KEY="your_global_api_key"
-``` 
+```

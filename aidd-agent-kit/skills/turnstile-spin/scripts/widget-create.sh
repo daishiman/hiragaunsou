@@ -5,7 +5,7 @@
 #   $CLOUDFLARE_API_TOKEN (required)
 #
 # Args:
-#   --account-id <id>        Cloudflare account ID
+#   --account-index <number> Masked candidate number from auth-probe
 #   --name <name>            Widget name (e.g. "myproject (Spin)")
 #   --domains <a,b,c>        Comma-separated domain list (include localhost,127.0.0.1)
 #   --mode <managed|invisible|non-interactive>  Default: managed
@@ -17,10 +17,15 @@
 
 set -uo pipefail
 
+script_dir=$(cd -- "$(dirname -- "$0")" && pwd)
+# shellcheck source=account-context.sh
+# shellcheck disable=SC1091
+. "$script_dir/account-context.sh"
+
 MODE="managed"
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --account-id) ACCOUNT_ID="$2"; shift 2 ;;
+    --account-index) ACCOUNT_INDEX="$2"; shift 2 ;;
     --name)       NAME="$2"; shift 2 ;;
     --domains)    DOMAINS="$2"; shift 2 ;;
     --mode)       MODE="$2"; shift 2 ;;
@@ -29,9 +34,19 @@ while [[ $# -gt 0 ]]; do
 done
 
 : "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN must be set}"
-: "${ACCOUNT_ID:?--account-id required}"
 : "${NAME:?--name required}"
 : "${DOMAINS:?--domains required}"
+
+if ! turnstile_require_user_api_token; then
+  echo "widget-create: Turnstileは専用User API Tokenを使ってください。Account API TokenとGlobal API Keyは非対応です。" >&2
+  exit 2
+fi
+
+if ! turnstile_resolve_account "${ACCOUNT_INDEX:-}"; then
+  echo "widget-create: Account候補番号を解決できません。auth-probeを再実行してください。" >&2
+  exit 2
+fi
+ACCOUNT_ID="$TURNSTILE_ACCOUNT_ID"
 
 domains_json=$(python3 -c "import sys; print(__import__('json').dumps(sys.argv[1].split(',')))" "$DOMAINS")
 

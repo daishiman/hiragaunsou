@@ -9,7 +9,7 @@
 | ワークフロー | 引き金 | 壊せるもの | 失敗したときの被害 |
 |---|---|---|---|
 | `ci.yml` | push / PR | **何も壊せない** | なし。赤くなるだけ |
-| `deploy.yml` | main への push | 動いているアプリ | 数分間おかしくなる。ロールバックで戻る |
+| `deploy.yml` | main のCI成功後 | 動いているアプリ | 数分間おかしくなる。ロールバックで戻る |
 | `migrate.yml` | **手動のみ** | データそのもの | **戻すのが難しい**。バックアップからの復旧が必要 |
 
 壊せる範囲が違うものを同じ引き金にまとめない。「main に push したらマイグレーションも走る」は、押し間違いが即データ事故になる。
@@ -31,7 +31,7 @@
 
 いずれも「ロックファイルの通りにしか入れない」形を選んでいる。`npm install` や素の `yarn install` はロックファイルを書き換えることがあり、CI とローカルで入るものがズレる。
 
-判別ステップの全文と解説は `assets/detect-pm.yml`。自分でワークフローを足すときはそこから貼る。
+共通処理は`assets/detect-pm.yml`を`.github/actions/detect-pm/action.yml`へ配置し、各workflowから`uses: ./.github/actions/detect-pm`で呼ぶ。判別・Node.js準備・依存関係installをコピー＆ペーストしない。
 
 ## 1. ci.yml
 
@@ -63,7 +63,8 @@
 CI を作っただけでは何も止まらない。**赤くてもマージできてしまう**。ブランチ保護で必須にして初めて機能する。
 
 ```bash
-gh api -X PUT /repos/{owner}/{repo}/branches/main/protection \
+GITHUB_DEFAULT_BRANCH_API="$(node -p 'encodeURIComponent(process.argv[1])' "$GITHUB_DEFAULT_BRANCH")"
+gh api -X PUT "repos/$GITHUB_REPOSITORY/branches/$GITHUB_DEFAULT_BRANCH_API/protection" \
   -f 'required_status_checks[strict]=true' \
   -f 'required_status_checks[contexts][]=verify' \
   -f 'enforce_admins=false' \
@@ -81,7 +82,15 @@ gh api -X PUT /repos/{owner}/{repo}/branches/main/protection \
 
 ### 引き金
 
-`push: [main]` のみ。**PR では動かさない**。PR で動かすと、まだレビューも通っていないコードが本番に出る。
+`workflow_run`で、mainへのpushを検査した`CI`が成功した後だけ起動する。**PRのCI成功では動かさない**。job条件で`workflow_run.event == 'push'`と`conclusion == 'success'`を両方確認する。
+
+checkoutは`github.event.workflow_run.head_sha`を明示し、CIが検査したcommitとデプロイ対象を一致させる。`workflow_dispatch`も残すが、mainだけを許可し、手動経路ではtypecheck/testを再実行してCIを迂回させない。
+
+### production Environment
+
+DeployとMigrateのjobへ`environment: production`を付ける。`CLOUDFLARE_API_TOKEN`と`CLOUDFLARE_ACCOUNT_ID`はRepository secretではなく、このEnvironment secretへ登録する。`APP_URL`だけは公開情報なのでRepository variable。
+
+EnvironmentのDeployment branches and tagsはmainだけにする。これにより、手動実行で作業ブランチを選んでも本番secretとデプロイへ進めない。
 
 ### なぜ CI からのデプロイが安全なのか
 
@@ -124,6 +133,8 @@ Cloudflare Workers は新しいコードを配った後も、すでに起動し�
 
 `workflow_dispatch` だけ。push では絶対に動かさない。
 
+jobには`environment: production`を付け、同EnvironmentのCloudflare secretとmain限定ポリシーを使う。
+
 ### confirm: APPLY
 
 ```yaml
@@ -157,7 +168,7 @@ inputs:
   run: ${{ steps.pm.outputs.run }} db:backup
 - name: バックアップを保管
   if: always()
-  uses: actions/upload-artifact@v4
+  uses: actions/upload-artifact@v7
 ```
 
 `if: always()` を付けているのは、後続が失敗してもバックアップだけは残すため。
@@ -173,3 +184,4 @@ Artifact は public リポジトリでも認証なしでは落とせないが、
 | Slack に通知したい | 入れてよい。ただし Webhook URL はシークレットに。ログに出さない |
 | テストが遅いので並列化したい | まず遅いテストを特定する。並列化は消費分を増やす。原因が1本のテストなら、そこを直すほうが安い |
 | Cloudflare の Workers Builds も使いたい | **併用しない**。同じコミットで2回デプロイが走り、どちらが最後か分からなくなる |
+| チーム用と個人用のCloudflare Accountがある | 新規はチーム用Accountを既定。既存リソースが個人側なら複製せず移行タスクへ分ける |

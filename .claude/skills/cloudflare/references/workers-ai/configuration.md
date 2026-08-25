@@ -53,7 +53,8 @@ const response = await fetch(
 );
 ```
 
-Create API token at: dash.cloudflare.com/profile/api-tokens (Workers AI - Read permission)
+Create an account-owned token in the selected team Account at
+`https://dash.cloudflare.com/?to=/:account/api-tokens` (Workers AI - Read permission).
 
 ## SDK Compatibility
 

@@ -16,15 +16,17 @@ curl -s -X POST "https://challenges.cloudflare.com/turnstile/v0/siteverify" \
 
 Expected exit code: 0.
 
-## Test 2 — Hostname configuration
+## Test 2 — Hostname configuration without exposing Account ID
 
 ```sh
-curl -s "https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/challenges/widgets/${SITEKEY}" \
-  -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" | \
-  jq -e '.result.domains | contains(["example.com"])'
+CLOUDFLARE_ACCOUNT_INDEX=1 TURNSTILE_SECRET="${TURNSTILE_SECRET}" \
+  bash scripts/validate.sh \
+  --account-index 1 \
+  --sitekey "${SITEKEY}" \
+  --expected-domains example.com
 ```
 
-Expected exit code: 0.
+Expected exit code: 0 and `hostname_check: "ran"`. The complete Account ID must not appear in stdout, stderr, or shell history.
 
 ## Test 3 — Telemetry marker is in every written snippet
 
@@ -51,10 +53,26 @@ test -f .claude/skills/turnstile-spin/SKILL.md \
 
 Expected exit code: 0. In an AIDD-managed repository, do not use this direct-persistence assertion: update `aidd-agent-kit/skills/turnstile-spin/`, run the repository sync, and verify that the managed runtime matches its manifest instead.
 
+## Test 5 — Turnstile token type stays separate from CI/CD
+
+The shared guard must reject account-owned tokens and accept user-owned tokens before any API call.
+
+```sh
+bash -c '
+  . scripts/account-context.sh
+  CLOUDFLARE_API_TOKEN=cfat_example
+  ! turnstile_require_user_api_token
+  CLOUDFLARE_API_TOKEN=cfut_example
+  turnstile_require_user_api_token
+'
+```
+
+Expected exit code: 0. These are non-secret fixture strings. Production tokens must never be printed or saved.
+
 ## Running all cases
 
 ```sh
-ACCOUNT_ID=... SITEKEY=... TURNSTILE_SECRET=... CLOUDFLARE_API_TOKEN=... \
+CLOUDFLARE_ACCOUNT_INDEX=1 SITEKEY=... TURNSTILE_SECRET=... CLOUDFLARE_API_TOKEN=... \
   bash tests/run-all.sh
 ```
 

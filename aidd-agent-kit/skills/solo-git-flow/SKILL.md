@@ -12,13 +12,15 @@ description: 個人開発(レビュアーが自分ひとり)で、Issue起票→
 3. **1つのPRは1つの目的**。「ついでの修正」を混ぜない。混ざったら分ける。
 4. **履歴は消さない**。`git reset --hard` と `git push --force` は使わない。取り消しは `git revert`(§7)。
 5. **レビュアーが自分でもPRを出す**。理由は3つ — 変更の全体像を1画面で見返せる / マージ単位で戻せる / 後から「なぜこうしたか」を追える。セルフマージは正当な運用であり、承認を待つ必要はない。
+6. **操作対象を推測しない**。最初に`ci-cd-pipeline/scripts/detect-github-repository.mjs`を実行し、`status: ok`の`recommended.repository`、`recommended.remote`、`recommended.default_branch`をそれぞれ`GITHUB_REPOSITORY`、`GIT_REMOTE`、`GITHUB_DEFAULT_BRANCH`として全コマンドで共用する。単一候補は推奨値を提示して自動採用し、質問するのは複数remote・remote未設定・`gh`未認証のときだけ。資格情報を含むremote URLやTokenを貼らせない。
 
 ## §1. 作業を始める前の3コマンド
 
 ```bash
-gh auth status                      # 認証確認
-git switch main && git pull --rebase   # 最新化
-gh issue list --state open          # 今の課題を見る
+gh auth status                                           # 認証確認
+git switch "$GITHUB_DEFAULT_BRANCH"                      # 既定ブランチへ移動
+git pull --rebase "$GIT_REMOTE" "$GITHUB_DEFAULT_BRANCH" # 最新化
+gh issue list --repo "$GITHUB_REPOSITORY" --state open   # 今の課題を見る
 ```
 
 ## §2. Issueの運用
@@ -66,9 +68,9 @@ mkdir -p .github/ISSUE_TEMPLATE && cp -R <skill>/assets/ISSUE_TEMPLATE/. .github
 ### 運用ルール
 
 - 起票時に**必ず本文を書く**(記入例は `references/pr-and-issue-templates.md`)。タイトルだけのIssueは1週間後に自分でも意味が分からなくなる。
-- **起票は `gh issue create --web` を使う**。`--web` なしのCLI起票はテンプレートが適用されず、空本文のIssueができてしまう。CLIで完結させたい場合は `--body-file .github/ISSUE_TEMPLATE/bug_report.md` で雛形を明示的に渡す(先頭のfrontmatterは削って渡す)。
+- **起票は `gh issue create --repo "$GITHUB_REPOSITORY" --web` を使う**。`--web` なしのCLI起票はテンプレートが適用されず、空本文のIssueができてしまう。CLIで完結させたい場合は `--repo "$GITHUB_REPOSITORY" --body-file .github/ISSUE_TEMPLATE/bug_report.md` で雛形を明示的に渡す(先頭のfrontmatterは削って渡す)。
 - タイトルはブランチ名・PRタイトルと同じ `<type>: 日本語` 形式にする(`fix: 評価シートの印刷が2枚に分かれる`)。テンプレートが `fix: ` `feat: ` まで自動で入れる。
-- **着手するときに自分をアサインする**(`gh issue edit 12 --add-assignee @me`)。「起票済み」と「着手中」が一覧で区別できる。
+- **着手するときに自分をアサインする**(`gh issue edit --repo "$GITHUB_REPOSITORY" 12 --add-assignee @me`)。「起票済み」と「着手中」が一覧で区別できる。
 - Issueは**PRの `Closes #12` で自動的に閉じる**。手で閉じない。閉じ忘れと、閉じたのに直っていない状態の両方を防ぐ。
 - **月1回、openなIssueを上から読み直す**。もうやらないと分かったものは `someday` ラベルを付けるか閉じる。放置されたIssueが20件を超えると一覧を見なくなり、置き場としての機能を失う。
 
@@ -92,7 +94,8 @@ docs/18-setup-guide
 ### 作成
 
 ```bash
-git switch main && git pull --rebase
+git switch "$GITHUB_DEFAULT_BRANCH"
+git pull --rebase "$GIT_REMOTE" "$GITHUB_DEFAULT_BRANCH"
 git switch -c feat/12-evaluation-sheet-print
 ```
 
@@ -130,11 +133,11 @@ git switch -c feat/12-evaluation-sheet-print
 ### 作成
 
 ```bash
-git push -u origin $(git branch --show-current)
-gh pr create --title "feat: 評価シートを印刷できるようにする" --body-file .github/PULL_REQUEST_TEMPLATE.md
+git push -u "$GIT_REMOTE" "$(git branch --show-current)"
+gh pr create --repo "$GITHUB_REPOSITORY" --title "feat: 評価シートを印刷できるようにする" --body-file .github/PULL_REQUEST_TEMPLATE.md
 ```
 
-対話で書きたい場合は `gh pr create --web` でブラウザを開く。
+対話で書きたい場合は `gh pr create --repo "$GITHUB_REPOSITORY" --web` でブラウザを開く。
 
 ### タイトル
 
@@ -180,15 +183,16 @@ PR本文は**2層構造**にする。上半分(§1〜5)は開発を知らない�
 マージ前に**自分のPRのDiffタブを必ず一度上から下まで見る**。エディタで書いているときとは別の視点になり、消し忘れのデバッグ出力・コメントアウトした旧コード・意図しないファイルの混入がここで見つかる。
 
 ```bash
-gh pr diff        # ターミナルで差分確認
-gh pr view --web  # ブラウザで確認
+gh pr diff --repo "$GITHUB_REPOSITORY"        # ターミナルで差分確認
+gh pr view --repo "$GITHUB_REPOSITORY" --web  # ブラウザで確認
 ```
 
 ## §6. マージとリリース
 
 ```bash
-gh pr merge --squash --delete-branch   # squashマージ + リモートブランチ削除
-git switch main && git pull --rebase
+gh pr merge --repo "$GITHUB_REPOSITORY" --squash --delete-branch
+git switch "$GITHUB_DEFAULT_BRANCH"
+git pull --rebase "$GIT_REMOTE" "$GITHUB_DEFAULT_BRANCH"
 ```
 
 - **必ず `--squash`**。作業中の細かいコミットをmainに持ち込まない。mainの履歴が「PR1件 = 1コミット」に揃い、revertの単位と一致する。
@@ -196,7 +200,7 @@ git switch main && git pull --rebase
 - デプロイを伴うリリースでは、本番URLでの確認が済んでからタグを打つ。
 
 ```bash
-git tag v3 && git push origin v3
+git tag v3 && git push "$GIT_REMOTE" v3
 ```
 
 ### 手元からデプロイするときの注意
@@ -219,7 +223,7 @@ git push
 ```
 
 - squashマージ済みなら、PR1件がコミット1個なので `git revert` 1回で綺麗に戻る。これが§6で `--squash` を必須にする実利。
-- `gh pr view <番号>` でマージコミットのSHAを確認できる。
+- `gh pr view --repo "$GITHUB_REPOSITORY" <番号>` でマージコミットのSHAを確認できる。
 - **`git reset --hard` / `git push --force` は使用禁止**。履歴が消えると二度と戻せない。
 
 ## §8. やってはいけないこと
@@ -236,22 +240,23 @@ git push
 
 ```bash
 # Issue
-gh issue create --web                      # テンプレートを使って起票(推奨)
-gh issue list --state open
-gh issue view 12
-gh issue edit 12 --add-assignee @me        # 着手時にアサイン
+gh issue create --repo "$GITHUB_REPOSITORY" --web       # テンプレートを使って起票(推奨)
+gh issue list --repo "$GITHUB_REPOSITORY" --state open
+gh issue view --repo "$GITHUB_REPOSITORY" 12
+gh issue edit --repo "$GITHUB_REPOSITORY" 12 --add-assignee @me
 
 # ブランチ〜PR
-git switch main && git pull --rebase
+git switch "$GITHUB_DEFAULT_BRANCH"
+git pull --rebase "$GIT_REMOTE" "$GITHUB_DEFAULT_BRANCH"
 git switch -c feat/12-xxx
-git push -u origin $(git branch --show-current)
-gh pr create --title "feat: ..." --body-file .github/PULL_REQUEST_TEMPLATE.md
-gh pr diff
-gh pr merge --squash --delete-branch
+git push -u "$GIT_REMOTE" "$(git branch --show-current)"
+gh pr create --repo "$GITHUB_REPOSITORY" --title "feat: ..." --body-file .github/PULL_REQUEST_TEMPLATE.md
+gh pr diff --repo "$GITHUB_REPOSITORY"
+gh pr merge --repo "$GITHUB_REPOSITORY" --squash --delete-branch
 
 # 状態確認
-gh pr status         # 自分のPRの状況
-gh run list -L 5     # CIの実行結果
+gh pr status --repo "$GITHUB_REPOSITORY"      # 自分のPRの状況
+gh run list --repo "$GITHUB_REPOSITORY" -L 5 # CIの実行結果
 git log --oneline -10
 ```
 

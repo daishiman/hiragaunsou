@@ -279,17 +279,17 @@ gh label create someday --color "cccccc" --description "今はやらない"
 
 ```bash
 # Issueからブランチを作る(番号入りブランチ名が自動生成される)
-gh issue develop 12 --checkout
+gh issue develop --repo "$GITHUB_REPOSITORY" 12 --checkout
 
 # 自分に割り当てられた未完了Issueだけ見る
-gh issue list --assignee @me --state open
+gh issue list --repo "$GITHUB_REPOSITORY" --assignee @me --state open
 
 # PRにIssueを紐付け忘れたときの追記
-gh pr edit 34 --body-file -    # 標準入力から差し替え
+gh pr edit --repo "$GITHUB_REPOSITORY" 34 --body-file -    # 標準入力から差し替え
 
 # マージ済みPRを一覧で振り返る(週次の棚卸しに使う)
-gh pr list --state merged --limit 20
+gh pr list --repo "$GITHUB_REPOSITORY" --state merged --limit 20
 
 # CIが通ってから自動でマージする
-gh pr merge --squash --delete-branch --auto
+gh pr merge --repo "$GITHUB_REPOSITORY" --squash --delete-branch --auto
 ```

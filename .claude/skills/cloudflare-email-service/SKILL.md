@@ -1,50 +1,52 @@
 ---
 name: cloudflare-email-service
-description: Send and receive transactional emails with Cloudflare Email Service (Email Sending + Email Routing). Use when building email sending (Workers binding or REST API), email routing, Agents SDK email handling, or integrating email into any app — Workers, Node.js, Python, Go, etc. Also use for email deliverability, SPF/DKIM/DMARC, wrangler email setup, MCP email tools, or when a coding agent needs to send emails. Even for simple requests like "add email to my Worker" — this skill has critical config details.
+description: Cloudflare Email Service（Email Sending + Email Routing）でトランザクションメールの送受信を実装するスキル。Workers bindingまたはREST APIによるメール送信、Email Routing、Agents SDKのemail handler、Workers・Node.js・Python・Go等への組み込みで使う。到達性、SPF/DKIM/DMARC、wrangler email設定、MCP email tools、coding agentからのメール送信も対象。「Workerにメール機能を追加」のような依頼でも、重要な設定要件があるため必ず使用する。
 ---
 
 # Cloudflare Email Service
 
-Your knowledge of the Cloudflare Email Service, Email Routing or Email Sending may be outdated. **Prefer retrieval over pre-training** for any Cloudflare Email Service task.
+Cloudflare Email Service、Email Routing、Email Sendingの仕様は更新されるため、すべての関連タスクで**事前知識より最新情報の取得を優先する**。
 
-Cloudflare Email Service lets you send transactional emails and route incoming emails, all within the Cloudflare platform. Your knowledge of this product may be outdated — it launched in 2025 and is evolving rapidly. **Prefer retrieval over pre-training** for any Email Service task.
+Cloudflare Email Serviceは、Cloudflare platform上でトランザクションメールを送信し、受信メールをroutingする。変更の速い製品なので、必ず現行仕様を取得してから進める。
 
-**If there is any discrepancy between this skill and the sources below, always trust the original source.** The Cloudflare docs, REST API spec, `@cloudflare/workers-types`, and Agents SDK repo are the source of truth. This skill is a convenience guide — it may lag behind the latest changes. When in doubt, retrieve from the sources below and use what they say.
+**本Skillと以下の一次情報が食い違う場合は、必ず一次情報を正とする。** Cloudflare docs、REST API spec、`@cloudflare/workers-types`、Agents SDK repoが正本であり、本Skillは作業開始用のガイドである。
 
-## Retrieval Sources
+Accountを伴うドメイン有効化やAPI操作の前には、Skill `cloudflare`で対象Accountを確定する。Wrangler CLIを実行するときはSkill `wrangler`の現行commandと安全規律に従う。本Skill内でAccount選択やWrangler共通規律を再定義しない。
 
-| Source | How to retrieve | Use for |
+## 最新情報の取得先
+
+| 取得先 | 取得方法 | 使う場面 |
 |--------|----------------|---------|
-| Cloudflare docs | `cloudflare-docs` search tool or URL `https://developers.cloudflare.com/email-service/` | API reference, limits, pricing, latest features |
-| REST API spec | `https://developers.cloudflare.com/api/resources/email_sending` | OpenAPI spec for the Email Sending REST API |
-| Workers types | `https://www.npmjs.com/package/@cloudflare/workers-types` | Type signatures, binding shapes |
-| Agents SDK docs | Fetch `docs/email.md` from `https://github.com/cloudflare/agents/tree/main/docs` | Email handling in Agents SDK |
+| Cloudflare docs | `cloudflare-docs` search toolまたは`https://developers.cloudflare.com/email-service/` | API reference、上限、価格、最新機能 |
+| REST API spec | `https://developers.cloudflare.com/api/resources/email_sending` | Email Sending REST APIのOpenAPI spec |
+| Workers types | `https://www.npmjs.com/package/@cloudflare/workers-types` | 型signature、binding形状 |
+| Agents SDK docs | `https://github.com/cloudflare/agents/tree/main/docs`の`docs/email.md`を取得 | Agents SDKのemail handling |
 
-## FIRST: Check Prerequisites
+## 最初に前提条件を確認する
 
-Before writing any email code, verify the basics are in place:
+メール処理コードを書く前に、次の3点を確認する。
 
-1. **Domain onboarded?** Run `pnpm wrangler email sending list` to see which domains have email sending enabled. If the domain isn't listed, run `pnpm wrangler email sending enable userdomain.com` or see [cli-and-mcp.md](references/cli-and-mcp.md) for full setup instructions.
-2. **Binding configured?** Look for `send_email` in `wrangler.jsonc` (for Workers)
-3. **postal-mime installed?** Run `pnpm ls postal-mime` (only needed for receiving/parsing emails)
+1. **ドメインが有効化済みか**: `pnpm wrangler email sending list`でEmail Sendingが有効なドメインを確認する。対象ドメインがなければ`pnpm wrangler email sending enable userdomain.com`を使うか、詳細を[cli-and-mcp.md](references/cli-and-mcp.md)で確認する。
+2. **Bindingが設定済みか**: Workersでは`wrangler.jsonc`に`send_email`があるか確認する。
+3. **`postal-mime`が必要か**: メールの受信・解析を行う場合だけ`pnpm ls postal-mime`で確認する。
 
-## What Do You Need?
+## 要件から実装方式を選ぶ
 
-Start here. Find your situation, then follow the link for full details.
+次の表から要件に合う経路を1つ選び、対応するreferenceだけを読む。
 
-| I want to... | Path | Reference |
+| やりたいこと | 実装経路 | Reference |
 |--------------|------|-----------|
-| **Send emails from a Cloudflare Worker** | Workers binding (no API keys needed) | [sending.md](references/sending.md) |
-| **Send emails from an AI agent built with [Cloudflare Agents SDK](https://developers.cloudflare.com/agents/)** | `onEmail()` + `replyToEmail()` in Agent class | [sending.md](references/sending.md) |
-| **Send emails from an external app or agent** (Node.js, Go, Python, etc.) | REST API with Bearer token | [rest-api.md](references/rest-api.md) |
-| **Send emails from a coding agent** (Claude Code, Cursor, Copilot, etc.) | MCP tools, wrangler CLI, or REST API | [cli-and-mcp.md](references/cli-and-mcp.md) |
-| **Receive and process incoming emails** (Email Routing) | Workers `email()` handler | [routing.md](references/routing.md) |
-| **Set up Email Sending or Email Routing** | `wrangler email sending enable` / `wrangler email routing enable`, or Dashboard | [cli-and-mcp.md](references/cli-and-mcp.md) |
-| **Improve deliverability, avoid spam folders** | Authentication, content, compliance | [deliverability.md](references/deliverability.md) |
+| **Cloudflare Workerからメールを送る** | Workers binding（API key不要） | [sending.md](references/sending.md) |
+| **[Cloudflare Agents SDK](https://developers.cloudflare.com/agents/)のAI agentからメールを送る** | Agent classの`onEmail()` + `replyToEmail()` | [sending.md](references/sending.md) |
+| **外部アプリやagentからメールを送る**（Node.js、Go、Python等） | Bearer tokenを使うREST API | [rest-api.md](references/rest-api.md) |
+| **coding agentからメールを送る**（Claude Code、Cursor、Copilot等） | MCP tools、wrangler CLI、またはREST API | [cli-and-mcp.md](references/cli-and-mcp.md) |
+| **受信メールを処理する**（Email Routing） | Workers `email()` handler | [routing.md](references/routing.md) |
+| **Email Sending / Email Routingを有効化する** | `wrangler email sending enable` / `wrangler email routing enable`、またはDashboard | [cli-and-mcp.md](references/cli-and-mcp.md) |
+| **到達性を改善し迷惑メールフォルダを避ける** | authentication、content、compliance | [deliverability.md](references/deliverability.md) |
 
-## Quick Start — Workers Binding
+## 最短実装 — Workers Binding
 
-Add the binding to `wrangler.jsonc`, then call `env.EMAIL.send()`. The `from` domain must be onboarded via `pnpm wrangler email sending enable yourdomain.com`.
+`wrangler.jsonc`にbindingを追加し、`env.EMAIL.send()`を呼ぶ。`from`のドメインは事前に`pnpm wrangler email sending enable yourdomain.com`で有効化しておく。
 
 ```jsonc
 // wrangler.jsonc
@@ -61,43 +63,54 @@ const response = await env.EMAIL.send({
 });
 ```
 
-The binding is recommended for Workers — no API keys needed. If a user specifically requests the REST API from within a Worker (e.g., they already have an API token workflow), that works too — see [rest-api.md](references/rest-api.md).
+WorkersではAPI keyが不要なbindingを推奨する。利用者がWorker内からREST APIを使う理由を明示した場合（既存のAPI token workflowを使う等）は、[rest-api.md](references/rest-api.md)に従ってREST APIも利用できる。
 
-See [sending.md](references/sending.md) for the full API, batch sends, attachments, custom headers, restricted bindings, and Agents SDK integration.
+完全なAPI、batch send、attachment、custom header、restricted binding、Agents SDK integrationは[sending.md](references/sending.md)を読む。
 
-## Quick Start — REST API
+## 最短実装 — REST API
 
-For apps outside Workers, or within Workers if the user explicitly requests it. Key differences from the Workers binding:
+Workers以外のアプリ、または利用者が明示的にREST APIを指定したWorkersで使う。Workers bindingとの主な違いは次のとおり。
 
 - Endpoint: `POST https://api.cloudflare.com/client/v4/accounts/{account_id}/email/sending/send`
-- `from` object uses `address` (not `email`): `{ "address": "...", "name": "..." }`
-- `replyTo` is `reply_to` (snake_case)
-- Response returns `{ delivered: [], permanent_bounces: [], queued: [] }` (not `messageId`)
+- `from` objectは`email`ではなく`address`を使う: `{ "address": "...", "name": "..." }`
+- `replyTo`は`reply_to` (snake_case)
+- Responseは`{ delivered: [], permanent_bounces: [], queued: [] }`を返す（`messageId`ではない）
 
-See [rest-api.md](references/rest-api.md) for curl examples, response format, and error handling.
+curl例、response format、error handlingは[rest-api.md](references/rest-api.md)を読む。
 
-## Common Mistakes
+## よくある間違い
 
-| Mistake | Why It Happens | Fix |
+| 間違い | 原因 | 対処 |
 |---------|---------------|-----|
-| Forgetting `send_email` binding in wrangler config | Email Service uses a binding, not an API key | Add `"send_email": [{ "name": "EMAIL" }]` to wrangler.jsonc |
-| Sending from an unverified domain | Domain must be onboarded onto Email Sending before first send | Run `wrangler email sending enable yourdomain.com` or onboard in Dashboard |
-| Reading `message.raw` twice in email handler | The raw stream is single-use — second read returns empty | Buffer first: `const raw = await new Response(message.raw).arrayBuffer()` |
-| Missing `text` field (HTML only) | Some email clients only show plain text; also helps spam scores | Always include both `html` and `text` versions |
-| Using email for marketing/bulk sends | Email Service is for transactional email only | Use a dedicated marketing email platform for newsletters and campaigns |
-| Forwarding to unverified destinations | `message.forward()` only works with verified addresses | Run `wrangler email routing addresses create user@gmail.com` or add in Dashboard |
-| Testing with fake addresses | Bounces from non-existent addresses hurt sender reputation | Use real addresses you control during development |
-| Hardcoding API tokens in source code | Tokens in code get committed and leaked | Use environment variables or Cloudflare secrets |
-| Ignoring the `from` domain requirement | The `from` address must use a domain onboarded to Email Service | Verify the domain first, then send from `anything@that-domain.com` |
-| Using `email` key in REST API `from` object | REST API uses `address` not `email` for `from` object | Use `{ "address": "...", "name": "..." }` for REST, `{ "email": "...", "name": "..." }` for Workers |
-| Using `replyTo` in REST API | REST API uses snake_case field names | Use `reply_to` for REST API, `replyTo` for Workers binding |
+| wrangler configに`send_email` bindingがない | Email ServiceはAPI keyではなくbindingを使う | `wrangler.jsonc`に`"send_email": [{ "name": "EMAIL" }]`を追加 |
+| 未検証domainから送信する | 初回送信前にEmail Sendingへのdomain登録が必要 | `wrangler email sending enable userdomain.com`を実行、またはDashboardで有効化 |
+| email handlerで`message.raw`を2回読む | raw streamは1度しか読めず、2回目は空になる | 最初にbuffer化: `const raw = await new Response(message.raw).arrayBuffer()` |
+| `text` fieldがない（HTMLのみ） | plain textしか表示しないclientがあり、spam scoreにも影響する | `html`と`text`を必ず両方用意 |
+| marketing/bulk sendに使う | Email Serviceはtransactional email用 | newsletterやcampaignは専用marketing email platformを使う |
+| 未検証の宛先へforwardする | `message.forward()`は検証済みaddressに限定 | `wrangler email routing addresses create user@gmail.com`またはDashboardで追加 |
+| 架空addressでテストする | 存在しないaddressからのbounceでsender reputationが下がる | 開発中も自分が管理する実addressを使う |
+| API tokenをソースコードに直書きする | commitされて漏えいする | environment variableまたはCloudflare secretsを使う |
+| `from` domain要件を無視する | `from`はEmail Serviceに登録済みのdomainである必要がある | domainを先に検証し、`anything@that-domain.com`から送信 |
+| REST APIの`from`で`email` keyを使う | REST APIは`email`ではなく`address`を使う | RESTは`{ "address": "...", "name": "..." }`、Workersは`{ "email": "...", "name": "..." }` |
+| REST APIで`replyTo`を使う | REST APIのfieldはsnake_case | REST APIは`reply_to`、Workers bindingは`replyTo` |
 
-## References
+## 詳細リファレンス
 
-Read the reference that matches your situation. You don't need all of them.
+要件に対応するreferenceだけを読む。すべてを一度に読み込まない。
 
-- **[references/sending.md](references/sending.md)** — Workers binding API, attachments, Agents SDK email. For Workers or Agents SDK.
-- **[references/rest-api.md](references/rest-api.md)** — REST endpoint, curl examples, error handling. For apps NOT on Workers.
-- **[references/routing.md](references/routing.md)** — Inbound `email()` handler, forwarding, replying, parsing. For receiving emails.
-- **[references/cli-and-mcp.md](references/cli-and-mcp.md)** — Domain setup, wrangler commands, MCP tools. For first-time setup.
-- **[references/deliverability.md](references/deliverability.md)** — SPF/DKIM/DMARC, bounces, suppressions, best practices.
+- **[references/sending.md](references/sending.md)** — Workers binding API、attachment、Agents SDK email。WorkersまたはAgents SDKで使う。
+- **[references/rest-api.md](references/rest-api.md)** — REST endpoint、curl例、error handling。Workers以外のアプリで使う。
+- **[references/routing.md](references/routing.md)** — 受信用`email()` handler、forward、reply、parse。
+- **[references/cli-and-mcp.md](references/cli-and-mcp.md)** — Domain setup、wrangler command、MCP tools。初回設定で使う。
+- **[references/deliverability.md](references/deliverability.md)** — SPF/DKIM/DMARC、bounce、suppression、best practices。
+
+## 完了報告
+
+実装・検証後は、次の順で日本語の報告を返す。
+
+1. **できるようになったこと**（送信 / 受信 / routing / 到達性のどれか）
+2. **採用した経路**（Workers binding / REST API / Email Routing / MCP tools）
+3. **確認したこと**（domain有効化、binding、実送受信、error handling）
+4. **利用者に残る操作**（Dashboard操作やdomain検証がある場合のみ）
+
+token、secret、完全なAccount IDは報告に含めない。

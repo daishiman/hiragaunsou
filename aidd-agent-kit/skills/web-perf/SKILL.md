@@ -1,25 +1,25 @@
 ---
 name: web-perf
-description: Analyzes web performance using Chrome DevTools MCP. Measures Core Web Vitals (LCP, INP, CLS) and supplementary metrics (FCP, TBT, Speed Index), identifies render-blocking resources, network dependency chains, layout shifts, caching issues, and accessibility gaps. Use when asked to audit, profile, debug, or optimize page load performance, Lighthouse scores, or site speed. Biases towards retrieval from current documentation over pre-trained knowledge.
+description: Chrome DevTools MCPを使ってWeb performanceを分析する。Core Web Vitals（LCP、INP、CLS）とFCP、TBT、Speed Indexを計測し、render-blocking resources、network dependency chains、layout shifts、cache、accessibilityの問題を特定する。表示速度の監査・計測・デバッグ・最適化、Lighthouse scoreの改善で使用する。事前学習の知識より最新の公式ドキュメントを優先する。
 ---
 
-# Web Performance Audit
+# Web Performance監査
 
-Your knowledge of web performance metrics, thresholds, and tooling APIs may be outdated. **Prefer retrieval over pre-training** when citing specific numbers or recommendations.
+Web performanceの計測名、閾値、tooling APIsは更新される。具体値や推奨を示す前に、**事前学習の知識ではなく最新の公式情報を取得する**。
 
-## Retrieval Sources
+## 最新情報の取得先
 
-| Source | How to retrieve | Use for |
+| Source | 取得先 | 確認内容 |
 |--------|----------------|---------|
-| web.dev | `https://web.dev/articles/vitals` | Core Web Vitals thresholds, definitions |
-| Chrome DevTools docs | `https://developer.chrome.com/docs/devtools/performance` | Tooling APIs, trace analysis |
-| Lighthouse scoring | `https://developer.chrome.com/docs/lighthouse/performance/performance-scoring` | Score weights, metric thresholds |
+| web.dev | `https://web.dev/articles/vitals` | Core Web Vitalsの閾値と定義 |
+| Chrome DevTools docs | `https://developer.chrome.com/docs/devtools/performance` | Tooling APIsとtrace analysis |
+| Lighthouse scoring | `https://developer.chrome.com/docs/lighthouse/performance/performance-scoring` | score weightsとmetric thresholds |
 
-## FIRST: Verify MCP Tools Available
+## 最初にMCP toolsを確認する
 
-**Run this before starting.** Try calling `navigate_page` or `performance_start_trace`. If unavailable, STOP—the chrome-devtools MCP server isn't configured.
+**監査開始前に必ず行う。** `navigate_page`または`performance_start_trace`を呼び出す。利用できなければchrome-devtools MCP serverが未設定のため停止し、計測したように報告しない。
 
-Ask the user to add this to their MCP config:
+ユーザーにMCP configへ次を追加してもらう。
 
 ```json
 "chrome-devtools": {
@@ -28,79 +28,81 @@ Ask the user to add this to their MCP config:
 }
 ```
 
-## Key Guidelines
+## 分析原則
 
-- **Be assertive**: Verify claims by checking network requests, DOM, or codebase—then state findings definitively.
-- **Verify before recommending**: Confirm something is unused before suggesting removal.
-- **Quantify impact**: Use estimated savings from insights. Don't prioritize changes with 0ms impact.
-- **Skip non-issues**: If render-blocking resources have 0ms estimated impact, note but don't recommend action.
-- **Be specific**: Say "compress hero.png (450KB) to WebP" not "optimize images".
-- **Prioritize ruthlessly**: A site with 200ms LCP and 0 CLS is already excellent—say so.
+- **根拠を確定する**: network requests、DOM、codebaseで確認した事実だけを断定的に述べる。
+- **推奨前に検証する**: 削除を提案する前に未使用であることを確認する。
+- **影響を数値化する**: insightsのestimated savingsを使う。0msの改善は優先項目にしない。
+- **問題でない項目は分ける**: render-blocking resourcesのestimated impactが0msなら記録のみとし、改善対象にしない。
+- **具体的に書く**: 「画像を最適化」ではなく、例えば「`hero.png` (450KB)をWebPへ圧縮」と示す。
+- **実測値で優先順位を付ける**: 十分高速な項目はそのように報告し、不要な改修を増やさない。
 
-## Quick Reference
+## Tool call早見表
 
-| Task | Tool Call |
+| 目的 | Tool Call |
 |------|-----------|
-| Load page | `navigate_page(url: "...")` |
-| Start trace | `performance_start_trace(autoStop: true, reload: true)` |
-| Analyze insight | `performance_analyze_insight(insightSetId: "...", insightName: "...")` |
-| List requests | `list_network_requests(resourceTypes: ["Script", "Stylesheet", ...])` |
-| Request details | `get_network_request(reqid: <id>)` |
-| A11y snapshot | `take_snapshot(verbose: true)` |
+| ページを開く | `navigate_page(url: "...")` |
+| traceを開始する | `performance_start_trace(autoStop: true, reload: true)` |
+| insightを分析する | `performance_analyze_insight(insightSetId: "...", insightName: "...")` |
+| requests一覧を取得する | `list_network_requests(resourceTypes: ["Script", "Stylesheet", ...])` |
+| request詳細を取得する | `get_network_request(reqid: <id>)` |
+| accessibility snapshotを取得する | `take_snapshot(verbose: true)` |
 
-## Workflow
+## 監査フロー
 
-Copy this checklist to track progress:
+次のchecklistで進捗を管理する。
 
 ```
-Audit Progress:
-- [ ] Phase 1: Performance trace (navigate + record)
-- [ ] Phase 2: Core Web Vitals analysis (includes CLS culprits)
-- [ ] Phase 3: Network analysis
-- [ ] Phase 4: Accessibility snapshot
-- [ ] Phase 5: Codebase analysis (skip if third-party site)
+監査の進捗:
+- [ ] Phase 1: Performance traceを取得
+- [ ] Phase 2: Core Web Vitalsを分析（CLSの原因を含む）
+- [ ] Phase 3: Networkを分析
+- [ ] Phase 4: Accessibility snapshotを取得
+- [ ] Phase 5: Codebaseを分析（第三者siteは省略）
 ```
 
-### Phase 1: Performance Trace
+### Phase 1: Performance traceの取得
 
-1. Navigate to the target URL:
+1. 対象URLを開く。
    ```
    navigate_page(url: "<target-url>")
    ```
 
-2. Start a performance trace with reload to capture cold-load metrics:
+2. reload付きでperformance traceを開始し、cold-load metricsを取得する。
    ```
    performance_start_trace(autoStop: true, reload: true)
    ```
 
-3. Wait for trace completion, then retrieve results.
+3. trace完了を待って結果を取得する。
 
-**Troubleshooting:**
-- If trace returns empty or fails, verify the page loaded correctly with `navigate_page` first
-- If insight names don't match, inspect the trace response to list available insights
+**トラブル時:**
+- traceが空または失敗なら、先に`navigate_page`でページが正常に開いたか確認する
+- insight nameが一致しない場合は、trace responseから利用可能なinsightsを確認する
 
-### Phase 2: Core Web Vitals Analysis
+### Phase 2: Core Web Vitalsの分析
 
-Use `performance_analyze_insight` to extract key metrics.
+`performance_analyze_insight`で主要metricsを取得する。
 
-**Note:** Insight names may vary across Chrome DevTools versions. If an insight name doesn't work, check the `insightSetId` from the trace response to discover available insights.
+**注意:** insight namesはChrome DevToolsのversionで変わることがある。動作しない場合は、trace responseの`insightSetId`から利用可能なinsightsを確認する。
 
-Common insight names:
+主なinsight names:
 
-| Metric | Insight Name | What to Look For |
+| Metric | Insight Name | 確認内容 |
 |--------|--------------|------------------|
-| LCP | `LCPBreakdown` | Time to largest contentful paint; breakdown of TTFB, resource load, render delay |
-| CLS | `CLSCulprits` | Elements causing layout shifts (images without dimensions, injected content, font swaps) |
-| Render Blocking | `RenderBlocking` | CSS/JS blocking first paint |
-| Document Latency | `DocumentLatency` | Server response time issues |
-| Network Dependencies | `NetworkRequestsDepGraph` | Request chains delaying critical resources |
+| LCP | `LCPBreakdown` | TTFB、resource load、render delayの内訳 |
+| CLS | `CLSCulprits` | layout shiftsを起こす要素（寸法のない画像、後から挿入されるcontent、font swap） |
+| Render Blocking | `RenderBlocking` | first paintを妨げるCSS / JS |
+| Document Latency | `DocumentLatency` | server response timeの問題 |
+| Network Dependencies | `NetworkRequestsDepGraph` | critical resourcesを遅らせるrequest chains |
 
-Example:
+例:
 ```
 performance_analyze_insight(insightSetId: "<id-from-trace>", insightName: "LCPBreakdown")
 ```
 
-**Key thresholds (good/needs-improvement/poor):**
+**主要閾値（good / needs-improvement / poor）:**
+
+下記は早見表であり、報告時は上記公式sourceの最新値を確認し、確認日を付ける。
 - TTFB: < 800ms / < 1.8s / > 1.8s
 - FCP: < 1.8s / < 3s / > 3s
 - LCP: < 2.5s / < 4s / > 4s
@@ -109,93 +111,94 @@ performance_analyze_insight(insightSetId: "<id-from-trace>", insightName: "LCPBr
 - CLS: < 0.1 / < 0.25 / > 0.25
 - Speed Index: < 3.4s / < 5.8s / > 5.8s
 
-### Phase 3: Network Analysis
+### Phase 3: Networkの分析
 
-List all network requests to identify optimization opportunities:
+全network requestsを取得し、改善候補を特定する。
 ```
 list_network_requests(resourceTypes: ["Script", "Stylesheet", "Document", "Font", "Image"])
 ```
 
-**Look for:**
+**確認項目:**
 
-1. **Render-blocking resources**: JS/CSS in `<head>` without `async`/`defer`/`media` attributes
-2. **Network chains**: Resources discovered late because they depend on other resources loading first (e.g., CSS imports, JS-loaded fonts)
-3. **Missing preloads**: Critical resources (fonts, hero images, key scripts) not preloaded
-4. **Caching issues**: Missing or weak `Cache-Control`, `ETag`, or `Last-Modified` headers
-5. **Large payloads**: Uncompressed or oversized JS/CSS bundles
-6. **Unused preconnects**: If flagged, verify by checking if ANY requests went to that origin. If zero requests, it's definitively unused—recommend removal. If requests exist but loaded late, the preconnect may still be valuable.
+1. **Render-blocking resources**: `<head>`内で`async` / `defer` / `media` attributesのないJS / CSS
+2. **Network chains**: 先に読まれるresourceへの依存で発見が遅れるresource（CSS imports、JS-loaded fontsなど）
+3. **Missing preloads**: preloadされていないcritical resources（fonts、hero images、key scripts）
+4. **Caching issues**: 不足または弱い`Cache-Control`、`ETag`、`Last-Modified` headers
+5. **Large payloads**: 未圧縮または過大なJS / CSS bundles
+6. **Unused preconnects**: 対象originへのrequestが0件であることを確認できた場合だけ削除を推奨する。requestが存在し後から読まれるならpreconnectに価値が残る。
 
-For detailed request info:
+requestの詳細は次で確認する。
 ```
 get_network_request(reqid: <id>)
 ```
 
-### Phase 4: Accessibility Snapshot
+### Phase 4: Accessibility snapshotの取得
 
-Take an accessibility tree snapshot:
+accessibility tree snapshotを取得する。
 ```
 take_snapshot(verbose: true)
 ```
 
-**Flag high-level gaps:**
-- Missing or duplicate ARIA IDs
-- Elements with poor contrast ratios (check against WCAG AA: 4.5:1 for normal text, 3:1 for large text)
-- Focus traps or missing focus indicators
-- Interactive elements without accessible names
+**主な検出対象:**
+- 欠落または重複するARIA IDs
+- contrast ratioが不足する要素（WCAG AA: 通常テキスト4.5:1、大きなテキスト3:1）
+- focus trap、またはfocus indicatorの欠落
+- accessible nameのないinteractive elements
 
-## Phase 5: Codebase Analysis
+## Phase 5: Codebaseの分析
 
-**Skip if auditing a third-party site without codebase access.**
+**第三者siteでcodebaseへアクセスできない場合は省略する。** その場合は未実施として最終報告に明記する。
 
-Analyze the codebase to understand where improvements can be made.
+codebaseを読み、改善すべき実装箇所を特定する。
 
-### Detect Framework & Bundler
+### Framework / bundlerの検出
 
-Search for configuration files to identify the stack:
+設定ファイルからstackを特定する。
 
-| Tool | Config Files |
+| Tool | Config files |
 |------|--------------|
 | Webpack | `webpack.config.js`, `webpack.*.js` |
 | Vite | `vite.config.js`, `vite.config.ts` |
 | Rollup | `rollup.config.js`, `rollup.config.mjs` |
-| esbuild | `esbuild.config.js`, build scripts with `esbuild` |
-| Parcel | `.parcelrc`, `package.json` (parcel field) |
+| esbuild | `esbuild.config.js`, `esbuild`を使うbuild scripts |
+| Parcel | `.parcelrc`, `package.json`のparcel field |
 | Next.js | `next.config.js`, `next.config.mjs` |
 | Nuxt | `nuxt.config.js`, `nuxt.config.ts` |
 | SvelteKit | `svelte.config.js` |
 | Astro | `astro.config.mjs` |
 
-Also check `package.json` for framework dependencies and build scripts.
+`package.json`のframework dependenciesとbuild scriptsも確認する。
 
-### Tree-Shaking & Dead Code
+### Tree-shaking / dead codeの確認
 
-- **Webpack**: Check for `mode: 'production'`, `sideEffects` in package.json, `usedExports` optimization
-- **Vite/Rollup**: Tree-shaking enabled by default; check for `treeshake` options
-- **Look for**: Barrel files (`index.js` re-exports), large utility libraries imported wholesale (lodash, moment)
+- **Webpack**: `mode: 'production'`、`package.json`の`sideEffects`、`usedExports`を確認する
+- **Vite / Rollup**: tree-shakingは既定で有効。`treeshake` optionsを確認する
+- **検出対象**: barrel files（`index.js`のre-exports）、一括importされた大きなutility libraries（lodash、moment）
 
-### Unused JS/CSS
+### Unused JS / CSSの確認
 
-- Check for CSS-in-JS vs. static CSS extraction
-- Look for PurgeCSS/UnCSS configuration (Tailwind's `content` config)
-- Identify dynamic imports vs. eager loading
+- CSS-in-JSとstatic CSS extractionの使い分けを確認する
+- PurgeCSS / UnCSS設定（Tailwindの`content` config）を確認する
+- dynamic importsとeager loadingを識別する
 
-### Polyfills
+### Polyfillsの確認
 
-- Check for `@babel/preset-env` targets and `useBuiltIns` setting
-- Look for `core-js` imports (often oversized)
-- Check `browserslist` config for overly broad targeting
+- `@babel/preset-env` targetsと`useBuiltIns`設定を確認する
+- `core-js` importsのサイズを確認する
+- `browserslist` configが必要以上に広い環境を対象にしていないか確認する
 
-### Compression & Minification
+### Compression / minificationの確認
 
-- Check for `terser`, `esbuild`, or `swc` minification
-- Look for gzip/brotli compression in build output or server config
-- Check for source maps in production builds (should be external or disabled)
+- `terser`、`esbuild`、`swc`のminificationを確認する
+- build outputまたはserver configのgzip / brotli compressionを確認する
+- production buildのsource mapsがexternalまたはdisabledであることを確認する
 
-## Output Format
+## 検証と出力形式
 
-Present findings as:
+取得したtrace / insights / network requestsとcodebaseを相互照合し、推測のみの項目は確定事実と分ける。traceが取得できない、対象URLが開けない、codebaseへアクセスできない場合は、その範囲の断定を停止して未検証と明記する。
 
-1. **Core Web Vitals Summary** - Table with metric, value, and rating (good/needs-improvement/poor)
-2. **Top Issues** - Prioritized list of problems with estimated impact (high/medium/low)
-3. **Recommendations** - Specific, actionable fixes with code snippets or config changes
-4. **Codebase Findings** - Framework/bundler detected, optimization opportunities (omit if no codebase access)
+1. **Core Web Vitals要約** - metric、実測値、rating（good / needs-improvement / poor）、閾値の確認日を表で示す
+2. **優先問題** - 根拠とestimated impactを付け、high / medium / low順に示す
+3. **改善案** - 対象ファイルやresource、具体的な修正、期待効果を示す。必要なcode snippet / config changeだけを添える
+4. **Codebase調査** - 検出したframework / bundlerと改善箇所を示す。codebaseへアクセスできなければ「未実施」とする
+5. **制約と未検証項目** - 利用できないtools、未取得のdata、追加検証に必要な操作を日本語で簡潔に示す

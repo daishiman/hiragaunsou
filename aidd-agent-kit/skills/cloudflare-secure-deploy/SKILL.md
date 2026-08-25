@@ -17,6 +17,23 @@ Workers + D1 を中心に、**①正しいスタック選定 ②本番品質の 
 
 - 具体的な設定スニペット集: `references/recipes.md`(レシピ別の完全な wrangler.jsonc / スクリプト)
 - 実戦で踏んだ落とし穴集: `references/gotchas.md`(**デプロイ前に必ず一読**)
+- 非エンジニア向けAccount/API Token/GitHub/Worker secret設定は Skill `ci-cd-pipeline` の生成ガイドを正本にする
+
+## 0. Cloudflare Accountを先に固定する
+
+リソース作成・secret設定・deployより前に対象Accountを固定する。1人が複数Accountへ所属しており、チーム用共有Accountと個人Accountの両方がある場合の既定は**チーム用Account**。個人Accountは利用者が明示指定した場合だけ使う。
+
+優先順は「既存`wrangler.jsonc`と既存リソースの所有Account → 新規ならチーム用Account → 明示指定時だけ個人Account」。既存リソースが個人側にあるとき、チーム側へ同名リソースを作らない。チーム移行はD1/R2データ・Worker URL・secret・GitHub Environmentを含む別タスクとして承認を取る。
+
+Cloudflare公式では共有環境も個人環境もAccountであり、特定の有料「Team plan」と同義ではない。料金プランの変更・購入は別の承認境界。
+
+最低確認:
+
+```bash
+pnpm wrangler whoami
+```
+
+Worker/D1/R2を使う場合は一覧と`wrangler.jsonc`のID/名前を照合する。Account不一致のまま作成・secret更新・deployへ進まない。Account IDの完全値をチャットや最終報告へ載せない。
 
 ---
 
@@ -61,6 +78,8 @@ pnpm wrangler d1 migrations apply <db-name> --local    # ローカルで検証
 pnpm wrangler d1 migrations apply <db-name> --remote   # ★コードのデプロイより先に適用
 
 # 5. シークレット設定(vars に秘密を書かない。§5)
+#    先にsecret list。既存secretは通常セットアップで上書きしない
+pnpm wrangler secret list
 pnpm wrangler secret put SESSION_SECRET
 # ローカルは .dev.vars(.gitignore 必須)
 
@@ -214,6 +233,9 @@ pnpm wrangler rollback                   # 問題発生時(直近100バージョ
 
 ## 10. 停止条件(勝手にやらない)
 
+- チーム用Accountと個人Accountの判別不能、または`wrangler.jsonc`/既存リソースとログイン先が不一致 → **作成・secret更新・deployを停止**
+- 既存Worker secretの更新 → **ローテーション扱い**。ログイン不能・全セッション失効等の影響を示してユーザー確認
+- 不足Worker/D1/R2の新規作成 → 対象Account・名前・課金有無を示してユーザー確認
 - `wrangler d1 delete` / R2バケット削除 / DROP TABLE を含むマイグレーション → **必ずユーザー確認**(Time Travel があっても)
 - 有料機能・課金枠の拡大(limits の大幅引き上げ、有料プラン前提の設定)→ 確認
 - カスタムドメインの付け替え・DNS変更 → 確認
@@ -223,10 +245,13 @@ pnpm wrangler rollback                   # 問題発生時(直近100バージョ
 
 デプロイ完了を宣言する前に:
 - [ ] compatibility_date が今日 / nodejs_compat / observability / upload_source_maps 設定済み
+- [ ] 対象Accountを固定し、複数候補ならチーム用Accountを既定選択した
+- [ ] 既存リソースの所有AccountとWrangler/GitHubのAccount IDが一致する
 - [ ] `run_worker_first` の要否を判断した(認証・APIパスは Worker 先行か)
 - [ ] D1: migrations 方式・prepare+bind のみ・書き込み原子性は batch・主要クエリにインデックス
 - [ ] マイグレーション --remote 適用 → コードデプロイの順を守った
 - [ ] 秘密は secret のみ(vars/コードに平文なし)・`secrets.required` 宣言・.dev.vars は .gitignore
+- [ ] `secret list`を先に確認し、既存secretを承認なくローテーションしていない
 - [ ] 認証: Access なら JWT 署名検証 + fail-closed + プレビューURL保護。書き込みに Origin チェック
 - [ ] レート制限(ユーザーIDキー)・セキュリティヘッダー・ボディサイズ上限
 - [ ] `limits.cpu_ms` 等のコスト安全弁を設定した

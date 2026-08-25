@@ -145,7 +145,7 @@ Before making any REST API calls (create, read, update, delete, toggle flags), v
 | Variable | Purpose | How to get |
 |----------|---------|------------|
 | `CLOUDFLARE_ACCOUNT_ID` | Account identifier | Dashboard URL or `wrangler whoami` |
-| `CLOUDFLARE_API_TOKEN` | Bearer token for API auth | [Create API token](https://dash.cloudflare.com/profile/api-tokens) with Flagship permissions |
+| `CLOUDFLARE_API_TOKEN` | Bearer token for API auth | [Create an account-owned API token](https://dash.cloudflare.com/?to=/:account/api-tokens) in the selected team Account with Flagship permissions |
 | `FLAGSHIP_APP_ID` | Target app UUID | Dashboard under **Compute > Flagship**, or `GET /apps` endpoint |
 
 Check with:
