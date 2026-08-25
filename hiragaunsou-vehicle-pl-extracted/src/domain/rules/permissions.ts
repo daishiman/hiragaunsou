@@ -18,7 +18,21 @@ export type Permission =
   | "report_settings"
   | "manage_api_keys"
   | "manage_users"
-  | "manage_imports";
+  | "manage_imports"
+  /**
+   * 届いた改善要望を読む・対応状況を書き換える。
+   * 他の人が書いた不満がそのまま載るため、入力担当・経営には開かない
+   * (依頼者の指示: 最上位の管理者だけが一元管理する)。
+   */
+  | "manage_improvements"
+  /**
+   * 改善要望を完全に削除する (本文・画像・送信時の記録ごと消す)。
+   *
+   * manage_improvements と分ける。いまは同じ admin だけが持つが、
+   * 「読める・整理できる」と「取り返しがつかない形で消せる」は別の重さの権限で、
+   * 将来 manage_improvements を誰かに開いたときに、削除まで一緒に開いてしまわないようにする。
+   */
+  | "purge_improvements";
 
 const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   admin: [
@@ -31,6 +45,8 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "manage_api_keys",
     "manage_users",
     "manage_imports",
+    "manage_improvements",
+    "purge_improvements",
   ],
   input_staff: ["view", "input", "approve_anomaly", "edit_master"],
   executive: ["view", "report_settings"],

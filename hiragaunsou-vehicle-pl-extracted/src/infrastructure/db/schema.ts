@@ -1,5 +1,13 @@
 import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  sqliteTable,
+  text,
+  integer,
+  real,
+  index,
+  uniqueIndex,
+  primaryKey,
+} from "drizzle-orm/sqlite-core";
 import { user } from "./auth-schema";
 
 /**
@@ -721,3 +729,261 @@ export const deficitFactorAnalysis = sqliteTable(
     uniqueIndex("deficit_factor_analysis_ym_no_idx").on(table.yearMonth, table.vehicleNo),
   ],
 );
+
+/**
+ * 各画面の右下から届く改善要望。
+ *
+ * 本文と画像を別のテーブルに分ける。画像は1件で数百KBあり、一覧を描くたびに
+ * 引くと全件ぶんの画像を読むことになる。一覧は本文だけ、詳細を開いたときだけ
+ * 画像を引く形にするため、最初から行を分けておく。
+ *
+ * routePattern は集計の単位 (/vehicle/[vehicleNo])。path は実URL。
+ * 実URLだけで数えると同じ画面への指摘が車番の数だけ分かれるため、両方を持つ。
+ */
+export const improvementRequest = sqliteTable(
+  "improvement_request",
+  {
+    /**
+     * 投稿者 + 送信キーから決まる id。同じ内容を2回送っても同じ行になるので、
+     * 通信が切れて押し直されたときに要望が2件並ばない。
+     */
+    id: text("id").primaryKey(),
+    reporterId: text("reporter_id").references(() => user.id, { onDelete: "set null" }),
+    /** 退職などで利用者が消えても「誰が言ったか」を残す。 */
+    reporterName: text("reporter_name").notNull().default(""),
+    /** 送信のたびにブラウザが作る鍵。再送を1件にまとめるために使う。 */
+    submissionKey: text("submission_key").notNull(),
+    path: text("path").notNull(),
+    routePattern: text("route_pattern").notNull(),
+    screenLabel: text("screen_label").notNull(),
+    body: text("body").notNull(),
+    /** 送ったときの画面の幅×高さ。「私の画面では崩れる」を再現するための手がかり。 */
+    viewport: text("viewport"),
+    userAgent: text("user_agent"),
+    status: text("status").notNull().default("open"),
+    handledById: text("handled_by_id").references(() => user.id, { onDelete: "set null" }),
+    handledNote: text("handled_note"),
+    handledAt: integer("handled_at", { mode: "timestamp_ms" }),
+    /**
+     * 「重複」にしたときの親。どの要望と同じ話なのかを必ず指させる。
+     * 指し先が無い「重複」は、後から見た人には消されたのと変わらない。
+     */
+    duplicateOfId: text("duplicate_of_id"),
+    /**
+     * 廃棄した日時 (論理削除)。入っていれば一覧の既定表示から外れる。
+     *
+     * 状態 (status) と別の列にするのは、この2つが直交するため。
+     * 「見送りにして廃棄」も「未対応のまま廃棄」もあり、状態に混ぜると
+     * 戻すときに元が何だったか分からなくなる。
+     */
+    archivedAt: integer("archived_at", { mode: "timestamp_ms" }),
+    archivedById: text("archived_by_id").references(() => user.id, { onDelete: "set null" }),
+    /**
+     * 直したときの確認依頼 (GitHub の Pull Request) の指し先。
+     *
+     * 状態が「レビュー待ち」「対応済み」でも、どの修正のことか辿れないと
+     * 「本当に直ったのか」を管理画面だけでは確かめられない。番号と URL を両方持つのは、
+     * 画面には短い番号を出し、リンク先は URL をそのまま使うため。
+     */
+    prUrl: text("pr_url"),
+    prNumber: integer("pr_number"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [
+    index("improvement_request_created_idx").on(table.createdAt),
+    index("improvement_request_status_idx").on(table.status, table.createdAt),
+    index("improvement_request_route_idx").on(table.routePattern, table.createdAt),
+    index("improvement_request_archived_idx").on(table.archivedAt),
+    // 並んで届いた再送も1件に収める最後の砦 (id の一致だけに頼らない)
+    uniqueIndex("improvement_request_submission_idx").on(table.reporterId, table.submissionKey),
+  ],
+);
+
+/**
+ * 改善要望から発行した、Claude Code 向けの指示文。
+ *
+ * 主キーを request_id にしてあるのが肝心なところ。「1つの要望に指示文は1つ」を
+ * アプリのロジックではなく DB が保証する。同時に2回押されても、2行目は入らない。
+ * 発行の権利 (publishing_at) もこの行で取るので、権利の取り合いも同じ表で決まる。
+ *
+ * 要望を完全削除すると、この行も一緒に消える (cascade)。指示文はアプリの中にしか
+ * 無いので、消してくれと言われたら本当に消せる。
+ */
+export const improvementInstruction = sqliteTable(
+  "improvement_instruction",
+  {
+    requestId: text("request_id")
+      .primaryKey()
+      .references(() => improvementRequest.id, { onDelete: "cascade" }),
+    /** 何版目か。内容が変わったときだけ上がる (同じ内容で押しても上がらない)。 */
+    version: integer("version").notNull().default(0),
+    /**
+     * 発行した内容の指紋 (見出し + 本文の SHA-256)。
+     * 一括発行で何度押されても、これが一致する件は何もしない。
+     */
+    hash: text("hash"),
+    /** published / fetched (Claude Code が取りに来た) / withdrawn (取り下げ)。 */
+    state: text("state").notNull().default("published"),
+    /**
+     * 最後に発行した時点の値 (状況・対応メモなど) の控え。
+     * 指紋だけでは「変わった」ことしか分からず、何が変わったかを書けない。
+     */
+    syncedFields: text("synced_fields"),
+    publishedAt: integer("published_at", { mode: "timestamp_ms" }),
+    publishedById: text("published_by_id").references(() => user.id, { onDelete: "set null" }),
+    /**
+     * 発行の作業中を示す印 (取りかかった時刻)。
+     * 途中で落ちても、一定時間で自然に空く (取りかかった時刻で判断する)。
+     */
+    publishingAt: integer("publishing_at", { mode: "timestamp_ms" }),
+    /** Claude Code が最後に読み取った時刻。 */
+    fetchedAt: integer("fetched_at", { mode: "timestamp_ms" }),
+    fetchCount: integer("fetch_count").notNull().default(0),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [index("improvement_instruction_state_idx").on(table.state, table.publishedAt)],
+);
+
+/**
+ * 指示文を読むための鍵。
+ *
+ * 平文は保存しない (token_hash だけ)。DB を読める人が鍵を使えてはいけないため。
+ * 範囲 (scope_ids) と期限 (expires_at) を必ず持たせる。「全部をいつまでも読める鍵」を
+ * 配ると、渡した先の管理がこちらの手を離れる。
+ */
+export const improvementAccessToken = sqliteTable(
+  "improvement_access_token",
+  {
+    id: text("id").primaryKey(),
+    /** 何のために発行したか (画面に出す覚え書き)。 */
+    name: text("name").notNull().default(""),
+    tokenHash: text("token_hash").notNull().unique(),
+    /** 開けてよい要望の id (JSON配列)。空配列なら発行済みのすべて。 */
+    scopeIds: text("scope_ids").notNull().default("[]"),
+    /**
+     * できること (JSON配列)。read / status:own / status:any の3つだけ。
+     * 既定を read だけにしてあるので、この列が入る前に発行された鍵は
+     * これまでどおり「読むだけ」になる (足した列で権限が増えない)。
+     */
+    abilities: text("abilities").notNull().default('["read"]'),
+    /**
+     * この鍵が属する会社の id。単一の会社しか扱っていないいまは必ず null。
+     *
+     * マルチテナントにするときに会社IDを焼き込むのは **ここ1点**。
+     * 発行時にセッションの会社IDを入れ、参照側は tokenCompanyRejection() で弾く
+     * (呼ぶ場所は instructionAccess.ts に用意済み)。
+     */
+    companyId: text("company_id"),
+    createdById: text("created_by_id").references(() => user.id, { onDelete: "set null" }),
+    createdByName: text("created_by_name").notNull().default(""),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+    revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+    revokedReason: text("revoked_reason"),
+    lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
+    useCount: integer("use_count").notNull().default(0),
+  },
+  (table) => [index("improvement_access_token_expires_idx").on(table.expiresAt)],
+);
+
+/**
+ * その鍵が、どの要望の指示文を実際に読み取ったか。
+ *
+ * 「自分が取得した要望だけ状態を進められる」を、権限の文字列ではなく事実で決めるための表。
+ * 読んだ記録が無ければ状態を動かせないので、鍵の力の範囲が
+ * 「実際にやった仕事」と自動的に一致する。
+ *
+ * request_id に外部キーを張らないのは improvement_audit と同じ理由で、
+ * 要望を完全削除したあとも「その鍵が何を読んだか」を数えられるようにするため。
+ */
+export const improvementTokenClaim = sqliteTable(
+  "improvement_token_claim",
+  {
+    tokenId: text("token_id").notNull(),
+    requestId: text("request_id").notNull(),
+    claimedAt: integer("claimed_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.tokenId, table.requestId] }),
+    index("improvement_token_claim_request_idx").on(table.requestId),
+  ],
+);
+
+/**
+ * 改善要望に自動で付く診断情報 (ブラウザの控え + サーバで足した分)。
+ *
+ * 本文と別の表にするのは、一覧で読まないため。診断情報は1件あたり数十KBあり、
+ * 一覧で全件読むと件数が増えるほど管理画面が開かなくなる。
+ * JSON のまま持つのは、集める項目が今後増えても表を作り直さずに済むから
+ * (この中身で検索・集計する予定は無い)。
+ */
+export const improvementDiagnostics = sqliteTable("improvement_diagnostics", {
+  requestId: text("request_id")
+    .primaryKey()
+    .references(() => improvementRequest.id, { onDelete: "cascade" }),
+  payload: text("payload").notNull(),
+  bytes: integer("bytes").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+    .notNull(),
+});
+
+/**
+ * 改善要望に対して行った操作の記録 (状態変更・廃棄・完全削除)。
+ *
+ * request_id に外部キーを張らない。張ると完全削除でこの行まで一緒に消え、
+ * 「いつ誰が何をなぜ消したか」が残らなくなる。消した記録が消えるのでは監査にならない。
+ */
+export const improvementAudit = sqliteTable(
+  "improvement_audit",
+  {
+    id: text("id").primaryKey(),
+    requestId: text("request_id").notNull(),
+    actorId: text("actor_id"),
+    /** 退職などで利用者が消えても「誰がやったか」を残す。 */
+    actorName: text("actor_name").notNull().default(""),
+    /**
+     * status_change / archive / restore / purge /
+     * instruction_publish / instruction_revise / instruction_withdraw / instruction_fetch /
+     * token_issue / token_revoke
+     */
+    action: text("action").notNull(),
+    fromStatus: text("from_status"),
+    toStatus: text("to_status"),
+    reason: text("reason"),
+    at: integer("at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+  },
+  (table) => [
+    index("improvement_audit_request_idx").on(table.requestId, table.at),
+    index("improvement_audit_at_idx").on(table.at),
+  ],
+);
+
+/** 改善要望に添えられた画面の写し (注釈・黒塗りを焼き込んだ後の1枚)。 */
+export const improvementShot = sqliteTable("improvement_shot", {
+  requestId: text("request_id")
+    .primaryKey()
+    .references(() => improvementRequest.id, { onDelete: "cascade" }),
+  /** data URL のまま持つ。R2 を挟むと本文と画像で保存先が分かれ、片方だけ残る事故が起きる。 */
+  dataUrl: text("data_url").notNull(),
+  bytes: integer("bytes").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+    .notNull(),
+});

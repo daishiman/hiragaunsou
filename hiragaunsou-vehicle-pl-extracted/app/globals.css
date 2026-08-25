@@ -441,3 +441,138 @@ main :where(details) > :where(:not(summary)) {
     break-inside: avoid;
   }
 }
+
+/*
+ * 改善要望 (右下の固定ボタンと、書き込みができる窓)。
+ *
+ * どの画面からでも同じ場所・同じ見た目で出す。画面ごとに置き方を変えると、
+ * 「この画面には無い」と思われて意見が届かなくなる。
+ */
+
+:root {
+  /* 画像に焼き込む印の色。明暗のモードで変えない (焼いた後は戻せないため) */
+  --mark-red: #d93025;
+  --mark-amber: #c74e0b;
+  --mark-blue: #1d63be;
+  --mark-ink: #16191d;
+  --mark-paper: #ffffff;
+}
+
+.feedback-fab {
+  position: fixed;
+  right: 1rem;
+  /* 下に貼り付く操作列がある画面でも重ならない位置に置く */
+  bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  z-index: 45;
+}
+/*
+ * 下に操作列が貼り付く画面では、その上へ逃がす。
+ * 「確定する」を隠してしまうと、要望を出す口が業務の邪魔になる。
+ */
+body:has(.screen-action-bar) .feedback-fab {
+  bottom: calc(var(--screen-action-bar-h) + 0.75rem + env(safe-area-inset-bottom, 0px));
+}
+.feedback-fab > button {
+  min-height: 44px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.18);
+}
+
+.feedback-dialog {
+  width: min(56rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: #fff;
+  color: var(--ink);
+}
+.feedback-dialog::backdrop {
+  background: rgb(22 25 29 / 0.35);
+}
+.feedback-dialog-body {
+  display: flex;
+  max-height: calc(100dvh - 2rem);
+  flex-direction: column;
+}
+.feedback-dialog-main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem;
+}
+.feedback-dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  border-top: 1px solid var(--line);
+  background: var(--subtle);
+  padding: 0.75rem 1.25rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* 道具の選択。押せるものはタッチでも 44px 以上を保つ */
+.feedback-chip {
+  display: inline-flex;
+  min-height: 44px;
+  min-width: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: #fff;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--ink);
+}
+/* 選ばれている状態。ボタンは aria-pressed、リンク (絞り込み) は aria-current で表す */
+.feedback-chip[aria-pressed="true"],
+.feedback-chip[aria-current="true"] {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand-deep);
+  font-weight: 600;
+}
+.feedback-swatch {
+  display: inline-block;
+  height: 1.125rem;
+  width: 1.125rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.feedback-swatch[data-mark="red"] { background: var(--mark-red); }
+.feedback-swatch[data-mark="amber"] { background: var(--mark-amber); }
+.feedback-swatch[data-mark="blue"] { background: var(--mark-blue); }
+.feedback-swatch[data-mark="ink"] { background: var(--mark-ink); }
+
+.feedback-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.feedback-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--subtle);
+  touch-action: none;
+  cursor: crosshair;
+}
+.feedback-alt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.feedback-link {
+  color: var(--brand-deep);
+  text-decoration: underline;
+}
+.feedback-shooting {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ink-muted);
+  font-size: 0.8125rem;
+}

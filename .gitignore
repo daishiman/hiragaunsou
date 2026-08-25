@@ -12,6 +12,8 @@ node_modules/
 .claude/backup-*/
 .codex/backup-*/
 
-# ロックファイルは package-lock.json が正 (CI/CDが npm ci を使う)。
-# pnpm でローカル作業しても、解決結果が2系統に分かれないよう追跡しない。
-hiragaunsou-vehicle-pl-extracted/pnpm-lock.yaml
+# ロックファイルは pnpm-lock.yaml の1本だけが正 (手元もCI/CDも pnpm を使う)。
+# 以前は package-lock.json を正としていたが、手元 pnpm・CI npm の食い違いで
+# 「手元の品質ゲートは全部通るのに CI だけ install で落ちる」が実際に起きたため、
+# pnpm 側へ寄せて1本にした。package-lock.json は作らない・追跡しない。
+hiragaunsou-vehicle-pl-extracted/package-lock.json

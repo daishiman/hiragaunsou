@@ -46,6 +46,9 @@
     "BOOTSTRAP_ADMIN_EMAILS": "manjumoto.daishi@senpai-lab.com,h_atsushi@hiragaunsou.co.jp"
   },
   // 未設定のままデプロイして「本番だけ500」になるのを防ぐ(設定漏れならデプロイ自体が失敗する)。
+  // 改善要望を Claude Code へ渡す機能は、外部サービスの設定を必要としない。
+  // 指示文を読むための鍵は管理画面から発行し、画像の署名は BETTER_AUTH_SECRET から導く
+  // (シークレットを増やすほど、設定漏れと管理の手間が増えるため)。
   "secrets": {
     "required": ["BETTER_AUTH_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]
   },

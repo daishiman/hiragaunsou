@@ -23,7 +23,7 @@ ALLOW_DESTRUCTIVE_MIGRATION="${ALLOW_DESTRUCTIVE_MIGRATION:-}"
 
 # --- 未適用マイグレーションの特定 -------------------------------------------
 # `wrangler d1 migrations list` は「まだ適用されていないもの」を出力する。
-if ! list_output="$(npx wrangler d1 migrations list "$DB_NAME" --remote 2>&1)"; then
+if ! list_output="$(pnpm exec wrangler d1 migrations list "$DB_NAME" --remote 2>&1)"; then
   echo "::error::未適用マイグレーションの一覧を取得できませんでした"
   printf '%s\n' "$list_output"
   exit 1
