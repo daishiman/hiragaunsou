@@ -1,0 +1,19 @@
+# 配布物の改行コード・エンコーディングを、リポジトリの中身と一致させる。
+#
+# なぜ必要か:
+#   cmd.exe はバッチファイルをバイトオフセットで読み進めるため、LF のみの .bat では
+#   goto / call :LABEL / ( ... ) ブロックが壊れる。
+#   PowerShell 5.1 (Windows 標準搭載) は BOM なしファイルを ANSI(日本語環境では CP932)
+#   として読むため、UTF-8 で書かれた日本語リテラルが文字化けする。
+#   どちらも macOS/Linux 上の開発では再現せず、Windows 実機でだけ失敗する。
+#
+# 方針: Windows 用スクリプトは CRLF を正本としてリポジトリに保存する(-text で自動変換を無効化し、
+#       手元で見えるバイト列がそのまま配布される状態にする)。
+
+*.bat   -text
+*.cmd   -text
+*.ps1   -text
+
+# Unix 側は LF を正本とする。
+*.command  text eol=lf
+*.sh       text eol=lf

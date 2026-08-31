@@ -142,11 +142,20 @@
         <div class="step-num">1</div>
         <div class="step-body">
           <h3>ZIPファイルを展開する</h3>
+          <p><strong>展開前に「ブロックの解除」をするのが最も簡単です。</strong> 解除せずに展開しても導入はやり直せます。</p>
           <ol>
-          <li>受け取った <code>aidd-agent-kit.zip</code> を <strong>右クリック</strong> し、<strong>「すべて展開…」</strong> を選びます。</li>
+          <li>受け取った <code>aidd-agent-kit.zip</code> を <strong>右クリック</strong> し、<strong>「プロパティ」</strong> を選びます。</li>
+          <li>一番下に <strong>「セキュリティ: このファイルは他のコンピューターから取得したものです。…」</strong> という行があれば、その右の <strong>「ブロックの解除」</strong> にチェックを入れて <strong>OK</strong> をクリックします。この行が無ければ、すでに解除済みです。</li>
+          <li>あらためて ZIP を <strong>右クリック</strong> し、<strong>「すべて展開…」</strong> を選びます。</li>
           <li>「展開」ボタンをクリックします。</li>
           <li><code>aidd-agent-kit</code> というフォルダができるので、開きます。</li>
           </ol>
+        <div class="warn">
+          <div class="warn-title">なぜ展開前なのか</div>
+          <p>インターネット経由で受け取ったファイルには、Windows が「他のコンピューターから来た」という印を付けます。ZIP を展開すると、この印は <strong>中の全ファイルに1つずつコピーされます</strong>。展開後に解除しようとすると、ファイルの数だけ同じ操作を繰り返すことになります。</p>
+          <p>展開前の ZIP で1回解除しておけば、中身には印が付きません。以降の警告画面もほとんど出なくなります。</p>
+          <p>展開後でも、インストーラーが自動解除を試みます。自動解除できなかった場合は、画面に記録の場所と手動解除コマンドが表示されます。</p>
+        </div>
           <p class="quote">ZIPをダブルクリックして「中を見ているだけ」の状態では、インストールできません。必ず「すべて展開」してからにしてください。</p>
         </div>
       </div>
@@ -171,7 +180,7 @@
         </div>
 
         <h3>コマンドプロンプトでコマンド実行してインストールする方法(上級者向け)</h3>
-        <p>ダブルクリックの代わりに、コマンドプロンプトから実行することもできます。挙動はダブルクリックと同じです。</p>
+        <p>ダブルクリックの代わりに、コマンドプロンプトから実行することもできます。インストールされる内容は同じです。こちらの経路ではセキュリティの警告画面が出ません。</p>
         <div class="cmd-sample">cd aidd-agent-kit フォルダのパス
 install-windows.bat</div>
         <p>通常インストーラーが書くのはuser scopeの <code>.claude</code>、<code>.agents\skills</code>、<code>.codex</code> です。Codex公式の探索範囲にはproject scopeもありますが、同名Skillはuser/project間で統合されません。プロジェクト限定で使う場合は、リポジトリルートから <code>call aidd-agent-kit\sync-project-windows.bat</code> を使ってproject scopeを明示してください。同じAIDDキットの二重導入は非推奨です。</p>
@@ -185,11 +194,17 @@ install-windows.bat</div>
         <div class="step-num">3</div>
         <div class="step-body">
           <h3>開発環境を準備する(初回のみ)</h3>
-          <p>アプリ開発には <strong>Node.js</strong> と <strong>pnpm</strong> という2つの道具が必要です。付属のスクリプトで両方まとめて入ります。</p>
+          <p>アプリ開発には <strong>Node.js 22 以上</strong> と <strong>pnpm</strong> という2つの道具が必要です。付属のスクリプトで両方まとめて入ります。</p>
           <ol>
           <li>フォルダの中の <code>setup-env-windows.bat</code> をダブルクリックします。(ファイル名が <code>setup-env-windows</code> とだけ表示されている場合もあります。同じものです)</li>
           <li>黒い画面が開き、自動でインストールが進みます(2〜5分)。</li>
-          <li><strong>「セットアップが完了しました!」</strong> と表示されたら成功です。</li>
+          <li>最後の表示で結果を確認します。
+            <ul>
+              <li><strong>「セットアップが完全に完了しました！」</strong> — Node.js・pnpm・Cloudflare連携がすべて準備できました。</li>
+              <li><strong>「基本セットアップ完了 / Cloudflare MCP は認証待ち」</strong> — 表示された手順で認証すれば完了です。</li>
+              <li><strong>「基本セットアップ完了 / 一部の連携は未設定」</strong> — 名指しされたCLIを使う場合だけ、導入後にもう一度実行します。</li>
+            </ul>
+          </li>
           </ol>
           <p>このスクリプトでは、あわせて <strong>Claude Code / Codex と Cloudflare の連携設定(MCP)</strong> も自動で行われます。初回にブラウザで許可を求められたら、<strong>「許可」</strong>を押してください。</p>
           <p class="quote">すでに入っている場合は「インストール済みです」と表示されるだけなので、何度実行しても問題ありません。「WindowsによってPCが保護されました」という青い画面が出たときは、STEP 2 と同じ方法(詳細情報 → 実行)で開いてください。</p>
@@ -236,7 +251,20 @@ install-windows.bat</div>
   <p>普通に「在庫管理のアプリを作りたい」と頼むこともできます。確実に動かしたいときは <code>/build-app</code> または <code>$build-app</code> を使ってください。</p>
 
   <h2 id="faq">うまくいかないとき</h2>
-      <div class="faq-q">Q1. インストーラーがどうしても開けない</div>
+      <div class="faq-q">Q1. 「開いているファイル - セキュリティの警告」「発行元を確認できませんでした」と出る</div>
+      <p>展開前の「ブロックの解除」を行っていないと表示されることがあります。インストーラーはキット全体の自動解除を試みますが、警告が残る場合は次の手順でまとめて解除できます。</p>
+      <p>まとめて解除したい場合は、キットのフォルダで <strong>アドレスバーに <code>powershell</code> と入力して Enter</strong> し、開いた画面で次を実行してください。</p>
+      <div class="cmd-sample">Get-ChildItem -Recurse -Force -File | Unblock-File</div>
+
+      <div class="faq-q">Q1-1. 「インストールを開始できません」と表示されて、すぐ終了する</div>
+      <p>インストーラーが実行前の点検で問題を見つけた状態です。画面に理由が出ています。</p>
+      <ul>
+        <li><strong>「PowerShell が見つかりません」</strong> — Windows 標準の PowerShell が無効化・削除されています。社内 PC の場合は情報システム部門にご確認ください。</li>
+        <li><strong>「PowerShell が制限モードで動作しています」</strong> — 組織のセキュリティポリシー(AppLocker / WDAC)による制限です。この制限はキット側では解除できません。管理者にご相談ください。</li>
+      </ul>
+      <p>詳しい記録は <code>%TEMP%\aidd-agent-kit-install.log</code> に残ります。このファイルを導入支援の担当者にお送りください。</p>
+
+      <div class="faq-q">Q1-2. インストーラーがどうしても開けない</div>
       <p><strong>手動でコピーする方法</strong>があります。</p>
       <ol>
         <li>Claude Code 用は <code>skills</code>・<code>agents</code>・<code>commands</code> を <code>.claude</code> の対応先へコピーします。</li>

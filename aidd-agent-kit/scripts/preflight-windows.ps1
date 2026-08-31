@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
     [string]$KitRoot,
@@ -9,6 +9,34 @@ param(
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
+
+# 診断に出す日本語が ??? に化けないようにする。Windows PowerShell 5.1 の
+# 既定の出力コードページは英語 Windows では 437 で、日本語を落とす。
+# 失敗の原因を書いた行が読めなければ、検査があっても支援側は動けない。
+try {
+    [Console]::OutputEncoding = New-Object Text.UTF8Encoding($false)
+} catch {
+    # 出力先がコンソールでない場合は設定できない。診断が読みにくくなるだけで
+    # 検査そのものは成立するため、ここで止めない。
+}
+
+# ファイルは必ず UTF-8 として読む。
+# Windows PowerShell 5.1 の Get-Content は BOM が無いと ANSI コードページ
+# (英語 Windows なら 1252、日本語 Windows なら 932) で読む。UTF-8 で書かれた
+# 日本語はそこで別の文字に化け、日本語の判定に通らなくなる。つまり
+# 「日本語が書かれていない」と誤って落ちる。利用者の Windows の言語設定で
+# 結果が変わる検査になってはいけない。
+function Read-AiddText {
+    param([Parameter(Mandatory = $true)][string]$FilePath)
+    $full = (Resolve-Path -LiteralPath $FilePath -ErrorAction Stop).ProviderPath
+    return [IO.File]::ReadAllText($full, [Text.Encoding]::UTF8)
+}
+
+function Read-AiddLines {
+    param([Parameter(Mandatory = $true)][string]$FilePath)
+    $full = (Resolve-Path -LiteralPath $FilePath -ErrorAction Stop).ProviderPath
+    return [IO.File]::ReadAllLines($full, [Text.Encoding]::UTF8)
+}
 
 $script:CurrentStage = 'bootstrap'
 $script:CurrentCategory = 'unexpected'
@@ -96,7 +124,7 @@ function Test-SkillMetadata {
             -Message 'SKILL.md is missing.'
     }
 
-    $text = Get-Content -LiteralPath $FilePath -Raw -ErrorAction Stop
+    $text = Read-AiddText -FilePath $FilePath
     Set-PreflightContext -Stage 'skill' -Category 'frontmatter' -Path $FilePath
     $frontmatter = [regex]::Match($text, '(?s)\A---\r?\n(.*?)\r?\n---')
     if (-not $frontmatter.Success) {
@@ -254,7 +282,7 @@ function Test-AgentToml {
     )
 
     Set-PreflightContext -Stage 'toml' -Category 'read' -Path $FilePath
-    $lines = @(Get-Content -LiteralPath $FilePath -ErrorAction Stop)
+    $lines = @(Read-AiddLines -FilePath $FilePath)
     Set-PreflightContext -Stage 'toml' -Category 'parse' -Path $FilePath
     $requiredKeys = @('name', 'description', 'developer_instructions')
     $seen = @{}

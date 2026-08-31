@@ -3,6 +3,8 @@ chcp 65001 >nul
 setlocal EnableExtensions EnableDelayedExpansion
 title AI開発エージェントキット インストーラー (Windows)
 cd /d "%~dp0"
+rem 呼び出しサブルーチン内では %~dp0 がラベル名を指すため、キットの位置は先に控える。
+set "AIDD_KIT_DIR=%~dp0"
 
 if not exist "%~dp0VERSION" (
   echo [エラー] VERSION が見つかりません。
@@ -47,6 +49,14 @@ shift
 goto ARG_LOOP
 
 :ARGS_DONE
+rem --- ステップ 0/6: 実行環境の事前確認 --------------------------
+rem Windows 固有の障壁は、失敗してから気づくのではなく先に検出して名指しする。
+rem   (1) powershell.exe の不在  (2) 制限された言語モード  (3) Mark of the Web
+set "AIDD_LOG=%TEMP%\aidd-agent-kit-install.log"
+type nul > "%AIDD_LOG%" 2>nul
+call :PRECHECK_ENV
+if errorlevel 1 goto ERR_ENV
+
 set "STAMP="
 for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd-HHmmss" 2^>nul') do set "STAMP=%%i"
 if not defined STAMP set "STAMP=old"
@@ -99,7 +109,7 @@ rem 旧manifestをコマンドとして解釈させないため、読み込み�
 set "AIDD_PHASE=old-manifest"
 set "OLD_CLAUDE_MANIFEST=%CLAUDE_MANIFEST%"
 set "OLD_CODEX_MANIFEST=%CODEX_MANIFEST%"
-powershell -NoProfile -Command "$ErrorActionPreference='Stop'; foreach($path in @($env:OLD_CLAUDE_MANIFEST,$env:OLD_CODEX_MANIFEST)){if(-not (Test-Path -LiteralPath $path -PathType Leaf)){continue}; foreach($line in Get-Content -LiteralPath $path){if([string]::IsNullOrWhiteSpace($line)){continue}; $p=$line.Split('|',2); if($p.Count -eq 2 -and $p[0] -notmatch '^[0-9a-fA-F]{64}$'){throw ('invalid manifest hash: '+$path)}; $rel=$p[$p.Count-1]; if($rel -notmatch '^[A-Za-z0-9_.\\-]+$' -or $rel -match '(^|\\)\.\.?($|\\)' -or $rel -notmatch '^(skills|agents|commands|prompts)\\'){throw ('unsafe manifest path: '+$path)}}}" >nul 2>&1
+powershell -NoProfile -Command "$ErrorActionPreference='Stop'; foreach($path in @($env:OLD_CLAUDE_MANIFEST,$env:OLD_CODEX_MANIFEST)){if(-not (Test-Path -LiteralPath $path -PathType Leaf)){continue}; foreach($line in Get-Content -LiteralPath $path -Encoding UTF8){if([string]::IsNullOrWhiteSpace($line)){continue}; $p=$line.Split('|',2); if($p.Count -eq 2 -and $p[0] -notmatch '^[0-9a-fA-F]{64}$'){throw ('invalid manifest hash: '+$path)}; $rel=$p[$p.Count-1]; if($rel -notmatch '^[A-Za-z0-9_.\\-]+$' -or $rel -match '(^|\\)\.\.?($|\\)' -or $rel -notmatch '^(skills|agents|commands|prompts)\\'){throw ('unsafe manifest path: '+$path)}}}" >>"%AIDD_LOG%" 2>&1
 if errorlevel 1 goto ERR_FORMAT
 
 set "AIDD_PHASE=map-claude-skills"
@@ -127,9 +137,12 @@ if "%LEGACY_PROMPTS%"=="1" (
 set "CL_NEW=%CLAUDE_NEW_MANIFEST%"
 set "CX_NEW=%CODEX_NEW_MANIFEST%"
 set "AIDD_PHASE=build-manifests"
-powershell -NoProfile -Command "$ErrorActionPreference='Stop'; $cache=@{}; $claude=New-Object Collections.Generic.List[string]; $codex=New-Object Collections.Generic.List[string]; foreach($line in Get-Content -LiteralPath $env:SOURCE_MAP -Encoding UTF8){$p=$line.Split('|',3); if($p.Count -ne 3){throw 'invalid source map'}; if(-not $cache.ContainsKey($p[1])){$cache[$p[1]]=(Get-FileHash -LiteralPath $p[1] -Algorithm SHA256).Hash.ToLowerInvariant()}; $entry=$cache[$p[1]]+'|'+$p[2]; if($p[0] -eq 'C'){$claude.Add($entry)}else{$codex.Add($entry)}}; $claude=$claude.ToArray() | Sort-Object -Unique; $codex=$codex.ToArray() | Sort-Object -Unique; [IO.File]::WriteAllLines($env:CL_NEW,$claude,(New-Object Text.UTF8Encoding($false))); [IO.File]::WriteAllLines($env:CX_NEW,$codex,(New-Object Text.UTF8Encoding($false)))" >nul 2>&1
+powershell -NoProfile -Command "$ErrorActionPreference='Stop'; $cache=@{}; $claude=New-Object Collections.Generic.List[string]; $codex=New-Object Collections.Generic.List[string]; foreach($line in Get-Content -LiteralPath $env:SOURCE_MAP -Encoding UTF8){$p=$line.Split('|',3); if($p.Count -ne 3){throw 'invalid source map'}; if(-not $cache.ContainsKey($p[1])){$cache[$p[1]]=(Get-FileHash -LiteralPath $p[1] -Algorithm SHA256).Hash.ToLowerInvariant()}; $entry=$cache[$p[1]]+'|'+$p[2]; if($p[0] -eq 'C'){$claude.Add($entry)}else{$codex.Add($entry)}}; $claude=$claude.ToArray() | Sort-Object -Unique; $codex=$codex.ToArray() | Sort-Object -Unique; [IO.File]::WriteAllLines($env:CL_NEW,$claude,(New-Object Text.UTF8Encoding($false))); [IO.File]::WriteAllLines($env:CX_NEW,$codex,(New-Object Text.UTF8Encoding($false)))" >>"%AIDD_LOG%" 2>&1
 if errorlevel 1 goto ERR_FORMAT
-echo %KIT_VERSION%> "%WORK_DIR%\version"
+rem リダイレクトは必ず前置する。`echo %KIT_VERSION%> file` と書くと、
+rem cmd.exe はバージョン末尾の数字(1.10.4 の "4")を直前のファイルハンドル番号と解釈し、
+rem 「1.10. を ハンドル4 へ出力」になってしまう(= versionファイルが常に空になる)。
+>"%WORK_DIR%\version" echo(%KIT_VERSION%
 
 rem 全配布先・manifest・versionが既に完全一致する場合は、
 rem 変更対象の登録やbackupより前に無更新で終了する。
@@ -180,7 +193,7 @@ for /f "usebackq tokens=1,2,3 delims=|" %%A in ("%AFFECTED%") do call :ADD_TARGE
 >> "%TARGET_LIST%" echo(%CODEX_BACKUP_DIR%
 set "CHECK_LIST=%TARGET_LIST%"
 set "CHECK_DIR_LIST=%DIR_TARGET_LIST%"
-powershell -NoProfile -Command "$ErrorActionPreference='Stop'; foreach($raw in Get-Content -LiteralPath $env:CHECK_LIST){$p=[IO.Path]::GetFullPath($raw); while($p){$i=Get-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue; if($null -ne $i -and (($i.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw ('destination reparse point: '+$p)}; $parent=[IO.Directory]::GetParent($p); if($null -eq $parent){break}; $next=$parent.FullName; if($next -eq $p){break}; $p=$next}}; foreach($root in Get-Content -LiteralPath $env:CHECK_DIR_LIST){if(-not (Test-Path -LiteralPath $root -PathType Container)){continue}; foreach($i in Get-ChildItem -LiteralPath $root -Recurse -Force){if(($i.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){throw ('destination child reparse point: '+$i.FullName)}}}" >nul 2>&1
+powershell -NoProfile -Command "$ErrorActionPreference='Stop'; foreach($raw in Get-Content -LiteralPath $env:CHECK_LIST -Encoding UTF8){$p=[IO.Path]::GetFullPath($raw); while($p){$i=Get-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue; if($null -ne $i -and (($i.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)){throw ('destination reparse point: '+$p)}; $parent=[IO.Directory]::GetParent($p); if($null -eq $parent){break}; $next=$parent.FullName; if($next -eq $p){break}; $p=$next}}; foreach($root in Get-Content -LiteralPath $env:CHECK_DIR_LIST -Encoding UTF8){if(-not (Test-Path -LiteralPath $root -PathType Container)){continue}; foreach($i in Get-ChildItem -LiteralPath $root -Recurse -Force){if(($i.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){throw ('destination child reparse point: '+$i.FullName)}}}" >>"%AIDD_LOG%" 2>&1
 if errorlevel 1 goto ERR_SYMLINK
 
 rem --- ステップ 3/6: 変更対象を検証付きでバックアップ ------------
@@ -365,13 +378,6 @@ set "MAP_SOURCE=%~f2"
 if errorlevel 1 exit /b 1
 exit /b 0
 
-:GET_HASH
-set "HASH_PATH=%~f1"
-set "FILE_HASH="
-for /f "usebackq delims=" %%H in (`powershell -NoProfile -Command "(Get-FileHash -LiteralPath $env:HASH_PATH -Algorithm SHA256).Hash.ToLowerInvariant()" 2^>nul`) do set "FILE_HASH=%%H"
-if not defined FILE_HASH exit /b 1
-exit /b 0
-
 :VALID_REL
 set "REL=%~1"
 if not defined REL exit /b 1
@@ -491,7 +497,7 @@ exit /b 0
 :VERIFY_DIRECTORY
 set "VERIFY_DIR_SOURCE=%~f1"
 set "VERIFY_DIR_TARGET=%~f2"
-powershell -NoProfile -Command "$ErrorActionPreference='Stop'; function Snapshot([string]$root){$prefix=$root.TrimEnd('\')+'\'; @(Get-ChildItem -LiteralPath $root -Recurse -Force | ForEach-Object {$rel=$_.FullName.Substring($prefix.Length); if($_.PSIsContainer){'D|'+$rel}else{'F|'+$rel+'|'+(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash}} | Sort-Object)}; $a=Snapshot $env:VERIFY_DIR_SOURCE; $b=Snapshot $env:VERIFY_DIR_TARGET; if(Compare-Object $a $b){exit 1}" >nul 2>&1
+powershell -NoProfile -Command "$ErrorActionPreference='Stop'; function Snapshot([string]$root){$prefix=$root.TrimEnd('\')+'\'; @(Get-ChildItem -LiteralPath $root -Recurse -Force | ForEach-Object {$rel=$_.FullName.Substring($prefix.Length); if($_.PSIsContainer){'D|'+$rel}else{'F|'+$rel+'|'+(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash}} | Sort-Object)}; $a=Snapshot $env:VERIFY_DIR_SOURCE; $b=Snapshot $env:VERIFY_DIR_TARGET; if(Compare-Object $a $b){exit 1}" >>"%AIDD_LOG%" 2>&1
 exit /b %errorlevel%
 
 :CLEAN_STALE_ENTRY
@@ -605,8 +611,59 @@ if exist "%WORK_DIR%" rd /s /q "%WORK_DIR%" >nul 2>&1
 exit /b 0
 
 rem =============================================================
+rem  実行環境の事前確認
+rem =============================================================
+:PRECHECK_ENV
+where powershell.exe >nul 2>nul
+if errorlevel 1 (
+  echo [エラー] Windows PowerShell が見つかりません。
+  echo このインストーラーは Windows 標準の PowerShell 5.1 以上を使用します。
+  echo この画面のままIT担当者にお見せください。
+  exit /b 1
+)
+
+rem 言語モードの確認。AppLocker / WDAC / グループポリシーの配下では
+rem ConstrainedLanguage になり、インストーラーが使う .NET 型の呼び出しが失敗する。
+rem その場合エラーは各所で散発的に出るため、ここで一度だけ名指しして止める。
+set "AIDD_LANG_MODE="
+for /f "usebackq delims=" %%M in (`powershell -NoProfile -NonInteractive -Command "$ExecutionContext.SessionState.LanguageMode" 2^>nul`) do set "AIDD_LANG_MODE=%%M"
+if not defined AIDD_LANG_MODE (
+  echo [エラー] Windows PowerShell を起動できませんでした。
+  echo セキュリティソフトや会社のポリシーが実行を妨げている可能性があります。
+  echo この画面のままIT担当者にお見せください。
+  exit /b 1
+)
+if /i not "%AIDD_LANG_MODE%"=="FullLanguage" (
+  echo [エラー] PowerShell が制限モードで動作しています ^(%AIDD_LANG_MODE%^)。
+  echo 会社のセキュリティ設定^(AppLocker / WDAC / グループポリシー^)による制限です。
+  echo キット側では回避できません。この画面のままIT担当者にお見せください。
+  exit /b 1
+)
+
+rem Mark of the Web の自己解除。インターネット経由で受け取ったZIPを展開すると
+rem 中の全ファイルに「別のコンピューターから取得したファイル」印が付き、
+rem 警告やスクリプト実行の拒否につながる。利用者が今まさに実行を選んだ
+rem このキットのフォルダ配下だけを対象にし、他の場所には一切触れない。
+powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Get-ChildItem -LiteralPath $env:AIDD_KIT_DIR -Recurse -Force -File | Unblock-File" >>"%AIDD_LOG%" 2>&1
+if errorlevel 1 (
+  echo [注意] キットのブロックを自動解除できませんでした。
+  echo         今回のインストールは続けますが、次回も警告が出る可能性があります。
+  echo         詳しい記録: %AIDD_LOG%
+  echo         手動解除: キットのフォルダで PowerShell を開き、
+  echo           Get-ChildItem -Recurse -Force -File ^| Unblock-File
+)
+exit /b 0
+
+rem =============================================================
 rem  エラー表示
 rem =============================================================
+:ERR_ENV
+echo.
+echo インストールを開始できませんでした。
+echo.
+if not "%AIDD_NONINTERACTIVE%"=="1" pause
+exit /b 1
+
 :ERR_SRC
 echo [エラー] インストールに必要なファイルまたはフォルダが見つかりません。
 echo ZIPを「すべて展開」してから install-windows.bat を実行してください。
@@ -649,6 +706,13 @@ goto ERR_END
 :ERR_END
 call :CLEAN_WORK
 echo 部分的な成功としては扱いません。必要に応じてインストール前の状態へ復元しました。
+rem 失敗の詳細は画面に流れず消えることがあるため、必ずファイルにも残す。
+rem 支援者はこのファイルを見れば、画面を撮り逃していても原因を追える。
+if defined AIDD_LOG if exist "%AIDD_LOG%" (
+  echo.
+  echo 詳しい記録: %AIDD_LOG%
+  echo このファイルを導入支援の担当者にお送りください。
+)
 echo.
 if not "%AIDD_NONINTERACTIVE%"=="1" pause
 exit /b 1

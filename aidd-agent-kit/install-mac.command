@@ -8,6 +8,7 @@
 
 set -Ee
 cd "$(dirname "$0")"
+KIT_DIR=$(pwd -P)
 
 [ -f VERSION ] || { echo "[エラー] VERSION が見つかりません。" >&2; exit 1; }
 KIT_VERSION=$(tr -d '\r\n' < VERSION)
@@ -53,6 +54,96 @@ cleanup() {
   fi
 }
 
+# --- ファイルの指紋(SHA256)を取る -------------------------------------
+# 入力: 標準入力に1行1パス / 出力: "<sha256>|<パス>"
+#
+# 1つの道具に賭けない理由: 以前は perl -MDigest::SHA だけを使っていたが、
+# Apple は同梱スクリプト言語(perl / python)の廃止を予告している。
+# 消えた時点でインストーラーが丸ごと動かなくなるので、
+# macOS 標準で複数ある道具を順に試す。パスに空白が含まれても壊れないよう、
+# 受け渡しは NUL 区切りにする。
+hash_file_list() {
+  if command -v shasum >/dev/null 2>&1; then
+    # 出力: "<hash><空白2>path"
+    tr '\n' '\0' | xargs -0 shasum -a 256 |
+      sed 's/^\([0-9a-f][0-9a-f]*\)  /\1|/'
+  elif command -v openssl >/dev/null 2>&1; then
+    # 出力: "<hash><空白>*path" (-r は coreutils 互換形式)
+    tr '\n' '\0' | xargs -0 openssl dgst -sha256 -r |
+      sed 's/^\([0-9a-f][0-9a-f]*\) \*\{0,1\}/\1|/'
+  elif command -v perl >/dev/null 2>&1; then
+    perl -MDigest::SHA -e '
+      while (<STDIN>) {
+        chomp;
+        open my $fh, "<", $_ or die "$!: $_\n";
+        binmode $fh;
+        my $sha = Digest::SHA->new(256);
+        $sha->addfile($fh);
+        print $sha->hexdigest, "|", $_, "\n";
+      }
+    '
+  else
+    echo "[エラー] ファイルの照合に必要なコマンドが見つかりません" >&2
+    echo "        (shasum / openssl / perl のいずれも使えません)。" >&2
+    return 1
+  fi
+}
+
+# --- キットの自己修復 -------------------------------------------------
+# setup-env-mac.command の self_heal_kit と同一内容(package-kit.sh が一致を検査する)。
+# 変更するときは両方を同時に直すこと。
+#
+# ブラウザ・メール・AirDrop 経由で受け取ったZIPを展開すると、中の全ファイルに
+# 隔離属性(com.apple.quarantine)が伝播する。macOS 15 以降はこの属性が付いた
+# .command をダブルクリックすると「Appleは…検証できませんでした」のダイアログ
+# (既定ボタンが「ゴミ箱に入れる」)が出る。
+# ターミナル経由の起動には隔離属性が適用されないため、この関数が動いている
+# 時点で利用者は明示的に実行を選んでいる。ここでキット自身の状態を整えれば、
+# 2回目以降はダブルクリックでも起動できるようになる。
+#
+# 方針:
+#   - 対象範囲はキットのフォルダ全体。隔離属性は展開時に全ファイルへ伝播するため、
+#     .command だけ外しても、後から開く .html マニュアルなどが残ってしまう。
+#   - 告知は「実際に直したときだけ」。何も直していないのに毎回メッセージを出すと、
+#     利用者は正常な出力と異常な出力を区別できなくなる。
+#   - 失敗しても中断しない。自己修復はあくまで次回以降のための補助であり、
+#     今回の導入自体は既に実行できている。中断させる理由がない。
+self_heal_kit() {
+  _chmodded=0
+
+  # 隔離属性: 1つでも付いていれば、フォルダ全体からまとめて外す。
+  #
+  # 検出に find -xattrname を使ってはいけない。この述語は比較的新しい macOS に
+  # しか無く、古い機では find が usage エラーで即座に終わる。2>/dev/null が
+  # それを捨てるので「隔離属性は付いていない」と誤判定し、解除を黙って飛ばす。
+  # つまり、いちばん古い機で、いちばん必要な処理だけが消える。
+  # xattr はどのバージョンにも在るため、そちらで見る。
+  if xattr -r "$KIT_DIR" 2>/dev/null | grep -q com.apple.quarantine; then
+    if xattr -dr com.apple.quarantine "$KIT_DIR" 2>/dev/null; then
+      echo "  ダブルクリックで開けるように、キットの隔離設定を解除しました。"
+    else
+      echo "  [注意] キットの隔離設定を解除できませんでした。"
+      echo "  次回もダブルクリックで開けない場合は、ターミナルで次を実行してください:"
+      echo "    xattr -dr com.apple.quarantine \"$KIT_DIR\""
+    fi
+  fi
+
+  # 実行権限: ZIPの作り方や転送経路によっては失われる。
+  for _f in "$KIT_DIR"/*.command "$KIT_DIR"/*.sh; do
+    [ -f "$_f" ] || continue
+    [ -x "$_f" ] && continue
+    if chmod +x "$_f" 2>/dev/null; then
+      _chmodded=1
+    fi
+  done
+  if [ "$_chmodded" = "1" ]; then
+    echo "  キットの実行権限を整えました。"
+  fi
+
+  unset _chmodded _f
+  return 0
+}
+
 target_for() {
   client="$1"
   relative="$2"
@@ -77,21 +168,48 @@ backup_root_for() {
 rollback() {
   [ "$TRANSACTION_ACTIVE" -eq 1 ] || return 0
   echo "[復元] 途中までの変更を元に戻しています..."
+  _restore_failed=0
   while IFS='|' read -r client relative existed; do
     [ -n "$client" ] || continue
     target=$(target_for "$client" "$relative")
     backup_root=$(backup_root_for "$client")
-    rm -rf "$target"
+    rm -rf "$target" 2>/dev/null || _restore_failed=$((_restore_failed + 1))
     if [ "$existed" = "1" ]; then
-      mkdir -p "$(dirname "$target")"
-      cp -pR "$backup_root/$relative" "$target" || true
+      mkdir -p "$(dirname "$target")" 2>/dev/null || true
+      cp -pR "$backup_root/$relative" "$target" 2>/dev/null ||
+        _restore_failed=$((_restore_failed + 1))
     fi
   done < "$WORK_DIR/rollback-items"
   TRANSACTION_ACTIVE=0
-  echo "[復元] インストール前の状態へ戻しました。"
+
+  # 復元の失敗を握りつぶして「戻しました」と言うのが、このスクリプトで
+  # いちばん危ない振る舞いになる。利用者はその報告を信じ、中途半端に
+  # 混ざった状態のまま使い続けてしまい、しかも原因を追う手がかりが無い。
+  # 戻せなかったなら、戻せなかったと言い、退避先を必ず指し示す。
+  if [ "$_restore_failed" -eq 0 ]; then
+    echo "[復元] インストール前の状態へ戻しました。"
+  else
+    echo "[復元] $_restore_failed 件を元に戻せませんでした。"
+    echo "       退避したファイルは消さずに残してあります:"
+    # `[ -d x ] && echo` と書くと、偽のときに文全体が失敗扱いになり、
+    # set -e / ERR トラップを踏む。復元中に更に中断するのは最悪なので if で書く。
+    if [ -d "$CLAUDE_BACKUP_DIR" ]; then echo "         $CLAUDE_BACKUP_DIR"; fi
+    if [ -d "$CODEX_BACKUP_DIR" ]; then echo "         $CODEX_BACKUP_DIR"; fi
+    echo "       この画面のまま導入支援の担当者にお見せください。"
+  fi
+  unset _restore_failed
 }
 
 on_error() {
+  # set -E により、ERR はコマンド置換 $(...) などのサブシェルでも発火しうる。
+  # そこで rollback / cleanup が走ると、親がまだ使っている作業フォルダを
+  # 消してしまい、インストールを途中で壊す。後始末は主シェルだけの仕事にする。
+  #
+  # 注意: この判定は bash 4 以降でしか効かない。macOS 標準の bash 3.2 には
+  # BASHPID が無く、$$ はサブシェルでも主シェルと同じ値になるため素通りする。
+  # 3.2 側の防御は「条件文の中でコマンド置換を使わない」ことで、
+  # package-kit.sh がその構文の混入を検査している。
+  [ "${BASHPID:-$$}" = "$$" ] || return 0
   trap - ERR INT TERM
   set +e
   rollback
@@ -123,6 +241,8 @@ for arg in "$@"; do
       ;;
   esac
 done
+
+self_heal_kit
 
 echo ""
 echo "==============================================="
@@ -206,9 +326,31 @@ for dir in skills/*/ codex/workflow-skills/*/; do
 done
 validate_skill "agents/app-orchestrator.md" "app-orchestrator" || finish 1
 
+# TOML の検査に python3 を使えるか。使えないなら下の awk 版で検査する。
+#
+# 注意: 判定に `command -v python3` だけを使ってはいけない。macOS の
+# /usr/bin/python3 は Xcode コマンドラインツール未導入だと「実体はまだ無いが
+# 存在はする」スタブで、実行した瞬間に『コマンドライン・デベロッパ・ツールを
+# インストールしますか？』の GUI ダイアログが出る。非エンジニアの画面に
+# インストーラーと無関係なダイアログを出さないため、実体の有無を先に見る。
+PYTHON_TOML=0
+if command -v python3 >/dev/null 2>&1; then
+  PYTHON_TOML=1
+  case "$(command -v python3)" in
+    /usr/bin/python3)
+      # Apple 標準の場所。CLT が入っていなければスタブなので触らない。
+      xcode-select -p >/dev/null 2>&1 || PYTHON_TOML=0
+      ;;
+  esac
+  if [ "$PYTHON_TOML" = "1" ] && ! python3 -c 'import tomllib' >/dev/null 2>&1; then
+    # tomllib は Python 3.11 以降。古い python3 なら awk 版へ落とす。
+    PYTHON_TOML=0
+  fi
+fi
+
 for toml in codex/agents/*.toml; do
   [ -f "$toml" ] || continue
-  if command -v python3 >/dev/null 2>&1 && python3 -c 'import tomllib' >/dev/null 2>&1; then
+  if [ "$PYTHON_TOML" = "1" ]; then
     python3 - "$toml" <<'PY' || {
 import re
 import sys
@@ -358,16 +500,17 @@ LC_ALL=C sort -u "$WORK_DIR/check-paths" -o "$WORK_DIR/check-paths"
 # manifestは実配置の所有契約。バックアップ前に生成し、
 # 完全なno-opなら書き込みとバックアップを一切行わない。
 awk -F'|' '{ print $2 }' "$WORK_DIR/maps" | LC_ALL=C sort -u > "$WORK_DIR/sources"
-perl -MDigest::SHA -e '
-  while (<STDIN>) {
-    chomp;
-    open my $fh, "<", $_ or die "$!: $_\n";
-    binmode $fh;
-    my $sha = Digest::SHA->new(256);
-    $sha->addfile($fh);
-    print $sha->hexdigest, "|", $_, "\n";
-  }
-' < "$WORK_DIR/sources" > "$WORK_DIR/source-hashes"
+hash_file_list < "$WORK_DIR/sources" > "$WORK_DIR/source-hashes"
+# 道具が途中で落ちても、行数が合わなければここで止まる。
+# ハッシュが欠けた manifest は「変更なし」の誤判定を生み、
+# 更新が黙って反映されない状態を作るため、必ず検算する。
+SRC_COUNT=$(wc -l < "$WORK_DIR/sources" | tr -d ' ')
+HASH_COUNT=$(wc -l < "$WORK_DIR/source-hashes" | tr -d ' ')
+if [ "$SRC_COUNT" != "$HASH_COUNT" ]; then
+  echo "[エラー] ファイルの照合に失敗しました ($SRC_COUNT 件中 $HASH_COUNT 件)。" >&2
+  echo "この画面のまま導入支援の担当者にお見せください。" >&2
+  finish 1
+fi
 
 awk -F'|' '
   NR == FNR { hash[$2]=$1; next }

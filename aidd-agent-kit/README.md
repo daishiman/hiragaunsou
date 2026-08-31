@@ -67,7 +67,7 @@ OpenAI Codex: $undo-app さっき追加したグラフをいったん取り消�
 
 - **Claude Code または OpenAI Codex** がインストール済みで、サインインが完了していること
   - インストーラーは両方の設定を同時に用意するため、あとからもう一方を導入しても同じキットを使えます
-- **開発環境(Node.js と pnpm)** — 無くてもキットのインストールはできますが、アプリ開発を始める前に必要です
+- **開発環境(Node.js 22 以上と pnpm)** — 無くてもキットのインストールはできますが、アプリ開発を始める前に必要です
   - 付属のセットアップスクリプトをダブルクリックするだけで両方入ります
   - あわせて **Claude Code / Codex と Cloudflare(アプリの公開先)の連携** も自動で設定されます
 - **GitHub CLI (`gh`) とGitHubへのサインイン** — プルリクエストの作成・確認・反映に使います。GitHub MCPは必須ではありません
@@ -80,10 +80,18 @@ OpenAI Codex: $undo-app さっき追加したグラフをいったん取り消�
 
   - このキットのパッケージマネージャは **pnpm** に統一しています(npm は使いません)
 
-## インストールの流れ(3ステップ・約5分)
+## インストールの流れ(約5分)
 
-1. このZIPを **展開する**(ZIPの中身を直接開いたままでは失敗します)
-2. インストーラーをダブルクリックする
+### Mac
+
+1. ZIPを展開する(ZIPの中身を直接開いたままでは失敗します)
+2. 初回はターミナルで展開先のフォルダへ移動し、`bash install-mac.command` を実行する
+3. Claude Code と Codex を再起動し、Claude Code では `/build-app`、Codex では `$build-app` を入力できれば完了
+
+### Windows
+
+1. ZIPを展開する前に、プロパティで「ブロックの解除」をする(表示されなければそのまま進みます)
+2. ZIPを「すべて展開」し、`install-windows.bat` をダブルクリックする
 3. Claude Code と Codex を再起動し、Claude Code では `/build-app`、Codex では `$build-app` を入力できれば完了
 
 詳しい手順・つまずいたときの対処は、上のマニュアルに全部書いてあります。
@@ -237,6 +245,17 @@ aidd-agent-kit/
     ├── agents/              ← `.codex/agents` へ反映するcustom agent TOML
     └── prompts/             ← 任意の旧互換prompt
 ```
+
+## 保守者向け: 配布ZIPを作る
+
+リポジトリのルートで次を実行します。
+
+```bash
+bash aidd-agent-kit/scripts/package-kit.sh --check  # 検査のみ
+bash aidd-agent-kit/scripts/package-kit.sh          # 検査してZIP作成
+```
+
+出力先は `dist/aidd-agent-kit.zip` です。Gitで管理中のファイルと、Gitが無視していない未追跡ファイルだけが入ります。GitHub Actions では `aidd-agent-kit-zip` artifact として保存され、その同じZIPから展開したキットに対する `配布キット (macOS 実機)` と `配布キット (Windows 実機)` の両ジョブが合格したら配布可能です。
 
 ## 変更履歴
 

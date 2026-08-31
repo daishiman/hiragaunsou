@@ -154,31 +154,39 @@
       <div class="step">
         <div class="step-num">2</div>
         <div class="step-body">
-          <h3>インストーラーをダブルクリックする</h3>
+          <h3>インストーラーを実行する</h3>
+          <p><strong>初回だけ、ターミナルから実行してください。</strong> 2回目以降はダブルクリックで開けるようになります。</p>
           <ol>
-          <li>フォルダの中の <code>install-mac.command</code> をダブルクリックします。</li>
-          <li>黒い画面(ターミナル)が開き、自動でインストールが進みます。</li>
-          <li><strong>「インストールが完了しました!」</strong> と表示されたら成功です。Enterキーを押して画面を閉じてください。</li>
+          <li><strong>ターミナル</strong> を開きます(Command + スペース →「ターミナル」と入力 → Enter)。</li>
+          <li>次の2文字を入力し、続けて半角スペースを1回押します(まだ Enter は押しません)。
+            <div class="cmd-sample">cd</div></li>
+          <li>STEP 1 でできた <code>aidd-agent-kit</code> フォルダを、ターミナルの画面に <strong>ドラッグ&amp;ドロップ</strong> します。フォルダの場所が自動で入力されます。</li>
+          <li><strong>Enter</strong> を押します。</li>
+          <li>続けて次を入力して <strong>Enter</strong> を押します。
+            <div class="cmd-sample">bash install-mac.command</div></li>
+          <li><strong>「インストールが完了しました!」</strong> と表示されたら成功です。</li>
           </ol>
-          
+
         <div class="warn">
-          <div class="warn-title">「開発元を検証できないため開けません」と表示されたら</div>
-      <ol>
-        <li><code>install-mac.command</code> を <strong>右クリック(または2本指クリック)</strong> して <strong>「開く」</strong> を選びます。</li>
-        <li>確認画面が出たら <strong>「開く」</strong> をクリックします。</li>
-      </ol>
-      <p>それでも開けない場合(新しいmacOS):</p>
-      <ol>
-        <li>アップルメニュー → <strong>システム設定</strong> → <strong>プライバシーとセキュリティ</strong> を開きます。</li>
-        <li>下の方にある <strong>「"install-mac.command"は開発元を確認できないため…」</strong> の右の <strong>「このまま開く」</strong> をクリックします。</li>
-        <li>もう一度ダブルクリックします。</li>
-      </ol>
+          <div class="warn-title">なぜ初回だけターミナルなのか</div>
+      <p>インターネット経由(ブラウザ・メール・AirDrop)で受け取ったファイルには、macOS が自動で「隔離」の印を付けます。この印が付いたファイルをダブルクリックすると、macOS 15 以降では</p>
+      <p class="quote">「Appleは "install-mac.command" に、Mac に損害を与えたり、プライバシーを侵害する可能性のあるマルウェアが含まれていないことを検証できませんでした」</p>
+      <p>というダイアログが出て開けません。<strong>ターミナルから実行する場合はこの確認が行われない</strong>ため、確実に進められます。</p>
+      <p>そして初回のインストーラーが、キットのフォルダから隔離の印を自動で取り除きます。<strong>2回目以降は、このフォルダの中身はすべてダブルクリックで開けます。</strong></p>
         </div>
 
-        <h3>ターミナルでコマンド実行してインストールする方法(上級者向け)</h3>
-        <p>ダブルクリックの代わりに、ターミナルからコマンドで実行することもできます。挙動はダブルクリックと同じです。</p>
-        <div class="cmd-sample">cd aidd-agent-kit フォルダのパス
-bash install-mac.command</div>
+        <h3>ターミナルを使いたくない場合(クリック操作だけで進める方法)</h3>
+      <ol>
+        <li><code>install-mac.command</code> を <strong>ダブルクリック</strong> します。</li>
+        <li>上記のダイアログが出ます。ここで <strong>左側の「ゴミ箱に入れる」を押さないでください。</strong> ファイルが削除されます。押すのは <strong>「完了」</strong> です。</li>
+        <li>アップルメニュー → <strong>システム設定</strong> → <strong>プライバシーとセキュリティ</strong> を開きます。</li>
+        <li>下の方までスクロールすると <strong>「"install-mac.command" はマルウェアが含まれていないことを検証できなかったため、使用がブロックされました」</strong> という行があります。その右の <strong>「このまま開く」</strong> をクリックします。</li>
+        <li>管理者のパスワード(または Touch ID)を求められたら入力します。</li>
+        <li>もう一度 <strong>「このまま開く」</strong> をクリックすると、インストールが始まります。</li>
+      </ol>
+        <p>この手順はファイル1つごとに必要ですが、一度インストーラーが動けば、残りのファイルの印は自動で外れます。</p>
+
+        <h3>コマンドの補足</h3>
         <p>通常インストーラーが書くのはuser scopeの <code>~/.claude</code>、<code>~/.agents/skills</code>、<code>~/.codex</code> です。Codex公式の探索範囲にはproject scopeもありますが、同名Skillはuser/project間で統合されません。プロジェクト限定で使う場合は、リポジトリルートから <code>bash aidd-agent-kit/sync-project-mac.command</code> を使ってproject scopeを明示してください。同じAIDDキットの二重導入は非推奨です。</p>
         <p>配置だけ診断する場合は <code>./aidd-agent-kit/doctor-codex-layout.sh</code> を実行します。読み取り専用で、同内容の重複は警告、内容差やproject <code>.codex/skills</code> はNGです。ファイルは自動削除しません。</p>
         <p>Codexの旧 <code>/prompts:build-app</code> 形式は非推奨で、標準インストールには含まれません。移行期間だけ必要な場合は任意オプションを付けます。新しい利用方法では <code>$build-app</code> を使ってください。</p>
@@ -190,14 +198,20 @@ bash install-mac.command</div>
         <div class="step-num">3</div>
         <div class="step-body">
           <h3>開発環境を準備する(初回のみ)</h3>
-          <p>アプリ開発には <strong>Node.js</strong> と <strong>pnpm</strong> という2つの道具が必要です。付属のスクリプトで両方まとめて入ります。</p>
+          <p>アプリ開発には <strong>Node.js 22 以上</strong> と <strong>pnpm</strong> という2つの道具が必要です。付属のスクリプトで両方まとめて入ります。</p>
           <ol>
           <li>フォルダの中の <code>setup-env-mac.command</code> をダブルクリックします。</li>
           <li>黒い画面が開き、自動でインストールが進みます(2〜5分)。</li>
-          <li><strong>「セットアップが完了しました!」</strong> と表示されたら成功です。</li>
+          <li>最後の表示で結果を確認します。
+            <ul>
+              <li><strong>「セットアップが完全に完了しました！」</strong> — Node.js・pnpm・Cloudflare連携がすべて準備できました。</li>
+              <li><strong>「基本セットアップ完了 / Cloudflare MCP は認証待ち」</strong> — 表示された手順で認証すれば完了です。</li>
+              <li><strong>「基本セットアップ完了 / 一部の連携は未設定」</strong> — 名指しされたCLIを使う場合だけ、導入後にもう一度実行します。</li>
+            </ul>
+          </li>
           </ol>
           <p>このスクリプトでは、あわせて <strong>Claude Code / Codex と Cloudflare の連携設定(MCP)</strong> も自動で行われます。初回にブラウザで許可を求められたら、<strong>「許可」</strong>を押してください。</p>
-          <p class="quote">すでに入っている場合は「インストール済みです」と表示されるだけなので、何度実行しても問題ありません。「開発元を検証できないため開けません」と出たときは、STEP 2 と同じ方法(右クリック → 開く)で開いてください。</p>
+          <p class="quote">すでに入っている場合は「インストール済みです」と表示されるだけなので、何度実行しても問題ありません。STEP 2 を終えていれば、隔離の印は外れているのでダブルクリックで開きます。もし STEP 2 を飛ばしていて開けない場合は、STEP 2 と同じくターミナルから <code>bash setup-env-mac.command</code> を実行してください。</p>
         </div>
       </div>
 
@@ -241,7 +255,23 @@ bash install-mac.command</div>
   <p>普通に「在庫管理のアプリを作りたい」と頼むこともできます。確実に動かしたいときは <code>/build-app</code> または <code>$build-app</code> を使ってください。</p>
 
   <h2 id="faq">うまくいかないとき</h2>
-      <div class="faq-q">Q1. インストーラーがどうしても開けない</div>
+      <div class="faq-q">Q1. ダブルクリックしたら「マルウェアが含まれていないことを検証できませんでした」と出た</div>
+      <p>インターネット経由で受け取ったファイルに macOS が付ける「隔離」の印が原因です。<strong>STEP 2 のターミナルからの実行</strong>で確実に進められます。</p>
+      <p><strong>このとき「ゴミ箱に入れる」は押さないでください。</strong> ファイルが削除されます。押すのは「完了」です。</p>
+
+      <div class="faq-q">Q1-1. 「このまま開く」を押したら、ターミナルがエラーを出した</div>
+      <p>次のような表示が出た場合、キットではなく <strong>ターミナル側の設定が壊れています</strong>。</p>
+      <div class="cmd-sample">コマンドが見つかりません: /opt/homebrew/bin/zsh
+新しいプロセスを作成して擬似ttyを開くことができませんでした。</div>
+      <p>ターミナルの設定に「起動時に使うコマンド」として、いま存在しないパスが登録されている状態です(Homebrew を入れ直した・アンインストールした後などに起こります)。直し方はどちらでも構いません。</p>
+      <ul>
+        <li><strong>設定画面から:</strong> ターミナルのメニュー → <strong>設定</strong> → <strong>一般</strong> → 「シェルの開き方」を <strong>「デフォルトのログインシェル」</strong> に戻します。</li>
+        <li><strong>コマンドで:</strong> ターミナルを一度終了(Command + Q)してから、他のターミナルアプリで次を実行します。</li>
+      </ul>
+      <div class="cmd-sample">defaults delete com.apple.Terminal Shell
+killall cfprefsd</div>
+
+      <div class="faq-q">Q1-2. インストーラーがどうしても開けない</div>
       <p><strong>手動でコピーする方法</strong>があります。</p>
       <ol>
         <li>Claude Code 用は <code>skills</code>・<code>agents</code>・<code>commands</code> を <code>~/.claude</code> の対応先へコピーします。</li>
