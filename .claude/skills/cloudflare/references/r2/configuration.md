@@ -1,165 +1,26 @@
-# R2 Configuration
+# R2 Configuration(索引)
 
-## Workers Binding
+設定項目は変わるため同梱しない。`cloudflare-docs` MCP で下表の語を検索して最新を取得する。不通時は `https://developers.cloudflare.com/r2/` を直接取得する。
 
-**wrangler.jsonc:**
+最小 binding(`wrangler.jsonc`):
+
 ```jsonc
 {
   "r2_buckets": [
-    {
-      "binding": "MY_BUCKET",
-      "bucket_name": "my-bucket-name"
-    }
+    { "binding": "MY_BUCKET", "bucket_name": "my-bucket-name" }
   ]
 }
 ```
 
-## TypeScript Types
+| 設定項目・作業 | docs MCP の検索語 |
+|---|---|
+| Workers binding と `Env` 型 | `R2 bindings wrangler` |
+| S3 SDK 接続(`region: 'auto'`、endpoint、access key) | `R2 S3 API tokens` |
+| Location hint / jurisdiction | `R2 data location` |
+| CORS(S3 SDK か Dashboard のみ) | `R2 CORS` |
+| Object lifecycle(期限切れ・IA への移行) | `R2 object lifecycles` |
+| API token の権限範囲 | `R2 API tokens permissions` |
+| Event notifications(Queues 連携) | `R2 event notifications` |
+| Storage class(Standard / InfrequentAccess) | `R2 storage classes` |
 
-```typescript
-interface Env { MY_BUCKET: R2Bucket; }
-
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    const object = await env.MY_BUCKET.get('file.txt');
-    return new Response(object?.body);
-  }
-}
-```
-
-## S3 SDK Setup
-
-```typescript
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-
-const s3 = new S3Client({
-  region: 'auto',
-  endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: env.R2_ACCESS_KEY_ID,
-    secretAccessKey: env.R2_SECRET_ACCESS_KEY
-  }
-});
-
-await s3.send(new PutObjectCommand({
-  Bucket: 'my-bucket',
-  Key: 'file.txt',
-  Body: data,
-  StorageClass: 'STANDARD' // or 'STANDARD_IA'
-}));
-```
-
-## Location Hints
-
-```bash
-wrangler r2 bucket create my-bucket --location=enam
-
-# Hints: wnam, enam, weur, eeur, apac, oc
-# Jurisdictions (override hint): --jurisdiction=eu (or fedramp)
-```
-
-## CORS Configuration
-
-CORS must be configured via S3 SDK or dashboard (not available in Workers API):
-
-```typescript
-import { S3Client, PutBucketCorsCommand } from '@aws-sdk/client-s3';
-
-const s3 = new S3Client({
-  region: 'auto',
-  endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: env.R2_ACCESS_KEY_ID,
-    secretAccessKey: env.R2_SECRET_ACCESS_KEY
-  }
-});
-
-await s3.send(new PutBucketCorsCommand({
-  Bucket: 'my-bucket',
-  CORSConfiguration: {
-    CORSRules: [{
-      AllowedOrigins: ['https://example.com'],
-      AllowedMethods: ['GET', 'PUT', 'HEAD'],
-      AllowedHeaders: ['*'],
-      ExposeHeaders: ['ETag'],
-      MaxAgeSeconds: 3600
-    }]
-  }
-}));
-```
-
-## Object Lifecycles
-
-```typescript
-import { PutBucketLifecycleConfigurationCommand } from '@aws-sdk/client-s3';
-
-await s3.send(new PutBucketLifecycleConfigurationCommand({
-  Bucket: 'my-bucket',
-  LifecycleConfiguration: {
-    Rules: [
-      {
-        ID: 'expire-old-logs',
-        Status: 'Enabled',
-        Prefix: 'logs/',
-        Expiration: { Days: 90 }
-      },
-      {
-        ID: 'transition-to-ia',
-        Status: 'Enabled',
-        Prefix: 'archives/',
-        Transitions: [{ Days: 30, StorageClass: 'STANDARD_IA' }]
-      }
-    ]
-  }
-}));
-```
-
-## API Token Scopes
-
-When creating R2 tokens, set minimal permissions:
-
-| Permission | Use Case |
-|------------|----------|
-| Object Read | Public serving, downloads |
-| Object Write | Uploads only |
-| Object Read & Write | Full object operations |
-| Admin Read & Write | Bucket management, CORS, lifecycles |
-
-**Best practice:** Separate tokens for Workers (read/write) vs admin tasks (CORS, lifecycles).
-
-## Event Notifications
-
-```jsonc
-// wrangler.jsonc
-{
-  "r2_buckets": [
-    {
-      "binding": "MY_BUCKET",
-      "bucket_name": "my-bucket",
-      "event_notifications": [
-        {
-          "queue": "r2-events",
-          "actions": ["PutObject", "DeleteObject", "CompleteMultipartUpload"]
-        }
-      ]
-    }
-  ],
-  "queues": {
-    "producers": [{ "binding": "R2_EVENTS", "queue": "r2-events" }],
-    "consumers": [{ "queue": "r2-events", "max_batch_size": 10 }]
-  }
-}
-```
-
-## Bucket Management
-
-```bash
-wrangler r2 bucket create my-bucket --location=enam --storage-class=Standard
-wrangler r2 bucket list
-wrangler r2 bucket info my-bucket
-wrangler r2 bucket delete my-bucket  # Must be empty
-wrangler r2 bucket update-storage-class my-bucket --storage-class=InfrequentAccess
-
-# Public bucket via dashboard
-wrangler r2 bucket domain add my-bucket --domain=files.example.com
-```
+バケット作成・一覧・公開状態確認・オブジェクト操作の CLI は `../../../wrangler/references/kv-r2.md` が正本。経験知は [gotchas.md](./gotchas.md) / [patterns.md](./patterns.md)。

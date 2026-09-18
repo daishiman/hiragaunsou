@@ -1,5 +1,7 @@
 # Workers Patterns
 
+**設計原則**: Workers は V8 isolate 上で動くため、移植性のために web platform API(fetch / URL / Headers / Request / Response)を可能な限り使う。Node 固有 API に寄せない。
+
 ## Error Handling
 
 ```typescript
@@ -154,7 +156,7 @@ const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(user
 if (new Uint8Array(hash)[0] % 100 < rolloutPercent) return newFeature(request);
 ```
 
-Rate limiting: See [Durable Objects](../durable-objects/README.md)
+Rate limiting: See the `durable-objects` Skill
 
 ## R2 Multipart Upload
 

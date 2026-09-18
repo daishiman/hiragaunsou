@@ -115,7 +115,7 @@ function navigate(key) {
   Object.entries(views).forEach(([k, id]) => {
     document.getElementById(id).hidden = k !== key
   })
-  document.querySelectorAll('.app-nav button').forEach((btn) => {
+  document.querySelectorAll('.app-nav [data-nav], .side-nav [data-nav], .bottom-tabs [data-nav]').forEach((btn) => {
     if (btn.dataset.nav === key) {
       btn.setAttribute('aria-current', 'page')
     } else {
@@ -219,10 +219,7 @@ function renderList() {
   })
 
   const count = state.selected.length
-  const excluded = state.deals.filter((d) => d.status === 'active' && !isSendable(d)).length
-  document.getElementById('selection-summary').textContent =
-    `優先度の高い物件が選択済みです(${count}件選択中` +
-    (excluded > 0 ? ` / ${excluded}件はメール未入力のため対象外)` : ')')
+  document.getElementById('selection-summary').textContent = `${count}件を選択中`
 
   const btn = document.getElementById('btn-open-confirm')
   btn.textContent = `選択した${count}件の内容を確認する`
@@ -320,8 +317,8 @@ document.getElementById('btn-do-send').addEventListener('click', async () => {
     showToast({
       error: true,
       message: `${failed.length}件が送信できませんでした`,
-      sub: '要確認キューから修正して再送信できます',
-      actionLabel: 'キューを見る',
+      sub: 'メールアドレスを修正して再送信できます',
+      actionLabel: '確認する',
       onAction: () => {
         document.getElementById('fixup-queue').scrollIntoView({ behavior: 'smooth' })
       }
@@ -340,7 +337,7 @@ function renderFixups() {
   queue.hidden = !has
   if (!has) return
 
-  heading.innerHTML = `要確認キュー <span class="count">${state.fixups.length}件</span>`
+  heading.innerHTML = `送信できなかった提案 <span class="count">${state.fixups.length}件</span>`
   queue.innerHTML = state.fixups
     .map(
       (f, i) => `
@@ -573,12 +570,13 @@ document.getElementById('reg-email').addEventListener('blur', (e) => {
   document.getElementById('field-reg-email').classList.toggle('has-error', invalid)
 })
 
+document.getElementById('btn-reply-unanswered').addEventListener('click', () => {
+  showToast({ message: '未返信11件の返信を開始しました' })
+})
+
 /* 送信トリガの規律: Enterでは登録しない(誤送信防止)。
    Enter=次のフィールドへ / ⌘+Enter(mac)・Ctrl+Enter(win)=登録。IME変換確定のEnterは素通し */
 const IS_MAC = /Mac|iPhone|iPad/.test(navigator.platform)
-
-document.getElementById('register-kbd-hint').innerHTML =
-  `<span class="kbd">${IS_MAC ? '⌘' : 'Ctrl'}</span><span class="kbd">Enter</span>で登録`
 
 document.getElementById('register-form').addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' || e.isComposing) return

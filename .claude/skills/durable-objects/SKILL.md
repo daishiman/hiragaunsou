@@ -3,6 +3,8 @@ name: durable-objects
 description: Cloudflare Durable Objects の実装とレビューに使用する。チャットルーム、マルチプレイ、予約システムなどの状態を持つ協調処理、RPC methods、SQLite storage、alarms、WebSockets、Workers統合、wrangler設定、Vitestでのテストを扱う。事前学習の知識より最新のCloudflare docsの取得を優先する。
 ---
 
+> 本ファイルは cloudflare/skills（Apache-2.0）を基に改変しています。詳細は リポジトリルートの ATTRIBUTION.md を参照。
+
 # Durable Objects の実装・レビュー
 
 Durable Objectsを使い、Cloudflare edge上に状態を持つ協調型アプリケーションを実装する。
@@ -11,12 +13,12 @@ Durable Objectsを使い、Cloudflare edge上に状態を持つ協調型アプ�
 
 Durable Objects APIsや設定は更新されるため、**事前学習の知識より最新の公式情報を優先する**。API signature、設定項目、制限値を記憶だけで断定しない。
 
-| 用途 | URL |
-|----------|-----|
-| 概要・機能 | https://developers.cloudflare.com/durable-objects/ |
-| API Reference | https://developers.cloudflare.com/durable-objects/api/ |
-| Best Practices | https://developers.cloudflare.com/durable-objects/best-practices/ |
-| 公式例 | https://developers.cloudflare.com/durable-objects/examples/ |
+正本は [`cloudflare` Skill の「最新情報の取得先」](../cloudflare/SKILL.md#最新情報の取得先)(docs MCP 第一手段、不通時の復旧、workers-types / config-schema の取得方法)。ここには本Skill固有の取得先だけを書く。
+
+| 取得先 | 取得方法 | 使う場面 |
+|--------|----------|---------|
+| **Cloudflare docs (MCP)** | `cloudflare-docs` MCPで `durable-objects` + API名(`sql.exec`、`setAlarm` 等)を検索 | **既定の第一手段**。API reference、制限値、compatibility date要件 |
+| Durable Objects docs (Web) | `https://developers.cloudflare.com/durable-objects/`(`api/`、`best-practices/`、`examples/`) | MCP不通時 |
 
 実装前に該当ページとプロジェクトのWrangler config schema / Workers typesを確認する。本Skillと最新の公式情報が食い違う場合は公式情報を優先し、不明なAPIや設定を推測で補わない。
 

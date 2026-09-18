@@ -1,7 +1,9 @@
 ---
 name: web-perf
-description: Chrome DevTools MCPを使ってWeb performanceを分析する。Core Web Vitals（LCP、INP、CLS）とFCP、TBT、Speed Indexを計測し、render-blocking resources、network dependency chains、layout shifts、cache、accessibilityの問題を特定する。表示速度の監査・計測・デバッグ・最適化、Lighthouse scoreの改善で使用する。事前学習の知識より最新の公式ドキュメントを優先する。
+description: Chrome DevTools MCPを使ってWeb performanceを分析する。Core Web Vitals（LCP、INP、CLS）とFCP、TBT、Speed Indexを計測し、render-blocking resources、network dependency chains、layout shifts、cache、accessibilityの問題を特定する。表示速度の監査・計測・デバッグ・最適化、Lighthouse scoreの改善で使用する。既定スタックの必須スキルではないoptional群であり、要件で明示された場合、またはapp-orchestratorがv1前の計測として指示した場合のみロードする。事前学習の知識より最新の公式ドキュメントを優先する。
 ---
+
+> 本ファイルは cloudflare/skills（Apache-2.0）を基に改変しています。詳細は リポジトリルートの ATTRIBUTION.md を参照。
 
 # Web Performance監査
 
@@ -9,24 +11,26 @@ Web performanceの計測名、閾値、tooling APIsは更新される。具体�
 
 ## 最新情報の取得先
 
-| Source | 取得先 | 確認内容 |
-|--------|----------------|---------|
-| web.dev | `https://web.dev/articles/vitals` | Core Web Vitalsの閾値と定義 |
-| Chrome DevTools docs | `https://developer.chrome.com/docs/devtools/performance` | Tooling APIsとtrace analysis |
-| Lighthouse scoring | `https://developer.chrome.com/docs/lighthouse/performance/performance-scoring` | score weightsとmetric thresholds |
+Cloudflare製品ではないため`cloudflare-docs` MCPは使わず、次のWebページを第一手段にする(列構成はキット共通)。
+
+| 取得先 | 取得方法 | 使う場面 |
+|--------|----------|---------|
+| web.dev | `https://web.dev/articles/vitals` を取得 | Core Web Vitalsの閾値と定義 |
+| Chrome DevTools docs | `https://developer.chrome.com/docs/devtools/performance` を取得 | Tooling APIsとtrace analysis |
+| Lighthouse scoring | `https://developer.chrome.com/docs/lighthouse/performance/performance-scoring` を取得 | score weightsとmetric thresholds |
 
 ## 最初にMCP toolsを確認する
 
-**監査開始前に必ず行う。** `navigate_page`または`performance_start_trace`を呼び出す。利用できなければchrome-devtools MCP serverが未設定のため停止し、計測したように報告しない。
+**監査開始前に必ず行う。** `navigate_page`または`performance_start_trace`を呼び出す。利用できなければchrome-devtools MCP serverが未登録なので、計測したように報告せず、**エージェントが登録を代行する**(利用者にコマンドを打たせない。方針は`app-orchestrator`のMCP接続原則と同じ)。登録後にclientを再起動し、上記toolを再確認してから監査へ進む。
 
-ユーザーにMCP configへ次を追加してもらう。
-
-```json
-"chrome-devtools": {
-  "type": "local",
-  "command": ["npx", "-y", "chrome-devtools-mcp@latest"]
-}
+```bash
+# Claude Code(user scope。作業フォルダに依らず使える)
+claude mcp add chrome-devtools --scope user -- npx -y chrome-devtools-mcp@latest
+# Codex
+codex mcp add chrome-devtools -- npx -y chrome-devtools-mcp@latest
 ```
+
+`claude` / `codex` コマンドが無い環境では登録をスキップし、計測を未実施として残課題に1行残す。
 
 ## 分析原則
 
@@ -54,14 +58,14 @@ Web performanceの計測名、閾値、tooling APIsは更新される。具体�
 
 ```
 監査の進捗:
-- [ ] Phase 1: Performance traceを取得
-- [ ] Phase 2: Core Web Vitalsを分析（CLSの原因を含む）
-- [ ] Phase 3: Networkを分析
-- [ ] Phase 4: Accessibility snapshotを取得
-- [ ] Phase 5: Codebaseを分析（第三者siteは省略）
+- [ ] 手順 1: Performance traceを取得
+- [ ] 手順 2: Core Web Vitalsを分析（CLSの原因を含む）
+- [ ] 手順 3: Networkを分析
+- [ ] 手順 4: Accessibility snapshotを取得
+- [ ] 手順 5: Codebaseを分析（第三者siteは省略）
 ```
 
-### Phase 1: Performance traceの取得
+### 手順 1: Performance traceの取得
 
 1. 対象URLを開く。
    ```
@@ -79,7 +83,7 @@ Web performanceの計測名、閾値、tooling APIsは更新される。具体�
 - traceが空または失敗なら、先に`navigate_page`でページが正常に開いたか確認する
 - insight nameが一致しない場合は、trace responseから利用可能なinsightsを確認する
 
-### Phase 2: Core Web Vitalsの分析
+### 手順 2: Core Web Vitalsの分析
 
 `performance_analyze_insight`で主要metricsを取得する。
 
@@ -111,7 +115,7 @@ performance_analyze_insight(insightSetId: "<id-from-trace>", insightName: "LCPBr
 - CLS: < 0.1 / < 0.25 / > 0.25
 - Speed Index: < 3.4s / < 5.8s / > 5.8s
 
-### Phase 3: Networkの分析
+### 手順 3: Networkの分析
 
 全network requestsを取得し、改善候補を特定する。
 ```
@@ -132,7 +136,7 @@ requestの詳細は次で確認する。
 get_network_request(reqid: <id>)
 ```
 
-### Phase 4: Accessibility snapshotの取得
+### 手順 4: Accessibility snapshotの取得
 
 accessibility tree snapshotを取得する。
 ```
@@ -145,7 +149,7 @@ take_snapshot(verbose: true)
 - focus trap、またはfocus indicatorの欠落
 - accessible nameのないinteractive elements
 
-## Phase 5: Codebaseの分析
+## 手順 5: Codebaseの分析
 
 **第三者siteでcodebaseへアクセスできない場合は省略する。** その場合は未実施として最終報告に明記する。
 

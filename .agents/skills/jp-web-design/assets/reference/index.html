@@ -3,29 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="color-scheme" content="light dark">
-<title>物件提案デスク — ux-design / jp-web-design モデルケース</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="theme.js"></script>
+<meta name="color-scheme" content="light">
+<title>物件提案デスク</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
 <header class="app-header">
-  <button type="button" class="app-name" data-nav="home" aria-label="ホームに戻る">物件提案デスク<span class="app-name-sub">顧客への物件提案をまとめて送る</span></button>
-  <nav class="app-nav" aria-label="主要ナビゲーション">
-    <button type="button" data-nav="home" aria-current="page">ホーム</button>
-    <button type="button" data-nav="list">提案リスト</button>
-    <button type="button" data-nav="report">レポート</button>
-  </nav>
-  <div class="theme-toggle" role="group" aria-label="テーマ切り替え">
-    <button type="button" data-theme-choice="auto" aria-pressed="true">自動</button>
-    <button type="button" data-theme-choice="light" aria-pressed="false">ライト</button>
-    <button type="button" data-theme-choice="dark" aria-pressed="false">ダーク</button>
-  </div>
+  <button type="button" class="app-name" data-nav="home" aria-label="ホームに戻る">物件提案デスク</button>
 </header>
+
+<div class="app-shell">
+<nav class="side-nav" aria-label="主要ナビゲーション">
+  <button type="button" data-nav="home" aria-current="page"><span class="nav-label">ホーム</span></button>
+  <button type="button" data-nav="list"><span class="nav-label">提案リスト</span></button>
+  <button type="button" data-nav="report"><span class="nav-label">レポート</span></button>
+</nav>
 
 <main>
 
@@ -34,7 +27,6 @@
        ============================================================ -->
   <section class="view" id="view-home">
     <h1 class="page-title">おはようございます、西山さん</h1>
-    <p class="page-lede">今日の提案業務は、要対応の2件から始めるのがおすすめです。</p>
 
     <h2 class="section-heading rise-in">要対応 <span class="count">2件</span></h2>
     <div class="card rise-in" style="--stagger: 40ms">
@@ -49,7 +41,6 @@
       <div class="card-row">
         <div class="row-main">
           <div class="todo-row-title">新着物件「板橋区 一棟マンション」の担当メールが未入力です</div>
-          <div class="todo-row-sub">入力が済むと、次回の一括提案の対象に含められます。</div>
         </div>
         <span class="badge badge-alert">要入力</span>
         <button type="button" class="btn btn-secondary pressable" data-nav="list">入力する</button>
@@ -60,12 +51,11 @@
     <div class="grid-2 rise-in" style="--stagger: 120ms">
       <div class="card card-pad hero-tint">
         <div class="todo-row-title">提案メールをまとめて送る</div>
-        <p class="todo-row-sub" style="margin:4px 0 14px">優先度の高い物件3件が選択済みです。内容を確認して送信できます。</p>
+        <span class="badge badge-active">3件を選択中</span>
         <button type="button" class="btn btn-primary pressable" data-nav="list">提案リストを開く</button>
       </div>
       <div class="card card-pad">
         <div class="todo-row-title">物件を登録する</div>
-        <p class="todo-row-sub" style="margin:4px 0 14px">入力は自動保存。途中で閉じても消えません。</p>
         <button type="button" class="btn btn-secondary pressable" id="btn-open-register">物件を登録する</button>
       </div>
     </div>
@@ -89,7 +79,6 @@
        ============================================================ -->
   <section class="view" id="view-list" hidden>
     <h1 class="page-title">提案リスト</h1>
-    <p class="page-lede">優先度の高い物件が選択済みです。内容を確認してから、まとめて送信できます。</p>
 
     <div class="card list-host">
       <div class="table-scroll">
@@ -114,7 +103,7 @@
       </div>
     </div>
 
-    <h2 class="section-heading" id="fixup-heading" hidden>要確認キュー</h2>
+    <h2 class="section-heading" id="fixup-heading" hidden>送信できなかった提案</h2>
     <div class="card" id="fixup-queue" hidden></div>
   </section>
 
@@ -123,13 +112,11 @@
        ============================================================ -->
   <section class="view" id="view-report" hidden>
     <h1 class="page-title">送信レポート</h1>
-    <p class="page-lede">今月の提案活動のまとめです。数字はすべて実際の記録から集計しています。</p>
 
     <div class="card hero-tint rise-in">
       <div class="hero-number">
         <div class="hn-label">今月の提案からの反響率</div>
         <div class="hn-value">18.6<span style="font-size:22px">%</span></div>
-        <div class="hn-note">送信86通のうち16件に返信・問い合わせがありました</div>
       </div>
       <div class="kpi-strip" style="margin-top:0; border-bottom:none">
         <div class="kpi"><div class="kpi-label">送信数</div><div class="kpi-value">86<span class="unit">通</span></div></div>
@@ -144,7 +131,7 @@
       <div class="delta-compare">
         <div class="dc-item">
           <div class="dc-label">先月の反響率</div>
-          <div class="dc-value" style="color:var(--ink-muted)">11.2<span class="unit">%</span></div>
+          <div class="dc-value" style="color:var(--text-secondary)">11.2<span class="unit">%</span></div>
         </div>
         <span class="dc-arrow" aria-hidden="true">→</span>
         <div class="dc-item">
@@ -153,7 +140,6 @@
         </div>
         <span class="delta-chip">+7.4pt</span>
       </div>
-      <p class="footnote" style="margin:14px 0 0; text-align:center">優先物件を選択済みにした一括提案の導入後、反響率が7.4ポイント上がりました。</p>
     </div>
 
     <h2 class="section-heading rise-in" style="--stagger: 120ms">今月の送信目標</h2>
@@ -162,7 +148,6 @@
       <div class="compare-item">
         <div class="ci-head"><span class="ci-label">目標120通に対する実績</span><span class="ci-value">86<span class="unit">/120通</span></span></div>
         <div class="bar-track"><div class="bar-fill is-brand" data-width="71.7%"></div></div>
-        <p class="footnote" style="margin:6px 0 0">達成率 71.7%(バーの100% = 月間目標120通)</p>
       </div>
     </div>
 
@@ -173,23 +158,20 @@
         <dt>商談中</dt><dd>5件。次回面談は 7月22日(水) 佐藤様が最初です。</dd>
       </dl>
       <div style="margin-top:16px">
-        <button type="button" class="btn btn-primary btn-block pressable">未返信の11件に返信する</button>
+        <button type="button" class="btn btn-primary btn-block pressable" id="btn-reply-unanswered">未返信の11件に返信する</button>
       </div>
     </div>
 
-    <div class="rise-in" style="--stagger: 220ms; margin-top: 28px">
-      <details class="disclosure">
-        <summary>この数字の根拠</summary>
-        <div class="disclosure-body">
-          反響率 = (返信 + 電話問い合わせの件数) ÷ 提案メール送信数。集計期間は 7月1日〜7月19日。
-          同一顧客から同一物件への複数反響は1件として数えています。除外条件はありません。
-        </div>
-      </details>
-      <p class="footnote" style="margin-top:10px">数値は本日 9:00 時点の記録に基づきます。</p>
-    </div>
   </section>
 
 </main>
+</div>
+
+<nav class="bottom-tabs" aria-label="主要ナビゲーション">
+  <button type="button" data-nav="home" aria-current="page">ホーム</button>
+  <button type="button" data-nav="list">提案リスト</button>
+  <button type="button" data-nav="report">レポート</button>
+</nav>
 
 <!-- 送信前のその場確認モーダル (ux §5-2 / jp §5) -->
 <div class="modal-overlay" id="confirm-overlay" hidden>
@@ -198,7 +180,7 @@
       <h2 class="modal-title" id="confirm-title">この内容で3件に送信します</h2>
     </div>
     <div class="modal-body">
-      <p style="font-size:12px; color:var(--ink-muted); margin:0 0 10px" id="confirm-recipients"></p>
+      <p style="font-size:var(--font-size-label); color:var(--text-secondary); margin:0 0 10px" id="confirm-recipients"></p>
       <div class="mail-preview">
         <div class="mp-meta">
           <span>件名</span><strong>【物件のご提案】ご希望条件に合う物件が見つかりました</strong>
@@ -236,8 +218,7 @@
         </div>
         <div class="field">
           <label for="reg-price">価格(万円)</label>
-          <input id="reg-price" type="text" inputmode="numeric" autocomplete="off" placeholder="23,048(全角のままでOK)">
-          <p class="hint">貼り付けたまま自動で整えます。</p>
+          <input id="reg-price" type="text" inputmode="numeric" autocomplete="off" placeholder="23,048">
         </div>
         <div class="field">
           <label for="reg-customer">顧客名</label>
@@ -246,14 +227,12 @@
         <div class="field" id="field-reg-email">
           <label for="reg-email">顧客メール</label>
           <input id="reg-email" type="email" inputmode="email" autocomplete="off" placeholder="tanaka@example.com">
-          <p class="hint">空のままでも登録できます。</p>
           <p class="error-msg" id="reg-email-err" hidden>メールアドレスの形式が正しくありません。「@」以降にドメインを入れてください。</p>
         </div>
       </form>
       <p class="draft-status" id="draft-status" aria-live="polite"></p>
     </div>
     <div class="modal-foot">
-      <span class="kbd-hint" id="register-kbd-hint" style="margin-right:auto"></span>
       <button type="button" class="btn btn-tertiary pressable" id="btn-close-register">閉じる</button>
       <button type="button" class="btn btn-primary pressable" id="btn-do-register">登録する</button>
     </div>

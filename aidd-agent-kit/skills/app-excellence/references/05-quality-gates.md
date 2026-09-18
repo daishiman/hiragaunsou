@@ -24,16 +24,23 @@ CIの機械ゲート(型・テスト・脆弱性・アクセス制御)は Skill 
 
 ## §3. チェックリスト検査
 
-references/checklists/ の4ファイル(ux-psychology / performance / accessibility-jp / risk)を全項目検査し、結果をT4に添付する。不合格項目は修正するか、依頼者に説明の上で「リスク受容」として記録する(黙って落とさない)。Sサイズ案件は★印の項目のみで可。
+references/checklists/ の4ファイル(ux-psychology / performance / accessibility-jp / risk)を全項目検査し、結果をT4に添付する。不合格項目は修正するか、依頼者に説明の上で「リスク受容」として記録する(黙って落とさない)。Sサイズ案件は★印の項目のみで可。不合格の記録は公開を止める理由にならない(例外は ux-psychology §C のダークパターン該当で、これは launch-security の CRITICAL として INV-3 に含まれる)。
+
+可視UIを含む案件は、上記4ファイルとは別にjp-web-design `references/catalog-default-contract.md` の現在段階のconformanceを実行し、結果と証拠をT4へ記録する。管理対象の既定profileはv0でminimum baseline、v1でfull conformanceを公開段階のゲートに含める。同契約が`REPORT_ONLY`と判定した明示別profile等は変更せず理由と別途の受入証拠を記録する。検査項目・profile・例外規則は同契約だけを正本とし、本書へ複製しない。可視UIへ一切触れない案件はT3と同じ `NON_VISUAL(理由)` をT4へ記録する。
 
 ## §4. リリース判定(T4)
 
-assets/T4-release-readiness.md を埋め、以下が全て Yes なら Go:
+assets/T4-release-readiness.md を公開段階ごとに埋める。**公開可否は INV-5 の3判定(mvp-first §4 の必須4項目 / launch-security の段階別ゲート / その段階のゲート)だけで決まる**。本節の項目は「その段階のゲート」の中身であり、これ以外の理由で止めない。
+
+**v0(関係者限定)**: app-orchestrator ステージ5の完了条件(最頻業務1周・実データ・N3・最小3イベント・限定が効く・戻せる・管理対象の既定profileならcatalog-default minimum baseline)が全て Yes。§2 ウォークスルーと通常の§3チェックリストは実施して結果を T4 に記録し、その不合格はリスク受容欄と残課題に書けば公開できる。catalog-default minimum baselineは段階ゲートなので後置しない。依頼者の受け入れ確認は求めない(v0 は触ってもらうために出す)。
+
+**v1(本番)**: 上に加えて以下が全て Yes なら Go:
 
 - [ ] T1の成功指標を計測するイベントが本番で発火する状態にある
 - [ ] §2ウォークスルーで Blocker/Critical ゼロ
 - [ ] §3チェックリスト: 全通過 or リスク受容が文書化済み
-- [ ] ロールバック手順が自動で機能する(CI側で確認済み)
+- [ ] 管理対象の既定profileはcatalog-default full conformanceがPASSし、T2 provenance・T3 adoption・T4 conformanceが同じprofileを指す。`REPORT_ONLY`は理由と別途の受入証拠、`NON_VISUAL`は理由がT3/T4で一致する
+- [ ] ロールバック手順が機能する(選定済み CI/CD 経路で `git revert` → 再公開できる)
 - [ ] 依頼者がプレビューで受け入れ確認済み(非IT依頼者の場合は「リリースして」の明示発話をもって確認とする)
 - [ ] リリース後1週間のレビュー日が決まっている
 

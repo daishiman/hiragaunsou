@@ -1,5 +1,7 @@
 # Workflow Patterns
 
+> 状態は `step.do()` の戻り値だけが永続化され、step 名がキャッシュキーになる。失敗 step の retry は成功済み step を再実行しない。この 2 点が以下の全パターンの前提。
+
 ## Image Processing Pipeline
 
 ```typescript

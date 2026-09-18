@@ -1,17 +1,10 @@
-# Vectorize Configuration
+# Vectorize Configuration(索引)
 
-## Create Index
+設定項目と上限値は変わるため同梱しない。`cloudflare-docs` MCP で下表の語を検索して最新を取得する。不通時は `https://developers.cloudflare.com/vectorize/`。
 
-```bash
-pnpm wrangler vectorize create my-index --dimensions=768 --metric=cosine
-```
-
-**⚠️ Dimensions and metric are immutable** - cannot change after creation.
-
-## Worker Binding
+最小 binding 例(`wrangler.jsonc`)。index の dimensions / metric は作成後に変更できない:
 
 ```jsonc
-// wrangler.jsonc
 {
   "vectorize": [
     { "binding": "VECTORIZE", "index_name": "my-index" }
@@ -19,70 +12,14 @@ pnpm wrangler vectorize create my-index --dimensions=768 --metric=cosine
 }
 ```
 
-```typescript
-interface Env {
-  VECTORIZE: Vectorize;
-}
-```
+| 設定項目・作業 | docs MCP の検索語 |
+|---|---|
+| index 作成(dimensions / metric / preset) | `vectorize create index dimensions metric` |
+| Worker binding と `Env` 型 | `vectorize wrangler binding` |
+| metadata index の作成(データ投入前に必須) | `vectorize create-metadata-index` |
+| NDJSON 一括投入とファイル上限 | `vectorize insert ndjson bulk upload` |
+| metadata の型と高カーディナリティ対策 | `vectorize metadata index cardinality` |
 
-## Metadata Indexes
+index 作成・一覧・metadata index・ベクトル投入の CLI は [`../../../wrangler/references/ai-vectorize-hyperdrive.md`](../../../wrangler/references/ai-vectorize-hyperdrive.md) が正本。
 
-**Must create BEFORE inserting vectors** - existing vectors not retroactively indexed.
-
-```bash
-wrangler vectorize create-metadata-index my-index --property-name=category --type=string
-wrangler vectorize create-metadata-index my-index --property-name=price --type=number
-```
-
-| Type | Use For |
-|------|---------|
-| `string` | Categories, tags (first 64 bytes indexed) |
-| `number` | Prices, timestamps |
-| `boolean` | Flags |
-
-## CLI Commands
-
-```bash
-# Index management
-wrangler vectorize list
-wrangler vectorize info <index-name>
-wrangler vectorize delete <index-name>
-
-# Vector operations
-wrangler vectorize insert <index-name> --file=embeddings.ndjson
-wrangler vectorize get <index-name> --ids=id1,id2
-wrangler vectorize delete-by-ids <index-name> --ids=id1,id2
-
-# Metadata indexes
-wrangler vectorize list-metadata-index <index-name>
-wrangler vectorize delete-metadata-index <index-name> --property-name=field
-```
-
-## Bulk Upload (NDJSON)
-
-```json
-{"id": "1", "values": [0.1, 0.2, ...], "metadata": {"category": "docs"}}
-{"id": "2", "values": [0.4, 0.5, ...], "namespace": "tenant-abc"}
-```
-
-**Limits:** 5000 vectors per file, 100 MB max
-
-## Cardinality Best Practice
-
-Bucket high-cardinality data:
-```typescript
-// ❌ Millisecond timestamps
-metadata: { timestamp: Date.now() }
-
-// ✅ 5-minute buckets
-metadata: { timestamp_bucket: Math.floor(Date.now() / 300000) * 300000 }
-```
-
-## Production Checklist
-
-1. Create index with correct dimensions
-2. Create metadata indexes FIRST
-3. Test bulk upload
-4. Configure bindings
-5. Deploy Worker
-6. Verify queries
+経験知は [gotchas.md](./gotchas.md) / [patterns.md](./patterns.md)。API は [api.md](./api.md)。

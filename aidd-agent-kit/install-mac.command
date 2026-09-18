@@ -8,6 +8,7 @@
 
 set -Ee
 cd "$(dirname "$0")"
+KIT_DIR=$(pwd -P)
 
 [ -f VERSION ] || { echo "[エラー] VERSION が見つかりません。" >&2; exit 1; }
 KIT_VERSION=$(tr -d '\r\n' < VERSION)
@@ -27,6 +28,7 @@ while case "$CODEX_DIR" in *'//'*) true ;; *) false ;; esac; do
 done
 CODEX_DIR=${CODEX_DIR%/}
 CODEX_SKILLS_DIR="$INSTALL_HOME/.agents/skills"
+# INV-14: 上書き前に backup、失敗時は manifest 単位で rollback、stale 削除は旧 manifest との差分だけ、HOME 外へ書かない
 STAMP=$(date +%Y%m%d-%H%M%S)
 CLAUDE_BACKUP_DIR="$CLAUDE_DIR/backup-$STAMP"
 CODEX_BACKUP_DIR="$CODEX_DIR/backup-$STAMP"
@@ -34,6 +36,11 @@ CLAUDE_MANIFEST="$CLAUDE_DIR/aidd-agent-kit.manifest"
 CLAUDE_VERSION_FILE="$CLAUDE_DIR/aidd-agent-kit.version"
 CODEX_MANIFEST="$CODEX_DIR/aidd-agent-kit.manifest"
 CODEX_VERSION_FILE="$CODEX_DIR/aidd-agent-kit.version"
+# setup-env-mac.command が記録する最終確認状態。
+# ファイルの存在だけで ready とは判定しない。
+# MCP の登録先は常に user scope なので、この目印も $HOME 側に固定する
+# (AIDD_TARGET_HOME で project scope へ入れる場合でも、MCP は共通)。
+SETUP_STAMP="$HOME/.claude/aidd-agent-kit.setup-env"
 LEGACY_PROMPTS=0
 TRANSACTION_ACTIVE=0
 WORK_DIR=""
@@ -52,6 +59,56 @@ cleanup() {
     rm -rf "$WORK_DIR"
   fi
 }
+
+# --- ファイルの指紋(SHA256)を取る -------------------------------------
+# 入力: 標準入力に1行1パス / 出力: "<sha256>|<パス>"
+#
+# 1つの道具に賭けない理由: 以前は perl -MDigest::SHA だけを使っていたが、
+# Apple は同梱スクリプト言語(perl / python)の廃止を予告している。
+# 消えた時点でインストーラーが丸ごと動かなくなるので、
+# macOS 標準で複数ある道具を順に試す。パスに空白が含まれても壊れないよう、
+# 受け渡しは NUL 区切りにする。
+hash_file_list() {
+  if command -v shasum >/dev/null 2>&1; then
+    # 出力: "<hash><空白2>path"
+    tr '\n' '\0' | xargs -0 shasum -a 256 |
+      sed 's/^\([0-9a-f][0-9a-f]*\)  /\1|/'
+  elif command -v openssl >/dev/null 2>&1; then
+    # 出力: "<hash><空白>*path" (-r は coreutils 互換形式)
+    tr '\n' '\0' | xargs -0 openssl dgst -sha256 -r |
+      sed 's/^\([0-9a-f][0-9a-f]*\) \*\{0,1\}/\1|/'
+  elif command -v perl >/dev/null 2>&1; then
+    perl -MDigest::SHA -e '
+      while (<STDIN>) {
+        chomp;
+        open my $fh, "<", $_ or die "$!: $_\n";
+        binmode $fh;
+        my $sha = Digest::SHA->new(256);
+        $sha->addfile($fh);
+        print $sha->hexdigest, "|", $_, "\n";
+      }
+    '
+  else
+    echo "[エラー] ファイルの照合に必要なコマンドが見つかりません" >&2
+    echo "        (shasum / openssl / perl のいずれも使えません)。" >&2
+    return 1
+  fi
+}
+
+# --- キットの自己修復 -------------------------------------------------
+# 本体は scripts/lib/self-heal.sh (setup-env-mac.command と共通の正本)。
+# ZIP を展開したフォルダをそのまま使う前提なので、lib が無いのは
+# 「ファイルを個別にコピーした」「展開が途中で止まった」など、キットが
+# 欠けた状態を意味する。黙って続けると他のファイルも欠けている可能性が
+# 高いため、ここで理由を示して止める。
+if [ -f "$KIT_DIR/scripts/lib/self-heal.sh" ]; then
+  . "$KIT_DIR/scripts/lib/self-heal.sh"
+else
+  echo "[エラー] キットの一部 (scripts/lib/self-heal.sh) が見つかりません。" >&2
+  echo "  ZIP を展開したフォルダを、中身を移動せずそのまま使ってください。" >&2
+  echo "  それでも直らない場合は、ZIP を展開し直してください。" >&2
+  finish 1
+fi
 
 target_for() {
   client="$1"
@@ -77,21 +134,48 @@ backup_root_for() {
 rollback() {
   [ "$TRANSACTION_ACTIVE" -eq 1 ] || return 0
   echo "[復元] 途中までの変更を元に戻しています..."
+  _restore_failed=0
   while IFS='|' read -r client relative existed; do
     [ -n "$client" ] || continue
     target=$(target_for "$client" "$relative")
     backup_root=$(backup_root_for "$client")
-    rm -rf "$target"
+    rm -rf "$target" 2>/dev/null || _restore_failed=$((_restore_failed + 1))
     if [ "$existed" = "1" ]; then
-      mkdir -p "$(dirname "$target")"
-      cp -pR "$backup_root/$relative" "$target" || true
+      mkdir -p "$(dirname "$target")" 2>/dev/null || true
+      cp -pR "$backup_root/$relative" "$target" 2>/dev/null ||
+        _restore_failed=$((_restore_failed + 1))
     fi
   done < "$WORK_DIR/rollback-items"
   TRANSACTION_ACTIVE=0
-  echo "[復元] インストール前の状態へ戻しました。"
+
+  # 復元の失敗を握りつぶして「戻しました」と言うのが、このスクリプトで
+  # いちばん危ない振る舞いになる。利用者はその報告を信じ、中途半端に
+  # 混ざった状態のまま使い続けてしまい、しかも原因を追う手がかりが無い。
+  # 戻せなかったなら、戻せなかったと言い、退避先を必ず指し示す。
+  if [ "$_restore_failed" -eq 0 ]; then
+    echo "[復元] インストール前の状態へ戻しました。"
+  else
+    echo "[復元] $_restore_failed 件を元に戻せませんでした。"
+    echo "       退避したファイルは消さずに残してあります:"
+    # `[ -d x ] && echo` と書くと、偽のときに文全体が失敗扱いになり、
+    # set -e / ERR トラップを踏む。復元中に更に中断するのは最悪なので if で書く。
+    if [ -d "$CLAUDE_BACKUP_DIR" ]; then echo "         $CLAUDE_BACKUP_DIR"; fi
+    if [ -d "$CODEX_BACKUP_DIR" ]; then echo "         $CODEX_BACKUP_DIR"; fi
+    echo "       この画面のまま導入支援の担当者にお見せください。"
+  fi
+  unset _restore_failed
 }
 
 on_error() {
+  # set -E により、ERR はコマンド置換 $(...) などのサブシェルでも発火しうる。
+  # そこで rollback / cleanup が走ると、親がまだ使っている作業フォルダを
+  # 消してしまい、インストールを途中で壊す。後始末は主シェルだけの仕事にする。
+  #
+  # 注意: この判定は bash 4 以降でしか効かない。macOS 標準の bash 3.2 には
+  # BASHPID が無く、$$ はサブシェルでも主シェルと同じ値になるため素通りする。
+  # 3.2 側の防御は「条件文の中でコマンド置換を使わない」ことで、
+  # package-kit.sh がその構文の混入を検査している。
+  [ "${BASHPID:-$$}" = "$$" ] || return 0
   trap - ERR INT TERM
   set +e
   rollback
@@ -124,6 +208,8 @@ for arg in "$@"; do
   esac
 done
 
+self_heal_kit
+
 echo ""
 echo "==============================================="
 echo "  AI開発エージェントキット インストーラー (Mac)"
@@ -150,6 +236,22 @@ if [ ! -f "agents/app-orchestrator.md" ] || \
   echo "[エラー] app-orchestrator のCodex用ファイルが揃っていません。"
   finish 1
 fi
+
+# Apache License 2.0 の 4(a) は「Work / Derivative Works の各コピーに
+# ライセンスの写しを添える」ことを求める。このキットは cloudflare/skills
+# 由来のファイルを含むため、配置物にもこの3点が必ず同行する必要がある。
+# 揃っていないものを配るほうが問題なので、ここは警告ではなく停止させる。
+for required_legal in LICENSE NOTICE ATTRIBUTION.md; do
+  if [ ! -f "$required_legal" ]; then
+    echo "[エラー] ライセンス関連ファイルが見つかりません: $required_legal"
+    echo "配布物が不完全です。導入支援の担当者にお知らせください。"
+    finish 1
+  fi
+  if [ -L "$required_legal" ]; then
+    echo "[エラー] ライセンス関連ファイルがシンボリックリンクです: $required_legal"
+    finish 1
+  fi
+done
 
 WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/aidd-agent-kit.XXXXXX")
 : > "$WORK_DIR/maps"
@@ -206,9 +308,31 @@ for dir in skills/*/ codex/workflow-skills/*/; do
 done
 validate_skill "agents/app-orchestrator.md" "app-orchestrator" || finish 1
 
+# TOML の検査に python3 を使えるか。使えないなら下の awk 版で検査する。
+#
+# 注意: 判定に `command -v python3` だけを使ってはいけない。macOS の
+# /usr/bin/python3 は Xcode コマンドラインツール未導入だと「実体はまだ無いが
+# 存在はする」スタブで、実行した瞬間に『コマンドライン・デベロッパ・ツールを
+# インストールしますか？』の GUI ダイアログが出る。非エンジニアの画面に
+# インストーラーと無関係なダイアログを出さないため、実体の有無を先に見る。
+PYTHON_TOML=0
+if command -v python3 >/dev/null 2>&1; then
+  PYTHON_TOML=1
+  case "$(command -v python3)" in
+    /usr/bin/python3)
+      # Apple 標準の場所。CLT が入っていなければスタブなので触らない。
+      xcode-select -p >/dev/null 2>&1 || PYTHON_TOML=0
+      ;;
+  esac
+  if [ "$PYTHON_TOML" = "1" ] && ! python3 -c 'import tomllib' >/dev/null 2>&1; then
+    # tomllib は Python 3.11 以降。古い python3 なら awk 版へ落とす。
+    PYTHON_TOML=0
+  fi
+fi
+
 for toml in codex/agents/*.toml; do
   [ -f "$toml" ] || continue
-  if command -v python3 >/dev/null 2>&1 && python3 -c 'import tomllib' >/dev/null 2>&1; then
+  if [ "$PYTHON_TOML" = "1" ]; then
     python3 - "$toml" <<'PY' || {
 import re
 import sys
@@ -286,6 +410,20 @@ append_tree X codex/workflow-skills skills
 printf '%s\n' 'X|agents/app-orchestrator.md|skills/app-orchestrator/SKILL.md' >> "$WORK_DIR/maps"
 printf '%s\n' 'X|codex/app-orchestrator-openai.yaml|skills/app-orchestrator/agents/openai.yaml' >> "$WORK_DIR/maps"
 append_tree X codex/agents agents
+# Claude 側と Codex 側は別の manifest で管理されるため、両方へ配る。
+# 名前を `aidd-agent-kit.` で始めるのは、利用者自身が置いた LICENSE と
+# 取り違えないため、かつ既存の manifest / version と同じ平置きに揃えるため。
+for legal_pair in 'LICENSE|aidd-agent-kit.LICENSE' \
+                  'NOTICE|aidd-agent-kit.NOTICE' \
+                  'ATTRIBUTION.md|aidd-agent-kit.ATTRIBUTION.md'; do
+  printf 'C|%s\n' "$legal_pair" >> "$WORK_DIR/maps"
+  printf 'X|%s\n' "$legal_pair" >> "$WORK_DIR/maps"
+  # .agents/skills は .codex とは別のツリーで、Apache-2.0 由来の再頒布物を
+  # 含む。§4(a) は「頒布物にライセンス本文を添えること」を求めるので、
+  # ここにも同じ3点を置く。ディレクトリではなくファイルなので、
+  # skill探索(<名前>/SKILL.md を探す)には拾われない。
+  printf 'X|%s|skills/%s\n' "${legal_pair%%|*}" "${legal_pair#*|}" >> "$WORK_DIR/maps"
+done
 if [ "$LEGACY_PROMPTS" -eq 1 ]; then
   append_tree X codex/prompts prompts
 fi
@@ -305,6 +443,7 @@ valid_relative() {
   esac
   case "$relative" in
     skills/*|agents/*|commands/*|prompts/*|aidd-agent-kit.manifest|aidd-agent-kit.version) return 0 ;;
+    aidd-agent-kit.LICENSE|aidd-agent-kit.NOTICE|aidd-agent-kit.ATTRIBUTION.md) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -358,16 +497,17 @@ LC_ALL=C sort -u "$WORK_DIR/check-paths" -o "$WORK_DIR/check-paths"
 # manifestは実配置の所有契約。バックアップ前に生成し、
 # 完全なno-opなら書き込みとバックアップを一切行わない。
 awk -F'|' '{ print $2 }' "$WORK_DIR/maps" | LC_ALL=C sort -u > "$WORK_DIR/sources"
-perl -MDigest::SHA -e '
-  while (<STDIN>) {
-    chomp;
-    open my $fh, "<", $_ or die "$!: $_\n";
-    binmode $fh;
-    my $sha = Digest::SHA->new(256);
-    $sha->addfile($fh);
-    print $sha->hexdigest, "|", $_, "\n";
-  }
-' < "$WORK_DIR/sources" > "$WORK_DIR/source-hashes"
+hash_file_list < "$WORK_DIR/sources" > "$WORK_DIR/source-hashes"
+# 道具が途中で落ちても、行数が合わなければここで止まる。
+# ハッシュが欠けた manifest は「変更なし」の誤判定を生み、
+# 更新が黙って反映されない状態を作るため、必ず検算する。
+SRC_COUNT=$(wc -l < "$WORK_DIR/sources" | tr -d ' ')
+HASH_COUNT=$(wc -l < "$WORK_DIR/source-hashes" | tr -d ' ')
+if [ "$SRC_COUNT" != "$HASH_COUNT" ]; then
+  echo "[エラー] ファイルの照合に失敗しました ($SRC_COUNT 件中 $HASH_COUNT 件)。" >&2
+  echo "この画面のまま導入支援の担当者にお見せください。" >&2
+  finish 1
+fi
 
 awk -F'|' '
   NR == FNR { hash[$2]=$1; next }
@@ -399,9 +539,173 @@ if [ -d "$CODEX_DIR/skills" ]; then
   echo ""
 fi
 
+# --- 「どこに何が入ったか」を必ず見せる -------------------------------
+# 利用者からいちばん多い誤解が「このキットはプロジェクトの中に入るのでは?」
+# というもの。実際は既定で $HOME 配下(ユーザー全体)に入っている。
+# 入った実パスと件数をその場で見せれば、この誤解は1画面で解ける。
+# 変更なしで終わるときも表示する。「何も出ないと何も入っていないように見える」
+# ためで、ここを黙ると誤解が残ったままになる。
+print_placement_summary() {
+  _skills=$(find "$CLAUDE_DIR/skills" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+  _agents=$(find "$CLAUDE_DIR/agents" -maxdepth 1 -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
+  _commands=$(find "$CLAUDE_DIR/commands" -maxdepth 1 -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
+  _codex_skills=$(find "$CODEX_SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+  _codex_agents=$(find "$CODEX_DIR/agents" -maxdepth 1 -type f -name '*.toml' 2>/dev/null | wc -l | tr -d ' ')
+
+  echo ""
+  echo "配置先(実際に入った場所と件数):"
+  echo "  $CLAUDE_DIR/skills"
+  echo "      スキル ${_skills}個"
+  echo "  $CLAUDE_DIR/agents"
+  echo "      エージェント ${_agents}個"
+  echo "  $CLAUDE_DIR/commands"
+  echo "      コマンド ${_commands}個"
+  echo "  $CODEX_SKILLS_DIR"
+  echo "      Codex スキル ${_codex_skills}個"
+  echo "  $CODEX_DIR/agents"
+  echo "      Codex custom agent (.toml) ${_codex_agents}個"
+  echo "  ※ AIDDキットは .codex/skills へ配布しません。"
+  echo ""
+  # 既定は $HOME(ユーザー全体)。AIDD_TARGET_HOME で project scope へ入れた
+  # ときにまで「グローバルです」と言うと、今度は逆向きの嘘になる。
+  # 実際の置き場所から判定して、言い分を切り替える。
+  echo "-----------------------------------------------"
+  if [ "$INSTALL_HOME" = "$HOME" ]; then
+    echo "  これはグローバル(ユーザー全体)に入りました。"
+    echo "  どのフォルダからでも使えます。"
+    echo "  プロジェクトごとに入れ直す必要はありません。"
+    echo "-----------------------------------------------"
+    echo "  置き場所はあなたのホームフォルダ($INSTALL_HOME)の中です。"
+    echo "  特定のプロジェクトの中には入れていません。"
+  else
+    echo "  これはプロジェクト限定(project scope)に入りました。"
+    echo "  このフォルダの中で作業しているときだけ使えます。"
+    echo "-----------------------------------------------"
+    echo "  置き場所: $INSTALL_HOME"
+    echo "  ユーザー全体で使いたい場合は、AIDD_TARGET_HOME を指定せずに"
+    echo "  install-mac.command を実行してください。"
+  fi
+  echo ""
+  unset _skills _agents _commands _codex_skills _codex_agents
+}
+
+# --- MCP(Cloudflare 連携)が未設定のままかを見る -----------------------
+# インストーラーはファイルを配るだけで、MCP は1つも登録しない。
+# 登録するのは setup-env-mac.command のほうなので、それを実行していない人は
+# 「入れ終わった」と思ったまま、連携が何も無い状態で使い始めてしまう。
+#
+# 自動で続けて実行してしまう案は採らなかった。setup-env は Node.js の導入、
+# MCPのuser/global登録・接続確認で数分かかる。このインストーラーは数秒で終わる
+# 冪等な処理として設計されており(途中失敗はロールバックする)、性質が違う。
+# 代わりに「未実行を検出して明示し、対話中なら本人の同意を得てその場で実行する」。
+print_mcp_status_and_offer() {
+  _setup_state=""
+  _setup_date=""
+  if [ -f "$SETUP_STAMP" ]; then
+    _setup_state=$(sed -n 's/^state=//p' "$SETUP_STAMP" 2>/dev/null | tail -n 1) || _setup_state=""
+    case "$_setup_state" in
+      attempted|registered|auth_pending|ready|failed) ;;
+      *) _setup_state="" ;;
+    esac
+    _setup_date=$(sed -n 's/^date=//p' "$SETUP_STAMP" 2>/dev/null | tail -n 1) || _setup_date=""
+  fi
+
+  case "$_setup_state" in
+    ready)
+      echo "Cloudflare 連携(MCP): 前回の接続確認は ready です。"
+      [ -z "$_setup_date" ] || echo "  確認日時: $_setup_date"
+      echo "  (現在状態を再確認するときは setup-env-mac.command を実行)"
+      echo ""
+      unset _setup_state _setup_date
+      return 0
+      ;;
+    auth_pending)
+      echo "Cloudflare 連携(MCP): 現在の作業で必要な対象がOAuth認証待ちです。"
+      echo "  エージェントが示した対象1件だけへ必要最小限の権限を認可してください。"
+      echo ""
+      unset _setup_state _setup_date
+      return 0
+      ;;
+    registered)
+      echo "Cloudflare 連携(MCP): user/global登録済みです。"
+      echo "  docsは利用可能です。変更系MCPは、その機能を初めて使う時だけ認証します。"
+      echo ""
+      unset _setup_state _setup_date
+      return 0
+      ;;
+    failed)
+      echo "Cloudflare 連携(MCP): 前回のセットアップは失敗しました。"
+      ;;
+    attempted)
+      echo "Cloudflare 連携(MCP): セットアップ開始済み / 登録・ready未確認です。"
+      ;;
+    "")
+      if [ -f "$SETUP_STAMP" ]; then
+        echo "Cloudflare 連携(MCP): 旧形式の記録のため ready とは判定できません。"
+      fi
+      ;;
+  esac
+
+  echo "==============================================="
+  echo "  [未完了] Cloudflare 連携(MCP)は ready ではありません"
+  echo "==============================================="
+  echo ""
+  echo "このインストーラーはキット本体を配っただけです。"
+  echo "アプリの公開やログ確認に必要な連携は、次のスクリプトで設定します。"
+  echo "  $KIT_DIR/setup-env-mac.command"
+  echo ""
+
+  # project scope への反映(sync-project 経由の管理作業)では聞かない。
+  # 目的が「リポジトリへの反映」であって、環境構築ではないため。
+  if [ "${AIDD_NONINTERACTIVE:-0}" = "1" ] || [ ! -t 0 ] ||
+     [ "$INSTALL_HOME" != "$HOME" ]; then
+    echo "続けて setup-env-mac.command を実行してください。"
+    echo ""
+    unset _setup_state _setup_date
+    return 0
+  fi
+
+  printf '続けて開発環境セットアップ(Node.js・pnpm・Cloudflare連携)を実行しますか? [Y/n]: '
+  read -r _answer || _answer=""
+  case "$_answer" in
+    [nN]|[nN][oO])
+      echo ""
+      echo "分かりました。あとで setup-env-mac.command をダブルクリックしてください。"
+      echo "(実行するまで Cloudflare 連携は使えません)"
+      echo ""
+      unset _setup_state _setup_date
+      ;;
+    *)
+      echo ""
+      _setup_status=0
+      if [ -x "$KIT_DIR/setup-env-mac.command" ]; then
+        "$KIT_DIR/setup-env-mac.command" || _setup_status=$?
+      else
+        bash "$KIT_DIR/setup-env-mac.command" || _setup_status=$?
+      fi
+      if [ "$_setup_status" -ne 0 ]; then
+        echo "==============================================="
+        echo "  [部分成功] キット導入済み / 開発環境・MCP未完了"
+        echo "==============================================="
+        echo "キット本体はそのまま保持します。上の原因を解消後、"
+        echo "setup-env-mac.command を再実行してください。"
+        unset _answer _setup_state _setup_date
+        return "$_setup_status"
+      fi
+      ;;
+  esac
+  unset _answer _setup_state _setup_date _setup_status
+}
+
 if [ "$NOOP" -eq 1 ]; then
   echo "[OK] 配布先はキット $KIT_VERSION と一致しています。"
   echo "     変更がないため、バックアップと書き込みは行いません。"
+  print_placement_summary
+  SETUP_CONTINUE_STATUS=0
+  print_mcp_status_and_offer || SETUP_CONTINUE_STATUS=$?
+  if [ "$SETUP_CONTINUE_STATUS" -ne 0 ]; then
+    finish "$SETUP_CONTINUE_STATUS"
+  fi
   finish 0
 fi
 
@@ -496,6 +800,9 @@ new_has_prefix() {
     "$WORK_DIR/maps"
 }
 
+STALE_DIRS="$WORK_DIR/stale-dirs"
+: > "$STALE_DIRS"
+
 clean_stale() {
   client="$1"
   manifest="$2"
@@ -517,11 +824,13 @@ clean_stale() {
       # 変更されていても旧キット所有。変更版も事前バックアップ済みなので
       # liveから除去して標準状態へ収束させる。
       rm -f "$target"
+      dirname "$target" >> "$STALE_DIRS"
       continue
     fi
 
     if [ -f "$target" ]; then
       rm -f "$target"
+      dirname "$target" >> "$STALE_DIRS"
     elif [ -d "$target" ]; then
       if new_has_prefix "$client" "$relative"; then
         # 現役skillは上書き対象の配布ファイルだけを更新し、knowledge等は残す。
@@ -530,6 +839,7 @@ clean_stale() {
         # v1 manifestが所有していた廃止skill。ディレクトリ全体は事前に
         # 検証済みバックアップ済みなので、liveから安全に整理できる。
         rm -rf "$target"
+        dirname "$target" >> "$STALE_DIRS"
       fi
     fi
   done < "$manifest"
@@ -545,6 +855,24 @@ while IFS='|' read -r client source relative; do
   mkdir -p "$(dirname "$target")"
   cp -p "$source" "$target"
 done < "$WORK_DIR/maps"
+
+# 廃止ファイルを消した結果、中身が空になった旧ディレクトリを片付ける。
+# コピー後に実行することで、現役ファイルが入り直したディレクトリは
+# 「空でない」ため対象外になる。空のものだけを下から上へ辿って削除し、
+# 管理ルート自身には到達しない。ls -A で空と確認できたものだけを消すため、
+# 利用者が置いたファイルを巻き込まない。
+if [ -s "$STALE_DIRS" ]; then
+  while IFS= read -r stale_dir; do
+    d="$stale_dir"
+    while [ -n "$d" ] && [ -d "$d" ] && [ -z "$(ls -A "$d")" ]; do
+      case "$d" in
+        "$CLAUDE_DIR"|"$CODEX_DIR"|"$CODEX_SKILLS_DIR"|"$INSTALL_HOME"|/|.) break ;;
+      esac
+      rmdir "$d" 2>/dev/null || break
+      d=$(dirname "$d")
+    done
+  done < "$STALE_DIRS"
+fi
 
 # --- ステップ 6/6: 内容・形式検証とmanifestの原子的更新 -----------
 while IFS='|' read -r client source relative; do
@@ -602,12 +930,12 @@ echo "  OpenAI Codex: スキル ${CODEX_SKILLS}個 / カスタムエージェン
 if [ "$LEGACY_PROMPTS" -eq 1 ]; then
   echo "  Codex legacy prompts: ${LEGACY_PROMPT_COUNT}個"
 fi
-echo ""
-echo "配置先:"
-echo "  Codex skills: $CODEX_SKILLS_DIR"
-echo "  Codex custom agents (.toml): $CODEX_DIR/agents"
-echo "  ※ AIDDキットは .codex/skills へ配布しません。"
-echo ""
+print_placement_summary
+SETUP_CONTINUE_STATUS=0
+print_mcp_status_and_offer || SETUP_CONTINUE_STATUS=$?
+if [ "$SETUP_CONTINUE_STATUS" -ne 0 ]; then
+  finish "$SETUP_CONTINUE_STATUS"
+fi
 echo "次にやること:"
 echo "  1. Claude Code と Codex を終了して起動し直す"
 echo "  2. Claude Code: /build-app 作りたいものの説明"

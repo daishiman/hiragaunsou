@@ -74,3 +74,14 @@ Cannot change dimensions/metric after creation. Must create new index and migrat
 - `@cf/baai/bge-small-en-v1.5`: 384
 - `@cf/baai/bge-base-en-v1.5`: 768
 - `@cf/baai/bge-large-en-v1.5`: 1024
+
+## api.md / configuration.md から移設した注意点
+
+- metadata filter の制約: filter 本体は最大 2048 bytes、キーに `.` や `$` を含められない、値は string / number / boolean / null のみ。演算子は `$eq`(暗黙)/ `$ne` / `$in` / `$nin` / `$lt` / `$lte` / `$gt` / `$gte`
+- 高カーディナリティな metadata は index に向かない。ミリ秒 timestamp をそのまま入れず、5 分などのバケットへ丸めてから metadata index を張る
+  ```typescript
+  // ❌ metadata: { timestamp: Date.now() }
+  // ✅ metadata: { timestamp_bucket: Math.floor(Date.now() / 300000) * 300000 }
+  ```
+- `queryById()` は V2 index 限定。既存ベクトルをクエリに使う場合は index の世代を先に確認する
+- 1 回の upsert 上限は文書間で 500 / 1,000(Workers)/ 5,000(HTTP API)と揺れている。上限は docs MCP で `vectorize limits` を再取得し、超過分が **無言で切り捨てられる** 前提でチャンクする

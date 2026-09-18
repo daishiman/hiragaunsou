@@ -135,3 +135,13 @@ See [frameworks.md](./frameworks.md) for full patterns
 - [API](./api.md) - Runtime APIs
 - [Configuration](./configuration.md) - Setup
 - [Frameworks](./frameworks.md) - Hono, routing, validation
+
+## api.md / configuration.md から移設した注意点
+
+- **背景処理は `await` しない**: レスポンス後に続ける処理(ログ送信、cache 書き込み)は `ctx.waitUntil()` に渡す。`await` すると応答が遅れる。
+- **Cache API へ入れる Response は `clone()`**: body は 1 回しか読めないため、`ctx.waitUntil(cache.put(request, response.clone()))` のように複製を渡し、元をクライアントへ返す。
+- **`env` ごとの継承ルール**: `name` / `main` / `compatibility_date` / `routes` / `workers_dev` は `env.<name>` へ継承されるが、**bindings(`vars`, `kv_namespaces`, `r2_buckets`, `d1_databases` など)は継承されない**。staging 用 env には binding を再宣言する。`migrations` / `keep_vars` / `send_metrics` は top-level のみ。
+- **新規 project の `compatibility_date` は当日**: 古い日付を写すと新しい runtime 挙動が有効にならない。
+- **Secrets は config に書かない**: `pnpm wrangler secret put <NAME>` で登録し、`env.<NAME>` で読む。
+- **Automatic provisioning(beta)**: `id` を書かない `kv_namespaces` 等は deploy 時に自動作成される。意図しない resource 作成を避けるため、既存 resource を使うときは必ず `id` を明記する。
+- **`nodejs_compat` の代償**: `Buffer` / `process.env` / `node:` import が使えるが、cold start が約 1〜2ms 増える。Workers API(R2 / KV)で足りる場面では有効化しない。

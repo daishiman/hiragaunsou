@@ -163,6 +163,15 @@ add_tree(kit / "codex" / "workflow-skills", "skills")
 add(kit / "agents" / "app-orchestrator.md", "skills/app-orchestrator/SKILL.md")
 add(kit / "codex" / "app-orchestrator-openai.yaml", "skills/app-orchestrator/agents/openai.yaml")
 add_tree(kit / "codex" / "agents", "agents")
+# install-mac.command / install-windows.bat の配布マップと同じく、
+# Codex は .codex 直下と .agents/skills 直下の両方に法的ファイルを持つ。
+for source_name, target_name in (
+    ("LICENSE", "aidd-agent-kit.LICENSE"),
+    ("NOTICE", "aidd-agent-kit.NOTICE"),
+    ("ATTRIBUTION.md", "aidd-agent-kit.ATTRIBUTION.md"),
+):
+    add(kit / source_name, target_name)
+    add(kit / source_name, f"skills/{target_name}")
 
 expected = {relative: sha256(source.read_bytes()).hexdigest() for relative, source in mapping.items()}
 manifest_path = project / ".codex" / "aidd-agent-kit.manifest"
@@ -204,6 +213,17 @@ for source_root, relative_root in (
             raise SystemExit(f"[NG] Claude manifestの配布先が重複しています: {relative}")
         claude_mapping[relative] = source
 
+# Claude Code 側は .claude 直下の3件が installer の正式な配布先。
+for source_name, target_name in (
+    ("LICENSE", "aidd-agent-kit.LICENSE"),
+    ("NOTICE", "aidd-agent-kit.NOTICE"),
+    ("ATTRIBUTION.md", "aidd-agent-kit.ATTRIBUTION.md"),
+):
+    relative = target_name
+    if relative in claude_mapping:
+        raise SystemExit(f"[NG] Claude manifestの配布先が重複しています: {relative}")
+    claude_mapping[relative] = kit / source_name
+
 claude_expected = {
     relative: sha256(source.read_bytes()).hexdigest()
     for relative, source in claude_mapping.items()
@@ -234,27 +254,74 @@ for relative, digest in claude_expected.items():
         raise SystemExit(f"[NG] Claude manifestの配布先hashが一致しません: {target}")
 PY
 
+# INVARIANTS.md の契約: 各 INV-id は正本欄のファイルに出現する(本文は正本1箇所、他は id 参照)。
+python3 - "$SCRIPT_DIR" <<'PY'
+import re, sys
+from pathlib import Path
+kit = Path(sys.argv[1])
+text = (kit / "INVARIANTS.md").read_text(encoding="utf-8")
+missing = []
+for m in re.finditer(r"^\| (INV-\d+) \|.*?\| (.*?) \|$", text, re.M):
+    inv, sources = m.group(1), re.findall(r"`([^`]+)`", m.group(2))
+    if not sources:
+        missing.append(f"{inv}: 正本欄にファイルがありません"); continue
+    hit = any((kit / src).is_file() and re.search(rf"\b{inv}\b", (kit / src).read_text(encoding="utf-8")) for src in sources)
+    if not hit:
+        missing.append(f"{inv}: {', '.join(sources)} に id が出現しません")
+if missing:
+    raise SystemExit("[NG] INVARIANTS.md の正本に INV-id がありません:\n  " + "\n  ".join(missing))
+PY
+echo "[OK] INVARIANTS.md: 全 INV-id が正本に出現"
+
 kit_version=$(tr -d '\r\n' < "$SCRIPT_DIR/VERSION")
 [ -n "$kit_version" ] || fail "キットのバージョンを取得できません"
 
+# バージョン表記の契約。正本は aidd-agent-kit/VERSION の1つだけ。
+#
+# 以前は「この8ファイルに version 文字列が在ること」を契約にしていた。
+# それは表記の箇所数を固定する検査で、埋め込み箇所を減らす変更が必ずここで
+# 落ちた。契約を次の2点に縮約する:
+#   (a) 利用者の入口である README.md には表記が在る (在るべき1か所)
+#   (b) それ以外は「表記が残っているなら VERSION と一致する」だけを見る。
+#       表記を消した箇所は検査対象から自然に外れ、古い表記が残った箇所だけ落ちる。
+# 走査対象は利用者向け文書と入口スクリプト。無いファイルは読み飛ばす
+# (AIDD_PROJECT_ROOT を差し替えた検証では AGENTS.md が無いことがある)。
 python3 - "$SCRIPT_DIR" "$PROJECT_ROOT" "$kit_version" <<'PY'
 from pathlib import Path
+import re
 import sys
 
 kit, project, version = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
-contracts = {
-    kit / "README.md": f"**バージョン {version}**",
-    kit / "manual-mac.md": f"**バージョン {version}**",
-    kit / "manual-windows.md": f"**バージョン {version}**",
-    kit / "manual-mac.html": f"バージョン {version}",
-    kit / "manual-windows.html": f"バージョン {version}",
-    kit / "setup-env-mac.command": f"v{version}",
-    kit / "setup-env-windows.bat": f"v{version}",
-    project / "AGENTS.md": f"AIDD エージェントキット v{version}",
-}
-for file, expected in contracts.items():
-    if expected not in file.read_text(encoding="utf-8"):
-        raise SystemExit(f"[NG] バージョン表記がVERSIONと一致しません: {file}")
+
+anchor = kit / "README.md"
+if f"**バージョン {version}**" not in anchor.read_text(encoding="utf-8"):
+    raise SystemExit(f"[NG] README.md のバージョン表記がVERSIONと一致しません: {anchor}")
+
+# 「キットのバージョン」を表す表記だけを拾う。URL や依存ライブラリの
+# 版数 (例: Node 20.1.0) を誤って拾わないよう、前置語で限定する。
+pattern = re.compile(
+    r"(?:バージョン\s*|エージェントキット\s*v|^\s*(?:#|rem)\s*v)(\d+\.\d+\.\d+)",
+    re.MULTILINE,
+)
+scan = [
+    kit / "README.md",
+    kit / "manual-mac.md",
+    kit / "manual-windows.md",
+    kit / "manual-mac.html",
+    kit / "manual-windows.html",
+    kit / "setup-env-mac.command",
+    kit / "setup-env-windows.bat",
+    project / "AGENTS.md",
+]
+stale = []
+for file in scan:
+    if not file.is_file():
+        continue
+    for match in pattern.finditer(file.read_text(encoding="utf-8")):
+        if match.group(1) != version:
+            stale.append(f"{file}: {match.group(0).strip()}")
+if stale:
+    raise SystemExit("[NG] VERSION と異なるバージョン表記が残っています:\n  " + "\n  ".join(stale))
 PY
 
 for version_file in \

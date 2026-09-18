@@ -2,13 +2,18 @@
 
 実装フェーズで品質のばらつきが出る箇所を標準化する。ここに書かれた既定値は依頼者に確認せず適用する。
 
+実装はT3の全層trace(`03-feature-decomposition.md` §2-1)を上から1行ずつ完成させる。UI・API・domain・DB・read modelの対応と要件フラグの判定は同節を正本とし、ここでは重複定義しない。
+
+全層traceは内部の受入証拠であり、技術構成や開発者注記を可視DOMへ出さない。画面は jp-web-design `references/information-design.md` §3-1の境界に従い、参照カタログの説明文・サンプル固有文言・デバッグ注記をコピーしない。
+
+可視UIを実装する前に jp-web-design `references/catalog-default-contract.md` を読み、T2で固定したprofileを適用する。対象判定、正本profile、provenance、段階別検査、例外の形式は同契約だけを正本とし、ここへ複製しない。各UI sliceの採用対象と検査証拠はT3へ残す。
+
 ## §1. デザイントークン(最初に確定、以後ハードコード禁止)
 
 - **余白**: 4/8pxグリッド(4,8,12,16,24,32,48,64)。目分量の余白を書かない
-- **タイポ**: 日本語本文13〜14pxを既定、ページタイトル19px(SP17px)。UI英数字はIBM Plex Sans、ID/タグ/ログはJetBrains Mono。外部fontが使えない場合のsystem fallbackを必ず持つ
-- **色**: 既定はGraphite × Amber。primary=主要CTA/操作/選択、accent=実行中など状態専用。success/warning/danger/neutralをsemantic名で定義し、生HEXをコンポーネントに書かない。AI専用色を作らない。コントラストはLight/DarkともAA(references/checklists/accessibility-jp.md)
+- **タイポ**: jp-web-design `references/typography-numerals.md` §0 の書体・文字サイズ既定(system-first、モバイルでも縮めない)をそのまま使う。値はここへ複製しない
+- **色**: jp-web-design `references/catalog-default-contract.md` が選んだprofileの正本CSSを読み込み、部品は役割トークンだけを参照する。色の使い方・禁止事項・テーマ(ライトのみ)は `references/hiraga-color-system.md`、既存アプリの配色移行手順は同契約を正本とし、ここへ複製しない
 - **角丸・影**: 各3段階まで。トークン外の値を発明しない
-- Mode AはLight/Dark/autoを初期から実装し、テーマ選択を永続化する。Darkは機械反転せず、page-bg/bg/surface/surface-alt/borderの面階層を個別定義する
 
 ## §2. コンポーネント規律
 

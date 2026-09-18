@@ -1,5 +1,12 @@
 # Vectorize Patterns
 
+## Distance Metric の選び方(index 作成後は変更不可)
+
+- テキスト・セマンティック検索 → `cosine`(高いほど近い。1.0 が同一)
+- 画像類似・空間データ → `euclidean`(低いほど近い。0.0 が同一)
+- レコメンド・正規化済みベクトル → `dot-product`(高いほど近い)
+- テナント分離は < 50K なら namespace(前段 filter で最速・厳密分離)、> 50K なら metadata filter(後段 filter・metadata index 必須)。テナント別 index はコンプライアンス要件があるときだけ
+
 ## Workers AI Integration
 
 ```typescript

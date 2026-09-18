@@ -1,4 +1,4 @@
-### Phase 2: Automated Code Scanning
+### 手順2: Automated Code Scanning
 
 Run these checks in parallel:
 

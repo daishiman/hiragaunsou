@@ -206,3 +206,11 @@ pnpm wrangler tail --format=pretty # Formatted logs
 
 - [Workers Limits](https://developers.cloudflare.com/workers/platform/limits/)
 - [Wrangler Commands](https://developers.cloudflare.com/workers/wrangler/commands/)
+
+## api.md / configuration.md から移設した注意点
+
+- **`addEventListener('fetch', …)` の旧形式では `env` が届かない**: bindings は Module Worker の `fetch(request, env, ctx)` handler(または Hono の `c.env`)で受け取る。旧形式は使わない。
+- **`env: any` にしない**: `wrangler types` が生成する `Env` を使う。`any` は binding 名の typo や型不一致を隠す。
+- **`id` を使う binding と `name` を使う binding が混在する**: KV / D1 / Hyperdrive は `id`、R2 は `bucket_name`、Queues / Workflows は `queue` / `name`。取り違えると deploy 時に「resource not found」になる。
+- **`wrangler types` の出力先と検出**: `.wrangler/types/runtime.d.ts` へ出る。`tsconfig.json` の `types` に `@cloudflare/workers-types` があり `include` に `.wrangler/types/**/*.ts` があれば自動で拾われる。binding を変えたら再実行する。
+- **別 Worker の Durable Object / Service を参照する**: DO は `script_name`、Service binding は `environment` で対象 Worker / env を指定できる。参照先を先に deploy しないと `No such service` になる。

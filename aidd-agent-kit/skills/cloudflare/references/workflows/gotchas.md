@@ -88,3 +88,12 @@ Key areas to check: CPU time per step, max steps per workflow, concurrent instan
 - [Pricing](https://developers.cloudflare.com/workflows/reference/pricing/)
 
 See: [README.md](./README.md), [configuration.md](./configuration.md), [api.md](./api.md), [patterns.md](./patterns.md)
+
+## api.md / configuration.md から移設した注意点
+
+- `NonRetryableError`(`cloudflare:workflows`)を throw すると retry を止められる。401 や入力不備など再試行しても直らない失敗はこれで即終了し、一時障害だけ通常の `Error` で retry させる
+- `create()` は retention 期間内に同じ ID が存在すると throw する。`createBatch()`(最大 100 件)は既存 ID をスキップする idempotent 動作で、挙動が非対称
+- `sendEvent({ type })` の `type` は `waitForEvent` 側の `type` と完全一致が必要。一致しないと待機側は timeout まで進まない
+- params と step の戻り値は `Rpc.Serializable` に限る。関数・symbol・循環参照は不可。大きなバイナリは `ReadableStream<Uint8Array>` を返すと非 stream の戻り値サイズ上限を回避できる
+- Workflows binding には `compatibility_date` 2024-10-22 以上が必要。`observability.enabled: true` にしないと Workflows dashboard と structured logs が出ない
+- 別 Worker の Workflow を呼ぶときは binding に `script_name` を付ける。Pages Functions から起動する場合は `service_bindings` 経由

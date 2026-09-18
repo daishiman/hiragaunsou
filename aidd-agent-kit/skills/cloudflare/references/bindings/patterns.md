@@ -135,6 +135,8 @@ const [user, config, cache] = await Promise.all([
 
 ## Storage Selection
 
+選び方の早見: key-value(< 25MB)→ KV、files/objects → R2、relational → D1、real-time coordination → Durable Objects、LLM inference → Workers AI、scraping/PDF → Browser Rendering、別 Worker 呼び出し → Service binding、background jobs → Queues、公開設定値 → vars、機密 → Secrets。
+
 ### KV: CDN-Backed Reads
 
 ```typescript

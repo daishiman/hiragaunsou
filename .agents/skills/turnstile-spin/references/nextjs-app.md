@@ -1,3 +1,5 @@
+> 本ファイルは cloudflare/skills（Apache-2.0）を基に改変しています。詳細は リポジトリルートの ATTRIBUTION.md を参照。
+
 # Next.js (App Router)
 
 For `app/`-directory Next.js projects. The widget needs to run on the client, so the page or component must be `"use client"`. The siteverify call lives server-side, either in a Server Action or an API route.

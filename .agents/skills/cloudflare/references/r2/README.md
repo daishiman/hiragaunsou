@@ -1,95 +1,25 @@
-# Cloudflare R2 Object Storage
+# R2(索引)
 
-S3-compatible object storage with zero egress fees, optimized for large file storage and delivery.
+S3 互換のオブジェクトストレージ。egress 無料、書き込み・削除は強整合。キット既定のファイルストレージ(`mvp-first-development` §3)。用途はメディア・ユーザーアップロード・バックアップ・静的アセット。limits / pricing は陳腐化するため同梱せず、docs MCP で `r2 limits` / `r2 pricing` を検索する。
 
-## Overview
+## 最新仕様の取得(第一手段)
 
-R2 provides:
-- S3-compatible API (Workers API + S3 REST)
-- Zero egress fees globally
-- Strong consistency for writes/deletes
-- Storage classes (Standard/Infrequent Access)
-- SSE-C encryption support
+- `cloudflare-docs` MCP で検索: `r2` / `R2 Workers API` / `R2 S3 API`
+- MCP 不通時: `https://developers.cloudflare.com/r2/`
 
-**Use cases:** Media storage, backups, static assets, user uploads, data lakes
+## 同梱ファイル
 
-## Quick Start
+| ファイル | 用途 | docs MCP で代替可か |
+|---|---|---|
+| `configuration.md` | 最小 binding 例と設定項目の検索語 | 可(索引のみ同梱) |
+| `api.md` | Workers API の検索語と最小例 | 可(索引のみ同梱) |
+| `patterns.md` | streaming、条件付き GET、presigned URL、公開バケット、Cache API | 不可(経験知。温存) |
+| `gotchas.md` | list truncated、httpEtag、stream 長、S3 SDK region、CORS、token 分離 | 不可(経験知。温存) |
 
-```bash
-wrangler r2 bucket create my-bucket --location=enam
-wrangler r2 object put my-bucket/file.txt --file=./local.txt
-```
+## wrangler コマンド
 
-```typescript
-// Upload
-await env.MY_BUCKET.put(key, data, {
-  httpMetadata: { contentType: 'image/jpeg' }
-});
+バケット・オブジェクト操作、公開状態の確認は `../../../wrangler/references/kv-r2.md` が正本。
 
-// Download
-const object = await env.MY_BUCKET.get(key);
-if (object) return new Response(object.body);
-```
+## 関連
 
-## Core Operations
-
-| Method | Purpose | Returns |
-|--------|---------|---------|
-| `put(key, value, options?)` | Upload object | `R2Object \| null` |
-| `get(key, options?)` | Download object | `R2ObjectBody \| R2Object \| null` |
-| `head(key)` | Get metadata only | `R2Object \| null` |
-| `delete(keys)` | Delete object(s) | `Promise<void>` |
-| `list(options?)` | List objects | `R2Objects` |
-
-## Storage Classes
-
-- **Standard**: Frequent access, low latency reads
-- **InfrequentAccess**: 30-day minimum storage, retrieval fees, lower storage cost
-
-## Event Notifications
-
-R2 integrates with Cloudflare Queues for reactive workflows:
-
-```typescript
-// wrangler.jsonc
-{
-  "event_notifications": [{
-    "queue": "r2-notifications",
-    "actions": ["PutObject", "DeleteObject"]
-  }]
-}
-
-// Consumer
-async queue(batch: MessageBatch, env: Env) {
-  for (const message of batch.messages) {
-    const event = message.body; // { action, bucket, object, timestamps }
-    if (event.action === 'PutObject') {
-      // Process upload: thumbnail generation, virus scan, etc.
-    }
-  }
-}
-```
-
-## Reading Order
-
-**First-time users:** README → configuration.md → api.md → patterns.md  
-**Specific tasks:**
-- Setup: configuration.md
-- Client uploads: patterns.md (presigned URLs)
-- Public static site: patterns.md (public access + custom domain)
-- Processing uploads: README (event notifications) + queues reference
-- Debugging: gotchas.md
-
-## In This Reference
-
-- [configuration.md](./configuration.md) - Bindings, S3 SDK, CORS, lifecycles, token scopes
-- [api.md](./api.md) - Workers API, multipart, conditional requests, presigned URLs
-- [patterns.md](./patterns.md) - Streaming, caching, client uploads, public buckets
-- [gotchas.md](./gotchas.md) - List truncation, etag format, stream length, S3 SDK region
-
-## See Also
-
-- [workers](../workers/) - Worker runtime and fetch handlers
-- [kv](../kv/) - Metadata storage for R2 objects
-- [d1](../d1/) - Store R2 URLs in relational database
-- [queues](../queues/) - Process R2 uploads asynchronously
+[workers](../workers/)(runtime と fetch handler)/ [kv](../kv/)(オブジェクトのメタデータ)/ [d1](../d1/)(R2 URL の管理)/ [queues](../queues/)(event notifications の非同期処理)

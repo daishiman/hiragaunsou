@@ -4,12 +4,12 @@
 
 ## 1. レイアウト
 
-- **アプリシェル**: `page-bg`の外周 + `bg`のmain + `surface/surface-alt`の面。境界は`border`、hover/inputは`border-strong`。Mode Aの値は `mode-a-graphite-amber.md`。
+- **アプリシェル**: `app-background`の地 + `surface/surface-alt`の面 + 淡いneutral〜薄藤色の半透明ナビmaterial。サイドナビと下部タブは同じ色・状態規則を使い、インディゴは現在地・アイコン・ブランドの小面積アクセントに限る。装飾罫線は`border-subtle`、入力枠は`input-border`。値と光学構造は `hiraga-color-system.md`。
 - **ヘッダー左のアプリ名はホームへのリンクにする(必須仕様)**。クリックでホーム画面に戻る。アプリ名は「いつ使うか」が分かる名前。ナビは3つまで。
 - **コンテンツ幅**: 下記ブレークポイント表に従う。
-- **面の重ね方**: `bg`の上に`surface`カード。影に頼らず罫線で分ける。影はアプリ外枠・モーダル等「浮いている」ことに意味がある要素だけ。
+- **面の重ね方**: `app-background`の地の上に`surface`カード。影に頼らず罫線で分ける。影はアプリ外枠・モーダル等「浮いている」ことに意味がある要素だけ。
 - **角丸**: カード `rounded-xl` / コントロール・小要素 `rounded-md`。用途で固定し混在させない。
-- **余白**: カード `p-5` / 行 `px-4 py-3`(詰めても `py-2` まで)。区切りは背景色ではなく `border-b border-line` の細罫線(最終行は `last:border-b-0`)。
+- **余白**: カード `p-5` / 行 `px-4 py-3`(詰めても `py-2` まで)。区切りは背景色ではなく `border-subtle` の細罫線(Tailwindなら `border-b border-border-subtle`)(最終行は `last:border-b-0`)。
 - **定義リスト**: `grid grid-cols-[8rem_1fr]` でラベル列を固定幅に。値は左揃えで縦のラインを通す。
 
 ### ナビゲーション骨格
@@ -21,7 +21,7 @@
 - 640px以下: サイドバーを外し、下部固定タブバーへ。項目は最大5個。
 - 6個以上なら業務場面で第2階層へ再編する。「その他」を含め5個以下へ減らす。
 
-下部タブバーは`surface`、上border、`position: fixed; z-index: 10`。本文下部へ`calc(76px + env(safe-area-inset-bottom))`を確保し、左右・下へsafe-areaを加算する。アクティブ項目は文言/太さ/`aria-current`を主符号にし、アイコンのaccentは補助符号に限る。
+下部タブバーはサイドナビと同じregular glass material、`position: fixed; z-index: 10`。本文下部へ`calc(76px + env(safe-area-inset-bottom))`を確保し、左右・下へsafe-areaを加算する。アクティブ項目は文言/太さ/`aria-current`を主符号にし、インディゴの`--nav-selected-indicator`は補助符号に限る。reduced transparency / increased contrastでは不透明な`surface-alt`へ戻す。
 
 ## 2. レスポンシブ規律(4段・コードで固定)
 
@@ -50,7 +50,7 @@ SPで全情報を縮小して詰め込まない。**第一階層だけ見せて�
 4. **KPIの絞り込み**: ダッシュボードのKPIはSPでは主要1〜3個。残りは「詳細」へ。
 5. ナビ・アクションは親指で届く位置に。タップ領域44px。
 
-具体テクニックの選び方(何を削るか)は Skill `ux-design` §2 の情報設計に従う。
+何を削るかの判断(最頻シナリオで使うか)は体験設計側で決まっている前提で、ここでは削り方の実装だけを扱う。
 
 ## 4. コンテナクエリ第一(部品は「画面幅」ではなく「容器の幅」で切り替える)
 
@@ -79,7 +79,7 @@ SPで全情報を縮小して詰め込まない。**第一階層だけ見せて�
 
 **surface・余白・罫線で階層を作る。カードの色分けやグラデーションに頼らない。**
 
-1. **主数字(=この画面の視覚的主役)** — 小さいmutedラベル + 大きな`text`色の数字(`--font-num`)。Mode Aでaccentをキー数字へ使わない。
+1. **主数字(=この画面の視覚的主役)** — 小さいmutedラベル + 大きな`text-primary`色の数字(`--font-num`)。キー数字は `--text-heading` または `--text-primary`。マゼンタや状態色をキー数字へ使わない。
 2. **前提ストリップ** — 上下の細罫線だけの3カラム(脇役として静かに)。
 3. **事実カード** — ユーザーが次に知りたいこと(実際の額・期限)を白カードで。
 4. **比較** — 少数比較は「数字+差分(+7.4pt)」。バーを使うなら `components.md` のバーチャート3条件を満たすものだけ。
@@ -90,13 +90,13 @@ SPで全情報を縮小して詰め込まない。**第一階層だけ見せて�
 
 ## 6. 固定ヘッダー・固定フッター(現在地と退避先の常時表示)
 
-長い一覧をスクロールしながら操作する画面では、**現在地(ステップ・タブ・対象期間)と主要アクション(保存・戻る・次へ)を常に見える位置に固定する**。なぜ必要かは Skill `ux-design` §2-2。ここでは実装の規律を定める。
+長い一覧をスクロールしながら操作する画面では、**現在地(ステップ・タブ・対象期間)と主要アクション(保存・戻る・次へ)を常に見える位置に固定する**。ここでは実装の規律だけを定める(必要性と適用範囲の判断は体験設計側)。
 
 - **共通レイアウト部品として1箇所に実装する**。画面ごとに同じ `sticky` を書かない(ヘッダー/フッターの高さ・影・z-index が画面ごとにずれる原因になる)。
 
 ```css
-.app-header { position: sticky; top: 0; z-index: 30; background: var(--surface); border-bottom: 1px solid var(--border); }
-.app-footer { position: sticky; bottom: 0; z-index: 30; background: var(--surface); border-top: 1px solid var(--border);
+.app-header { position: sticky; top: 0; z-index: 30; background: var(--surface); border-bottom: 1px solid var(--border-subtle); }
+.app-footer { position: sticky; bottom: 0; z-index: 30; background: var(--surface); border-top: 1px solid var(--border-subtle);
               padding-bottom: max(12px, env(safe-area-inset-bottom)); }   /* iOSのホームバー回避 */
 /* 固定要素の下にアンカー・フォーカスが隠れないように */
 :root { scroll-padding-top: 64px; scroll-padding-bottom: 88px; }

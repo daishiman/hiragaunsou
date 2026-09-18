@@ -188,3 +188,12 @@ return Response.json({
 
 **Cause:** Part sizes not uniform or incorrect part number  
 **Solution:** Ensure uniform size except final part, verify part numbers start at 1
+
+## api.md / configuration.md から移設した注意点
+
+- **CORS は Workers API では設定できない。** S3 SDK の `PutBucketCorsCommand` か Dashboard で設定する。Workers binding だけの構成で CORS エラーが出たらここを疑う。
+- **Location hint と jurisdiction は別物。** `--location=wnam|enam|weur|eeur|apac|oc` はヒントに過ぎず、`--jurisdiction=eu`(または `fedramp`)を付けるとヒントより優先して配置が固定される。
+- **R2 API token は用途で分ける。** Workers 用は Object Read/Write、CORS・lifecycle 変更は Admin Read & Write。1 本の admin token を Worker に渡さない。
+- **Event notifications は `r2_buckets[].event_notifications` だけでは動かない。** 通知先 queue の `queues.producers` / `queues.consumers` も同じ `wrangler.jsonc` に必要。consumer が無いと通知は積まれたままになる。
+- **`wrangler r2 bucket delete` は空バケットでしか成功しない。** 先にオブジェクトを削除するか lifecycle で期限切れにする。
+- **`storageClass` は put 時に指定できるが、lifecycle は Standard → IA の一方向。** IA → Standard は S3 CopyObject で書き直す(上記 Storage Class Pitfalls 参照)。

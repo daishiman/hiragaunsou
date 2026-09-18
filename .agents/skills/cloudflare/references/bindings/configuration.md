@@ -1,170 +1,16 @@
-# Binding Configuration Reference
+# Bindings Configuration(索引)
 
-## Storage Bindings
+binding ごとの key 名は変わるため同梱しない。`cloudflare-docs` MCP で検索するか `node_modules/wrangler/config-schema.json` を読む。不通時は `https://developers.cloudflare.com/workers/wrangler/configuration/`。
 
-```jsonc
-{
-  "kv_namespaces": [{ "binding": "MY_KV", "id": "..." }],
-  "r2_buckets": [{ "binding": "MY_BUCKET", "bucket_name": "my-bucket" }],
-  "d1_databases": [{ "binding": "DB", "database_name": "my-db", "database_id": "..." }],
-  "durable_objects": { "bindings": [{ "name": "MY_DO", "class_name": "MyDO" }] },
-  "vectorize": [{ "binding": "VECTORIZE", "index_name": "my-index" }],
-  "queues": { "producers": [{ "binding": "MY_QUEUE", "queue": "my-queue" }] }
-}
-```
-
-**Create commands:**
-```bash
-pnpm wrangler kv namespace create MY_KV
-pnpm wrangler r2 bucket create my-bucket
-pnpm wrangler d1 create my-db
-pnpm wrangler vectorize create my-index --dimensions=768 --metric=cosine
-pnpm wrangler queues create my-queue
-
-# List existing resources
-pnpm wrangler kv namespace list
-pnpm wrangler r2 bucket list
-pnpm wrangler d1 list
-pnpm wrangler vectorize list
-pnpm wrangler queues list
-```
-
-## Compute Bindings
+最小 `wrangler.jsonc`(既定スタック分):
 
 ```jsonc
 {
-  "services": [{ 
-    "binding": "MY_SERVICE", 
-    "service": "other-worker",
-    "environment": "production"  // Optional: target specific env
-  }],
-  "ai": { "binding": "AI" },
-  "browser": { "binding": "BROWSER" },
-  "workflows": [{ "binding": "MY_WORKFLOW", "name": "my-workflow" }]
-}
-```
-
-**Create workflows:**
-```bash
-pnpm wrangler workflows create my-workflow
-```
-
-## Platform Bindings
-
-```jsonc
-{
-  "analytics_engine_datasets": [{ "binding": "ANALYTICS" }],
-  "mtls_certificates": [{ "binding": "MY_CERT", "certificate_id": "..." }],
-  "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "..." }],
-  "unsafe": {
-    "bindings": [{ "name": "RATE_LIMITER", "type": "ratelimit", "namespace_id": "..." }]
-  }
-}
-```
-
-## Configuration Bindings
-
-```jsonc
-{
-  "vars": {
-    "API_URL": "https://api.example.com",
-    "MAX_RETRIES": "3"
-  },
-  "text_blobs": { "MY_TEXT": "./data/template.html" },
-  "data_blobs": { "MY_DATA": "./data/config.bin" },
-  "wasm_modules": { "MY_WASM": "./build/module.wasm" }
-}
-```
-
-**Secrets (never in config):**
-```bash
-pnpm wrangler secret put API_KEY
-```
-
-## Environment-Specific Configuration
-
-```jsonc
-{
-  "name": "my-worker",
-  "vars": { "ENV": "production" },
-  "kv_namespaces": [{ "binding": "CACHE", "id": "prod-kv-id" }],
-  
-  "env": {
-    "staging": {
-      "vars": { "ENV": "staging" },
-      "kv_namespaces": [{ "binding": "CACHE", "id": "staging-kv-id" }]
-    }
-  }
-}
-```
-
-**Deploy:**
-```bash
-pnpm wrangler deploy              # Production
-pnpm wrangler deploy --env staging
-```
-
-## Local Development
-
-```jsonc
-{
-  "kv_namespaces": [{
-    "binding": "MY_KV",
-    "id": "prod-id",
-    "preview_id": "dev-id"  // Used in wrangler dev
-  }]
-}
-```
-
-**Or use remote:**
-```bash
-pnpm wrangler dev --remote  # Uses production bindings
-```
-
-## Complete Example
-
-```jsonc
-{
-  "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "my-app",
-  "main": "src/index.ts",
-  "compatibility_date": "2025-01-01",
-  
   "vars": { "API_URL": "https://api.example.com" },
-  "kv_namespaces": [{ "binding": "CACHE", "id": "abc123" }],
+  "kv_namespaces": [{ "binding": "CACHE", "id": "abc123", "preview_id": "dev-id" }],
   "r2_buckets": [{ "binding": "ASSETS", "bucket_name": "my-assets" }],
   "d1_databases": [{ "binding": "DB", "database_name": "my-db", "database_id": "xyz789" }],
   "services": [{ "binding": "AUTH", "service": "auth-worker" }],
-  "ai": { "binding": "AI" }
-}
-```
-
-## Binding-Specific Configuration
-
-### Durable Objects with Class Export
-
-```jsonc
-{
-  "durable_objects": {
-    "bindings": [
-      { "name": "COUNTER", "class_name": "Counter", "script_name": "my-worker" }
-    ]
-  }
-}
-```
-
-```typescript
-// In same Worker or script_name Worker
-export class Counter {
-  constructor(private state: DurableObjectState, private env: Env) {}
-  async fetch(request: Request) { /* ... */ }
-}
-```
-
-### Queue Consumers
-
-```jsonc
-{
   "queues": {
     "producers": [{ "binding": "MY_QUEUE", "queue": "my-queue" }],
     "consumers": [{ "queue": "my-queue", "max_batch_size": 10 }]
@@ -172,17 +18,12 @@ export class Counter {
 }
 ```
 
-Queue consumer handler: `export default { async queue(batch, env) { /* process batch.messages */ } }`
+| 設定項目・作業 | docs MCP の検索語 |
+|---|---|
+| storage bindings(KV / R2 / D1 / DO / Vectorize / Queues) | `wrangler configuration kv_namespaces` など製品名 + `binding` |
+| compute bindings(services / ai / browser / workflows) | `service bindings configuration` / `workers ai binding` |
+| platform bindings(analytics engine / mtls / hyperdrive / rate limiting) | `analytics_engine_datasets` / `mtls_certificates` / `hyperdrive binding` / `rate limiting binding` |
+| vars / secrets / text_blobs / data_blobs / wasm_modules | `wrangler configuration vars` / `wrangler secret put` |
+| `env` ごとの上書きと `preview_id` | `wrangler configuration environments` / `preview_id` |
 
-## Key Points
-
-- **64 binding limit** (all types combined)
-- **Secrets**: Always use `wrangler secret put`, never commit
-- **Types**: Run `pnpm wrangler types` after config changes
-- **Environments**: Use `env` field for staging/production variants
-- **Development**: Use `preview_id` or `--remote` flag
-- **IDs vs Names**: Some bindings use `id` (KV, D1), others use `name` (R2, Queues)
-
-## See Also
-
-- [Wrangler Configuration](https://developers.cloudflare.com/workers/wrangler/configuration/)
+resource の作成・一覧・型生成の CLI は `../../../wrangler/references/config.md` と各製品ファイル(`d1.md` / `kv-r2.md` / `queues-workflows-pipelines.md`)が正本。経験知は [gotchas.md](./gotchas.md) / [patterns.md](./patterns.md)。

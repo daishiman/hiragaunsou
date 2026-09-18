@@ -1,3 +1,5 @@
+> 本ファイルは cloudflare/skills（Apache-2.0）を基に改変しています。詳細は リポジトリルートの ATTRIBUTION.md を参照。
+
 # Hugo
 
 For Hugo static sites. The widget renders on any page that includes the partial; siteverify happens at whatever backend handles your form submissions (a Cloudflare Pages Function, a Worker, an external API, or a form host with a server-side hook).

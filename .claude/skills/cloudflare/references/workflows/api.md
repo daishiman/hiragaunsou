@@ -1,218 +1,30 @@
-# Workflow APIs
+# Workflows API(索引)
 
-## Step APIs
+API シグネチャは変わるため同梱しない。`cloudflare-docs` MCP で下表の語を検索して最新を取得する。不通時は `https://developers.cloudflare.com/workflows/`(Workers API: `/workflows/build/workers-api/`)。
 
-```typescript
-// step.do()
-const result = await step.do('step name', async () => { /* logic */ });
-const result = await step.do('step name', { retries, timeout }, async () => {});
+| やりたいこと | docs MCP の検索語 |
+|---|---|
+| step を定義する(`do` / retry / timeout) | `workflows step.do retries timeout` |
+| 待機・スケジュール(`sleep` / `sleepUntil`) | `workflows step.sleep sleepUntil` |
+| 外部イベント・承認を待つ | `workflows waitForEvent sendEvent` |
+| retry 回数に応じた分岐(`WorkflowStepContext`) | `workflows WorkflowStepContext attempt` |
+| instance の作成・状態・pause/resume/terminate | `workflows create createBatch status instance` |
+| Worker / Queue / Cron / 別 Workflow から起動する | `workflows trigger workflow from worker queue cron` |
+| retry を止めるエラー | `workflows NonRetryableError` |
+| params / 戻り値の型制約 | `workflows Rpc.Serializable step return` |
+| REST API で instance を作成・監視 | `workflows REST API instances` |
 
-// step.sleep()
-await step.sleep('description', '1 hour');
-await step.sleep('description', 5000); // ms
-
-// step.sleepUntil()
-await step.sleepUntil('description', Date.parse('2024-12-31'));
-
-// step.waitForEvent()
-const data = await step.waitForEvent<PayloadType>('wait', {type: 'webhook-type', timeout: '24h'});
-try { const event = await step.waitForEvent('wait', { type: 'approval', timeout: '1h' }); } catch (e) { /* Timeout */ }
-```
-
-## WorkflowStepContext
-
-The `WorkflowStepContext` is passed as the first argument to the `step.do()` callback. It provides runtime information about the current step execution.
+最小例:
 
 ```typescript
-type WorkflowStepContext = {
-  step: {
-    name: string;   // Step name as passed to step.do()
-    count: number;  // How many times step.do() called with this name in current run (1-indexed)
-  };
-  attempt: number;  // Current attempt number (1-indexed): 1 = first try, 2 = first retry, etc.
-  config: WorkflowStepConfig; // Resolved config for this step, including runtime defaults
-};
-```
-
-**Use cases:**
-```typescript
-// Adjust behavior based on retry attempt
-await step.do('call api', { retries: { limit: 3, delay: '5 seconds', backoff: 'exponential' } }, async (ctx) => {
-  if (ctx.attempt > 1) console.log(`Retry attempt ${ctx.attempt} for step "${ctx.step.name}"`);
-  const res = await fetch('https://api.example.com/data');
-  if (!res.ok) throw new Error(`API failed (attempt ${ctx.attempt})`);
-  return res.json();
-});
-
-```
-
-## Instance Management
-
-```typescript
-// Create single
-const instance = await env.MY_WORKFLOW.create({id: crypto.randomUUID(), params: { userId: 'user123' }}); // id optional, auto-generated if omitted; throws if ID already exists within retention period
-
-// Create with custom retention (check docs for default per plan)
-const instance = await env.MY_WORKFLOW.create({
-  id: crypto.randomUUID(),
-  params: { userId: 'user123' },
-  retention: '30 days'  // Override default retention period
-});
-
-// Batch (max 100, idempotent: skips existing IDs)
-const instances = await env.MY_WORKFLOW.createBatch([{id: 'user1', params: {name: 'John'}}, {id: 'user2', params: {name: 'Jane'}}]);
-
-// Get & Status
-const instance = await env.MY_WORKFLOW.get('instance-id');
-const status = await instance.status(); // {status: 'queued' | 'running' | 'paused' | 'errored' | 'terminated' | 'complete' | 'waiting' | 'waitingForPause' | 'unknown', error?, output?}
-
-// Control
-await instance.pause(); await instance.resume(); await instance.terminate(); await instance.restart();
-
-// Send Events
-await instance.sendEvent({type: 'approval', payload: { approved: true }}); // Must match waitForEvent type
-```
-
-## Triggering Workflows
-
-```typescript
-// From Worker
-export default { async fetch(req, env) { const instance = await env.MY_WORKFLOW.create({id: crypto.randomUUID(), params: { userId: 'user123' }}); return Response.json({ id: instance.id }); }};
-
-// From Queue
-export default { async queue(batch, env) { for (const msg of batch.messages) { await env.MY_WORKFLOW.create({id: `job-${msg.id}`, params: msg.body}); } }};
-
-// From Cron
-export default { async scheduled(event, env) { await env.CLEANUP_WORKFLOW.create({id: `cleanup-${Date.now()}`, params: { timestamp: event.scheduledTime }}); }};
-
-// From Another Workflow (non-blocking)
-export class ParentWorkflow extends WorkflowEntrypoint<Env, Params> {
-  async run(event, step) {
-    const child = await step.do('start child', async () => await this.env.CHILD_WORKFLOW.create({id: `child-${event.instanceId}`, params: {}}));
+export class MyWorkflow extends WorkflowEntrypoint<Env, Params> {
+  async run(event: WorkflowEvent<Params>, step: WorkflowStep) {
+    const user = await step.do('fetch user', async () =>
+      this.env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(event.payload.userId).first());
+    await step.sleep('wait 7 days', '7 days');
+    await step.do('send reminder', async () => sendEmail(user.email, 'Reminder!'));
   }
 }
 ```
 
-## Error Handling
-
-```typescript
-import { NonRetryableError } from 'cloudflare:workflows';
-
-// NonRetryableError
-await step.do('validate', async () => {
-  if (!event.payload.paymentMethod) throw new NonRetryableError('Payment method required');
-  const res = await fetch('https://api.example.com/charge', { method: 'POST' });
-  if (res.status === 401) throw new NonRetryableError('Invalid credentials'); // Don't retry
-  if (!res.ok) throw new Error('Retryable failure'); // Will retry
-  return res.json();
-});
-
-// Catching Errors
-try { await step.do('risky op', async () => { throw new NonRetryableError('Failed'); }); } catch (e) { await step.do('cleanup', async () => {}); }
-
-// Idempotency
-await step.do('charge', async () => {
-  const sub = await fetch(`https://api/subscriptions/${id}`).then(r => r.json());
-  if (sub.charged) return sub; // Already done
-  return await fetch(`https://api/subscriptions/${id}`, {method: 'POST', body: JSON.stringify({ amount: 10.0 })}).then(r => r.json());
-});
-```
-
-## Type Constraints
-
-Params and step returns must be `Rpc.Serializable<T>`:
-
-```typescript
-// ✅ Valid types
-type ValidParams = {
-  userId: string;
-  count: number;
-  tags: string[];
-  metadata: Record<string, unknown>;
-};
-
-// ❌ Invalid types
-type InvalidParams = {
-  callback: () => void;      // Functions not serializable
-  symbol: symbol;            // Symbols not serializable
-  circular: any;             // Circular references not allowed
-};
-
-// Step returns follow same rules
-const result = await step.do('fetch', async () => {
-  return { userId: '123', data: [1, 2, 3] }; // ✅ Plain object
-});
-
-// ✅ ReadableStream<Uint8Array> for large binary output (bypasses non-stream step result size limit)
-const stream = await step.do('read from R2', async () => {
-  const obj = await this.env.BUCKET.get('large-file.csv');
-  return obj.body; // Return the ReadableStream directly
-});
-```
-
-## Sleep & Scheduling
-
-```typescript
-// Relative
-await step.sleep('wait 1 hour', '1 hour');
-await step.sleep('wait 30 days', '30 days');
-await step.sleep('wait 5s', 5000); // ms
-
-// Absolute
-await step.sleepUntil('launch date', Date.parse('24 Oct 2024 13:00:00 UTC'));
-await step.sleepUntil('deadline', new Date('2024-12-31T23:59:59Z'));
-```
-
-Units: second, minute, hour, day, week, month, year.
-Sleeping instances don't count toward concurrency.
-
-## Parameters
-
-**Pass from Worker:**
-```typescript
-const instance = await env.MY_WORKFLOW.create({
-  id: crypto.randomUUID(),
-  params: { userId: 'user123', email: 'user@example.com' }
-});
-```
-
-**Access in Workflow:**
-```typescript
-async run(event: WorkflowEvent<Params>, step: WorkflowStep) {
-  const userId = event.payload.userId;
-  const instanceId = event.instanceId;
-  const createdAt = event.timestamp;
-}
-```
-
-**CLI Trigger:**
-```bash
-pnpm wrangler workflows trigger my-workflow '{"userId":"user123"}'
-```
-
-## Wrangler CLI
-
-```bash
-pnpm create cloudflare@latest my-workflow -- --template "cloudflare/workflows-starter"
-pnpm wrangler deploy
-pnpm wrangler workflows list
-pnpm wrangler workflows trigger my-workflow '{"userId":"user123"}'
-pnpm wrangler workflows instances list my-workflow
-pnpm wrangler workflows instances describe my-workflow instance-id
-pnpm wrangler workflows instances pause/resume/terminate my-workflow instance-id
-```
-
-## REST API
-
-```bash
-# Create
-curl -X POST "https://api.cloudflare.com/client/v4/accounts/{account_id}/workflows/{workflow_name}/instances" -H "Authorization: Bearer {token}" -d '{"id":"custom-id","params":{"userId":"user123"}}'
-
-# Status
-curl "https://api.cloudflare.com/client/v4/accounts/{account_id}/workflows/{workflow_name}/instances/{instance_id}/status" -H "Authorization: Bearer {token}"
-
-# Send Event
-curl -X POST "https://api.cloudflare.com/client/v4/accounts/{account_id}/workflows/{workflow_name}/instances/{instance_id}/events" -H "Authorization: Bearer {token}" -d '{"type":"approval","payload":{"approved":true}}'
-```
-
-See: [configuration.md](./configuration.md), [patterns.md](./patterns.md)
+経験知は [gotchas.md](./gotchas.md) / [patterns.md](./patterns.md)。設定は [configuration.md](./configuration.md)。

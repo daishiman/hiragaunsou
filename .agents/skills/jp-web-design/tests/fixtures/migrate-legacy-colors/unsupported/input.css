@@ -1,0 +1,2 @@
+.sample { color: rgb(16 0 91); background: #10005Bcc; }
+@media (prefers-color-scheme: dark) { .sample { color: white; } }

@@ -204,3 +204,11 @@ await env.QUEUE.send({
 | Operations per message | 3 (write + read + delete) | Base cost per message |
 | Pricing | $0.40 per 1M operations | After 1M free operations |
 | Message charging | Per 64 KB chunk | Messages charged in 64 KB increments |
+
+## api.md / configuration.md から移設した注意点
+
+- **ack / retry の優先順位。** 同じ message に `msg.ack()` と `msg.retry()` を両方呼ぶと**最後の呼び出しが勝つ**。`batch.ackAll()` / `batch.retryAll()` は個別に ack/retry していない message にだけ効き、個別呼び出しを上書きしない。何も呼ばなかった message は設定された遅延で自動 retry される。
+- **consumer 内の副作用は `ctx.waitUntil()` に逃がす。** 分析イベント送信など ack を待たせたくない処理は `ctx.waitUntil(env.OTHER_QUEUE.send(...))` にし、本処理の try/catch と `msg.ack()` を遅らせない。
+- **contentType 未指定時の自動選択。** JSON 化できる値は `json`、Date/Map/Set などを含む値は `v8` が自動選択される。意図せず `v8` になると pull consumer と Dashboard で読めなくなるため、可視性が要る場合は `json` を明示する。
+- **pull consumer(`type: "http_pull"`)は Worker を持たない。** `visibility_timeout_ms` 内に REST の `/messages/ack` で `lease_id` を返さないと再配信される。
+- **`sendBatch` は 100 件または 256 KB のどちらか先に達した方で止まる。** 大きな message を束ねるときは件数ではなくサイズで分割する。

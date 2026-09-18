@@ -3,6 +3,8 @@ name: turnstile-spin
 description: Cloudflare Turnstileをprojectへend-to-endで導入する。codebaseを調査し、Cloudflare APIでwidgetを作成し、適切なformへ埋め込み、既存backendへ正式なserver-side siteverifyを接続して検証する。Turnstile追加、CAPTCHA設定、botからのform保護、Turnstile連携修正を依頼されたときに使用する。developers.cloudflare.com/turnstile/spinの中核手順へAIDD固有の安全規則を重ねたSkill。
 ---
 
+> 本ファイルは cloudflare/skills（Apache-2.0）を基に改変しています。詳細は リポジトリルートの ATTRIBUTION.md を参照。
+
 # Turnstile Spin
 
 「Turnstileを設定して」という依頼を、動作するend-to-end連携へ変える。成果物はwidget、選定した全挿入箇所のfrontend、既存backendでの正式なserver-side siteverify、成功報告前の実検証である。

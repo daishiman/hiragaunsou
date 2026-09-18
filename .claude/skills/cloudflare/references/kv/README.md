@@ -1,89 +1,25 @@
-# Cloudflare Workers KV
+# KV(索引)
 
-Globally-distributed, eventually-consistent key-value store optimized for high read volume and low latency.
+グローバル分散・結果整合(≤60 秒で伝播)の key-value ストア。**キット既定の session / cache 置き場**(`mvp-first-development` §3)。読み取り多・書き込み少に最適化され、key あたり 1 write/秒。強整合が要るなら `durable-objects` Skill、SQL なら [D1](../d1/)、ファイルなら [R2](../r2/)。
 
-## Overview
+## 最新仕様の取得(第一手段)
 
-KV provides:
-- Eventual consistency (60s global propagation)
-- Read-optimized performance
-- 25 MiB value limit per key
-- Auto-replication to Cloudflare edge
-- Metadata support (1024 bytes)
+- `cloudflare-docs` MCP で検索: `kv`、`kv get put api`、`kv wrangler configuration`、`kv limits` / `kv pricing`(制限値・料金は陳腐化するため同梱しない)
+- MCP 不通時: `https://developers.cloudflare.com/kv/`
 
-**Use cases:** Config storage, user sessions, feature flags, caching, A/B testing
+## 同梱ファイル
 
-## When to Use KV
+| ファイル | 用途 | docs MCP で代替可か |
+|---|---|---|
+| [configuration.md](./configuration.md) | `wrangler.jsonc` 最小 binding と設定項目の検索語 | 可(索引のみ同梱) |
+| [api.md](./api.md) | 主要 API の検索語と get/put の最小例 | 可(索引のみ同梱) |
+| [patterns.md](./patterns.md) | 多段 cache、API response cache、session、prefix 設計、metadata versioning | 不可(経験知。温存) |
+| [gotchas.md](./gotchas.md) | 書き込み直後の stale read、負の cache、429、null 処理、上限の読み方 | 不可(経験知。温存) |
 
-| Need | Recommendation |
-|------|----------------|
-| Strong consistency | → [Durable Objects](../durable-objects/) |
-| SQL queries | → [D1](../d1/) |
-| Object storage (files) | → [R2](../r2/) |
-| High read, low write volume | → KV ✅ |
-| Sub-10ms global reads | → KV ✅ |
+## wrangler コマンド
 
-**Quick comparison:**
+namespace 作成・key / bulk 操作は `../../../wrangler/references/kv-r2.md` が正本。
 
-| Feature | KV | D1 | Durable Objects |
-|---------|----|----|-----------------|
-| Consistency | Eventual | Strong | Strong |
-| Read latency | <10ms | ~50ms | <1ms |
-| Write limit | 1/s per key | Unlimited | Unlimited |
-| Use case | Config, cache | Relational data | Coordination |
+## 関連
 
-## Quick Start
-
-```bash
-wrangler kv namespace create MY_NAMESPACE
-# Add binding to wrangler.jsonc
-```
-
-```typescript
-// Write
-await env.MY_KV.put("key", "value", { expirationTtl: 300 });
-
-// Read
-const value = await env.MY_KV.get("key");
-const json = await env.MY_KV.get<Config>("config", "json");
-```
-
-## Core Operations
-
-| Method | Purpose | Returns |
-|--------|---------|---------|
-| `get(key, type?)` | Single read | `string \| null` |
-| `get(keys, type?)` | Bulk read (≤100) | `Map<string, T \| null>` |
-| `put(key, value, options?)` | Write | `Promise<void>` |
-| `delete(key)` | Delete | `Promise<void>` |
-| `list(options?)` | List keys | `{ keys, list_complete, cursor? }` |
-| `getWithMetadata(key)` | Get + metadata | `{ value, metadata }` |
-
-## Consistency Model
-
-- **Write visibility:** Immediate in same location, ≤60s globally
-- **Read path:** Eventually consistent
-- **Write rate:** 1 write/second per key (429 on exceed)
-
-## Reading Order
-
-| Task | Files to Read |
-|------|---------------|
-| Quick start | README → configuration.md |
-| Implement feature | README → api.md → patterns.md |
-| Debug issues | gotchas.md → api.md |
-| Batch operations | api.md (bulk section) → patterns.md |
-| Performance tuning | gotchas.md (performance) → patterns.md (caching) |
-
-## In This Reference
-
-- [configuration.md](./configuration.md) - wrangler.jsonc setup, namespace creation, TypeScript types
-- [api.md](./api.md) - KV methods, bulk operations, cacheTtl, content types
-- [patterns.md](./patterns.md) - Caching, sessions, rate limiting, A/B testing
-- [gotchas.md](./gotchas.md) - Eventual consistency, concurrent writes, value limits
-
-## See Also
-
-- [workers](../workers/) - Worker runtime for KV access
-- [d1](../d1/) - Use D1 for strong consistency needs
-- [durable-objects](../durable-objects/) - Strongly consistent alternative
+- [workers](../workers/) - KV にアクセスする Worker runtime / [d1](../d1/) - 強整合・リレーショナルが要るとき

@@ -44,7 +44,7 @@
     color var(--motion-fast) var(--ease-standard),
     transform var(--motion-instant) var(--ease-standard);
 }
-.interactive:hover { border-color: var(--border-strong); }
+.interactive:hover { border-color: var(--border-control); }
 .interactive:active { transform: scale(.985); }
 
 @keyframes enter-soft {
@@ -85,10 +85,10 @@
 ## 3. hoverと状態の設計
 
 - **ボタン**: hoverで同色相の明度、pressedでscale、loadingで幅を維持したまま文言 + 進捗表示。二度押しを防ぐ。
-- **カード/行**: クリック可能な場合だけhoverで`border-strong`またはsurface変化。押せないカードへhover・pointerを付けない。
+- **カード/行**: クリック可能な場合だけhoverで`border-control`またはsurface変化。押せないカードへhover・pointerを付けない。
 - **リンク/ナビ**: textまたはsurface変化に加えて太さ・border・`aria-current`を使う。色だけに頼らない。
 - **入力**: hoverはborder、focusはoutline、errorはdanger border + 直し方。hoverをfocusより強くしない。
-- **状態バッジ**: 状態変化時に1回だけsurface/borderを変える。連続点滅させない。処理中だけaccent + 文言 + 必要なら穏やかなpulse。
+- **状態バッジ**: 状態変化時に1回だけsurface/borderを変える。連続点滅させない。処理中は `--status-info-*` + 文言 + 必要なら穏やかなpulse。
 - **ドラッグ**: 掴める形、grab/grabbing、移動先のプレースホルダーを同時に示す。hoverだけに隠さない。
 
 タッチ端末にはhoverがない。重要操作・説明・状態をhoverだけに置かず、`@media (hover: hover) and (pointer: fine)` の中だけでhover固有効果を有効にする。
@@ -113,28 +113,23 @@
   }
 }
 
-@media (prefers-contrast: more) {
-  :root, html[data-theme] {
-    --border: var(--border-strong);
-    --text-muted: var(--text);
-  }
-}
-
 @media (forced-colors: active) {
   :where(a, button, input, select, textarea, summary):focus-visible {
-    outline: 2px solid CanvasText;
+    outline: 3px solid CanvasText;
   }
 }
 ```
 
 reduced-motionでも状態変化そのものは消さない。animationを止めた状態で、文言・アイコン・border・DOM順だけで同じ意味が伝わることを確認する。
 
+`prefers-contrast: more` の役割トークン上書きは `assets/hiraga/hiraga-color-system.css` が唯一の正本。ここやアプリ側へ値を複製せず、正本CSSをそのまま読み込む。
+
 ## 6. アクセシビリティ
 
-- `:focus-visible` は2px outline + 2px offset、即時表示。
+- `:focus-visible` は `--focus-ring`(マゼンタ)の3px outline + 3px offset + `--focus-gap`(白)の隙間、即時表示。紺地のナビ内では `--focus-ring-inverse`。
 - タップ領域44×44px以上。SPでは主要CTAを原則全幅にする。
 - 状態を色だけで伝えない。文言、border、アイコン、位置のうち少なくとも1つを併用する。
-- Light/Darkの本文・muted・状態色・focusをaxe等で機械検査する。Dark warningは個別に確認する。
+- `node scripts/check-hiraga-contrast.mjs` でトークンの組を検査し、画面はaxe等で本文・状態色・focusを機械検査する(ライトのみ)。
 - スクリーンリーダーのlive regionは必要な結果だけを短く読み上げる。アニメーションの途中経過を連続通知しない。
 - キーボードでpopover / modal / accordion / tabbarを操作し、フォーカスが見え、閉じた要素へ入らず、固定要素の下へ隠れないことを実測する。
 
@@ -146,4 +141,4 @@ reduced-motionでも状態変化そのものは消さない。animationを止め
 - [ ] hoverでレイアウトが動かず、タッチでも重要情報へ到達できる。
 - [ ] modal・popover・accordion・toastを実操作し、開閉・ESC・フォーカス復帰を確認した。
 - [ ] reduced-motionで装飾動作が止まり、意味と操作が残る。
-- [ ] Light/Dark/contrast/keyboard/screen readerを確認した。
+- [ ] contrast/forced-colors/print/keyboard/screen readerを確認した。

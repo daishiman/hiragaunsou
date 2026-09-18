@@ -3,20 +3,21 @@ name: workers-best-practices
 description: Cloudflare Workersのコードを本番運用品質のベストプラクティスに照らして作成・レビューする。新しいWorkerの実装、Workerコードのレビュー、wrangler.jsoncの設定、streaming・floating promises・global state・secrets・bindings・observabilityなどのanti-pattern確認で使用する。事前学習の記憶よりCloudflare公式ドキュメントからの取得を優先する。
 ---
 
+> 本ファイルは cloudflare/skills（Apache-2.0）を基に改変しています。詳細は リポジトリルートの ATTRIBUTION.md を参照。
+
 # Cloudflare Workers ベストプラクティス
 
 Cloudflare WorkersのAPI、型、設定は更新される可能性がある。Workersコードの作成・レビューでは、**事前学習の記憶ではなく最新資料の取得を優先する**。
 
-## 最新情報の取得元
+## 最新情報の取得先
 
-Workersコードを書く・レビューする前に最新版を取得する。API signature、設定field、binding形状を、このSkillに埋め込まれた知識だけで決めない。
+Workersコードを書く・レビューする前に最新版を取得する。API signature、設定field、binding形状を、このSkillに埋め込まれた知識だけで決めない。正本は [`cloudflare` Skill の「最新情報の取得先」](../cloudflare/SKILL.md#最新情報の取得先)(docs MCP 第一手段、不通時の復旧、workers-types / config-schema の取得方法)。ここには本Skill固有の取得先だけを書く。
 
-| 取得元 | 取得方法 | 用途 |
-|--------|----------|------|
-| Workers best practices | `https://developers.cloudflare.com/workers/best-practices/workers-best-practices/`を取得 | 正式なrules、patterns、anti-patterns |
-| Workers types | `references/review.md`の取得手順を参照 | API signatures、handler types、binding types |
-| Wrangler config schema | `node_modules/wrangler/config-schema.json` | 設定fields、binding形状、許可値 |
-| Cloudflare docs | 検索toolまたは`https://developers.cloudflare.com/workers/` | API reference、compatibility dates/flags |
+| 取得先 | 取得方法 | 使う場面 |
+|--------|----------|---------|
+| **Cloudflare docs (MCP)** | `cloudflare-docs` MCPで `workers best practices` / API名を検索 | **既定の第一手段**。rules、API reference、compatibility dates/flags |
+| Workers best practices (Web) | `https://developers.cloudflare.com/workers/best-practices/workers-best-practices/` | MCP不通時。正式なrules、patterns、anti-patterns |
+| Workers types の検証手順 | `references/review.md` | 取得した型でbinding access・handler signatureを照合する手順 |
 
 ## 最初に最新referenceを取得する
 

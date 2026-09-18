@@ -1,17 +1,17 @@
 <!DOCTYPE html>
-<html lang="ja" data-mode="pop" data-theme="light">
+<html lang="ja" data-mode="pop">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
-<title>物件提案デスク Pop — モードB モデルケース</title>
+<title>物件提案デスク</title>
 <link rel="stylesheet" href="styles.css">
 <style>
 /* ============================================================
    モードB「Pop・親しみ」 — jp-web-design §15(Nani実測ディテール反映版)
    ============================================================ */
 :root[data-mode="pop"] {
-  --pop-primary: #43a4f5;        /* ブライト: CTA・トグルON・強調 */
+  --pop-primary: #43a4f5;        /* ブライト: CTA・選択・強調 */
   --pop-primary-pastel: #8ecdf8; /* パステル: マスコット・面 */
   --pop-primary-soft: #d9edfe;   /* 選択状態・チップ・CTAリング */
   --pop-primary-deep: #2273b8;   /* 文字・リンク・アイコン */
@@ -29,7 +29,11 @@ html[data-mode="pop"] body {
 .pop-header {
   max-width: 720px;
   margin: 16px auto 0;
-  background: #fff;
+  background: var(--glass-fill-strong) padding-box, var(--glass-specular-rim) border-box;
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  border: 1px solid transparent;
+  box-shadow: var(--glass-shadow-sm);
   border-radius: 20px;
   display: flex;
   align-items: center;
@@ -37,53 +41,41 @@ html[data-mode="pop"] body {
   padding: 10px 16px;
   gap: 12px;
 }
-.pop-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
-.pop-logo .name { font-weight: 700; font-size: 16px; }
+.pop-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text-primary); }
+.pop-logo .name { font-weight: 700; font-size: var(--font-size-app); }
 
 /* マスコット: assets/pop-mascot-editable.svg の再着色版
    縁あり=ヒーロー用 / 縁なし=ヘッダー・フッター用(jp-web-design §15-4) */
 .mascot-img { display: block; flex: none; }
 
 .pill-ghost {
-  border: none;
-  background: var(--subtle);
-  color: var(--ink);
+  border: 1px solid transparent;
+  background: var(--glass-fill-strong) padding-box, var(--glass-specular-rim) border-box;
+  box-shadow: var(--glass-control-shadow);
+  color: var(--text-primary);
   font: inherit;
   font-weight: 700;
-  font-size: 14px;
+  font-size: var(--font-size-control);
   padding: 8px 16px;
   border-radius: var(--pop-control-radius);
   cursor: pointer;
 }
-.pill-ghost:hover { background: #e9edf2; }
+.pill-ghost:hover { background: linear-gradient(#e9edf2, #e9edf2) padding-box, var(--glass-specular-rim-hover) border-box; box-shadow: var(--glass-control-shadow-hover); }
+.pill-ghost:active { background: var(--glass-fill-strong) padding-box, var(--glass-specular-rim-pressed) border-box; box-shadow: var(--glass-control-shadow-pressed); }
 
 main.pop { max-width: 720px; margin: 0 auto; padding: 36px 20px 0; }
 
 /* ヒーロー: 黒太字+わずかな傾き */
 .pop-hero { text-align: center; margin-bottom: 8px; display: grid; justify-items: center; gap: 12px; }
 .pop-hero h1 {
-  font-size: 30px;
+  font-size: clamp(28px, 6vw, 40px);
   font-weight: 700;
   margin: 0;
   letter-spacing: 0.01em;
   text-wrap: balance;
   transform: rotate(-1.2deg);
 }
-.pop-hero p { margin: 0; color: var(--ink-muted); font-size: 15px; }
 @media (prefers-reduced-motion: reduce) { .pop-hero h1 { transform: none; } }
-
-/* 手書き風注釈: くるっとループ矢印+全体を少し傾ける */
-.hand-note {
-  color: var(--pop-primary-deep);
-  font-weight: 700;
-  font-size: 14px;
-  margin: 18px 0 2px;
-  text-align: center;
-  transform: rotate(-1.5deg);
-  display: grid;
-  justify-items: center;
-  gap: 0;
-}
 
 /* カード */
 .pop-card {
@@ -96,9 +88,9 @@ main.pop { max-width: 720px; margin: 0 auto; padding: 36px 20px 0; }
 
 /* セクション見出し: 波線の下線 */
 .section-label {
-  font-size: 15px;
+  font-size: var(--font-size-section);
   font-weight: 700;
-  color: var(--ink);
+  color: var(--text-primary);
   margin: 0 0 14px;
 }
 .section-label .squiggle {
@@ -108,7 +100,7 @@ main.pop { max-width: 720px; margin: 0 auto; padding: 36px 20px 0; }
   text-decoration-thickness: 2px;
   text-underline-offset: 7px;
 }
-.section-label .count { font-weight: 700; color: var(--ink-muted); font-size: 13px; margin-left: 8px; }
+.section-label .count { font-weight: 700; color: var(--text-secondary); font-size: var(--font-size-label); margin-left: 8px; }
 
 /* 行 */
 .pop-row {
@@ -116,7 +108,7 @@ main.pop { max-width: 720px; margin: 0 auto; padding: 36px 20px 0; }
   align-items: center;
   gap: 12px;
   padding: 12px 4px;
-  border-bottom: 1px solid var(--subtle);
+  border-bottom: 1px solid var(--surface-alt);
 }
 .pop-row:last-of-type { border-bottom: none; }
 
@@ -150,8 +142,8 @@ main.pop { max-width: 720px; margin: 0 auto; padding: 36px 20px 0; }
 }
 @media (prefers-reduced-motion: reduce) { .pop-row input[type="checkbox"] { transition: none; } }
 .pop-row .pr-main { flex: 1; min-width: 0; }
-.pop-row .pr-title { font-weight: 700; font-size: 15px; }
-.pop-row .pr-sub { font-size: 13px; color: var(--ink-muted); }
+.pop-row .pr-title { font-weight: 700; font-size: var(--font-size-body); }
+.pop-row .pr-sub { font-size: var(--font-size-body); color: var(--text-secondary); }
 .pop-row .pr-price {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
@@ -163,8 +155,11 @@ main.pop { max-width: 720px; margin: 0 auto; padding: 36px 20px 0; }
 
 /* 主要CTA: ブライト+白太字+淡色リング(Nani踏襲) */
 .pop-cta {
-  border: none;
-  background: var(--pop-primary);
+  border: 1px solid transparent;
+  background-color: var(--pop-primary);
+  background-image: var(--glass-sheen), var(--glass-specular-rim);
+  background-origin: padding-box, border-box;
+  background-clip: padding-box, border-box;
   color: #fff;
   font: inherit;
   font-weight: 700;
@@ -174,11 +169,11 @@ main.pop { max-width: 720px; margin: 0 auto; padding: 36px 20px 0; }
   cursor: pointer;
   width: 100%;
   margin-top: 18px;
-  box-shadow: 0 0 0 5px var(--pop-primary-soft);
-  transition: transform 100ms, background 100ms;
+  box-shadow: var(--glass-control-shadow);
+  transition: transform 100ms, background-color 100ms, box-shadow 100ms;
 }
-.pop-cta:hover { background: #2f96ec; transform: scale(1.02); }
-.pop-cta:active { transform: scale(0.98); }
+.pop-cta:hover { background-color: #2f96ec; background-image: var(--glass-sheen-soft), var(--glass-specular-rim-hover); box-shadow: var(--glass-control-shadow-hover); }
+.pop-cta:active { background-image: var(--glass-sheen-pressed), var(--glass-specular-rim-pressed); box-shadow: var(--glass-control-shadow-pressed); transform: scale(0.985); }
 @media (prefers-reduced-motion: reduce) { .pop-cta, .pop-cta:hover, .pop-cta:active { transform: none; transition: none; } }
 
 .cta-row { display: flex; align-items: center; gap: 14px; margin-top: 6px; }
@@ -186,12 +181,13 @@ main.pop { max-width: 720px; margin: 0 auto; padding: 36px 20px 0; }
 
 /* 調整ボタン: プライマリの枠線で際立たせる(どこで調整できるか迷わせない) */
 .tune-btn {
-  border: 2px solid var(--pop-primary);
-  background: #fff;
+  border: 1px solid transparent;
+  background: var(--glass-fill-strong) padding-box, var(--glass-specular-rim) border-box;
+  box-shadow: var(--glass-control-shadow);
   color: var(--pop-primary-deep);
   font: inherit;
   font-weight: 700;
-  font-size: 14px;
+  font-size: var(--font-size-control);
   padding: 10px 14px;
   border-radius: 14px;
   cursor: pointer;
@@ -201,20 +197,20 @@ main.pop { max-width: 720px; margin: 0 auto; padding: 36px 20px 0; }
   flex: none;
   margin-top: 12px;
 }
-.tune-btn:hover { background: var(--pop-primary-soft); }
-.tune-btn[aria-expanded="true"] { background: var(--pop-primary-soft); }
+.tune-btn:hover { background: linear-gradient(var(--pop-primary-soft), var(--pop-primary-soft)) padding-box, var(--glass-specular-rim-hover) border-box; box-shadow: var(--glass-control-shadow-hover); }
+.tune-btn:active { background: var(--glass-fill-strong) padding-box, var(--glass-specular-rim-pressed) border-box; box-shadow: var(--glass-control-shadow-pressed); }
+.tune-btn[aria-expanded="true"] { background: var(--pop-primary-soft); border-color: var(--pop-primary); }
 
-.pop-cta-note { display: flex; justify-content: center; margin-top: 12px; }
-
-/* 設定パネル: セグメント切替+トグルスイッチ */
-.settings-panel { margin-top: 16px; border-top: 1px solid var(--subtle); padding-top: 16px; display: grid; gap: 18px; }
+/* 設定パネル: セグメント切替 */
+.settings-panel { margin-top: 16px; border-top: 1px solid var(--surface-alt); padding-top: 16px; display: grid; gap: 18px; }
 .setting-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.setting-item .s-label { font-weight: 700; font-size: 15px; }
-.setting-item .s-sub { font-size: 13px; color: var(--ink-muted); font-weight: 400; }
+.setting-item .s-label { font-weight: 700; font-size: var(--font-size-label); }
 
 .segmented {
   display: inline-flex;
-  background: var(--subtle);
+  background: var(--glass-fill-strong) padding-box, var(--glass-specular-rim) border-box;
+  border: 1px solid transparent;
+  box-shadow: var(--glass-control-shadow);
   border-radius: 999px;
   padding: 4px;
   gap: 2px;
@@ -224,62 +220,37 @@ main.pop { max-width: 720px; margin: 0 auto; padding: 36px 20px 0; }
   background: transparent;
   font: inherit;
   font-weight: 700;
-  font-size: 14px;
-  color: var(--ink-muted);
+  font-size: var(--font-size-control);
+  color: var(--text-secondary);
   padding: 8px 18px;
   border-radius: 999px;
   cursor: pointer;
 }
 .segmented button[aria-pressed="true"] {
   background: #fff;
-  color: var(--ink);
+  color: var(--text-primary);
   box-shadow: 0 1px 3px rgba(22, 25, 29, .08);
 }
-
-.switch {
-  width: 48px;
-  height: 28px;
-  border-radius: 999px;
-  border: none;
-  background: #d6dde4;
-  position: relative;
-  cursor: pointer;
-  flex: none;
-  transition: background 150ms;
-}
-.switch::after {
-  content: "";
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: #fff;
-  top: 3px;
-  left: 3px;
-  transition: left 150ms;
-  box-shadow: 0 1px 3px rgba(22, 25, 29, .2);
-}
-.switch[aria-checked="true"] { background: var(--pop-primary); }
-.switch[aria-checked="true"]::after { left: 23px; }
-@media (prefers-reduced-motion: reduce) { .switch, .switch::after { transition: none; } }
 
 /* チップ */
 .pop-chips { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 @media (min-width: 640px) { .pop-chips { grid-template-columns: repeat(4, 1fr); } }
 .pop-chip {
-  border: none;
-  background: var(--subtle);
-  color: var(--ink);
+  border: 1px solid transparent;
+  background: var(--glass-fill-strong) padding-box, var(--glass-specular-rim) border-box;
+  box-shadow: var(--glass-control-shadow);
+  color: var(--text-primary);
   font: inherit;
   font-weight: 700;
-  font-size: 14px;
+  font-size: var(--font-size-control);
   padding: 12px 8px;
   border-radius: var(--pop-control-radius);
   cursor: pointer;
   text-align: center;
 }
-.pop-chip:hover { background: #e9edf2; }
-.pop-chip[aria-pressed="true"] { background: var(--pop-primary-soft); color: var(--pop-primary-deep); }
+.pop-chip:hover { background: linear-gradient(#e9edf2, #e9edf2) padding-box, var(--glass-specular-rim-hover) border-box; box-shadow: var(--glass-control-shadow-hover); }
+.pop-chip:active { background: var(--glass-fill-strong) padding-box, var(--glass-specular-rim-pressed) border-box; box-shadow: var(--glass-control-shadow-pressed); }
+.pop-chip[aria-pressed="true"] { background: var(--pop-primary-soft); border-color: var(--pop-primary-pastel); color: var(--pop-primary-deep); }
 
 /* 機能カード: 破線ボーダー+太字タイトル(アイコンなし) */
 .pop-features { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 16px; }
@@ -294,29 +265,34 @@ main.pop { max-width: 720px; margin: 0 auto; padding: 36px 20px 0; }
   text-align: left;
   transition: transform 100ms, background 100ms;
 }
-.pop-feature:hover { background: #fff; transform: translateY(-2px); }
+.pop-feature:hover { background: #fff; transform: translateY(-1px); }
 @media (prefers-reduced-motion: reduce) { .pop-feature:hover { transform: none; } }
-.pop-feature .f-title { font-weight: 700; font-size: 15px; }
-.pop-feature .f-sub { font-size: 13px; color: var(--ink-muted); margin-top: 2px; }
+.pop-feature .f-title { font-weight: 700; font-size: var(--font-size-control); }
 
 /* KPI */
 .pop-kpis { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 24px; }
 .pop-kpi { text-align: center; padding: 8px; }
-.pop-kpi .k-label { font-size: 13px; color: var(--ink-muted); font-weight: 700; }
+.pop-kpi .k-label { font-size: var(--font-size-label); color: var(--text-secondary); font-weight: 700; }
 .pop-kpi .k-value {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.015em;
   font-weight: 700;
-  font-size: 26px;
+  font-size: clamp(28px, 4vw, 36px);
 }
 
 /* フッター: 波と白面を密着させる(隙間の線を出さない) */
 .pop-bottom { margin-top: 40px; font-size: 0; }
 .pop-bottom .wave { display: block; width: 100%; height: 40px; margin: 0 0 -1px; }
 .pop-bottom .foot { background: #fff; padding: 14px 20px 48px; }
-.pop-footer { text-align: center; font-size: 13px; color: var(--ink-muted); margin: 0; }
-.pop-footer a { color: var(--pop-primary-deep); font-weight: 700; }
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .pop-header, .pill-ghost, .tune-btn, .segmented, .pop-chip { background: #fff; background-image: none; -webkit-backdrop-filter: none; backdrop-filter: none; border-color: var(--border-control); box-shadow: none; }
+  .pop-cta { background: var(--pop-primary); background-image: none; box-shadow: none; }
+}
+@media print {
+  .pop-header, .pill-ghost, .tune-btn, .segmented, .pop-chip, .pop-cta { background-image: none; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
+}
 </style>
 </head>
 <body>
@@ -326,24 +302,13 @@ main.pop { max-width: 720px; margin: 0 auto; padding: 36px 20px 0; }
     <img class="mascot-img" src="mascot-borderless.svg" alt="" width="36" height="37">
     <span class="name">物件提案デスク</span>
   </a>
-  <button type="button" class="pill-ghost pressable">ログイン</button>
+  <button type="button" class="pill-ghost pressable" data-action-message="ログイン画面を開きました" data-action-target="#pop-status">ログイン</button>
 </header>
 
 <main class="pop">
   <div class="pop-hero rise-in">
     <img class="mascot-img" src="mascot-bordered.svg" alt="" width="88" height="91">
     <h1>提案メールを、ぽんと送る。</h1>
-    <p>優先物件は選択済み。確認して送るだけ。</p>
-  </div>
-
-  <div class="hand-note rise-in" style="--stagger: 60ms">
-    ログインなしで試せます
-    <svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden="true">
-      <path d="M16 4.2 a4.2 4.2 0 1 0 -1.5 8.1 C 13.2 15.6 14.6 19.2 18.4 21.6"
-            stroke="var(--pop-primary-deep)" stroke-width="2.4" stroke-linecap="round" fill="none"/>
-      <path d="M14.4 21.4 L 18.9 22 L 18.1 17.7"
-            stroke="var(--pop-primary-deep)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-    </svg>
   </div>
 
   <!-- 視覚的主役: 今日の提案 -->
@@ -375,7 +340,7 @@ main.pop { max-width: 720px; margin: 0 auto; padding: 36px 20px 0; }
     </div>
 
     <div class="cta-row">
-      <button type="button" class="tune-btn" id="tune-btn" aria-expanded="false" aria-controls="settings-panel">
+      <button type="button" class="tune-btn" id="tune-btn" data-disclosure aria-expanded="false" aria-controls="settings-panel">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
           <path d="M4 7h9"/><circle cx="17" cy="7" r="2.6"/>
           <path d="M20 15h-9"/><circle cx="7" cy="15" r="2.6"/>
@@ -384,29 +349,21 @@ main.pop { max-width: 720px; margin: 0 auto; padding: 36px 20px 0; }
       </button>
       <button type="button" class="pop-cta" id="pop-send">3件を確認して送る</button>
     </div>
-    <div class="pop-cta-note">
-      <span class="kbd-hint"><span class="kbd">⌘</span><span class="kbd">Enter</span>でも送れます</span>
-    </div>
-
-    <!-- 調整パネル: セグメント+トグル(Enter送信はオプトイン) -->
+    <!-- 調整パネル: セグメント -->
     <div class="settings-panel" id="settings-panel" hidden>
       <div class="setting-item">
         <span class="s-label">メールの文体</span>
-        <div class="segmented" role="group" aria-label="メールの文体">
+        <div class="segmented" data-exclusive role="group" aria-label="メールの文体">
           <button type="button" aria-pressed="true">丁寧</button>
           <button type="button" aria-pressed="false">フランク</button>
         </div>
-      </div>
-      <div class="setting-item">
-        <span class="s-label">Enterキーで送信<br><span class="s-sub">Shift+Enterで改行</span></span>
-        <button type="button" class="switch" role="switch" aria-checked="false" aria-label="Enterキーで送信"></button>
       </div>
     </div>
   </section>
 
   <section class="pop-card rise-in" style="--stagger: 180ms">
     <p class="section-label"><span class="squiggle">次の提案エリア</span></p>
-    <div class="pop-chips" id="pop-chips">
+    <div class="pop-chips" id="pop-chips" data-exclusive role="group" aria-label="次の提案エリア">
       <button type="button" class="pop-chip pressable" aria-pressed="true">東京23区</button>
       <button type="button" class="pop-chip pressable" aria-pressed="false">首都圏</button>
       <button type="button" class="pop-chip pressable" aria-pressed="false">関西圏</button>
@@ -416,13 +373,11 @@ main.pop { max-width: 720px; margin: 0 auto; padding: 36px 20px 0; }
 
   <!-- 機能カード: 破線+太字(アイコンなし) -->
   <div class="pop-features rise-in" style="--stagger: 240ms">
-    <button type="button" class="pop-feature">
+    <button type="button" class="pop-feature" data-action-message="登録を開始しました" data-action-target="#pop-status">
       <div class="f-title">概要書から登録</div>
-      <div class="f-sub">貼り付けやドラッグ&ドロップでも</div>
     </button>
-    <button type="button" class="pop-feature">
+    <button type="button" class="pop-feature" data-action-message="送信レポートを開きました" data-action-target="#pop-status">
       <div class="f-title">送信レポート</div>
-      <div class="f-sub">反響率と次にやることだけ</div>
     </button>
   </div>
 
@@ -431,6 +386,7 @@ main.pop { max-width: 720px; margin: 0 auto; padding: 36px 20px 0; }
     <div class="pop-kpi"><div class="k-label">今月の成約</div><div class="k-value">3<span class="unit">件</span></div></div>
     <div class="pop-kpi"><div class="k-label">反響率</div><div class="k-value">18.6<span class="unit">%</span></div></div>
   </div>
+  <p class="demo-status" id="pop-status" role="status" hidden></p>
 </main>
 
 <div class="pop-bottom">
@@ -439,21 +395,12 @@ main.pop { max-width: 720px; margin: 0 auto; padding: 36px 20px 0; }
   </svg>
   <div class="foot">
     <img class="mascot-img" src="mascot-borderless.svg" alt="" width="30" height="31" style="margin: 0 auto 10px">
-    <p class="pop-footer">
-      モードB「Pop・親しみ」の見本 — <a href="index.html">モードA(ミニマル・信頼)</a> / <a href="catalog.html">部品カタログ</a>
-    </p>
   </div>
 </div>
 
+<script src="reference-interactions.js"></script>
 <script>
 'use strict'
-document.querySelectorAll('#pop-chips .pop-chip').forEach((chip) => {
-  chip.addEventListener('click', () => {
-    document.querySelectorAll('#pop-chips .pop-chip').forEach((c) => c.setAttribute('aria-pressed', 'false'))
-    chip.setAttribute('aria-pressed', 'true')
-  })
-})
-
 /* 選択数とCTAラベルを連動(濃く太い数字=変わる値) */
 function syncDealCount() {
   const n = document.querySelectorAll('.pop-row input[type="checkbox"]:checked').length
@@ -467,25 +414,9 @@ document.querySelectorAll('.pop-row input[type="checkbox"]').forEach((cb) => {
 })
 syncDealCount()
 
-const tuneBtn = document.getElementById('tune-btn')
-tuneBtn.addEventListener('click', () => {
-  const panel = document.getElementById('settings-panel')
-  const open = panel.hidden
-  panel.hidden = !open
-  tuneBtn.setAttribute('aria-expanded', String(open))
-})
-
-document.querySelectorAll('.segmented button').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    btn.parentElement.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', 'false'))
-    btn.setAttribute('aria-pressed', 'true')
-  })
-})
-
-document.querySelectorAll('.switch').forEach((sw) => {
-  sw.addEventListener('click', () => {
-    sw.setAttribute('aria-checked', String(sw.getAttribute('aria-checked') !== 'true'))
-  })
+document.getElementById('pop-send').addEventListener('click', () => {
+  const count = document.querySelectorAll('.pop-row input[type="checkbox"]:checked').length
+  ReferenceUI.showStatus('#pop-status', `${count}件を送信しました`)
 })
 </script>
 </body>

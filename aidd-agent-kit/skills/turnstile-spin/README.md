@@ -1,3 +1,5 @@
+> 本ファイルは cloudflare/skills（Apache-2.0）を基に改変しています。詳細は リポジトリルートの ATTRIBUTION.md を参照。
+
 # turnstile-spin（Skill）
 
 Cloudflare Turnstileをend-to-endで設定するSkill。Turnstile追加、CAPTCHA設定、formのbot対策を依頼されたときにloadする。

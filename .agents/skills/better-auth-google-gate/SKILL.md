@@ -1,6 +1,6 @@
 ---
 name: better-auth-google-gate
-description: Webアプリの認証・認可の実装はすべてこのスキルを使う。認証ライブラリの標準はBetter Auth。「認証を付けて」「ログイン機能」「Googleでログインできるように」「社員だけに限定」「特定企業だけに公開」「許可リスト/招待制」「メール+パスワード認証」「セッション管理」「ロール・権限管理」「OAuth設定」「redirect_uri_mismatchを直す」「認証のセキュリティレビュー」などの文脈で、ユーザーが「認証」と明示しなくてもログイン要件が含まれるなら必ず読む。特にNext.js App Router＋OpenNext＋D1、Hono、素のWorkersでのBetter Auth＋Google OAuth導入を自動化し、Google Cloud Consoleで人間にしかできない操作は日本語のクリック手順と直リンクへ切り分ける。社内限定・特定企業限定・一般公開のいずれもBetter Auth一本で実装する。
+description: Webアプリのアクセス制御・認証・認可の実装はすべてこのスキルを使う。遮断だけならCloudflare Access、アプリ内identity・role・session・WebSocket等が必要ならBetter Authとする単一決定表の正本。「認証を付けて」「ログイン機能」「Googleでログインできるように」「社員だけに限定」「特定企業だけに公開」「許可リスト/招待制」「メール+パスワード認証」「セッション管理」「ロール・権限管理」「OAuth設定」「redirect_uri_mismatchを直す」「認証のセキュリティレビュー」などの文脈で、ユーザーが「認証」と明示しなくてもログイン要件が含まれるなら必ず読む。特にNext.js App Router＋OpenNext＋D1、Hono、素のWorkersでのBetter Auth＋Google OAuth導入を自動化し、Google Cloud Consoleで人間にしかできない操作は日本語のクリック手順と直リンクへ切り分ける。
 ---
 
 # Better Auth Google Gate
@@ -19,9 +19,18 @@ Cloudflare上のアプリへGoogle認証を導入する。既定はGoogle Worksp
 - ユーザーが「実装して」と依頼した場合、検証済みの安全な次工程が残る限り、案内だけで止まらず実行する。
 - 通常は事前質問ゼロで、既存コードと設定から認証モデルを再構成し、secretを必要としない実装・テスト・設定ガイドを先に完成させる。複数方式を並べず、証拠に合う安全な構成を1つ選ぶ。
 
-## 0. 実装方針（分岐なし）
+## 0. アクセス制御の単一決定表（正本、INV-4）
 
-認証の実装は常に**Better Auth**で行う。社内限定・特定企業限定・一般公開のいずれもBetter Authのアクセス制御（`hd`検証・許可リスト・ロール管理）で実現し、Cloudflare Access等の別方式へ分岐しない。
+v0/v1 の呼び方で分岐させず、**アプリが利用者のidentityを必要とするか**で決める。
+
+| 要件 | 採用方式 | v1 での扱い |
+|---|---|---|
+| 社内利用者以外をエッジで遮断するだけ。全員が同じデータを使い、アプリ内のidentity・role・session・ユーザー単位データが不要で、WebSocketも使わない | **Cloudflare Access** | そのまま継続可。Better Auth への移行を残課題にしない |
+| アプリ内のidentity、role/認可、session、ユーザー単位データのいずれかが必要、または WebSocket を使う | **Better Auth** | v0 から必須。Access だけを一時利用して後送りにしない |
+
+Access で利用者を識別してアプリの所有者・権限に使う折衷案は採用しない。`Cf-Access-Jwt-Assertion` の識別実装が必要となった時点で Better Auth の行を選ぶ。Access の遮断範囲・バージョン別プレビューURL・許可/拒否の実機検証は `cloudflare-secure-deploy` に従う。Access の行を選んだら本Skillの Better Auth 実装手順はここで終了する。
+
+Better Auth の行を選んだ場合は、以降の手順を実行する。
 
 - Auth.js（旧NextAuth）は2025年9月にBetter Authチームへ移管されメンテナンスモードのため、新規では選ばない。
 - Google以外のプロバイダー（メール+パスワード、GitHub、Microsoft等）が要件でも、Better Authのプロバイダー追加で同じ骨格のまま対応する。セキュリティ不変条件は共通で適用する。
@@ -71,7 +80,7 @@ Client ID、Client Secret、BETTER_AUTH_SECRETの値をチャットで尋ねな�
 4. `/api/auth/[...all]`、auth client、サインインUI、サインアウト、保護ページ/APIのサーバー側検証を配線する。
 5. 静的SPAアセットを`not_found_handling: "single-page-application"`で配る構成（Hono／素のWorker + 別ビルドSPA）なら、`assets.run_worker_first`に`/api/*`を入れる。入れないとOAuthコールバック（ブラウザのトップレベル遷移=`Accept: text/html`）がSPAフォールバックに横取りされ、Better Authが実行されずログインが完了しない。`fetch`は届くので気づけない。
 6. Better Auth CLI用の副作用のない設定を用意し、スキーマを生成する。
-7. D1がなければWranglerで作成し、bindingを設定する。migrationをローカル、本番の順で適用する。
+7. D1がなければWranglerで作成し、bindingを設定する。migrationをローカル、本番の順で適用する(作成・migration・secret・デプロイの手順と停止条件は`cloudflare-secure-deploy` §2・§10が正本。本Skillでは再定義しない)。
 8. `.dev.vars`または`.env`の一方だけを使い、`.gitignore`へ含める。ローカル値はユーザーがエディタへ直接入れるか、安全な対話入力を使う。
 
 `.gitignore`へ`.dev.vars`を追加後、ローカル設定がなければ次で安全に初期化する。

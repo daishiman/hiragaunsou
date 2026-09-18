@@ -10,6 +10,8 @@
 
 [行動1] → [行動2] → [行動3](目標: 3タップ/30秒以内。超える場合の根拠: ____)
 
+認知負荷(jp-web-design `information-design.md` §3-1): 1画面1主目的 ____ / 段階的開示 ____ / 本文2文以内 ____ / 利用者の業務語 ____ / エラーの次行動 ____
+
 **ピーク体験**(最も感情が動く瞬間): 画面____で「____」
 **エンド体験**(完了の締め): 「____」(成果の数値を返す)
 
@@ -48,12 +50,22 @@
 
 ## 5. デザインシステム適用
 
+記入規則: 判定語彙・provenance・既存配色の移行手順はjp-web-design `references/catalog-default-contract.md`、色の役割とテーマはjp-web-design `references/hiraga-color-system.md` を正本とする。ここには結果だけを書く。
+catalog-default判定: apply(new) / apply(existing・資格: ____) / REPORT_ONLY(理由: ____) / NON_VISUAL(理由: ____)
+provenance: `docs/product/design-profile.json` / contract ____ / profile id ____ / profile version ____ / digest ____ / 確認日 ____
+採用範囲: 画面 ____ / component ____ / interaction ____ / 明示例外と理由 ____
 参考デザイン(あれば): ____(取り込むのはトーンのみ。操作体系はプラットフォーム慣習優先)
-Mode: A Graphite × Amber / B Pop / brand例外: ____
-primary: ____ / accentの状態用途: ____ / テーマ: auto・light・dark / 永続化: ____
+配色: 平賀カラー(既定。版は `hiraga-color-system.css` の @hiraga-meta version: ____) / Pop(明示指定時のみ・指定者: ____)
+brand_color_status: unspecified / provisional / approved / exception
+brand_color_source: ____
+brand_color_approver: ____
+brand_color_approved_at: ____(ISO 8601。未承認は空欄)
+追加した役割トークン: ____(なければ「なし」)
+既存配色の移行: 対象外 / REPORT_ONLY / 実施(migrate-legacy-colors schema __ / eligibility __ / safe適用 __ 件 / review-only残件 __ 件。対応表は `--plan --json` 出力を添付し、手修正分だけ下に書く)
+手修正した対応: 旧 ____ → 新 ____(なければ「なし」)
 フォント: UI ____ / mono・ID・ログ ____ / fallback ____
 ナビ骨格: 上部ナビ / sidebar→icon rail→bottom tabs / その他 ____ (選定理由: ____)
-safe-area: ____ / 44px操作領域: ____ / Light-Darkコントラスト検証: ____
+safe-area: ____ / 44px操作領域: ____ / コントラスト検証(check-hiraga-contrast と実画面): ____
 
 ## 5-1. 状態とモーション
 

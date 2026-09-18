@@ -1,7 +1,7 @@
 ---
 name: ci-cd-pipeline
 description: >
-  GitHub Actions で CI(自動検査)と CD(自動デプロイ)を、無料枠に収まる最小構成で構築・運用するためのスキル。
+  Cloudflare WorkersのCI(自動検査)とCD(自動デプロイ)を、Workers Buildsまたは外部CI/CDから案件に合う1経路だけ選び、無料枠に収まる最小構成で構築・運用するためのスキル。
   「CIを入れて」「CDを組んで」「自動デプロイしたい」「GitHub Actions」「ワークフロー」「テストを自動で回したい」
   「マージしたら勝手に公開されるようにして」「デプロイを自動化して」「CIが落ちた」「Actionsが失敗する」
   「デプロイの手作業をなくしたい」「Cloudflareの設定が分からない」「非エンジニア向け手順を作って」などの文脈で必ず使用する。
@@ -11,16 +11,16 @@ description: >
   このスキルの §0 を読んで導入可否を判断すること。
 ---
 
-# ci-cd-pipeline — 無料で回す CI/CD
+# ci-cd-pipeline — deploy経路を1つに絞る最小 CI/CD
 
 手動デプロイは「人が正しく手順を踏んだ」という申告の上に成り立つ。申告は外れる。
 **CI/CD の本質は自動化による時短ではなく、「言ったこと」と「実際に起きたこと」の乖離を機械が検出することにある。**
 
-- ワークフロー全文: `references/workflows.md`
+- 外部CI/CDのワークフロー全文(必要時だけ読む): `references/workflows.md`
 - Node.js・パッケージマネージャ共通部品(npm / yarn / pnpm): `assets/detect-pm.yml` → `.github/actions/detect-pm/action.yml`
 - 無料枠の実数と削減手法: `references/cost-control.md`
 - 失敗パターンと対処: `references/troubleshooting.md`
-- そのまま置ける雛形: `assets/ci.yml` / `assets/deploy.yml` / `assets/migrate.yml`（共通部品も必ず配置する）
+- 外部CI/CDを選んだ場合の雛形: `assets/ci.yml` / `assets/deploy.yml` / `assets/migrate.yml`(必要なものだけ配置)
 - 非エンジニア向けCloudflare設定票: `assets/cloudflare-credentials-guide.md.template`
 - 設定票と秘密値非表示helperの生成: `scripts/generate-cloudflare-credentials-guide.mjs`
 - 資格情報ガイド・helper・workflowの退行検査: `scripts/validate-cloudflare-credentials-guide.mjs`
@@ -30,6 +30,26 @@ description: >
 ---
 
 ## §0. 入れる前の判断
+
+### 最初にdeploy責任者を1つ選ぶ
+
+Cloudflare公式は、GitHub/GitLabで最小設定なら Workers Builds、外部統制が必要なら外部CI/CDとする。キットの既定スタックは D1 を含むため、**既定は外部CI/CD**(`mvp-first-development` §3 の「CI/CD」行が正本)。次の決定表でそれを具体化する。
+
+| 条件 | 選ぶ経路 | 作るもの |
+|---|---|---|
+| D1 を使う(既定スタック)、独自test gate、GitHub Environment、厳密な承認、セルフホストGitHub/GitLab、または非対応Gitのいずれか | **外部CI/CD(既定)** | `migrate.yml` + `deploy.yml`(migration → deploy の順 = INV-7)。必要なworkflowだけ |
+| DB を持たない・静的配信だけで、ホスト版GitHub/GitLab、独自test gateなし、厳密な承認なし | **Workers Builds** | CloudflareのGit連携 + 最小のbuild/deploy command。`.github/workflows` は追加しない |
+
+**Workers Builds 採用後にスキーマ変更が入ったら**、マージ前に Builds の deploy を無効化 → `migrate.yml` + `deploy.yml` を設置 → 切替理由と復旧手順を記録して外部CI/CDへ切り替える(手元の `--remote` 適用で凌がない)。
+
+**Workers Builds と外部CI/CDのdeployを両方有効にすることは禁止**。既存経路がある場合は、設定・実行履歴・対象ブランチを読み取ってから継続可否を決める。別経路を追加する前に既存deployを無効化し、切替理由と復旧手順を記録する。
+
+公式根拠:
+
+- <https://developers.cloudflare.com/workers/ci-cd/>
+- <https://developers.cloudflare.com/workers/ci-cd/builds/>
+- <https://developers.cloudflare.com/workers/ci-cd/builds/git-integration/>
+- <https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/>
 
 ### GitHubの操作対象を最初に確定する
 
@@ -55,15 +75,15 @@ helperはremote URLに埋め込まれたuserinfoを出力せず、GitHubとし�
 | **検証の申告** | 「テスト201件通過」が口頭報告のみで、実際に走ったかは誰も確認できない | 実行ログが残り、落ちればマージできない |
 | **手順の抜け** | バックアップ→マイグレーション→デプロイ→検証の8手順を毎回人が踏む。1つ飛ばしても気づかない | 順序がコードとして固定される |
 
-### 入れない方がよい場合
+### 自動deployを止めるべき場合
 
 | 状況 | 理由 |
 |---|---|
-| デプロイ頻度が月1回未満 | 手動でも事故が起きにくい。ワークフローの保守コストが上回る |
-| テストが1件もない | CI は「落ちる仕組み」がないと意味がない。先に testing-excellence でテストを書く |
-| 本番が1つしかなく、壊れると業務が止まる | **CD は入れず CI だけ入れる**。公開は人の判断で行う |
+| リリースごとの明示承認が必須 | Workers Buildsの自動deployではなく、外部CI/CDの承認/手動deployを選ぶ |
+| migrationや破壊的操作をdeployと分離できていない | 先に外部CI/CDでバックアップ・手動migration・deployの順を固定する |
+| 本番が1つで、壊れると業務が即停止するが回復手順がない | 先にロールバックとスモーク確認を用意し、それまで自動deployは無効にする |
 
-**迷ったら CI だけ先に入れる。** CI は壊すものが何もないので、ほぼ無条件で得。CD は「壊れたものが即座に公開される」というリスクと引き換えなので、CI が安定してから足す。
+テストがまだないことは、Workers Buildsのclean checkoutからdeployする価値を消さない。その場合は独自`ci.yml`を作らず、固定した業務ロジックができた時点でtesting-excellenceに従ってテストを追加する。**迷ったら、D1 を使う案件は外部CI/CD、DB を持たない案件だけ Workers Builds から始める。**
 
 ---
 
@@ -101,27 +121,33 @@ gh repo view "$GITHUB_REPOSITORY" --json isPrivate -q '.isPrivate'
 | Workers リクエスト | 10万/日 |
 | Workers Builds(Cloudflare 内蔵CI) | 月300分 |
 
-**GitHub Actions と Cloudflare Workers Builds を両方有効にしない。** 両方が反応して二重にデプロイが走り、どちらの成果物が本番か分からなくなる。**GitHub Actions 側に寄せる**(検証とデプロイを1本の流れで書けるため)。Cloudflare 側の Git 連携は切っておく。
+**GitHub Actions と Cloudflare Workers Builds を両方有効にしない。** 両方が反応して二重にデプロイが走り、どちらの成果物が本番か分からなくなる。§0の決定表で選んだ経路だけを有効にする。Workers Builds を選んだら外部のdeploy workflowを置かず、外部CI/CDを選んだら Cloudflare 側の自動deployを無効にする。
 
 ---
 
-## §2. ワークフローは3本だけ
+## §2. 選んだ経路の最小構成
 
-これ以上増やすと、どれがいつ走るのか本人にも分からなくなる。
+### A. Workers Builds(DB なし・静的配信の案件のみ)
 
-| ファイル | いつ走るか | 何をするか | 壊すもの |
+- GitHub/GitLab の対象repositoryとproduction branchをCloudflareに接続し、build commandとdeploy commandを必要最小限にする。
+- push→build→version/deployとpreview URLの履歴はWorkers Builds側を正本とする。同じbranchに反応する`deploy.yml`は作らない。
+- 独自test gateやD1 migrationが必要になったら、Buildsに継ぎ足して複雑化せず、§0で外部CI/CDへ切り替える。
+
+### B. 外部CI/CD(該当案件だけ)
+
+| ファイル | 作る条件 | 何をするか | 壊すもの |
 |---|---|---|---|
-| `ci.yml` | PR作成時・更新時 | 型チェック → テスト → (必要なら)ビルド | **なし**(検査だけ) |
-| `deploy.yml` | main のCI成功後 | CIが検査したSHAをビルド → 本番公開 → スモークテスト | **本番アプリ** |
-| `migrate.yml` | **手動起動のみ** | バックアップ → DBの構造変更を適用 | **本番データ** |
+| `ci.yml` | 独自のmerge gateが必要 | 型チェック → テスト → (必要なら)ビルド | **なし**(検査だけ) |
+| `deploy.yml` | 外部CI/CDがdeploy責任者 | 検査済みSHAをビルド → 本番公開 → スモークテスト | **本番アプリ** |
+| `migrate.yml` | **D1 migrationがある場合だけ** | 手動起動でバックアップ → DB構造変更 | **本番データ** |
 
-**この3分割には理由がある**: 壊せるものの重さが3段階で違うので、トリガーの厳しさも3段階にする。検査は誰でもいつでも、公開はマージという明示的な操作で、**データの変更は人が起動したときだけ**。
+一律に3本作らない。壊せる対象と独自gateの有無から必要なworkflowだけを配置し、詳細はこの経路を選んだ時点で `references/workflows.md` を読む。
 
 ### なぜマイグレーションを自動化しないのか
 
 DBの構造変更は**元に戻せない**(列を消したら中身も消える)。CD に混ぜると、PR をマージした瞬間に本番データの構造が変わる。
 
-`migrate.yml` は `workflow_dispatch`(手動起動)にし、**確認文字列の入力を必須**にする:
+外部CI/CDでD1を使う場合、`migrate.yml` は `workflow_dispatch`(手動起動)にし、**確認文字列の入力を必須**にする:
 
 ```yaml
 on:
@@ -148,7 +174,9 @@ on:
 
 ---
 
-## §3. Cloudflare Accountとシークレット
+## §3. Cloudflare Accountとシークレット(外部CI/CDを選んだ場合だけ)
+
+Workers Builds を選んだ場合は本節のGitHub Environment・API Token helperを導入せず、CloudflareのGit連携とBuilds設定に従う。以下はGitHub Actions等の外部CI/CDがdeployする案件だけの詳細である。
 
 ### Account選択の既定
 
@@ -238,7 +266,7 @@ gh secret list --env production --repo "$GITHUB_REPOSITORY"
 
 `deploy.yml`と`migrate.yml`のjobには`environment: production`が必要。これがないとEnvironment secretを読めない。
 
-Worker secretは先に`wrangler secret list`で名前を確認する。存在する`AUTH_PASSWORD`や`SESSION_SECRET`を通常セットアップで上書きしない。更新はローテーションであり、ログイン不能・全セッション失効の影響を説明してから所有者が明示実行する。
+Worker secret(`wrangler secret list` → 既存secretを通常セットアップで上書きしない → 更新はローテーション扱いで所有者が明示実行)の手順と停止条件は`cloudflare-secure-deploy` §2・§10に従う。CI/CDで扱うのは上記のGitHub Environment secretだけである。
 
 ### やってはいけないこと
 
@@ -248,7 +276,7 @@ Worker secretは先に`wrangler secret list`で名前を確認する。存在す
 
 ---
 
-## §4. CI の原則
+## §4. 外部CIの原則(独自gateが必要な場合だけ)
 
 ### 落ちないCIは存在しないのと同じ
 
@@ -289,7 +317,7 @@ gh api -X PUT "repos/$GITHUB_REPOSITORY/branches/$GITHUB_DEFAULT_BRANCH_API/prot
 
 ---
 
-## §5. CD の原則
+## §5. 外部CDの原則
 
 ### CD が構造的に解決する問題
 
@@ -311,10 +339,7 @@ gh api -X PUT "repos/$GITHUB_REPOSITORY/branches/$GITHUB_DEFAULT_BRANCH_API/prot
 
 ### 失敗したときに戻せること
 
-```bash
-wrangler deployments list      # どのバージョンがいつ公開されたか
-wrangler rollback              # CI/CDを待てない緊急時だけ。理由と対象versionを記録する
-```
+戻し方のコマンド(`wrangler deployments list` / `wrangler rollback`、versions による段階配信)は`cloudflare-secure-deploy` §8が正本で、ここでは複製しない。CI/CD固有の規律は次の1点。
 
 **スモークテストが落ちたらワークフローを失敗させる。** 「デプロイは成功したがアプリは壊れている」を緑で通さない。自動ロールバックはせず、人が原因を確認して対象変更を`git revert`し、mainのCI成功後に同じDeploy経路で戻す。`wrangler rollback`はCI/CDを待てない緊急時のみに限定する。
 
@@ -322,11 +347,25 @@ wrangler rollback              # CI/CDを待てない緊急時だけ。理由と
 
 ## §6. 導入手順
 
+### A. Workers Builds
+
+1. Cloudflareの Workers & Pages から対象Workerの **Settings > Builds** を開き、ホスト版GitHub/GitLab repositoryを1件接続する。
+2. Worker名とWrangler設定の`name`、root directory、production branch、build/deploy commandを既存プロジェクトに合わせる。
+3. pushでbuild/deployが1回だけ走り、build history・version・preview URL・active deploymentの対応を確認する。
+4. Git provider側のcheck/commit statusを確認し、外部のdeploy workflowが同じpushで走っていないことを確認する。
+
+### B. 外部CI/CD
+
+以下は外部CI/CDを選んだ場合だけ実行する。D1がなければ`migrate.yml`のコピーと設定は省く。
+
 ```bash
-# 1. 雛形を置く
+# 1. 必要な雛形だけ置く
 mkdir -p .github/workflows .github/scripts .github/actions/detect-pm
-cp <skill>/assets/ci.yml      .github/workflows/ci.yml
-cp <skill>/assets/deploy.yml  .github/workflows/deploy.yml
+# 独自merge gateが必要な場合だけ:
+cp <skill>/assets/ci.yml .github/workflows/ci.yml
+# 外部CI/CDがdeploy責任者なので:
+cp <skill>/assets/deploy.yml .github/workflows/deploy.yml
+# D1 migrationがある場合だけ:
 cp <skill>/assets/migrate.yml .github/workflows/migrate.yml
 cp <skill>/assets/detect-pm.yml .github/actions/detect-pm/action.yml
 cp <skill>/assets/smoke.sh    .github/scripts/smoke.sh
@@ -356,8 +395,8 @@ gh variable set APP_URL --body "https://<本番URL>" --repo "$GITHUB_REPOSITORY"
 # 7. 所有者がAccount API Tokenを作り、生成済みhelperを1回実行する
 #    AIへtokenを貼らない
 
-# 8. CI だけ先に有効化する。deploy.yml と migrate.yml はこの時点では置くだけで、
-#    main にマージするまで走らない
+# 8. 独自CI gateがある場合はCIだけ先に有効化する。deployはmain反映まで走らず、
+#    D1 migrationは手動起動以外で走らないことを確認する
 
 # 9. 実際に PR を出して CI が緑になることを確認する
 gh pr create --repo "$GITHUB_REPOSITORY" ...
@@ -367,7 +406,7 @@ gh run watch --repo "$GITHUB_REPOSITORY"  # 実行中のジョブを追う
 # 10. わざと失敗させて、赤くなることを確認する(重要)
 #    落ちないことを確認しただけでは「本当に検査しているか」が分からない
 
-# 11. ブランチ保護を設定する(§4)
+# 11. 独自merge gateが必要な場合だけブランチ保護を設定する(§4)
 
 # 12. CI成功後の自動CDを有効化する。workflow_runのSHAがmainと一致するまで見届ける
 ```
@@ -394,8 +433,8 @@ gh run watch --repo "$GITHUB_REPOSITORY"  # 実行中のジョブを追う
 | CI が赤いままマージする | 1回許すと二度と見られなくなる |
 | ワークフローに認証情報を直書き | public なら即漏洩、private でも履歴に永久に残る |
 | DBの構造変更を自動デプロイに混ぜる | 元に戻せない変更が、マージした瞬間に本番データへ及ぶ |
-| `timeout-minutes` を書かない | 暴走ジョブが既定6時間走り、無料枠を1回で溶かす |
-| macOS ランナー | Linux の10倍消費する。個人開発で必要になる場面はほぼ無い |
+| 外部CI/CDで `timeout-minutes` を書かない | 暴走ジョブが既定6時間走り、無料枠を1回で溶かす |
+| 外部CI/CDで macOS ランナー | Linux の10倍消費する。個人開発で必要になる場面はほぼ無い |
 | デプロイ後の検証を省く | 「デプロイ成功」はファイルが届いたことしか意味しない |
 | スモークテストを1回だけにする | 旧バージョンの実行環境が残っており、古い応答で誤判定する |
 | CI にコードの自動修正をさせる | 手元と食い違い、原因不明の差分が生まれる |
@@ -404,27 +443,28 @@ gh run watch --repo "$GITHUB_REPOSITORY"  # 実行中のジョブを追う
 
 ## §9. 検収チェックリスト
 
-- [ ] GitHubのowner/repo/remoteをhelperで検出し、`status: ok`の推奨値を全GitHub操作で共用した
-- [ ] 複数・未設定・`gh`未認証以外では、利用者にリポジトリの調査や候補選択を求めていない
-- [ ] リポジトリが public か private か確認し、private なら §1 のコスト対策を全て入れた
-- [ ] `runs-on` が `ubuntu-latest` のみ
-- [ ] 全ジョブに `timeout-minutes` がある
-- [ ] `concurrency` で古い実行をキャンセルする設定がある
-- [ ] シークレットは**本人が**登録した(代行していない)
+- [ ] §0の決定表で Workers Builds / 外部CI/CD のどちらか1つを記録した
+- [ ] 同じproduction branchに反応するdeploy経路が1つだけで、二重deployがない
 - [ ] 複数Accountならチーム用Accountを既定選択し、個人Accountを暗黙選択していない
-- [ ] 非エンジニア向け設定票と秘密値非表示helperを生成した
-- [ ] `production` Environment secretへ登録し、workflow jobに`environment: production`がある
-- [ ] `production`がmainだけを許可する
-- [ ] 既存Worker secretをローテーション承認なしに上書きしていない
-- [ ] APIトークンの権限を必要最小限に絞った
-- [ ] **わざと失敗させて CI が赤くなることを確認した**
-- [ ] ブランチ保護を設定した(使えないプランなら運用ルールとして記録した)
-- [ ] DBの構造変更は手動起動 + 確認文字列を必須にした
-- [ ] マイグレーション → デプロイの順序が守られる設計になっている
-- [ ] デプロイ後のスモークテストがあり、**間隔を空けて2回**実行する
-- [ ] スモークテストが落ちたらワークフローが失敗する(緑で通さない)
+- [ ] 選定経路のbuild/deploy履歴、対象commit、active deploymentが対応する
+- [ ] デプロイ後、間隔を空けた2回のスモーク確認に成功した
 - [ ] 戻し方(`wrangler rollback`)を実際に試した、または手順を記録した
-- [ ] Cloudflare 側の Git 連携を切った(二重デプロイの防止)
+
+**Workers Buildsを選んだ場合だけ**:
+
+- [ ] ホスト版GitHub/GitLabの対象repository・production branch・root directory・commandが正しい
+- [ ] Git provider側のcheck/commit statusとWorkers Buildsのbuild historyを確認した
+- [ ] 外部のdeploy workflowが同じpushで走らない
+
+**外部CI/CDを選んだ場合だけ**:
+
+- [ ] GitHub案件ではowner/repo/remoteをhelperで検出し、`status: ok`の推奨値を全GitHub操作で共用した
+- [ ] 必要なworkflowだけを配置し、全ジョブに`timeout-minutes`、対象ジョブに`concurrency`がある
+- [ ] 非エンジニア向け設定票/helperを生成し、Secretは本人が必要最小権限で登録した
+- [ ] GitHub Environmentが必要な案件は`production`をmainだけに限定し、workflow jobがそれを参照する
+- [ ] 独自CI gateが必要な案件は、わざと失敗させてmergeが止まることを確認した
+- [ ] D1がある場合だけ手動migration jobと確認文字列を用意し、migration → deployの順を守った
+- [ ] Cloudflare側の自動deployを無効にした
 
 ---
 

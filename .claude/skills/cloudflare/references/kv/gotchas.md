@@ -129,3 +129,11 @@ const value = await env.KV.get("key") ?? "default-value";
 | Writes pricing | $5.00 per 1M | Per million writes |
 | Deletes pricing | $5.00 per 1M | Per million deletes |
 | Storage pricing | $0.50 per GB-month | Per GB per month |
+
+## api.md / configuration.md から移設した注意点
+
+- **`delete()` は key が無くても成功する**(エラーにならない)。存在確認を delete の戻り値で代用しない。
+- **読み取り型の選び方**: 1MB 超は `stream`、バイナリは `arrayBuffer`、`json` は parse コストが最も高い。並列読み取りは `Promise.all` にまとめる。
+- **`wrangler dev` は既定でローカル隔離 KV**。`wrangler dev --remote` または binding の `"remote": true` は**本番 namespace を直接読み書きする**。preview 用は `preview_id` で分ける。
+- **REST/bulk API の上限**: bulk put / delete は 10,000 key・合計 100MB、bulk get は 100 key まで。超える場合は分割する。
+- **`list()` のページング**は `list_complete` が `true` になるまで `cursor` を渡して繰り返す(1 回の上限は 1,000 key)。

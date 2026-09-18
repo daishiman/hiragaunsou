@@ -1,3 +1,5 @@
+> 本ファイルは cloudflare/skills（Apache-2.0）を基に改変しています。詳細は リポジトリルートの ATTRIBUTION.md を参照。
+
 # Next.js (Pages Router)
 
 For older Next.js projects using `pages/` rather than `app/`. The widget renders client-side; siteverify lives in the API route.

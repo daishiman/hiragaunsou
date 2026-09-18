@@ -15,11 +15,13 @@ description: >
 Workers + D1 を中心に、**①正しいスタック選定 ②本番品質の wrangler 設定 ③D1の鉄則 ④セキュリティ不変条件 ⑤パフォーマンス最適化 ⑥失敗しないデプロイ手順** を定める。
 実プロジェクト13本(不動産マッチング/恵友系/ポータル系/Quiz Bingo等)の実戦知見 + 2026-07時点の公式ドキュメント検証済み。
 
+> **原則: 仕様の確認と調査は MCP、deploy / secret put / d1 migrations apply は監査性・可逆性・秘密保護のため wrangler CLI を既定にする**(MCP に能力が無いからではない)。操作別の既定表と MCP 不通時の復旧は `skills/wrangler/references/mcp-vs-cli-routing.md` が唯一の正本。本スキル固有の制約は §10 の停止条件だけである。
+
 - 具体的な設定スニペット集: `references/recipes.md`(レシピ別の完全な wrangler.jsonc / スクリプト)
 - 実戦で踏んだ落とし穴集: `references/gotchas.md`(**デプロイ前に必ず一読**)
 - 非エンジニア向けAccount/API Token/GitHub/Worker secret設定は Skill `ci-cd-pipeline` の生成ガイドを正本にする
 
-## 0. Cloudflare Accountを先に固定する
+## 0. Cloudflare Accountを先に固定する(INV-10)
 
 リソース作成・secret設定・deployより前に対象Accountを固定する。1人が複数Accountへ所属しており、チーム用共有Accountと個人Accountの両方がある場合の既定は**チーム用Account**。個人Accountは利用者が明示指定した場合だけ使う。
 
@@ -66,8 +68,8 @@ pnpm create cloudflare@latest -- <app-name> --framework=react  # レシピB
 # 2. リソースをプロビジョニング(IDを控えて wrangler.jsonc に記入)
 pnpm wrangler d1 create <app-name>-db
 pnpm wrangler r2 bucket create <app-name>-docs    # 必要な場合
-# ※ Cloudflare MCP(d1_database_create / r2_bucket_create / kv_namespace_create)でも可。
-#   作成・一覧・調査は MCP が便利。ただしコードのデプロイ・secrets・migrations は wrangler CLI が正
+# ※ Bindings MCP 認証済みなら MCP(d1_database_create 等)でも可。未認証なら CLI のまま進め、認証は促さない
+#   (既定表: skills/wrangler/references/mcp-vs-cli-routing.md)
 
 # 3. wrangler.jsonc をベースライン(§3)に整える。compatibility_date は今日の日付
 
@@ -87,9 +89,13 @@ pnpm wrangler secret put SESSION_SECRET
 pnpm wrangler types
 pnpm run build && pnpm run preview   # OpenNextは opennextjs-cloudflare preview
 
-# 7. デプロイ
+# 7. デプロイ前検証(mvp-first §5 の前段。どちらも失敗ならデプロイしない)
+pnpm exec wrangler deploy --dry-run   # 設定・binding・バンドルの検証。実デプロイなし
+pnpm audit --prod                     # 高危険度の依存脆弱性を確認(HIGH 以上は残課題へ記録か解消)
+
+# 8. デプロイ
 pnpm run deploy
-# 8. デプロイ後検証(§8): 本番URLを実際に叩く・wrangler tail・Access確認
+# 9. デプロイ後検証(§8): 本番URLを実際に叩く・wrangler tail・Access確認
 ```
 
 **順序の鉄則**: マイグレーション適用(--remote)→ コードデプロイ。逆にすると新スキーマ前提のコードが旧DBに当たって全面エラーになる。カラム削除を伴う場合は「新コードデプロイ→旧カラム参照が消えたことを確認→削除マイグレーション」の2段階(expand → contract)。
@@ -149,7 +155,7 @@ pnpm run deploy
 
 ---
 
-## 5. セキュリティ不変条件
+## 5. セキュリティ不変条件(INV-1)
 
 ### Secrets
 - `vars` は**平文**(config・ダッシュボードで丸見え)。API キー・署名鍵・パスワードは `wrangler secret put` のみ。ローカルは `.dev.vars`(.gitignore)
@@ -222,16 +228,9 @@ pnpm wrangler rollback                   # 問題発生時(直近100バージョ
 
 ## 9. MCP と wrangler の役割分担
 
-| 操作 | 使うもの |
-|---|---|
-| D1/R2/KV の作成・一覧・調査、D1への単発クエリ | Cloudflare MCP(`d1_database_create`, `d1_database_query`, `r2_bucket_create`, `workers_list` 等)または wrangler |
-| 公式ドキュメント検索 | MCP `search_cloudflare_documentation`(仕様が不確かなら**推測せずこれを引く**) |
-| コードのデプロイ / versions / rollback | **wrangler CLI のみ** |
-| secrets 設定 | **wrangler CLI のみ**(`wrangler secret put`) |
-| マイグレーション適用 | **wrangler CLI のみ**(`d1 migrations apply` — 適用簿の管理があるため MCP の raw query で流さない) |
-| 本番ログ確認 | `wrangler tail` / ダッシュボード |
+操作別の既定経路(D1/R2/KV 作成、docs 検索、deploy、secrets、migration、ログ)は `skills/wrangler/references/mcp-vs-cli-routing.md` の「作業別の既定経路」表に従う。本スキルでは表を複製しない。仕様が不確かなら**推測せず docs MCP を引く**。
 
-## 10. 停止条件(勝手にやらない)
+## 10. 停止条件(勝手にやらない)(INV-10, INV-13)
 
 - チーム用Accountと個人Accountの判別不能、または`wrangler.jsonc`/既存リソースとログイン先が不一致 → **作成・secret更新・deployを停止**
 - 既存Worker secretの更新 → **ローテーション扱い**。ログイン不能・全セッション失効等の影響を示してユーザー確認
@@ -256,5 +255,7 @@ pnpm wrangler rollback                   # 問題発生時(直近100バージョ
 - [ ] レート制限(ユーザーIDキー)・セキュリティヘッダー・ボディサイズ上限
 - [ ] `limits.cpu_ms` 等のコスト安全弁を設定した
 - [ ] preview(workerd 実機)で確認してからデプロイした
+- [ ] `wrangler deploy --dry-run` が通った
+- [ ] `pnpm audit --prod` を実行し、HIGH 以上は解消するか残課題に記録した
 - [ ] デプロイ後: 本番URL実打・tail で例外ゼロ・スキーマ変更機能の1往復確認
 - [ ] `references/gotchas.md` の該当項目を確認した

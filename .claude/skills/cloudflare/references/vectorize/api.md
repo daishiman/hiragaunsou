@@ -1,88 +1,27 @@
-# Vectorize API Reference
+# Vectorize API(索引)
 
-## Types
+API シグネチャと上限値は変わるため同梱しない。`cloudflare-docs` MCP で下表の語を検索して最新を取得する。不通時は `https://developers.cloudflare.com/vectorize/`(Client API: `/vectorize/reference/client-api/`)。
+
+| やりたいこと | docs MCP の検索語 |
+|---|---|
+| ベクトル型(`id` / `values` / `namespace` / `metadata`)の制約 | `vectorize VectorizeVector metadata size` |
+| 類似検索(`query` / `topK` / `returnMetadata` / `returnValues`) | `vectorize query topK returnMetadata` |
+| 既存ベクトルをクエリにする(`queryById`) | `vectorize queryById` |
+| 追加・更新(`insert` / `upsert`)と batch 上限 | `vectorize insert upsert batch limit` |
+| 取得・削除・index 情報(`getByIds` / `deleteByIds` / `describe`) | `vectorize getByIds deleteByIds describe` |
+| metadata filter の演算子と制約 | `vectorize metadata filtering operators` |
+| topK と返却オプションの性能トレードオフ | `vectorize query performance returnMetadata all` |
+
+最小例:
 
 ```typescript
-interface VectorizeVector {
-  id: string;                    // Max 64 bytes
-  values: number[];              // Must match index dimensions
-  namespace?: string;            // Optional partition (max 64 bytes)
-  metadata?: Record<string, any>; // Max 10 KiB
-}
-```
-
-## Query
-
-```typescript
-const matches = await env.VECTORIZE.query(queryVector, {
-  topK: 10,                        // Max 100 (or 20 with returnValues/returnMetadata:"all")
-  returnMetadata: "indexed",       // "none" | "indexed" | "all"
-  returnValues: false,
+const emb = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: [query] });
+const matches = await env.VECTORIZE.query(emb.data[0], {   // data[0] を渡す
+  topK: 5,
+  returnMetadata: "indexed",
   namespace: "tenant-123",
-  filter: { category: "docs" }
 });
 // matches.matches[0] = { id, score, metadata? }
 ```
 
-**returnMetadata:** `"none"` (fastest) → `"indexed"` (recommended) → `"all"` (topK max 20)
-
-**queryById (V2 only):** Search using existing vector as query.
-```typescript
-await env.VECTORIZE.queryById("doc-123", { topK: 5 });
-```
-
-## Insert/Upsert
-
-```typescript
-// Insert: ignores duplicates (keeps first)
-await env.VECTORIZE.insert([{ id, values, metadata }]);
-
-// Upsert: overwrites duplicates (keeps last)
-await env.VECTORIZE.upsert([{ id, values, metadata }]);
-```
-
-**Max 1,000 vectors per call (Workers) / 5,000 (HTTP API).** Queryable after 5-10 seconds.
-
-## Other Operations
-
-```typescript
-// Get by IDs
-const vectors = await env.VECTORIZE.getByIds(["id1", "id2"]);
-
-// Delete (max 1000 IDs per call)
-await env.VECTORIZE.deleteByIds(["id1", "id2"]);
-
-// Index info
-const info = await env.VECTORIZE.describe();
-// { dimensions, metric, vectorCount }
-```
-
-## Filtering
-
-Requires metadata index. Filter operators:
-
-| Operator | Example |
-|----------|---------|
-| `$eq` (implicit) | `{ category: "docs" }` |
-| `$ne` | `{ status: { $ne: "deleted" } }` |
-| `$in` / `$nin` | `{ tag: { $in: ["sale"] } }` |
-| `$lt`, `$lte`, `$gt`, `$gte` | `{ price: { $lt: 100 } }` |
-
-**Constraints:** Max 2048 bytes, no dots/`$` in keys, values: string/number/boolean/null.
-
-## Performance
-
-| Configuration | topK Limit | Speed |
-|--------------|------------|-------|
-| No metadata | 100 | Fastest |
-| `returnMetadata: "indexed"` | 100 | Fast |
-| `returnMetadata: "all"` | 20 | Slower |
-| `returnValues: true` | 20 | Slower |
-
-**Batch operations:** Always batch (1,000/call via Workers, 5,000 via HTTP API) for optimal throughput.
-
-```typescript
-for (let i = 0; i < vectors.length; i += 1000) {
-  await env.VECTORIZE.upsert(vectors.slice(i, i + 1000));
-}
-```
+経験知は [gotchas.md](./gotchas.md) / [patterns.md](./patterns.md)。設定は [configuration.md](./configuration.md)。

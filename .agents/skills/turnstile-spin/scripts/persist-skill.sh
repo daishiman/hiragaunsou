@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 本ファイルは cloudflare/skills（Apache-2.0）を基に改変しています。詳細は リポジトリルートの ATTRIBUTION.md を参照。
 # Persists the canonical Spin skill bundle (SKILL.md + scripts/ + references/)
 # from cloudflare/skills to an unmanaged repository. Repositories whose
 # AGENTS.md declares runtime locations as generated must update their authoring

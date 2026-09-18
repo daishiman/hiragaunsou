@@ -54,10 +54,10 @@
 
 ## 4. 本番リリース手順
 
-**Phase 1 Google**：本番プロジェクト作成 → Branding → Audience → 最小スコープ → 本番OAuth Client → 本番Origin/Callback登録 → ID/Secret取得 → （外部公開）Privacy Policy公開
-**Phase 2 Cloudflare**：本番D1作成 → binding → Secrets登録 → 本番ドメイン → HTTPS確認 → migration適用 → デプロイ
-**Phase 3 確認**：本番ログイン/ログアウト → 401/403 → ドメイン制限 → admin権限 → テナント分離 → ログに機密なし → D1 Metrics → Git履歴にSecretなし
-**Phase 4 外部公開**：Audience `In production`へ → 検証手続き → サポート窓口 → 利用規約/Privacy Policy → アカウント削除導線 → Secretローテーション手順
+**手順1 Google**：本番プロジェクト作成 → Branding → Audience → 最小スコープ → 本番OAuth Client → 本番Origin/Callback登録 → ID/Secret取得 → （外部公開）Privacy Policy公開
+**手順2 Cloudflare**：本番D1作成 → binding → Secrets登録 → 本番ドメイン → HTTPS確認 → migration適用 → デプロイ
+**手順3 確認**：本番ログイン/ログアウト → 401/403 → ドメイン制限 → admin権限 → テナント分離 → ログに機密なし → D1 Metrics → Git履歴にSecretなし
+**手順4 外部公開**：Audience `In production`へ → 検証手続き → サポート窓口 → 利用規約/Privacy Policy → アカウント削除導線 → Secretローテーション手順
 
 ## 5. トラブルシューティング早見表
 

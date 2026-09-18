@@ -5,6 +5,10 @@ description: Cloudflare Workers CLIでWorkers、KV、R2、D1、Vectorize、Hyper
 
 # Wrangler CLI
 
+> 本ファイルは cloudflare/skills（Apache-2.0）を基に改変しています。詳細は リポジトリルートの ATTRIBUTION.md を参照。
+>
+> **原則: 仕様の確認と調査は MCP、deploy / secret put / d1 migrations apply は監査性・可逆性・秘密保護のため wrangler CLI を既定にする**(MCP に能力が無いからではない)。操作別の既定表と MCP 不通時の復旧は `references/mcp-vs-cli-routing.md` が唯一の正本。
+
 Wrangler の CLI フラグ・設定フィールド・サブコマンドに関する知識は古くなっている可能性がある。**事前学習した知識より取得 (retrieval) を優先すること。**
 
 ## 最初に: package managerとWranglerを確認する
@@ -44,7 +48,7 @@ Cloudflareへ変更を加えるコマンドの前に、選択したpackage manag
 
 既存`wrangler.jsonc`やWorker/D1/R2が特定Accountにある場合は、その所有先を優先して照合する。チームへ移したい場合も別Accountへ同名リソースを勝手に作らず、移行タスクとして止める。Account不一致時はcreate / secret put / migrations apply / deployを実行しない。
 
-## 情報の取得元
+## 最新情報の取得先
 
 コマンドや設定を書く・レビューする前に**最新**の情報を取得する。CLI フラグ、設定フィールド、バインディング形状を記憶に頼って書かない。
 

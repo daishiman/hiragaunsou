@@ -1,133 +1,25 @@
-# Cloudflare D1 Database
+# D1(索引)
 
-Expert guidance for Cloudflare D1, a serverless SQLite database designed for horizontal scale-out across multiple databases.
+Cloudflare のサーバーレス SQLite。**キット既定の DB**(`mvp-first-development` §3)。1 つの巨大 DB より per-tenant / per-user の複数 DB へ水平分割する設計を前提にする。Time Travel による point-in-time 復旧を持つ。
 
-## Overview
+## 最新仕様の取得(第一手段)
 
-D1 is Cloudflare's managed, serverless database with:
-- SQLite SQL semantics and compatibility
-- Built-in disaster recovery via Time Travel (30-day point-in-time recovery)
-- Horizontal scale-out architecture (10 GB per database)
-- Worker and HTTP API access
-- Pricing based on query and storage costs only
+- `cloudflare-docs` MCP で検索: `d1`、`d1 workers binding api`、`d1 migrations`、`d1 limits` / `d1 pricing`(制限値・料金は陳腐化するため同梱しない)
+- MCP 不通時: `https://developers.cloudflare.com/d1/`
 
-**Architecture Philosophy**: D1 is optimized for per-user, per-tenant, or per-entity database patterns rather than single large databases.
+## 同梱ファイル
 
-## Quick Start
+| ファイル | 用途 | docs MCP で代替可か |
+|---|---|---|
+| [configuration.md](./configuration.md) | `wrangler.jsonc` 最小 binding と設定項目の検索語 | 可(索引のみ同梱) |
+| [api.md](./api.md) | 主要 API の検索語と prepared statement の最小例 | 可(索引のみ同梱) |
+| [patterns.md](./patterns.md) | pagination、bulk insert、KV cache、multi-tenant、replica、sessions、backup | 不可(経験知。温存) |
+| [gotchas.md](./gotchas.md) | SQL injection、型の罠、plan tier 制限の読み方、migration 事故 | 不可(経験知。温存) |
 
-```bash
-# Create database
-wrangler d1 create <database-name>
+## wrangler コマンド
 
-# Execute migration
-wrangler d1 migrations apply <db-name> --remote
+作成・SQL 実行・migration・export は `../../../wrangler/references/d1.md` が正本。
 
-# Local development
-wrangler dev
-```
+## 関連
 
-## Core Query Methods
-
-```typescript
-// .all() - Returns all rows; .first() - First row or null; .first(col) - Single column value
-// .run() - INSERT/UPDATE/DELETE; .raw() - Array of arrays (efficient)
-const { results, success, meta } = await env.DB.prepare('SELECT * FROM users WHERE active = ?').bind(true).all();
-const user = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(userId).first();
-```
-
-## Batch Operations
-
-```typescript
-// Multiple queries in single round trip (atomic transaction)
-const results = await env.DB.batch([
-  env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(1),
-  env.DB.prepare('SELECT * FROM posts WHERE author_id = ?').bind(1),
-  env.DB.prepare('UPDATE users SET last_access = ? WHERE id = ?').bind(Date.now(), 1)
-]);
-```
-
-## Sessions API (Paid Plans)
-
-```typescript
-// Create long-running session for analytics/migrations (up to 15 minutes)
-const session = env.DB.withSession();
-try {
-  await session.prepare('CREATE INDEX idx_heavy ON large_table(column)').run();
-  await session.prepare('ANALYZE').run();
-} finally {
-  session.close(); // Always close to release resources
-}
-```
-
-## Read Replication (Paid Plans)
-
-```typescript
-// Read from nearest replica for lower latency (automatic failover)
-const user = await env.DB_REPLICA.prepare('SELECT * FROM users WHERE id = ?').bind(userId).first();
-
-// Writes always go to primary
-await env.DB.prepare('UPDATE users SET last_login = ? WHERE id = ?').bind(Date.now(), userId).run();
-```
-
-## Platform Limits
-
-| Limit | Free Tier | Paid Plans |
-|-------|-----------|------------|
-| Database size | 500 MB | 10 GB per database |
-| Row size | 1 MB max | 1 MB max |
-| Query timeout | 30 seconds | 30 seconds |
-| Batch size | 1,000 statements | 10,000 statements |
-| Time Travel retention | 7 days | 30 days |
-| Read replicas | Not available | Yes (paid add-on) |
-
-**Pricing**: $0.001 per million rows read + $1.00 per million rows written + $0.75/GB storage/month (includes free monthly allowance; no per-database fee)
-
-## CLI Commands
-
-```bash
-# Database management
-wrangler d1 create <db-name>
-wrangler d1 list
-wrangler d1 delete <db-name>
-
-# Migrations
-wrangler d1 migrations create <db-name> <migration-name>    # Create new migration file
-wrangler d1 migrations apply <db-name> --remote             # Apply pending migrations
-wrangler d1 migrations apply <db-name> --local              # Apply locally
-wrangler d1 migrations list <db-name> --remote              # Show applied migrations
-
-# Direct SQL execution
-wrangler d1 execute <db-name> --remote --command="SELECT * FROM users"
-wrangler d1 execute <db-name> --local --file=./schema.sql
-
-# Backups & Import/Export
-wrangler d1 export <db-name> --remote --output=./backup.sql  # Full export with schema
-wrangler d1 export <db-name> --remote --no-schema --output=./data.sql  # Data only
-wrangler d1 time-travel restore <db-name> --timestamp="2024-01-15T14:30:00Z"  # Point-in-time recovery
-
-# Development
-wrangler dev --persist-to=./.wrangler/state
-```
-
-## Reading Order
-
-**Start here**: Quick Start above → configuration.md (setup) → api.md (queries)
-
-**Common tasks**:
-- First time setup: configuration.md → Run migrations
-- Adding queries: api.md → Prepared statements
-- Pagination/caching: patterns.md
-- Production optimization: Read Replication + Sessions API (this file)
-- Debugging: gotchas.md
-
-## In This Reference
-
-- [configuration.md](./configuration.md) - wrangler.jsonc setup, migrations, TypeScript types, ORMs, local dev
-- [api.md](./api.md) - Query methods (.all/.first/.run/.raw), batch, sessions, read replicas, error handling
-- [patterns.md](./patterns.md) - Pagination, bulk operations, caching, multi-tenant, sessions, analytics
-- [gotchas.md](./gotchas.md) - SQL injection, limits by plan tier, performance, common errors
-
-## See Also
-
-- [workers](../workers/) - Worker runtime and fetch handler patterns
-- [hyperdrive](../hyperdrive/) - Connection pooling for external databases
+- [workers](../workers/) - Worker runtime と fetch handler / Hyperdrive(既存 Postgres/MySQL): `docs:hyperdrive`

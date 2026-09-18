@@ -96,3 +96,12 @@
 
 **Cause:** Local uses SQLite file, production uses distributed D1 - different performance/limits  
 **Solution:** Always test migrations on remote with `--remote` flag before production rollout
+
+## api.md / configuration.md から移設した注意点
+
+- **`wrangler d1 execute` は migration 追跡を迂回する**: Wrangler は `d1_migrations` テーブルを自動作成して適用済み migration を記録するが、`execute --file` で流した SQL は記録されない。schema 変更は必ず `migrations create` → `migrations apply` で行う。
+- **import は atomic ではない**: `wrangler d1 export` で取った SQL を `execute --file` で戻す操作は途中失敗し得る。トランザクションが必要な投入は Worker 内の `batch()` を使う。export は既定で foreign key を無効化して出力し、1GB 超は timeout し得るため分割する。
+- **Sessions API の timeout は 1〜900 秒**(`withSession({ timeout })`)。30 秒制限を超える index 作成・`ANALYZE`・一括変換に限って使い、`finally` で `close()` する。
+- **index 設計の確認**: 複合 index(`(user_id, published)`)、covering index、partial index(`... WHERE active = 1`)を使い分け、`EXPLAIN QUERY PLAN` で index が使われているかを実際に確認する。
+- **local DB の実体**: `wrangler dev --persist-to=./.wrangler/state` で `.wrangler/state/v3/d1/<database-id>.sqlite` に永続化され、`sqlite3` で直接 `.schema` / `PRAGMA table_info` を確認できる。local は free tier 相当の制限で動く。
+- **`.first(column)` は単一列の値(`string | number | null`)を返す**。行オブジェクトを期待して `.email` のようにアクセスすると undefined になる。

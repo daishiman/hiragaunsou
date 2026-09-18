@@ -17,12 +17,35 @@
 - 迷ったら RICE(Reach×Impact×Confidence÷Effort)で採点し、判断根拠をT3に残す
 - 各ストーリーは INVEST(独立・交渉可能・価値がある・見積れる・小さい・テスト可能)を満たすまで割る。1ストーリー=1PR=1デモが理想
 
+### §2-1. 全層traceと要件フラグ(単一の正本)
+
+各スライスはT3の1行で、**最頻業務フロー → UI action → API/command → domain/service → DB schema/migration → read model/UI state**を対応づける。層が不要なら空欄にせず `N/A(理由)` と書く。画面だけ、APIだけ、テーブルだけの横切り実装は完了に数えない。
+
+DOM/JSX/HTML、描画component、新画面、layout、style/token、利用者interactionを作る・変えるスライスは、依頼文の表現に関係なくcatalog-default対象とする。T2のprovenanceを入力に、採用profile・対象・証拠・例外をT3のcatalog adoption欄へ記録する。可視UIへ一切触れないスライスは `NON_VISUAL(理由)` とする。適用と検査の正本はjp-web-design `references/catalog-default-contract.md`。
+
+依頼者へ技術選択を尋ねず、依頼文・既存コード・帳票・データから次の要件フラグを判定し、T3の同じ行へ `required / N/A / deferred(理由)` と実装箇所を記録する。
+
+| 観測した要件 | 自動的に判定する品質契約 |
+|---|---|
+| 非公開利用、利用者識別、ロール、所有者別データ | 認証方式とAPI側の認可 |
+| フォーム、CSV、URL、外部APIから値が入る | 境界validation |
+| 保存の再試行、二重送信、取込、外部副作用 | idempotency |
+| 金額・確定・承認・マスタ等、変更者と変更時点の追跡が必要 | audit |
+| 外部サービス・資格情報 | secretをコード/ログへ出さない保管 |
+| 全スライス | 開始・完了・失敗理由のobservability(PII・Secret・自由文なし) |
+| DBまたはschema migration | 適用前backup、後方互換migration、アプリとデータのrollback |
+
+書き込みを含む代表フローは、**入力 → 保存 → 再読込 → 更新 → 失敗回復**までE2Eで通し、永続化後のread model/UI stateを確認する。見た目だけ更新するモック、保存後に再読込できない実装、失敗時に入力が消える実装は未完了とする。
+
 ## §3. 各スライスの完了定義(DoD)
 
 スライスは以下を全て満たして初めて完了(コードが書けた≠完了):
 - [ ] 動くデモをプレビューURLで依頼者に見せられる
 - [ ] 6状態(02 §3)のうち該当するものが実装済み
 - [ ] ユニットテスト+主要経路のE2Eが緑
+- [ ] T3の全層traceが実装と一致し、書き込みは保存・再読込・更新・失敗回復までE2Eで緑
+- [ ] 可視UIを含む場合はT3のcatalog adoptionがT2と同じprofileを指し、`catalog-default-contract.md` 指定の現在段階の検査証拠がある。非可視なら`NON_VISUAL(理由)`がある
+- [ ] 要件フラグから認証/認可/validation/idempotency/audit/secret/observability/backup/rollbackを判定し、必要な契約に実装または明示的な残課題がある
 - [ ] 計測イベント(04 §5)が発火している
 - [ ] T2/T3の該当箇所が現実と一致している(ドキュメントを腐らせない)
 

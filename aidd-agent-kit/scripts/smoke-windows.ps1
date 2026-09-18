@@ -1,7 +1,18 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
-  [string]$RepoRoot = (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)),
-  [string]$TempRoot = [IO.Path]::GetTempPath()
+  # 既定値をここで計算してはいけない。param の既定式は「その引数を使うか
+  # どうか」に関係なく束縛時に必ず評価される。CI は -KitPath を渡すので
+  # RepoRoot は一度も使わないのに、その計算の失敗だけでスクリプトが
+  # 起動前に落ちていた。必要になった場所で解決する。
+  [string]$RepoRoot = '',
+  [string]$TempRoot = [IO.Path]::GetTempPath(),
+  # 検査したいキットの場所。既定はリポジトリの中身だが、CI からは
+  # 配布 ZIP を展開した場所を渡す。利用者が実際に手にするのは ZIP の中身で
+  # あって、リポジトリのチェックアウトではないため。
+  [string]$KitPath = '',
+  # CI では実行対象の fixture 自体に Mark of the Web を付け、
+  # インストーラーの通常経路が実際に全件解除することを確かめる。
+  [switch]$AssertMotwRecovery
 )
 
 $ErrorActionPreference = 'Stop'
@@ -211,6 +222,19 @@ function Assert-AiddFile {
   }
 }
 
+function Get-AiddMotwCount {
+  param([Parameter(Mandatory = $true)][string]$Root)
+
+  $count = 0
+  foreach ($file in Get-ChildItem -LiteralPath $Root -Recurse -Force -File) {
+    if ($null -ne (Get-Item -LiteralPath $file.FullName `
+      -Stream 'Zone.Identifier' -ErrorAction SilentlyContinue)) {
+      $count++
+    }
+  }
+  return $count
+}
+
 function Restore-AiddEnvironment {
   param([Parameter(Mandatory = $true)][hashtable]$Original)
 
@@ -224,9 +248,44 @@ function Restore-AiddEnvironment {
   }
 }
 
-$repo = [IO.Path]::GetFullPath($RepoRoot)
 $temp = [IO.Path]::GetFullPath($TempRoot)
-$sourceKit = Join-Path $repo 'aidd-agent-kit'
+
+# 検査対象の決め方:
+#   -KitPath があればそれ。無ければリポジトリの中の aidd-agent-kit。
+# リポジトリ位置の解決は、KitPath が無いときだけ行う。
+# $PSScriptRoot は起動のされ方 (dot-source, -Command "& {...}",
+# スクリプトブロック経由) によっては空になる。空のまま Split-Path へ
+# 渡すと、原因の分からない束縛エラーで止まるので、順に候補を試し、
+# 全部だめなら何が起きたのかを名指しして落とす。
+if ([string]::IsNullOrWhiteSpace($KitPath)) {
+  # $MyInvocation はスクリプトブロックの中では「そのブロック自身」を指す。
+  # 候補集めを & { } で包むと、この行だけ常に空になる。ここは素の
+  # スクリプト直下 (if はスコープを作らない) なので、そのまま書く。
+  $scriptFile = $PSCommandPath
+  if ([string]::IsNullOrWhiteSpace($scriptFile)) {
+    $scriptFile = $MyInvocation.MyCommand.Path
+  }
+  $scriptDir = $PSScriptRoot
+  if ([string]::IsNullOrWhiteSpace($scriptDir) -and
+      -not [string]::IsNullOrWhiteSpace($scriptFile)) {
+    $scriptDir = Split-Path -Parent $scriptFile
+  }
+  if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
+    if ([string]::IsNullOrWhiteSpace($scriptDir)) {
+      throw ('スクリプトの位置を特定できません。-KitPath ' +
+             'でキットの場所を明示してください。')
+    }
+    $RepoRoot = Split-Path -Parent (Split-Path -Parent $scriptDir)
+  }
+  $repo = [IO.Path]::GetFullPath($RepoRoot)
+  $sourceKit = Join-Path $repo 'aidd-agent-kit'
+} else {
+  $sourceKit = [IO.Path]::GetFullPath($KitPath)
+}
+if (-not (Test-Path -LiteralPath $sourceKit -PathType Container)) {
+  throw ('検査対象のキットが見つかりません: ' + $sourceKit)
+}
+Write-Host ('[AIDD-SMOKE] kit="{0}"' -f $sourceKit)
 $realUserProfile = $env:USERPROFILE
 $originalEnvironment = @{}
 foreach ($name in @('AIDD_TARGET_HOME', 'AIDD_CODEX_TARGET', 'AIDD_NONINTERACTIVE')) {
@@ -353,8 +412,37 @@ try {
   $env:AIDD_NONINTERACTIVE = '1'
 
   $installer = Join-Path $fixtureKit 'install-windows.bat'
+  if ($AssertMotwRecovery) {
+    Write-AiddPhase -Phase 'motw-before' -Category 'mark-fixture' `
+      -Path $fixtureKit
+    foreach ($file in Get-ChildItem -LiteralPath $fixtureKit `
+      -Recurse -Force -File) {
+      Set-Content -LiteralPath $file.FullName -Stream 'Zone.Identifier' `
+        -Value "[ZoneTransfer]`r`nZoneId=3"
+    }
+    $markedBefore = Get-AiddMotwCount -Root $fixtureKit
+    if ($markedBefore -le 0) {
+      Stop-AiddSmoke -Phase 'motw-before' -Category 'mark-fixture' `
+        -Path $fixtureKit -ExitCode 'contract' `
+        -Message 'fixture has no Zone.Identifier immediately before install'
+    }
+    Write-Host ('[AIDD-SMOKE] motw-before={0}' -f $markedBefore)
+  }
+
   [void](Invoke-AiddBatch -Phase 'installer-first' `
     -Category 'windows-installer' -BatchPath $installer)
+
+  if ($AssertMotwRecovery) {
+    Write-AiddPhase -Phase 'motw-after' -Category 'unblock-fixture' `
+      -Path $fixtureKit
+    $markedAfter = Get-AiddMotwCount -Root $fixtureKit
+    Write-Host ('[AIDD-SMOKE] motw-after={0}' -f $markedAfter)
+    if ($markedAfter -ne 0) {
+      Stop-AiddSmoke -Phase 'motw-after' -Category 'unblock-fixture' `
+        -Path $fixtureKit -ExitCode 'contract' `
+        -Message 'Zone.Identifier remained after successful install'
+    }
+  }
 
   Write-AiddPhase -Phase 'installer-artifacts' -Category 'required-files' `
     -Path $targetHome
@@ -364,6 +452,33 @@ try {
     (Join-Path $targetHome '.codex\aidd-agent-kit.manifest')
   )) {
     Assert-AiddFile -Phase 'installer-artifacts' -Path $path
+  }
+
+  # version ファイルは「存在する」だけの確認では不十分。
+  # cmd.exe は `echo %VER%> file` の VER 末尾の数字をファイルハンドル番号と解釈するため、
+  # 空の version ファイルができてもインストール自体は成功してしまう。
+  # さらに :CHECK_NO_CHANGES の fc /b は「空 vs 空」で一致するので、以後ずっと無症状になる。
+  # 中身まで照合して初めて、この種の欠陥がリリース前に落ちる。
+  $expectedVersion = ([IO.File]::ReadAllText(
+    (Join-Path $fixtureKit 'VERSION'))).Trim()
+  if ([string]::IsNullOrWhiteSpace($expectedVersion)) {
+    Stop-AiddSmoke -Phase 'installer-artifacts' -Category 'version-content' `
+      -Path (Join-Path $fixtureKit 'VERSION') -ExitCode 'contract' `
+      -Message 'fixture VERSION is empty'
+  }
+  foreach ($versionFile in @(
+    (Join-Path $targetHome '.claude\aidd-agent-kit.version'),
+    (Join-Path $targetHome '.codex\aidd-agent-kit.version')
+  )) {
+    Write-AiddPhase -Phase 'installer-artifacts' -Category 'version-content' `
+      -Path $versionFile
+    Assert-AiddFile -Phase 'installer-artifacts' -Path $versionFile
+    $actualVersion = ([IO.File]::ReadAllText($versionFile)).Trim()
+    if ($actualVersion -ne $expectedVersion) {
+      Stop-AiddSmoke -Phase 'installer-artifacts' -Category 'version-content' `
+        -Path $versionFile -ExitCode 'contract' `
+        -Message "version mismatch: expected '$expectedVersion' but got '$actualVersion'"
+    }
   }
 
   $installedToml = Join-Path $targetHome '.codex\agents\app-orchestrator.toml'
@@ -391,7 +506,13 @@ try {
   $manifestPath = Join-Path $targetHome '.codex\aidd-agent-kit.manifest'
   Write-AiddPhase -Phase 'installer-artifacts' -Category 'manifest' `
     -Path $manifestPath
-  $manifestText = (Get-Content -LiteralPath $manifestPath) -join "`n"
+  # ここも ANSI 読みを避ける。照合表は今のところ ASCII だけだが、
+  # 読み方が環境依存のまま残ると、日本語を含めた瞬間に壊れる。
+  # 下の照合は Multiline の $ で行末を見る。.NET の $ は \n の直前に合うので、
+  # CRLF のままだと行末に \r が残って一致しない。Get-Content は改行を
+  # 落として返していたため、素朴に置き換えると静かに素通りする検査になる。
+  $manifestText = ([IO.File]::ReadAllText($manifestPath, [Text.Encoding]::UTF8)) `
+    -replace "`r`n", "`n"
   foreach ($pattern in @(
     '\|skills\\build-app\\SKILL\.md$',
     '\|agents\\app-orchestrator\.toml$'

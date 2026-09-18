@@ -10,7 +10,27 @@ const artifactContractPath = 'skills/app-excellence/references/artifact-first-de
 const contracts = [
   {
     path: 'skills/app-excellence/SKILL.md',
-    required: ['artifact-first-delivery.md', '成果物先行']
+    required: ['artifact-first-delivery.md', '成果物先行', '全層trace', 'catalog-default-contract.md']
+  },
+  {
+    path: 'skills/app-excellence/references/03-feature-decomposition.md',
+    required: ['全層traceと要件フラグ(単一の正本)', '入力 → 保存 → 再読込 → 更新 → 失敗回復', 'catalog adoption', 'DOM/JSX/HTML']
+  },
+  {
+    path: 'skills/app-excellence/assets/T3-feature-map.md',
+    required: ['UI action', 'DB schema/migration', 'catalog adoption', 'E2E証拠(保存→再読込→更新→失敗回復)']
+  },
+  {
+    path: 'skills/app-excellence/assets/T2-experience-spec.md',
+    required: ['catalog-default判定', 'catalog-default-contract.md', 'docs/product/design-profile.json', 'profile version', 'REPORT_ONLY(理由', 'NON_VISUAL(理由', '@hiraga-meta version']
+  },
+  {
+    path: 'skills/app-excellence/assets/T4-release-readiness.md',
+    required: ['catalog-default conformance', 'v0 minimum・v1 full', 'docs/product/design-conformance.json', 'REPORT_ONLY']
+  },
+  {
+    path: 'skills/app-excellence/references/05-quality-gates.md',
+    required: ['catalog-default-contract.md', 'v0でminimum baseline', 'v1でfull conformance', 'NON_VISUAL(理由)']
   },
   {
     path: 'skills/app-excellence/references/01-requirements.md',
@@ -18,11 +38,23 @@ const contracts = [
   },
   {
     path: 'skills/mvp-first-development/SKILL.md',
-    required: ['事前質問ゼロ', '成果物への差分']
+    required: ['事前質問ゼロ', '成果物への差分', '技術を聞かない自動裁定(単一の正本)', '技術情報を質問しないだけでなく可視DOMへも出さず', 'catalog-default-contract.md', 'T2 provenance→T3 adoption→T4 conformance']
   },
   {
     path: 'skills/jp-web-design/SKILL.md',
-    required: ['完成度の高い代表画面', '質問より先']
+    required: ['代表画面', '質問より先', 'references/information-design.md', 'references/catalog-default-contract.md']
+  },
+  {
+    path: 'skills/jp-web-design/references/information-design.md',
+    required: ['文章とフローの認知負荷', '3操作・30秒', '常設の補足説明', '参照カタログの説明文・サンプル固有文言']
+  },
+  {
+    path: 'skills/jp-web-design/assets/reference/README.md',
+    required: ['コピーしない', 'references/information-design.md', 'catalog-default-contract.md']
+  },
+  {
+    path: 'skills/app-excellence/references/04-build-standards.md',
+    required: ['全層traceは内部の受入証拠', '参照カタログの説明文・サンプル固有文言・デバッグ注記をコピーしない', 'references/catalog-default-contract.md', 'references/typography-numerals.md', 'references/hiraga-color-system.md', '役割トークン']
   },
   {
     path: 'skills/ux-design/SKILL.md',
@@ -30,7 +62,7 @@ const contracts = [
   },
   {
     path: 'agents/app-orchestrator.md',
-    required: ['Evidence → Decide → Draft → Validate → Diff', '事前質問ゼロ']
+    required: ['Evidence → Decide → Draft → Validate → Diff', '事前質問ゼロ', '全層traceと要件フラグ', '文章とフローの認知負荷', '参照カタログの説明文・サンプル固有文言・デバッグ注記', 'catalog-default consumer contract', 'references/catalog-default-contract.md', 'references/hiraga-color-system.md', 'DOM/JSX/HTML', 'v0で同契約のminimum baseline', 'v1でfull conformance']
   },
   {
     path: 'codex/agents/app-orchestrator.toml',
@@ -38,11 +70,11 @@ const contracts = [
   },
   {
     path: 'codex/workflow-skills/build-app/SKILL.md',
-    required: ['質問で止めず', '成果物先行']
+    required: ['質問で止めず', '成果物先行', 'catalog-default入口契約', 'NON_VISUAL(理由)']
   },
   {
     path: 'codex/workflow-skills/improve-app/SKILL.md',
-    required: ['最有力の1件', '成果物への差分']
+    required: ['最有力の1件', '成果物への差分', 'catalog-default入口契約', 'DOM/JSX/HTML', '通常の新画面追加']
   },
   {
     path: 'commands/build-app.md',
@@ -66,7 +98,7 @@ const contracts = [
   },
   {
     path: 'skills/turnstile-spin/SKILL.md',
-    required: ['Artifact-first flow', 'without asking the user to choose']
+    required: ['成果物先行フロー', '利用者へ選択を丸投げせず']
   }
 ]
 
@@ -80,7 +112,14 @@ const forbidden = [
   ['commands/improve-app.md', '今回はどれから進めますか?'],
   ['commands/undo-app.md', '3件以内の選択式'],
   ['skills/turnstile-spin/SKILL.md', 'Proceed?'],
-  ['skills/turnstile-spin/SKILL.md', 'Ask "yes" / "show"']
+  ['skills/turnstile-spin/SKILL.md', 'Ask "yes" / "show"'],
+  ['skills/app-excellence/references/04-build-standards.md', '日本語本文13〜14px'],
+  ['skills/app-excellence/references/04-build-standards.md', 'ページタイトル19px(SP17px)'],
+  ['skills/app-excellence/references/04-build-standards.md', 'IBM Plex Sans'],
+  ['skills/app-excellence/references/04-build-standards.md', 'JetBrains Mono'],
+  ['agents/app-orchestrator.md', 'hiraga-color-system.css` をそのままコピー'],
+  ['skills/app-excellence/assets/T2-experience-spec.md', 'hiraga-color-tokens.json の version'],
+  ['skills/app-excellence/assets/T2-experience-spec.md', 'managed-default / explicit-adoption']
 ]
 
 let failed = false
@@ -109,9 +148,9 @@ for (const contract of contracts) {
 for (const [path, phrase] of forbidden) {
   const body = await readFile(join(kitRoot, path), 'utf8')
   if (body.includes(phrase)) {
-    fail(`${path}: legacy question-first phrase remains: ${phrase}`)
+    fail(`${path}: legacy or duplicated phrase remains: ${phrase}`)
   } else {
-    pass(`${path}: legacy question-first phrase absent`)
+    pass(`${path}: legacy or duplicated phrase absent: ${phrase}`)
   }
 }
 

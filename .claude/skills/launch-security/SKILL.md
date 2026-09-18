@@ -23,33 +23,33 @@ description: >
 
 ## 監査プロセス
 
-### Phase 1: 偵察（構成把握）
+### 手順1: 偵察（構成把握）
 
 プロジェクトを分析して適用範囲を決める:
 テックスタック / 認証方式 / API構成 / デプロイ先（Workers・Pages・Vercel等）/ DB（D1・Supabase等）/
 ファイルアップロード有無 / 決済有無 / LLM API利用有無。
 
-### Phase 2: 自動スキャン
+### 手順2: 自動スキャン
 
 `references/scan-commands.md` のgrep/auditコマンド群を並列実行する（secrets検出、SQLi、XSS、コマンドインジェクション、認証/セッション、依存脆弱性、セキュリティヘッダー、ファイルアップロード、API保護、DB、ソースマップ、オープンリダイレクト）。
 
 並列エージェントを使う場合の分担: ①secrets+injection ②フロント+API ③インフラ+依存関係。
 security-reviewer / code-reviewer / database-reviewer エージェントを併用してよい。
 
-### Phase 3: 4軸チェックリスト
+### 手順3: 4軸チェックリスト（+ 倫理ガード）
 
 #### A. セキュリティ
 
 - [ ] ハードコードされたSecretなし（環境変数+Wrangler Secrets。`.dev.vars`/`.env`はGit除外）
 - [ ] 全ユーザー入力をzodで検証（クライアントとサーバー両方。サーバーが正）
 - [ ] SQLはprepared statementのみ（D1: `prepare().bind()`）
-- [ ] 認証・認可はサーバー側で毎回検証（詳細は Skill better-auth-google-gate の不変条件）
+- [ ] アクセス制御は `better-auth-google-gate` §0 の単一決定表と一致。Better Auth を選んだ場合は認証・認可をサーバー側で毎回検証し、Access を選んだ場合はエッジ遮断の許可/拒否を実機で確認
 - [ ] XSS対策（dangerouslySetInnerHTMLはsanitize必須）+ セキュリティヘッダー（CSP/HSTS/X-Frame-Options/X-Content-Type-Options/Referrer-Policy）
 - [ ] CSRF保護有効・状態変更はPOST/PUT/DELETE
 - [ ] 認証・公開フォーム・コスト発生エンドポイントにレート制限（公開フォームはTurnstile検討 → Skill turnstile-spin）
 - [ ] CORSは明示的な許可オリジンリスト
 - [ ] ファイルアップロードは型・サイズ検証+R2キー正規化
-- [ ] `pnpm audit` のhigh/criticalゼロ（または対処方針を文書化）
+- [ ] `pnpm audit` の high/critical を全件評価。v0 は CRITICAL ゼロ、v1 は悪用可能な HIGH もゼロ(例外は期限つき明示的リスク受容のみ)
 - [ ] インフラ・CI/CD・WAFは `references/cloud-infrastructure-security.md`
 
 #### B. 例外処理・エラー設計・攻撃対処
@@ -82,29 +82,38 @@ security-reviewer / code-reviewer / database-reviewer エージェントを併�
 - [ ] 初期バンドル最小化・画像最適化・スケルトン表示
 - [ ] リリース前にCore Web Vitals実測（Skill web-perf）でLCP 2.5s以内
 
-### Phase 4: レポート
+#### E. 倫理ガード（体験）
+
+- [ ] app-excellence `references/checklists/ux-psychology.md` §C のダークパターン禁止リストに1つも該当しない（該当は CRITICAL。v0・v1 とも NO-GO）
+
+### 手順4: レポート
 
 ```text
 ## 本番品質監査レポート
 Project / Tech Stack / Date
 
 ### CRITICAL（リリースブロック）   … file:line付き
-### HIGH（リリース前に修正推奨）
+### HIGH（v0は記録して限定公開可 / v1は悪用可能なら遮断）
 ### MEDIUM（リリース後1スプリント内）
 ### LOW（ベストプラクティス）
 ### PASS（確認済み項目）
 
 Summary: 件数と内訳
+Target stage: v0 / v1
 Launch readiness: GO / CONDITIONAL / NO-GO
 ```
 
 **Severity基準**
-- CRITICAL: ハードコードSecret、SQLi、認証欠落、.env流出、認可バイパス、クォータ即死する設計
+- CRITICAL: ハードコードSecret、SQLi、認証欠落、.env流出、認可バイパス、クォータ即死する設計、ダークパターン該当（手順3 E）
 - HIGH: XSS、CSRF欠落、レート制限なし、localStorageトークン、high/critical CVE、スタックトレース公開
 - MEDIUM: ヘッダー不足、過剰CORS、一部入力未検証、ソースマップ公開、N+1
 - LOW: Referrer-Policy欠落、監査ログなし、CSP微調整
 
-**判定**: GO = Critical 0 + High 0 ／ CONDITIONAL = Critical 0 + Highに対処計画あり ／ NO-GO = Critical残存
+**段階別判定**（INV-3 の正本。app-orchestrator 裁定ルール1と mvp-first §4 はここを参照する。`INVARIANTS.md`）:
+
+- **v0(関係者限定)**: GO = CRITICAL 0。HIGH は T4 と `docs/product/backlog.md` へ全件記録し、利用者を限定して公開できる。CRITICAL が1件でも残れば NO-GO。
+- **v1(本来の利用者へ公開)**: GO = CRITICAL 0 + **悪用可能な HIGH 0**。認証/認可、XSS、CSRF、Secret露出、到達可能な高危険度依存脆弱性など、入力や公開経路から再現・攻撃できる HIGH はリリース前に遮断する。それ以外の HIGH に対処計画がある場合は CONDITIONAL。
+- **例外**: 悪用可能な HIGH を残して v1 へ進めるのは、T4 に「責任者 / 受容理由 / 補償統制 / 解消期限」を書き、責任者が明示受容した場合だけ。期限なし、担当不明、「急ぐため」だけの受容は無効で NO-GO。
 
 各CRITICAL/HIGHには「リスク・該当箇所・修正コード例・参照標準（OWASP等）」を添える。
 

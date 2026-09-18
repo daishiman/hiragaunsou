@@ -1,77 +1,27 @@
-# Cloudflare Workflows
+# Workflows(索引)
 
-Durable multi-step applications with automatic retries, state persistence, and long-running execution.
+自動 retry と状態永続化を備えた複数 step の長時間ジョブ基盤。step 単位で再試行し、数分〜数週間の sleep や外部イベント待ちを資源を消費せず行える。キットでは要件フラグ経由で明示ルーティングされる製品(既定スタック外)。limits / pricing は陳腐化するため同梱せず、docs MCP で `workflows limits` / `workflows pricing` を検索する。
 
-## What It Does
+## 最新仕様の取得(第一手段)
 
-- Chain steps with automatic retry logic
-- Persist state between steps (minutes → weeks)
-- Handle failures without losing progress
-- Wait for external events/approvals
-- Sleep without consuming resources
+- `cloudflare-docs` MCP で検索: `workflows` / `workflows step.do` / `workflows waitForEvent` / `workflows limits`
+- MCP 不通時: `https://developers.cloudflare.com/workflows/`
 
-**Available:** Free & Paid Workers plans
+## 同梱ファイル
 
-## Core Concepts
+| ファイル | 用途 | docs MCP で代替可か |
+|---|---|---|
+| [configuration.md](./configuration.md) | wrangler.jsonc の最小 binding 例と設定項目の検索語 | 可(索引のみ同梱) |
+| [api.md](./api.md) | step / instance / trigger API の検索語と最小例 | 可(索引のみ同梱) |
+| [patterns.md](./patterns.md) | 経験知: pipeline・承認待ち・fan-out・テスト | 不可(経験知。温存) |
+| [gotchas.md](./gotchas.md) | 経験知: timeout・非決定性・retention・移設した注意点 | 不可(経験知。温存) |
 
-**Workflow**: Class extending `WorkflowEntrypoint` with `run` method
-**Instance**: Single execution with unique ID & independent state
-**Steps**: Independently retriable units via `step.do()` - API calls, DB queries, AI invocations
-**State**: Persisted from step returns; step name = cache key
+## wrangler コマンド
 
-## Quick Start
+[`../../../wrangler/references/queues-workflows-pipelines.md`](../../../wrangler/references/queues-workflows-pipelines.md)(list / trigger / instances の CLI は wrangler 側が正本)
 
-```typescript
-import { WorkflowEntrypoint, WorkflowStep, WorkflowEvent } from 'cloudflare:workers';
+## 関連
 
-type Env = { MY_WORKFLOW: Workflow; DB: D1Database };
-type Params = { userId: string };
-
-export class MyWorkflow extends WorkflowEntrypoint<Env, Params> {
-  async run(event: WorkflowEvent<Params>, step: WorkflowStep) {
-    const user = await step.do('fetch user', async () => {
-      return await this.env.DB.prepare('SELECT * FROM users WHERE id = ?')
-        .bind(event.payload.userId).first();
-    });
-    
-    await step.sleep('wait 7 days', '7 days');
-    
-    await step.do('send reminder', async () => {
-      await sendEmail(user.email, 'Reminder!');
-    });
-  }
-}
-```
-
-## Key Features
-
-- **Durability**: Failed steps don't re-run successful ones
-- **Retries**: Configurable backoff (constant/linear/exponential)
-- **Events**: `waitForEvent()` for webhooks/approvals (configurable timeout)
-- **Sleep**: `sleep()` / `sleepUntil()` for scheduling
-- **Parallel**: `Promise.all()` for concurrent steps
-- **Idempotency**: Check-then-execute patterns
-
-## Retrieval
-
-These reference files cover API shapes, code patterns, and debugging — things that are stable. For **limits, pricing, and other values that change**, always fetch the latest from the official docs:
-
-- **Limits:** https://developers.cloudflare.com/workflows/reference/limits/
-- **Pricing:** https://developers.cloudflare.com/workflows/reference/pricing/
-- **Workers API:** https://developers.cloudflare.com/workflows/build/workers-api/
-
-## Reading Order
-
-**Getting Started:** configuration.md → api.md → patterns.md  
-**Troubleshooting:** gotchas.md
-
-## In This Reference
-- [configuration.md](./configuration.md) - wrangler.jsonc setup, step config, bindings
-- [api.md](./api.md) - Step APIs, instance management, sleep/parameters
-- [patterns.md](./patterns.md) - Common workflows, testing, orchestration
-- [gotchas.md](./gotchas.md) - Timeouts, limits, debugging strategies
-
-## See Also
-- [durable-objects](../durable-objects/) - Alternative stateful approach
-- [queues](../queues/) - Message-driven workflows
-- [workers](../workers/) - Entry point for workflow instances
+- `durable-objects` Skill - 状態を持つ別アプローチ
+- [queues](../queues/) - メッセージ駆動の起動元
+- [workers](../workers/) - instance を起動する entry point

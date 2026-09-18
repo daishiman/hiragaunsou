@@ -3,6 +3,8 @@ name: cloudflare-email-service
 description: Cloudflare Email Service（Email Sending + Email Routing）でトランザクションメールの送受信を実装するスキル。Workers bindingまたはREST APIによるメール送信、Email Routing、Agents SDKのemail handler、Workers・Node.js・Python・Go等への組み込みで使う。到達性、SPF/DKIM/DMARC、wrangler email設定、MCP email tools、coding agentからのメール送信も対象。「Workerにメール機能を追加」のような依頼でも、重要な設定要件があるため必ず使用する。
 ---
 
+> 本ファイルは cloudflare/skills（Apache-2.0）を基に改変しています。詳細は リポジトリルートの ATTRIBUTION.md を参照。
+
 # Cloudflare Email Service
 
 Cloudflare Email Service、Email Routing、Email Sendingの仕様は更新されるため、すべての関連タスクで**事前知識より最新情報の取得を優先する**。
@@ -15,11 +17,13 @@ Accountを伴うドメイン有効化やAPI操作の前には、Skill `cloudflar
 
 ## 最新情報の取得先
 
+正本は [`cloudflare` Skill の「最新情報の取得先」](../cloudflare/SKILL.md#最新情報の取得先)(docs MCP 第一手段、不通時の復旧、workers-types / config-schema の取得方法)。ここには本Skill固有の取得先だけを書く。
+
 | 取得先 | 取得方法 | 使う場面 |
-|--------|----------------|---------|
-| Cloudflare docs | `cloudflare-docs` search toolまたは`https://developers.cloudflare.com/email-service/` | API reference、上限、価格、最新機能 |
+|--------|----------|---------|
+| **Cloudflare docs (MCP)** | `cloudflare-docs` MCPで `email-service` / `email routing` / `send_email` を検索 | **既定の第一手段**。API reference、上限、価格、最新機能 |
+| Email Service docs (Web) | `https://developers.cloudflare.com/email-service/` | MCP不通時 |
 | REST API spec | `https://developers.cloudflare.com/api/resources/email_sending` | Email Sending REST APIのOpenAPI spec |
-| Workers types | `https://www.npmjs.com/package/@cloudflare/workers-types` | 型signature、binding形状 |
 | Agents SDK docs | `https://github.com/cloudflare/agents/tree/main/docs`の`docs/email.md`を取得 | Agents SDKのemail handling |
 
 ## 最初に前提条件を確認する

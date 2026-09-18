@@ -2,19 +2,15 @@
 
 コンポーネント・アイコン・データ表現の全ルール。ボタン / フォーム / バッジ / テーブル / 選択バー / モーダル / 空状態 / アイコン方針 / スライダー座標系 / バーチャートの使用条件。
 
-実装時は必ず `assets/reference/styles.css`・`catalog.html` の動く実装を開いて流用する(記憶で似せて書かない)。
+具体的な寸法・角丸・状態CSSの正本は `assets/reference/styles.css`・`catalog.html` だけ。本書では競合するutility値を複製しない。指定なしは `catalog-default-contract.md` で正本CSSを適用し、業務DOMへ正本クラスを割り当てる。
 
 ## 1. ボタン(3階層 + 破壊的)
 
 ```html
-<!-- 主要CTA(画面に基本1つ。Graphite primary。accentは使わない) -->
-<button class="interactive rounded-lg bg-primary min-h-11 px-5 text-sm font-bold text-primary-text hover:bg-primary-hover disabled:opacity-50">送信する</button>
-<!-- セカンダリ(surface + strong border) -->
-<button class="interactive rounded-lg border border-border-strong bg-surface min-h-11 px-4 text-sm font-bold text-text hover:bg-surface-alt disabled:opacity-50">編集する</button>
-<!-- 三次(静かな操作) -->
-<button class="interactive rounded-lg border border-border bg-surface min-h-11 px-4 text-sm text-text hover:bg-surface-alt">キャンセル</button>
-<!-- 破壊的(通常は罫線。塗りのdangerは最終確認モーダル内だけ) -->
-<button class="interactive rounded-lg border border-danger min-h-11 px-4 text-sm font-bold text-danger hover:bg-danger-bg">削除する</button>
+<button class="btn btn-primary">送信する</button>
+<button class="btn btn-secondary">編集する</button>
+<button class="btn btn-tertiary">キャンセル</button>
+<button class="btn btn-danger-outline">削除する</button>
 ```
 
 - ラベルは**動詞で終える**(「送信する」「保存する」)。「〜させていただく」禁止。
@@ -23,15 +19,12 @@
 ## 2. フォーム
 
 ```html
-<div class="space-y-1.5">
-  <label for="email" class="flex items-baseline gap-2 text-xs font-medium text-ink">
-    メールアドレス <span class="rounded bg-subtle px-1.5 py-0.5 text-[10px] text-ink-muted">必須</span>
+<div class="field">
+  <label for="email">
+    メールアドレス <span class="badge badge-required">必須</span>
   </label>
-  <input id="email" type="email" inputmode="email"
-         class="w-full rounded-md border border-line bg-white px-3 py-2 text-sm placeholder:text-ink-muted/60" />
-  <p class="text-xs text-ink-muted">提案メールの送信先になります。</p>
-  <!-- エラー時: input に border-danger、直下に -->
-  <p class="text-xs text-danger">メールアドレスの形式が正しくありません。</p>
+  <input id="email" type="email" inputmode="email" aria-invalid="true" aria-describedby="email-error" />
+  <p class="error-msg" id="email-error">「@」以降も入力してください。</p>
 </div>
 ```
 
@@ -51,26 +44,28 @@
 <span class="badge badge-neutral">下書き</span>
 ```
 
-- runningだけaccentを使う。success / warning / danger / neutralは各semantic tokenを使う。
+- 状態は `--status-{neutral,info,success,warning,danger}-{text,bg}` を使う(処理中=info)。ブランド色(紺・マゼンタ)を状態に流用しない。
 - 背景色だけに頼らず、同色30%相当のborderと文言を必ず付ける。ID・タグ・ログ・バッジは`--font-mono`。
-- accentとwarningは色相が近いので、`実行中`と`要確認`の文言・配置・必要ならアイコンで区別する。
+- 色だけで区別させない。`↻ 処理中` `! 要確認` `× エラー` のように記号+文言を付ける。分類タグは `--tag-*`、未読件数は `--badge-unread-*`。
 
 ## 4. テーブル
 
-- ヘッダー `text-xs text-ink-muted font-medium border-b border-line`、本文 `text-sm`。**単位は列ヘッダーに**(`typography-numerals.md`)。
-- **数値列は右揃え + `.num`(生数値+カンマ)**。行は `border-b border-line hover:bg-subtle`、行アクションは右端。
-- SPではカード型に組み替える(`layout-responsive.md` のモバイル情報削減)。横スクロール表のままにするなら `overflow-x-auto` のコンテナに入れる(**ページ全体を横スクロールさせない**)。
+- ヘッダー・本文・交互行・選択行は正本の `.table-scroll` とtable規則を使う。選択行は色+左線+`aria-selected`。**単位は列ヘッダーに**(`typography-numerals.md`)。
+- **数値列は右揃え + `.num`(生数値+カンマ)**。行の罫線・hoverは正本CSSへ任せ、行アクションは右端に置く。
+- SPではカード型に組み替える(`layout-responsive.md` のモバイル情報削減)。横スクロール表のままにする場合も正本の `.table-scroll` を使い、**ページ全体を横スクロールさせない**。
 - 空のときは EmptyState(下記)を表に見せず単体で。
 
-## 5. 選択バー(一括選択の相棒・ux-design `references/bulk-operations.md` §5-1とセット)
+## 5. 選択バー(一括選択の相棒)
 
 リストで1件でも選択されたら、リスト上部(または画面下部固定)に現れるバー:
 
 ```html
-<div class="flex items-center gap-3 rounded-lg bg-surface-alt border border-border px-4 py-2 text-sm" role="status">
-  <span class="font-bold text-text tnum">3件を選択中</span>
-  <button class="text-text underline-offset-2 hover:underline">すべて解除</button>
-  <div class="ml-auto"><!-- 主要アクション(選択件数入りラベル: 「3件に送信する」) --></div>
+<div class="card card-pad" role="status">
+  <div class="demo-row">
+    <span class="badge badge-active">3件を選択中</span>
+    <button class="btn btn-tertiary">すべて解除</button>
+    <button class="btn btn-primary">3件に送信する</button>
+  </div>
 </div>
 ```
 
@@ -79,21 +74,20 @@
 
 ## 6. モーダル / トースト
 
-- モーダルは「文脈を離れられない確認」だけに使う。`max-w-md`・白・`rounded-xl`・影あり。ESCで閉じる・フォーカストラップ・開いたら最初のコントロールへ。**破壊的確認は外側クリックで閉じない**。
+- モーダルは「文脈を離れられない確認」だけに使い、正本の `.modal` を使う。ESCで閉じる・フォーカストラップ・開いたら最初のコントロールへ。**破壊的確認は外側クリックで閉じない**。
 - トーストは結果通知用。成功は静かに数秒で消える。**エラーは手で消すまで残し、次のアクションを添える**。`aria-live="polite"`。
 
 ## 7. 空状態 / スケルトン / 注意の面
 
 ```html
-<div class="rounded-lg border border-dashed border-border px-6 py-12 text-center">
-  <p class="text-sm font-semibold text-text">まだ登録がありません</p>
-  <p class="mt-1 text-sm text-text-muted">最初の1件を追加すると、ここに一覧が表示されます。</p>
-  <div class="mt-4"><!-- 主要アクション --></div>
+<div class="empty-state">
+  <p class="es-title">まだ登録がありません</p>
+  <button class="btn btn-primary">登録する</button>
 </div>
 
-<div class="skeleton h-10 w-full"></div>
+<div class="skeleton"></div>
 
-<div class="rounded-md border border-warning bg-warning-bg px-4 py-3 text-xs leading-relaxed">
+<div class="caution-panel">
   この操作は取り消せません。内容をご確認ください。
 </div>
 ```
@@ -131,5 +125,5 @@
 - **比率(%)同士を恣意的な幅で描かない**(反響率11.2%を45%幅のバーで表すのは嘘のスケール)。
 - **2〜3値の比較はバーより「数字+差分」が速い**(「先月 11.2% → 今月 18.6%(+7.4pt)」)。バーチャートを使いすぎない。
 - 裸の棒禁止: バーには必ずラベルと数値を添える(図形だけで意味を伝えない)。
-- 色は現状=neutral、対象=primary。accentをグラフに使わない。
+- 色は現状=`--surface-selected` の中立面、対象=`--chart-main`。複数系列は `--chart-1`〜`--chart-5`、閾値線は `--chart-threshold`。
 - 円グラフは2分割(残量表現)まで。3分割以上は表にする。
